@@ -1,12 +1,20 @@
 import { crayon } from "https://deno.land/x/crayon@3.3.3/mod.ts";
 import { Key } from "https://deno.land/x/tui@2.1.11/src/input_reader/types.ts";
-import { Component, ComponentOptions, Computed, Signal, Style, TextObject, signalify } from "https://deno.land/x/tui@2.1.11/mod.ts";
+import {
+  Component,
+  ComponentOptions,
+  Computed,
+  Signal,
+  signalify,
+  Style,
+  TextObject,
+} from "https://deno.land/x/tui@2.1.11/mod.ts";
 
 export interface ActionBarItemOptions {
-  previousItem: Omit<ComponentOptions, "theme">,
-  key: Key,
-  description: string,
-  callBack: () => void,
+  previousItem: Omit<ComponentOptions, "theme">;
+  key: Key;
+  description: string;
+  callBack: () => void;
 }
 
 export class ActionBarItem extends Component {
@@ -17,7 +25,8 @@ export class ActionBarItem extends Component {
 
   constructor(options: ActionBarItemOptions) {
     const rectangle = new Computed(() => {
-      const { width, column, height, row } = signalify(options.previousItem.rectangle).value;
+      const { width, column, height, row } =
+        signalify(options.previousItem.rectangle).value;
       return {
         column: column + width + 2,
         height,
@@ -25,7 +34,14 @@ export class ActionBarItem extends Component {
         width: options.key.length + options.description.length + 2,
       };
     });
-    super({ ...options, zIndex: options.previousItem.zIndex, rectangle, parent: options.previousItem.parent } as unknown as ComponentOptions);
+    super(
+      {
+        ...options,
+        zIndex: options.previousItem.zIndex,
+        rectangle,
+        parent: options.previousItem.parent,
+      } as unknown as ComponentOptions,
+    );
     this.key = options.key;
     this.description = options.description;
     this.callBack = options.callBack;
@@ -51,7 +67,7 @@ export class ActionBarItem extends Component {
       style: new Computed(() => this.baseStyle.value.lightYellow as Style),
       value: this.key,
       rectangle: new Computed(() => {
-        const { column, row, } = this.rectangle.value;
+        const { column, row } = this.rectangle.value;
 
         return {
           column: column,

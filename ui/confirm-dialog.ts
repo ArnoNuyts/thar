@@ -3,9 +3,7 @@ import { Computed, Tui } from "https://deno.land/x/tui@2.1.11/mod.ts";
 import { Button } from "https://deno.land/x/tui@2.1.11/src/components/button.ts";
 import { Popup } from "./popup.ts";
 
-
 export default (title: string, parent: Tui): Promise<void> => {
-
   const popup = new Popup({
     parent,
     zIndex: 5,
@@ -39,7 +37,8 @@ export default (title: string, parent: Tui): Promise<void> => {
       active: crayon.bgYellow.black,
     },
     rectangle: new Computed(() => ({
-      column: popup.rectangle.value.column + 1 + popup.rectangle.value.width / 2,
+      column: popup.rectangle.value.column + 1 +
+        popup.rectangle.value.width / 2,
       row: popup.rectangle.value.row + 1,
       width: popup.rectangle.value.width / 2 - 2,
       height: 1,
@@ -54,7 +53,7 @@ export default (title: string, parent: Tui): Promise<void> => {
     okButton.destroy();
     cancelButton.destroy();
     popup.destroy();
-  }
+  };
 
   // Set timeout otherwise toggle breaks :/
   const toggleFocus = () => {
@@ -63,17 +62,16 @@ export default (title: string, parent: Tui): Promise<void> => {
     } else {
       setTimeout(() => okButton.state.value = "focused", 20);
     }
-  }
+  };
 
   return new Promise((resolve, reject) => {
-
     cancelButton.interact = (event) => {
       if (event === "mouse") {
         destroy();
         // Prevent event bubbling
         setTimeout(reject, 200);
       }
-    }
+    };
 
     okButton.interact = (event) => {
       if (event === "mouse") {
@@ -81,7 +79,7 @@ export default (title: string, parent: Tui): Promise<void> => {
         // Prevent event bubbling
         setTimeout(resolve, 200);
       }
-    }
+    };
 
     cancelButton.on("keyPress", ({ key, ctrl, meta, shift }) => {
       if (cancelButton.state.value !== "focused") return;
@@ -104,7 +102,6 @@ export default (title: string, parent: Tui): Promise<void> => {
       }
     });
     okButton.on("keyPress", ({ key, ctrl, meta, shift }) => {
-
       if (okButton.state.value !== "focused") return;
 
       if (ctrl || meta || shift) return;
@@ -128,4 +125,4 @@ export default (title: string, parent: Tui): Promise<void> => {
       }
     });
   });
-}
+};

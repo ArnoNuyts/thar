@@ -1,10 +1,16 @@
-import { ComponentState, Signal, Theme } from "https://deno.land/x/tui@2.1.11/mod.ts";
+import {
+  ComponentState,
+  Signal,
+  Theme,
+} from "https://deno.land/x/tui@2.1.11/mod.ts";
 
-export const disableComponent = (component: { state: Signal<keyof Theme> }): AbortController => {
+export const disableComponent = (
+  component: { state: Signal<keyof Theme> },
+): AbortController => {
   const initialState = component.state.value;
   component.state.value = "disabled";
   const abortController = new AbortController();
-  component.state.subscribe(x => {
+  component.state.subscribe((x) => {
     if (x !== "disabled") {
       component.state.value = "disabled";
     }
@@ -14,15 +20,17 @@ export const disableComponent = (component: { state: Signal<keyof Theme> }): Abo
   });
 
   return abortController;
-}
+};
 
-export const keepComponentFocussed = (input: { state: Signal<ComponentState> }) => {
+export const keepComponentFocussed = (
+  input: { state: Signal<ComponentState> },
+) => {
   if (input.state.value !== "focused") {
     input.state.value = "focused";
   }
-  input.state.subscribe(x => {
+  input.state.subscribe((x) => {
     if (x !== "focused") {
       input.state.value = "focused";
     }
   });
-}
+};

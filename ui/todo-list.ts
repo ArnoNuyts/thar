@@ -1,6 +1,16 @@
 import { writeText } from "https://deno.land/x/copy_paste@v1.1.3/mod.ts";
 import { crayon } from "https://deno.land/x/crayon@3.3.3/mod.ts";
-import { BoxObject, clamp, Component, ComponentOptions, Computed, DrawObject, Signal, Style, TextObject } from "https://deno.land/x/tui@2.1.11/mod.ts";
+import {
+  BoxObject,
+  clamp,
+  Component,
+  ComponentOptions,
+  Computed,
+  DrawObject,
+  Signal,
+  Style,
+  TextObject,
+} from "https://deno.land/x/tui@2.1.11/mod.ts";
 import { debounce } from "jsr:@std/async/debounce";
 import { Todo } from "../logic/todo.ts";
 import { Todos } from "../logic/Todos.ts";
@@ -11,15 +21,15 @@ enum IndexType {
   todo,
 }
 type ContextIndexEntry = {
-  type: IndexType.context,
+  type: IndexType.context;
   todoCount: number;
-  contextName: string,
-}
+  contextName: string;
+};
 
 type TodoIndexEntry = {
-  type: IndexType.todo,
-  todoNumber: number,
-}
+  type: IndexType.todo;
+  todoNumber: number;
+};
 
 type IndexEntry = ContextIndexEntry | TodoIndexEntry;
 
@@ -48,7 +58,7 @@ export class TodoList extends Component {
   newCallback: () => Promise<Todo | undefined>;
   lastSelectedId: symbol | undefined = undefined;
   archiveCallback: () => void;
-  indexes: Computed<IndexEntry[]>
+  indexes: Computed<IndexEntry[]>;
 
   constructor(options: TableOptions) {
     super(options as unknown as ComponentOptions);
@@ -65,14 +75,22 @@ export class TodoList extends Component {
         if (!currTodo?.id) {
           continue;
         }
-        if (prevTodo === null || currTodo?.contexts?.values().next().value != prevTodo?.contexts?.values().next().value) {
+        if (
+          prevTodo === null ||
+          currTodo?.contexts?.values().next().value !=
+            prevTodo?.contexts?.values().next().value
+        ) {
           // Set counter of prev header;
           if (currHeader) {
             currHeader.todoCount = currHeaderTodoCounter;
             currHeaderTodoCounter = 0;
           }
 
-          currHeader = { type: IndexType.context, todoCount: 0, contextName: currTodo?.contexts?.values().next().value ?? "None" };
+          currHeader = {
+            type: IndexType.context,
+            todoCount: 0,
+            contextName: currTodo?.contexts?.values().next().value ?? "None",
+          };
           indexArray.push(currHeader);
         }
         indexArray.push({ type: IndexType.todo, todoNumber: parseInt(index) });
@@ -100,7 +118,7 @@ export class TodoList extends Component {
     }
 
     // Keep track of last selected id so we can reselect it if it changes index
-    this.selectedRow.subscribe(selectedRow => {
+    this.selectedRow.subscribe((selectedRow) => {
       const index = this.indexes.peek()[selectedRow];
 
       if (index?.type === IndexType.context) {
@@ -110,14 +128,16 @@ export class TodoList extends Component {
     });
 
     // Track size of todo number padding
-    this.data.subscribe(data => {
+    this.data.subscribe((data) => {
       const todoNumberPadding = data.length.toString().length;
       if (todoNumberPadding !== this.numberPadding.peek()) {
         this.numberPadding.value = todoNumberPadding;
       }
     });
 
-    this.numberPadding = new Signal(options.data.peek().length.toString().length);
+    this.numberPadding = new Signal(
+      options.data.peek().length.toString().length,
+    );
 
     this.indexes.subscribe((indexes) => {
       // Draw extra objects if data was changed
@@ -131,13 +151,21 @@ export class TodoList extends Component {
       // Reselect item if it changed index (eg -> change prio / state)
       const index = indexes[this.selectedRow.peek()];
 
-      if (!index || index.type !== IndexType.todo || this.data.peek()[index.todoNumber!]?.id !== this.lastSelectedId) {
-        const newIndexNr = indexes.findIndex(x => x.type === IndexType.todo && this.data.peek()[x.todoNumber!]?.id === this.lastSelectedId);
+      if (
+        !index || index.type !== IndexType.todo ||
+        this.data.peek()[index.todoNumber!]?.id !== this.lastSelectedId
+      ) {
+        const newIndexNr = indexes.findIndex((x) =>
+          x.type === IndexType.todo &&
+          this.data.peek()[x.todoNumber!]?.id === this.lastSelectedId
+        );
         if (newIndexNr !== -1) {
           this.selectedRow.value = newIndexNr;
         } else {
           // File updated and id not present anymore
-          this.lastSelectedId = index && index.type === IndexType.todo ? this.data.peek()[index.todoNumber!]?.id : undefined;
+          this.lastSelectedId = index && index.type === IndexType.todo
+            ? this.data.peek()[index.todoNumber!]?.id
+            : undefined;
         }
       }
       this.clampOffsetRow();
@@ -147,16 +175,16 @@ export class TodoList extends Component {
       () => {
         this.clampOffsetRow();
 
-        // Redraw everything. Popping / adding selectively gave bugs 
+        // Redraw everything. Popping / adding selectively gave bugs
         let row = this.drawnRows.pop();
         while (row) {
-          Object.keys(row!).forEach(k => row![k].erase())
+          Object.keys(row!).forEach((k) => row![k].erase());
           row = this.drawnRows.pop();
         }
         this.#fillDataDrawObjects();
-
-
-      }, 200));
+      },
+      200,
+    ));
 
     this.on("keyPress", async ({ key, ctrl, meta, shift }) => {
       const { selectedRow } = this;
@@ -171,7 +199,10 @@ export class TodoList extends Component {
         currentSelectedTodo = this.data.peek()[index.todoNumber!];
       }
 
-      if (currentSelectedTodo && shift && ["A", "B", "C", "D", "E", "F"].includes(key)) {
+      if (
+        currentSelectedTodo && shift &&
+        ["A", "B", "C", "D", "E", "F"].includes(key)
+      ) {
         currentSelectedTodo.setPriority(key as UpperCaseLetter);
       }
 
@@ -255,10 +286,15 @@ export class TodoList extends Component {
 
       const newIndex = this.indexes.peek()[newSelectedRow];
 
-      if (newIndex?.type === IndexType.context && ["pagedown", "down"].includes(key)) {
+      if (
+        newIndex?.type === IndexType.context &&
+        ["pagedown", "down"].includes(key)
+      ) {
         newSelectedRow++;
       }
-      if (newIndex?.type === IndexType.context && ["pageup", "up"].includes(key)) {
+      if (
+        newIndex?.type === IndexType.context && ["pageup", "up"].includes(key)
+      ) {
         newSelectedRow--;
       }
 
@@ -275,10 +311,17 @@ export class TodoList extends Component {
       const lastDataRow = this.indexes.peek().length - 1;
 
       if ("scroll" in mouseEvent) {
-        this.offsetRow.value = clamp(this.offsetRow.peek() + mouseEvent.scroll, 0, lastDataRow - height + 1);
+        this.offsetRow.value = clamp(
+          this.offsetRow.peek() + mouseEvent.scroll,
+          0,
+          lastDataRow - height + 1,
+        );
       } else if ("button" in mouseEvent && y >= row && y <= row + height - 1) {
         const dataRow = y - row + this.offsetRow.peek();
-        if (dataRow === clamp(dataRow, 0, lastDataRow) && this.selectedRow.value !== dataRow) {
+        if (
+          dataRow === clamp(dataRow, 0, lastDataRow) &&
+          this.selectedRow.value !== dataRow
+        ) {
           this.selectedRow.value = dataRow;
         }
       }
@@ -286,7 +329,15 @@ export class TodoList extends Component {
   }
 
   private clampOffsetRow() {
-    this.offsetRow.value = clamp(clamp(this.offsetRow.value, this.selectedRow.value - (this.rectangle.value.height - 2), this.selectedRow.value - 1), 0, this.indexes.value.length - this.rectangle.value.height);
+    this.offsetRow.value = clamp(
+      clamp(
+        this.offsetRow.value,
+        this.selectedRow.value - (this.rectangle.value.height - 2),
+        this.selectedRow.value - 1,
+      ),
+      0,
+      this.indexes.value.length - this.rectangle.value.height,
+    );
   }
 
   override draw(): void {
@@ -299,7 +350,11 @@ export class TodoList extends Component {
   #fillDataDrawObjects(): void {
     const { canvas } = this.tui;
     const { drawnRows } = this;
-    const nrOfToDrawRows = clamp(this.indexes.peek().length, 0, this.rectangle.peek().height);
+    const nrOfToDrawRows = clamp(
+      this.indexes.peek().length,
+      0,
+      this.rectangle.peek().height,
+    );
 
     for (let i = drawnRows.length; i < nrOfToDrawRows; i++) {
       const contextText = new TextObject({
@@ -359,7 +414,7 @@ export class TodoList extends Component {
           const todo = this.data.value[index.todoNumber!];
           let [selected, base] = this.getTodoStyles(todo);
           base = base.dim;
-          selected = selected.dim
+          selected = selected.dim;
 
           return (i + offsetRow) === selectedRow ? selected : base as Style;
         }),
@@ -459,7 +514,9 @@ export class TodoList extends Component {
               base = base.white;
           }
 
-          return (i + offsetRow) === selectedRow ? selected as Style : base as Style;
+          return (i + offsetRow) === selectedRow
+            ? selected as Style
+            : base as Style;
         }),
         value: new Computed(() => {
           const index = this.indexes?.value[i + this.offsetRow.value];
@@ -501,7 +558,9 @@ export class TodoList extends Component {
           if (!todo) {
             return "";
           }
-          const tagsText = Object.keys(todo.tags).map(x => `${x}:${todo.tags[x]}`).join(" ");
+          const tagsText = Object.keys(todo.tags).map((x) =>
+            `${x}:${todo.tags[x]}`
+          ).join(" ");
 
           return `${todo.text} ${tagsText} (${i})`;
         }),
@@ -519,9 +578,10 @@ export class TodoList extends Component {
           const todo = this.data.peek()[index.todoNumber!];
 
           return {
-            column: column + 1 + this.numberPadding.value + (todo?.priority ? 9 : 5),
+            column: column + 1 + this.numberPadding.value +
+              (todo?.priority ? 9 : 5),
             row: row + i,
-          };;
+          };
         }),
       });
 
@@ -535,7 +595,7 @@ export class TodoList extends Component {
       box.draw();
       main.draw();
     }
-    /* Debug code 
+    /* Debug code
     const index = new TextObject({
       canvas,
       view: this.view,
@@ -554,19 +614,19 @@ export class TodoList extends Component {
     index.draw()
     */
   }
-  private getRowStyle = (i: number): Signal<Style> => new Computed(() => {
-    const offsetRow = this.offsetRow.value;
-    const selectedRow = this.selectedRow.value;
-    const index = this.indexes.value[i + offsetRow];
-    if (index?.type !== IndexType.todo) {
-      return crayon.bgBlack;
-    }
-    const todo = this.data.value[index.todoNumber!];
-    const [selected, base] = this.getTodoStyles(todo);
+  private getRowStyle = (i: number): Signal<Style> =>
+    new Computed(() => {
+      const offsetRow = this.offsetRow.value;
+      const selectedRow = this.selectedRow.value;
+      const index = this.indexes.value[i + offsetRow];
+      if (index?.type !== IndexType.todo) {
+        return crayon.bgBlack;
+      }
+      const todo = this.data.value[index.todoNumber!];
+      const [selected, base] = this.getTodoStyles(todo);
 
-
-    return (i + offsetRow) === selectedRow ? selected : base as Style;
-  })
+      return (i + offsetRow) === selectedRow ? selected : base as Style;
+    });
   private getTodoStyles(todo: Todo): [typeof crayon, typeof crayon] {
     let selected = crayon.bgWhite.black;
     let base = crayon.bgBlack.white;
@@ -579,25 +639,31 @@ export class TodoList extends Component {
   }
 
   private popUnusedDataDrawObjects(): void {
-    while (this.drawnRows.length > clamp(this.indexes.peek().length, 0, this.rectangle.peek().height)) {
+    while (
+      this.drawnRows.length >
+        clamp(this.indexes.peek().length, 0, this.rectangle.peek().height)
+    ) {
       const row = this.drawnRows.pop();
-      Object.keys(row!).forEach(k => row![k].erase())
+      Object.keys(row!).forEach((k) => row![k].erase());
     }
   }
 
   public getSelectedTodo(): Todo | undefined {
     const index = this.indexes.value[this.selectedRow.value];
 
-    if (index.type !== IndexType.todo)
+    if (index.type !== IndexType.todo) {
       return;
+    }
 
     return this.data.value[index.todoNumber];
   }
 
   public setSelectedTodo(todo: { id: symbol }): void {
-    const i = this.data.peek().findIndex(x => x.id === todo.id);
+    const i = this.data.peek().findIndex((x) => x.id === todo.id);
     if (i) {
-      this.selectedRow.value = this.indexes.value.findIndex(x => x.type === IndexType.todo && x.todoNumber === i);
+      this.selectedRow.value = this.indexes.value.findIndex((x) =>
+        x.type === IndexType.todo && x.todoNumber === i
+      );
       this.clampOffsetRow();
     }
   }

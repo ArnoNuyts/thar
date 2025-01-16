@@ -1,12 +1,21 @@
 // Copyright 2023 Im-Beast. MIT license.
-import { Component, ComponentOptions } from "https://deno.land/x/tui@2.1.11/src/component.ts";
+import {
+  Component,
+  ComponentOptions,
+} from "https://deno.land/x/tui@2.1.11/src/component.ts";
 
 import { BoxObject } from "https://deno.land/x/tui@2.1.11/src/canvas/box.ts";
 import { TextObject } from "https://deno.land/x/tui@2.1.11/src/canvas/text.ts";
 
-import { Computed, Signal } from "https://deno.land/x/tui@2.1.11/src/signals/mod.ts";
+import {
+  Computed,
+  Signal,
+} from "https://deno.land/x/tui@2.1.11/src/signals/mod.ts";
 import { Theme } from "https://deno.land/x/tui@2.1.11/src/theme.ts";
-import type { DeepPartial, Rectangle } from "https://deno.land/x/tui@2.1.11/src/types.ts";
+import type {
+  DeepPartial,
+  Rectangle,
+} from "https://deno.land/x/tui@2.1.11/src/types.ts";
 import { clamp } from "https://deno.land/x/tui@2.1.11/src/utils/numbers.ts";
 import { signalify } from "https://deno.land/x/tui@2.1.11/src/utils/signals.ts";
 import { textWidth } from "https://deno.land/x/tui@2.1.11/src/utils/strings.ts";
@@ -131,7 +140,11 @@ export class List extends Component {
       }
 
       selectedRow.value = clamp(selectedRow.peek(), 0, lastDataRow);
-      offsetRow.value = clamp(selectedRow.peek() - ~~((height) / 2), 0, lastDataRow - height);
+      offsetRow.value = clamp(
+        selectedRow.peek() - ~~(height / 2),
+        0,
+        lastDataRow - height,
+      );
     });
 
     this.on("mouseEvent", (mouseEvent) => {
@@ -142,7 +155,11 @@ export class List extends Component {
       const lastDataRow = this.data.peek().length - 1;
 
       if ("scroll" in mouseEvent) {
-        this.offsetRow.value = clamp(this.offsetRow.peek() + mouseEvent.scroll, 0, lastDataRow - height);
+        this.offsetRow.value = clamp(
+          this.offsetRow.peek() + mouseEvent.scroll,
+          0,
+          lastDataRow - height,
+        );
       } else if ("button" in mouseEvent && y >= row && y <= row + height) {
         const dataRow = y - row + this.offsetRow.peek();
         if (dataRow !== clamp(dataRow, 0, lastDataRow)) return;
@@ -167,19 +184,22 @@ export class List extends Component {
     if (this.state.peek() === "focused" && interactionInterval < 500) {
       // Set timeout to prevent event to affect other components.
       this.interactCallback?.();
-      this.state.value === "active"
+      this.state.value === "active";
     } else {
       this.state.value = "focused";
     }
     super.interact(method);
-
   }
 
   #fillDataDrawObjects(): void {
     const { canvas } = this.tui;
     const { drawnObjects } = this;
 
-    for (let i = drawnObjects.data.length; i < this.rectangle.peek().height; ++i) {
+    for (
+      let i = drawnObjects.data.length;
+      i < this.rectangle.peek().height;
+      ++i
+    ) {
       const textRectangle = { column: 0, row: 0 };
       const text = new TextObject({
         canvas,
@@ -205,7 +225,10 @@ export class List extends Component {
             string += dataCell;
           }
 
-          const endPadding = Math.max(0, this.rectangle.value.width - textWidth(string) - 2);
+          const endPadding = Math.max(
+            0,
+            this.rectangle.value.width - textWidth(string) - 2,
+          );
           string += " ".repeat(endPadding);
           return string;
         }),
@@ -223,7 +246,9 @@ export class List extends Component {
   }
 
   #popUnusedDataDrawObjects(): void {
-    for (const dataCell of this.drawnObjects.data.splice(this.data.value.length)) {
+    for (
+      const dataCell of this.drawnObjects.data.splice(this.data.value.length)
+    ) {
       dataCell.erase();
     }
   }

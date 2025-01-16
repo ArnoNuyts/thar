@@ -1,10 +1,20 @@
 import { dirname } from "https://deno.land/std@0.224.0/path/mod.ts";
 import { crayon } from "https://deno.land/x/crayon@3.3.3/mod.ts";
-import { Computed, Signal, Tui, handleInput, handleKeyboardControls, handleMouseControls } from "https://deno.land/x/tui@2.1.11/mod.ts";
+import {
+  Computed,
+  handleInput,
+  handleKeyboardControls,
+  handleMouseControls,
+  Signal,
+  Tui,
+} from "https://deno.land/x/tui@2.1.11/mod.ts";
 import { debounce } from "jsr:@std/async/debounce";
 import editTodo from "./ui/edit-todo.ts";
 import { propagateOnSetHandler } from "./logic/signal-helpers.ts";
-import { readTodosFromFile, writeTodosToFile } from "./logic/todo-file-helpers.ts";
+import {
+  readTodosFromFile,
+  writeTodosToFile,
+} from "./logic/todo-file-helpers.ts";
 import { TodoList } from "./ui/todo-list.ts";
 import { Todo } from "./logic/todo.ts";
 import { Todos } from "./logic/Todos.ts";
@@ -27,8 +37,13 @@ const tui = new Tui({
 });
 const filename = Deno.args[0];
 const initialTodoList = await readTodosFromFile(filename);
-const todosOrig: Signal<Todos> = new Signal(new Todos(), { deepObserve: true, watchObjectIndex: true });
-todosOrig.value = new Todos(...initialTodoList.map(x => new Proxy(x, propagateOnSetHandler(todosOrig))));
+const todosOrig: Signal<Todos> = new Signal(new Todos(), {
+  deepObserve: true,
+  watchObjectIndex: true,
+});
+todosOrig.value = new Todos(
+  ...initialTodoList.map((x) => new Proxy(x, propagateOnSetHandler(todosOrig))),
+);
 // When todo changes -> pauze watcher, write to file, reenable watcher
 const writeTodosDebounced = debounce(async (todos: Todo[]) => {
   if (justReadFileFlag.value) {
@@ -36,17 +51,16 @@ const writeTodosDebounced = debounce(async (todos: Todo[]) => {
     return;
   }
   await writeTodosToFile(todos, filename);
-}
-  , 50
-);
+}, 50);
 
 todosOrig.subscribe((todos: Todo[]) => {
   writeTodosDebounced(todos);
 });
 const todosSorted = new Computed(
-  () => todosOrig.value
-    .sortByImportance()
-    .filterHidden()
+  () =>
+    todosOrig.value
+      .sortByImportance()
+      .filterHidden(),
 );
 handleInput(tui);
 handleMouseControls(tui);
@@ -58,8 +72,9 @@ let todoList: TodoList | undefined = undefined;
 let actionBar: ActionBar | undefined = undefined;
 
 const disableUiWhile = <T, Args extends unknown[]>(
-  func: (...args: Args) => Promise<T>
-): ((...args: Args) => Promise<T | undefined>) => async (...args: Args) => {
+  func: (...args: Args) => Promise<T>,
+): (...args: Args) => Promise<T | undefined> =>
+async (...args: Args) => {
   const disableTodoList = disableComponent(todoList!);
   const disableActionBar = disableComponent(actionBar!);
   try {
@@ -73,17 +88,21 @@ const disableUiWhile = <T, Args extends unknown[]>(
 };
 
 const archiveCallback = disableUiWhile(async () => {
-  const completedTodos = todosOrig.value.filter(x => x.isDone());
-  await confirmDialog(`Archive ${completedTodos.length} completed todos to done.txt?`, tui);
+  const completedTodos = todosOrig.value.filter((x) => x.isDone());
+  await confirmDialog(
+    `Archive ${completedTodos.length} completed todos to done.txt?`,
+    tui,
+  );
   await writeTodosToFile(
     completedTodos,
     dirname(filename) + "/done.txt",
     {
       append: true,
       create: true,
-    });
-  todosOrig.value = new Todos(...todosOrig.peek().filter(x => !x.isDone()));
-})
+    },
+  );
+  todosOrig.value = new Todos(...todosOrig.peek().filter((x) => !x.isDone()));
+});
 
 todoList = new TodoList({
   parent: tui,
@@ -120,7 +139,7 @@ todoList = new TodoList({
   }),
   deleteCallback: disableUiWhile(async (todo: Todo): Promise<void> => {
     await confirmDialog("Delete todo?", tui);
-    todosOrig.value = new Todos(...todosOrig.value.filter(x => x !== todo));
+    todosOrig.value = new Todos(...todosOrig.value.filter((x) => x !== todo));
   }),
   toggleHiddenCallback: disableUiWhile(async (todo: Todo): Promise<void> => {
     if (!todo.isHidden()) {
@@ -152,15 +171,16 @@ actionBar = new ActionBar({
   }),
   editCallback: disableUiWhile(async () => {
     const todo = todoList.getSelectedTodo();
-    if (!todo)
+    if (!todo) {
       return;
+    }
     const text = await editTodo(todo.text, tui);
     return todo.setText(text);
   }),
-  dueCallback: () => { },
-  thresholdCallback: () => { },
-  deleteCallback: () => { },
-  toggleHiddenCallback: () => { },
+  dueCallback: () => {},
+  thresholdCallback: () => {},
+  deleteCallback: () => {},
+  toggleHiddenCallback: () => {},
   archiveCallback,
 });
 
@@ -168,9 +188,13 @@ const readTodosDebounced = debounce(
   async () => {
     justReadFileFlag.value = true;
     const todosFromFile = await readTodosFromFile(filename);
-    todosOrig.value = new Todos(...todosFromFile.map(x => new Proxy(x, propagateOnSetHandler(todosOrig))));
+    todosOrig.value = new Todos(
+      ...todosFromFile.map((x) =>
+        new Proxy(x, propagateOnSetHandler(todosOrig))
+      ),
+    );
   },
-  500
+  500,
 );
 
 const openTodoFileWatcher = async (filename: string) => {
@@ -180,5 +204,5 @@ const openTodoFileWatcher = async (filename: string) => {
       readTodosDebounced();
     }
   }
-}
+};
 await openTodoFileWatcher(filename);

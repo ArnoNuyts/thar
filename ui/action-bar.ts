@@ -1,5 +1,10 @@
 import { crayon } from "https://deno.land/x/crayon@3.3.3/mod.ts";
-import { Component, ComponentOptions, Computed, TextObject } from "https://deno.land/x/tui@2.1.11/mod.ts";
+import {
+  Component,
+  ComponentOptions,
+  Computed,
+  TextObject,
+} from "https://deno.land/x/tui@2.1.11/mod.ts";
 import { ActionBarItem } from "./action-bar-item.ts";
 
 export interface ActionBarOptions extends Omit<ComponentOptions, "theme"> {
@@ -32,7 +37,9 @@ export class ActionBar extends Component {
     this.archiveCallback = options.archiveCallback;
 
     this.state.subscribe((state) => {
-      Object.keys(this.subComponents).forEach(key => this.subComponents[key].state.value = state);
+      Object.keys(this.subComponents).forEach((key) =>
+        this.subComponents[key].state.value = state
+      );
     });
   }
 
@@ -58,7 +65,7 @@ export class ActionBar extends Component {
     });
 
     const help = new ActionBarItem({
-      callBack: () => { },
+      callBack: () => {},
       previousItem: {
         rectangle: new Computed(() => {
           const { row } = this.rectangle.value;
@@ -73,35 +80,35 @@ export class ActionBar extends Component {
         parent: this,
       },
       key: "?",
-      description: "Help"
+      description: "Help",
     });
 
     const quit = new ActionBarItem({
       callBack: () => Deno.exit(),
       previousItem: help,
       key: "q",
-      description: "Quit"
+      description: "Quit",
     });
 
     const newItem = new ActionBarItem({
       callBack: this.newCallback,
       previousItem: quit,
       key: "n",
-      description: "New"
+      description: "New",
     });
 
     const edit = new ActionBarItem({
       callBack: this.editCallback,
       previousItem: newItem,
       key: "e",
-      description: "Edit"
+      description: "Edit",
     });
 
     const archive = new ActionBarItem({
       callBack: this.archiveCallback,
       previousItem: edit,
       key: "a",
-      description: "Archive"
+      description: "Archive",
     });
 
     help.draw();
@@ -119,4 +126,3 @@ export class ActionBar extends Component {
     this.subComponents.archive = archive;
   }
 }
-

@@ -1,5 +1,8 @@
 import { assertEquals } from "https://deno.land/std@0.201.0/assert/mod.ts";
-import { formatDate, lightFormat } from "https://esm.sh/v135/date-fns@4.1.0/index.js";
+import {
+  formatDate,
+  lightFormat,
+} from "https://esm.sh/v135/date-fns@4.1.0/index.js";
 import { startOfTomorrow } from "https://esm.sh/v135/date-fns@4.1.0/startOfTomorrow.js";
 import { startOfYesterday } from "https://esm.sh/v135/date-fns@4.1.0/startOfYesterday.js";
 import { Todo } from "../logic/todo.ts"; // Adjust the path as needed
@@ -19,9 +22,18 @@ Deno.test("Todo constructor - sets text correctly", () => {
     { input: "with +multiple +project", expected: "with +multiple +project" },
     { input: "2024-06-02 With creation date", expected: "With creation date" },
     { input: "With tags:yeah", expected: "With" },
-    { input: "x 2024-06-02 2024-06-02 With complition and creation date", expected: "With complition and creation date" },
-    { input: "x    excessive space before", expected: "   excessive space before" }, // Should this be trimmed?
-    { input: "x excessive space after    ", expected: "excessive space after    " },// Should this be trimmed?
+    {
+      input: "x 2024-06-02 2024-06-02 With complition and creation date",
+      expected: "With complition and creation date",
+    },
+    {
+      input: "x    excessive space before",
+      expected: "   excessive space before",
+    }, // Should this be trimmed?
+    {
+      input: "x excessive space after    ",
+      expected: "excessive space after    ",
+    }, // Should this be trimmed?
   ];
 
   for (const { input, expected } of testCases) {
@@ -30,7 +42,7 @@ Deno.test("Todo constructor - sets text correctly", () => {
     assertEquals(
       todo.text,
       expected,
-      `Input "${input}" should have exactly the text: ${expected}`
+      `Input "${input}" should have exactly the text: ${expected}`,
     );
   }
 });
@@ -49,7 +61,7 @@ Deno.test("Todo constructor - sets state correctly", () => {
     assertEquals(
       todo.state,
       expected,
-      `Input "${input}" should have exactly the state: ${expected}`
+      `Input "${input}" should have exactly the state: ${expected}`,
     );
   }
 });
@@ -70,16 +82,22 @@ Deno.test("Todo constructor - sets priority correctly", () => {
     assertEquals(
       todo.priority,
       expected,
-      `Input "${input}" should have exactly the priority: ${expected}`
+      `Input "${input}" should have exactly the priority: ${expected}`,
     );
   }
 });
 
 Deno.test("Todo constructor - sets completionDate correctly", () => {
   const testCases = [
-    { input: "x 2024-06-02 2024-06-01 Happy path", expected: new Date("2024-06-02T00:00:00.000Z") },
+    {
+      input: "x 2024-06-02 2024-06-01 Happy path",
+      expected: new Date("2024-06-02T00:00:00.000Z"),
+    },
     { input: "x 2024-06-02 No completion date", expected: undefined },
-    { input: "2024-06-02 No completion date, not completed", expected: undefined },
+    {
+      input: "2024-06-02 No completion date, not completed",
+      expected: undefined,
+    },
   ];
 
   for (const { input, expected } of testCases) {
@@ -88,7 +106,7 @@ Deno.test("Todo constructor - sets completionDate correctly", () => {
     assertEquals(
       todo.completionDate,
       expected,
-      `Input "${input}" should have exactly the date: ${expected?.toISOString()}`
+      `Input "${input}" should have exactly the date: ${expected?.toISOString()}`,
     );
   }
 });
@@ -96,7 +114,10 @@ Deno.test("Todo constructor - sets completionDate correctly", () => {
 // Test for `completionDate`
 Deno.test("Todo constructor - sets completionDate correctly", () => {
   const testCases = [
-    { input: "x 2024-06-02 2024-06-01 Buy groceries", expected: new Date("2024-06-02T00:00:00.000Z") },
+    {
+      input: "x 2024-06-02 2024-06-01 Buy groceries",
+      expected: new Date("2024-06-02T00:00:00.000Z"),
+    },
     { input: "x 2024-06-02 Buy groceries", expected: undefined },
   ];
 
@@ -106,7 +127,7 @@ Deno.test("Todo constructor - sets completionDate correctly", () => {
     assertEquals(
       todo.completionDate,
       expected,
-      `Input "${input}" should have exactly the date: ${expected?.toISOString()}`
+      `Input "${input}" should have exactly the date: ${expected?.toISOString()}`,
     );
   }
 });
@@ -143,7 +164,9 @@ Deno.test("Todo constructor - extracts projects correctly", () => {
     assertEquals(
       Array.from(todo.contexts),
       expected,
-      `Input "${input}" should have exactly the contexts: ${expected.join(", ")}`
+      `Input "${input}" should have exactly the contexts: ${
+        expected.join(", ")
+      }`,
     );
   }
 });
@@ -167,7 +190,9 @@ Deno.test("Todo constructor - extracts contexts correctly", () => {
     assertEquals(
       Array.from(todo.projects),
       expected,
-      `Input "${input}" should have exactly the contexts: ${expected.join(", ")}`
+      `Input "${input}" should have exactly the contexts: ${
+        expected.join(", ")
+      }`,
     );
   }
 });
@@ -175,12 +200,21 @@ Deno.test("Todo constructor - extracts contexts correctly", () => {
 // Test for `tags` extraction
 Deno.test("Todo constructor - extracts tags correctly", () => {
   const testCases = [
-    { input: "Todo h:1", expected: { h: '1' } },
-    { input: "Todo due:2024-01-01", expected: { due: '2024-01-01' } },
-    { input: "Todo t:2024-01-01", expected: { t: '2024-01-01' } },
-    { input: "Todo multiple:t1 tags:t2", expected: { multiple: 't1', tags: 't2' } },
-    { input: "Array of tags tag:one tag:two", expected: { tag: ['one', 'two'] } },
-    { input: "Array of tags tag:one tag:two tag:three", expected: { tag: ['one', 'two', 'three'] } },
+    { input: "Todo h:1", expected: { h: "1" } },
+    { input: "Todo due:2024-01-01", expected: { due: "2024-01-01" } },
+    { input: "Todo t:2024-01-01", expected: { t: "2024-01-01" } },
+    {
+      input: "Todo multiple:t1 tags:t2",
+      expected: { multiple: "t1", tags: "t2" },
+    },
+    {
+      input: "Array of tags tag:one tag:two",
+      expected: { tag: ["one", "two"] },
+    },
+    {
+      input: "Array of tags tag:one tag:two tag:three",
+      expected: { tag: ["one", "two", "three"] },
+    },
   ];
 
   for (const { input, expected } of testCases) {
@@ -189,7 +223,9 @@ Deno.test("Todo constructor - extracts tags correctly", () => {
     assertEquals(
       todo.tags,
       expected as unknown,
-      `Input "${input}" should have exactly the tags: ${JSON.stringify(expected)}`
+      `Input "${input}" should have exactly the tags: ${
+        JSON.stringify(expected)
+      }`,
     );
   }
 });
@@ -224,7 +260,7 @@ Deno.test("isHidden - returns correctly", () => {
     assertEquals(
       todo.isHidden(),
       expected,
-      input
+      input,
     );
   }
 });
@@ -233,9 +269,18 @@ Deno.test("isOverdue - returns correctly", () => {
   const testCases = [
     { input: "In the past due:1999-01-01", expected: true },
     { input: "In the future due:3000-01-01", expected: false },
-    { input: `Today due:${lightFormat(new Date(), "yyyy-MM-dd")}`, expected: true },
-    { input: `Tomorrow due:${lightFormat(startOfTomorrow(), "yyyy-MM-dd")}`, expected: false },
-    { input: `Yesterday due:${lightFormat(startOfYesterday(), "yyyy-MM-dd")}`, expected: true },
+    {
+      input: `Today due:${lightFormat(new Date(), "yyyy-MM-dd")}`,
+      expected: true,
+    },
+    {
+      input: `Tomorrow due:${lightFormat(startOfTomorrow(), "yyyy-MM-dd")}`,
+      expected: false,
+    },
+    {
+      input: `Yesterday due:${lightFormat(startOfYesterday(), "yyyy-MM-dd")}`,
+      expected: true,
+    },
     { input: "No due date", expected: false },
   ];
 
@@ -245,7 +290,7 @@ Deno.test("isOverdue - returns correctly", () => {
     assertEquals(
       todo.isOverdue(),
       expected,
-      input
+      input,
     );
   }
 });
@@ -254,9 +299,18 @@ Deno.test("isPassedThreshold - returns correctly", () => {
   const testCases = [
     { input: "In the past t:1999-01-01", expected: true },
     { input: "In the future t:3000-01-01", expected: false },
-    { input: `Today t:${formatDate(new Date(), "yyyy-MM-dd")}`, expected: true },
-    { input: `Tomorrow t:${formatDate(startOfTomorrow(), "yyyy-MM-dd")}`, expected: false },
-    { input: `Yesterday t:${formatDate(startOfYesterday(), "yyyy-MM-dd")}`, expected: true },
+    {
+      input: `Today t:${formatDate(new Date(), "yyyy-MM-dd")}`,
+      expected: true,
+    },
+    {
+      input: `Tomorrow t:${formatDate(startOfTomorrow(), "yyyy-MM-dd")}`,
+      expected: false,
+    },
+    {
+      input: `Yesterday t:${formatDate(startOfYesterday(), "yyyy-MM-dd")}`,
+      expected: true,
+    },
     { input: "No threshold date", expected: true },
   ];
 
@@ -266,7 +320,7 @@ Deno.test("isPassedThreshold - returns correctly", () => {
     assertEquals(
       todo.isPassedThreshold(),
       expected,
-      input
+      input,
     );
   }
 });
@@ -284,7 +338,7 @@ Deno.test("toggleState - sets state correctly", () => {
     assertEquals(
       todo.state,
       expected,
-      `Input "${input}" should have exactly the state: ${expected}`
+      `Input "${input}" should have exactly the state: ${expected}`,
     );
   }
 });
@@ -301,11 +355,10 @@ Deno.test("toggleHidden - sets hidden correctly", () => {
     const todo = new Todo(input);
     todo.toggleHidden();
 
-
     assertEquals(
       todo.isHidden(),
       expected,
-      `Input "${input}" should be: ${expected}`
+      `Input "${input}" should be: ${expected}`,
     );
   }
 });
@@ -321,11 +374,10 @@ Deno.test("setPriority - sets priority correctly", () => {
     const todo = new Todo(text);
     todo.setPriority(input);
 
-
     assertEquals(
       todo.priority,
       expected,
-      `Input "${input}" should be: ${expected}`
+      `Input "${input}" should be: ${expected}`,
     );
   }
 });
@@ -333,18 +385,21 @@ Deno.test("setPriority - sets priority correctly", () => {
 Deno.test("setDue - sets correctly", () => {
   const testCases = [
     { text: "todo", input: new Date("1999-01-01"), expected: "1999-01-01" },
-    { text: "todo due:3000-03-03", input: new Date("1999-01-01"), expected: "1999-01-01" },
+    {
+      text: "todo due:3000-03-03",
+      input: new Date("1999-01-01"),
+      expected: "1999-01-01",
+    },
   ];
 
   for (const { text, input, expected } of testCases) {
     const todo = new Todo(text);
     todo.setDue(input);
 
-
     assertEquals(
       todo.tags.due,
       expected,
-      `Input "${input}" should be: ${expected}`
+      `Input "${input}" should be: ${expected}`,
     );
   }
 });
@@ -352,18 +407,21 @@ Deno.test("setDue - sets correctly", () => {
 Deno.test("setThreshold - sets correctly", () => {
   const testCases = [
     { text: "todo", input: new Date("1999-01-01"), expected: "1999-01-01" },
-    { text: "todo due:3000-03-03", input: new Date("1999-01-01"), expected: "1999-01-01" },
+    {
+      text: "todo due:3000-03-03",
+      input: new Date("1999-01-01"),
+      expected: "1999-01-01",
+    },
   ];
 
   for (const { text, input, expected } of testCases) {
     const todo = new Todo(text);
     todo.setThreshold(input);
 
-
     assertEquals(
       todo.tags.t,
       expected,
-      `Input "${input}" should be: ${expected}`
+      `Input "${input}" should be: ${expected}`,
     );
   }
 });

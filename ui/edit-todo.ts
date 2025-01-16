@@ -1,6 +1,6 @@
 import { readText } from "https://deno.land/x/copy_paste@v1.1.3/mod.ts";
 import { crayon } from "https://deno.land/x/crayon@3.3.3/mod.ts";
-import { Computed, Tui, clamp } from "https://deno.land/x/tui@2.1.11/mod.ts";
+import { clamp, Computed, Tui } from "https://deno.land/x/tui@2.1.11/mod.ts";
 import { Box } from "https://deno.land/x/tui@2.1.11/src/components/box.ts";
 import { Frame } from "https://deno.land/x/tui@2.1.11/src/components/frame.ts";
 import { Input } from "https://deno.land/x/tui@2.1.11/src/components/input.ts";
@@ -15,7 +15,11 @@ export default (text: string, parent: Tui): Promise<string> => {
       base: crayon.bgBlack.white,
     },
     rectangle: new Computed(() => {
-      let width = clamp(clamp(parent.rectangle.value.width / 2, 20, 60), 0, parent.rectangle.value.width);
+      let width = clamp(
+        clamp(parent.rectangle.value.width / 2, 20, 60),
+        0,
+        parent.rectangle.value.width,
+      );
       if (width % 2 !== 0) {
         // Adjust the value to make it even
         width = Math.floor(width / 2) * 2; // Rounds down to nearest even number
@@ -29,7 +33,7 @@ export default (text: string, parent: Tui): Promise<string> => {
       };
     }),
     zIndex: 5,
-  })
+  });
 
   const frame = new Frame({
     parent: box,
@@ -43,7 +47,7 @@ export default (text: string, parent: Tui): Promise<string> => {
 
   const textBox = new Text({
     parent: box,
-    text: text ? '| Edit task |' : '| New task |',
+    text: text ? "| Edit task |" : "| New task |",
     theme: {
       base: crayon.bgBlack.white,
     },
@@ -58,7 +62,6 @@ export default (text: string, parent: Tui): Promise<string> => {
     parent: frame,
     placeholder: "",
     theme: {
-
       value: {
         base: crayon.bgBlack,
         focused: crayon.bgBlack,
@@ -68,7 +71,7 @@ export default (text: string, parent: Tui): Promise<string> => {
         base: crayon.bgWhite.blink,
         //focused: crayon.bgBlue,
         //active: crayon.bgYellow,
-      }
+      },
     },
     rectangle: new Computed(() => ({
       column: frame.rectangle.value.column + 1,
@@ -84,13 +87,16 @@ export default (text: string, parent: Tui): Promise<string> => {
   keepComponentFocussed(input);
 
   return new Promise((resolve, reject) => {
-
     input.on("keyPress", async ({ key, ctrl, meta, shift }) => {
       // TODO: Support for mac shortcuts here?
       if (ctrl && key === "v") {
         // Note on windows I get extra spaces add the end. That is why trim
         const clipboardInput = (await readText()).trimEnd();
-        input.text.value = insertAt(input.text.value, input.cursorPosition.value, clipboardInput);
+        input.text.value = insertAt(
+          input.text.value,
+          input.cursorPosition.value,
+          clipboardInput,
+        );
 
         input.cursorPosition.value += clipboardInput.length;
         return;
@@ -112,5 +118,4 @@ export default (text: string, parent: Tui): Promise<string> => {
       }
     });
   });
-}
-
+};

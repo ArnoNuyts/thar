@@ -1,7 +1,8 @@
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
 
-const TODO_REGEX = /^((?<done>[x])\s){0,1}(\((?<prio>[A-Z])\)\s){0,1}((?<completionDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}((?<creationDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}(?<rest>[^\n\r]+)\s*$/;
+const TODO_REGEX =
+  /^((?<done>[x])\s){0,1}(\((?<prio>[A-Z])\)\s){0,1}((?<completionDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}((?<creationDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}(?<rest>[^\n\r]+)\s*$/;
 const PROJECT_REGEX = /\s+\+(?<name>[\w.\_\-]+)/g;
 const CONTEXT_REGEX = /\s+\@(?<name>[\w.\_\-]+)/g;
 const TAG_REGEX = /\s+(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
@@ -22,12 +23,14 @@ export class Todo {
   constructor(text: string) {
     const match = text.match(TODO_REGEX);
     if (match?.groups) {
-      this.completionDate = match.groups.creationDate && match.groups.completionDate
-        ? new Date(match.groups.completionDate)
-        : undefined;
-      this.creationDate = match.groups.creationDate || match.groups.completionDate
-        ? new Date(match.groups.creationDate || match.groups.completionDate)
-        : undefined;
+      this.completionDate =
+        match.groups.creationDate && match.groups.completionDate
+          ? new Date(match.groups.completionDate)
+          : undefined;
+      this.creationDate =
+        match.groups.creationDate || match.groups.completionDate
+          ? new Date(match.groups.creationDate || match.groups.completionDate)
+          : undefined;
       this.priority = match.groups.prio as UpperCaseLetter;
       text = match.groups.rest as string;
       this.state = match.groups.done ? TodoStateEnum.done : TodoStateEnum.todo;
@@ -67,7 +70,7 @@ export class Todo {
   }
 
   isHidden() {
-    return !!this.tags["h"] && this.tags["h"] !== "0"
+    return !!this.tags["h"] && this.tags["h"] !== "0";
   }
 
   isVisibleInOverview() {
@@ -75,11 +78,13 @@ export class Todo {
   }
 
   isOverdue() {
-    return typeof this.tags.due === "string" && new Date() > new Date(this.tags.due);
+    return typeof this.tags.due === "string" &&
+      new Date() > new Date(this.tags.due);
   }
 
   isPassedThreshold() {
-    return typeof this.tags.t !== "string" || new Date() >= new Date(this.tags.t);
+    return typeof this.tags.t !== "string" ||
+      new Date() >= new Date(this.tags.t);
   }
 
   setText(text: string) {
@@ -100,12 +105,19 @@ export class Todo {
     for (const tag of matchTags) {
       switch (typeof this.tags[tag.groups!.key]) {
         case "object":
-          this.tags[tag.groups!.key] = [...this.tags[tag.groups!.key], tag.groups!.value];
+          this.tags[tag.groups!.key] = [
+            ...this.tags[tag.groups!.key],
+            tag.groups!.value,
+          ];
           break;
         case "string":
-          this.tags[tag.groups!.key] = [this.tags[tag.groups!.key] as string, tag.groups!.value];
+          this.tags[tag.groups!.key] = [
+            this.tags[tag.groups!.key] as string,
+            tag.groups!.value,
+          ];
           break;
-        default: this.tags[tag.groups!.key] = tag.groups!.value;
+        default:
+          this.tags[tag.groups!.key] = tag.groups!.value;
       }
       text = text.replace(tag[0], "");
     }
@@ -131,4 +143,3 @@ export class Todo {
     this.signalChangeHack++;
   }
 }
-
