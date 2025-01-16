@@ -3,25 +3,24 @@ import { crayon } from "https://deno.land/x/crayon@3.3.3/mod.ts";
 import {
   Computed,
   handleInput,
-  handleKeyboardControls,
   handleMouseControls,
   Signal,
-  Tui,
+  Tui
 } from "https://deno.land/x/tui@2.1.11/mod.ts";
 import { debounce } from "jsr:@std/async/debounce";
-import editTodo from "./ui/edit-todo.ts";
 import { propagateOnSetHandler } from "./logic/signal-helpers.ts";
 import {
   readTodosFromFile,
   writeTodosToFile,
 } from "./logic/todo-file-helpers.ts";
-import { TodoList } from "./ui/todo-list.ts";
 import { Todo } from "./logic/todo.ts";
 import { Todos } from "./logic/Todos.ts";
-import { disableComponent } from "./ui/tui-helpers.ts";
-import dateSelector from "./ui/date-selector.ts";
-import confirmDialog from "./ui/confirm-dialog.ts";
 import { ActionBar } from "./ui/action-bar.ts";
+import confirmDialog from "./ui/confirm-dialog.ts";
+import dateSelector from "./ui/date-selector.ts";
+import editTodo from "./ui/edit-todo.ts";
+import { TodoList } from "./ui/todo-list.ts";
+import { disableComponent } from "./ui/tui-helpers.ts";
 
 if (Deno.args.length < 1) {
   console.error("Please provide a filename as an argument.");
@@ -74,18 +73,18 @@ let actionBar: ActionBar | undefined = undefined;
 const disableUiWhile = <T, Args extends unknown[]>(
   func: (...args: Args) => Promise<T>,
 ): (...args: Args) => Promise<T | undefined> =>
-async (...args: Args) => {
-  const disableTodoList = disableComponent(todoList!);
-  const disableActionBar = disableComponent(actionBar!);
-  try {
-    return await func(...args);
-  } catch (_) {
-    // Catch cancel of modals
-  } finally {
-    disableTodoList.abort();
-    disableActionBar.abort();
-  }
-};
+  async (...args: Args) => {
+    const disableTodoList = disableComponent(todoList!);
+    const disableActionBar = disableComponent(actionBar!);
+    try {
+      return await func(...args);
+    } catch (_) {
+      // Catch cancel of modals
+    } finally {
+      disableTodoList.abort();
+      disableActionBar.abort();
+    }
+  };
 
 const archiveCallback = disableUiWhile(async () => {
   const completedTodos = todosOrig.value.filter((x) => x.isDone());
@@ -177,10 +176,10 @@ actionBar = new ActionBar({
     const text = await editTodo(todo.text, tui);
     return todo.setText(text);
   }),
-  dueCallback: () => {},
-  thresholdCallback: () => {},
-  deleteCallback: () => {},
-  toggleHiddenCallback: () => {},
+  dueCallback: () => { },
+  thresholdCallback: () => { },
+  deleteCallback: () => { },
+  toggleHiddenCallback: () => { },
   archiveCallback,
 });
 
