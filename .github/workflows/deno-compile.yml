@@ -19,19 +19,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Setup repo
-        uses: actions/checkout@v4
+  steps:
+    - name: Setup repo
+      uses: actions/checkout@v4
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v1
-        with:
-          deno-version: v1.x
+    - name: Setup Deno
+      uses: denoland/setup-deno@v1
+      with:
+        deno-version: v1.x
 
-      - name: Compile windows
-        run: deno compile --target x86_64-pc-windows-msvc --allow-read --allow-write --allow-run main.ts -o todotui.exe
-      
-      - name: Create Draft Release
+    - name: Compile windows
+      run: deno compile --target x86_64-pc-windows-msvc --allow-read --allow-write --allow-run main.ts -o todotui.exe
+
+    - name: Create Draft Release
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -56,4 +56,3 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         release_id: ${{ steps.create_release.outputs.id }}
- 
