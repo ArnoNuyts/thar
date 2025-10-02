@@ -31,7 +31,7 @@ jobs:
           deno-version: v1.x
 
       - name: Compile windows
-        run: deno compile --target x86_64-pc-windows-msvc --allow-read --allow-write --allow-run main.ts -o todotui.exe
+        run: deno compile --target x86_64-pc-windows-msvc --allow-read --allow-write --allow-run -o todotui.exe main.ts
 
       - name: Create Draft Release
         id: create_release
