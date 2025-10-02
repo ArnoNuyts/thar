@@ -24,8 +24,3 @@ x Array tags like "for : alice" "for : bob" -> {for: [bob, alice]} +v0.0
 x Fix: support dashes in @Context +v0.0
 x 2024-12-18 2024-12-18 Check for resize bugs in todolist, maybe just throttle it +v0.0
 
-
-
-
-x 6
-x 2024-12-24 2024-12-17 zrz

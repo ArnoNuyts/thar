@@ -63,6 +63,7 @@ export class TodoList extends Component {
   lastSelectedId: symbol | undefined = undefined;
   archiveCallback: () => void;
   indexes: Computed<IndexEntry[]>;
+  noTodosTextObject: TextObject;
 
   constructor(options: TableOptions) {
     super(options as unknown as ComponentOptions);
@@ -105,6 +106,31 @@ export class TodoList extends Component {
         currHeader.todoCount = currHeaderTodoCounter;
       }
       return indexArray;
+    });
+
+    const { canvas } = this.tui;
+    const message = "Don't Panic! Press 'n' to start adding todo's.";
+    const messageWidth = message.length;
+    const messageHeight = 1;
+
+    this.noTodosTextObject = new TextObject({
+      canvas,
+      view: this.view,
+      zIndex: this.zIndex.value + 1,
+      style: crayon.white.dim,
+      value: new Computed(() =>
+        this.data.value.length === 0 ? message : "" as string
+      ),
+      rectangle: new Computed(() => {
+            const { column, row, width, height } = this.rectangle.value;
+
+        const centeredColumn = column + Math.floor((width - messageWidth) / 2);
+        const centeredRow = row + Math.floor((height - messageHeight) / 2);
+        return {
+          column: centeredColumn,
+          row: centeredRow,
+        };
+      }),
     });
 
     this.selectedRow = new Signal(1);
@@ -355,6 +381,7 @@ export class TodoList extends Component {
 
     // Drawing data cells
     this.#fillDataDrawObjects();
+    this.noTodosTextObject.draw();
   }
 
   #fillDataDrawObjects(): void {
