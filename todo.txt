@@ -19,3 +19,6 @@ x 2024-12-24 2024-12-19 Make confirm dialog clickable @v0.1
 2024-12-24 Close button on dialogs @v0.2
 2025-01-06 Fix cancel in confirm in dialog @v0.1 +bug
 x 2025-10-02 2025-10-02 Recurrent todos @v0.1
+2025-10-02 Github action only on release @v0.1
+2025-10-02 Add multiple tasks at once @zFuture
+2025-10-02 Autocomplete tags and projects in task dialog @zFuture
