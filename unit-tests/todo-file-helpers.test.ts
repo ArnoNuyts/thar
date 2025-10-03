@@ -1,6 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.201.0/assert/mod.ts";
 import { readTodosFromFile } from "../logic/todo-file-helpers.ts";
-import { Todos } from "../logic/Todos.ts"; // Needed for new Todos()
 
 Deno.test("readTodosFromFile - should return empty Todos and create file if not found", async () => {
   const tempFilename = `temp_test_file_${Date.now()}.txt`;

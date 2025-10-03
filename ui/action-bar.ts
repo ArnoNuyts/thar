@@ -15,6 +15,7 @@ export interface ActionBarOptions extends Omit<ComponentOptions, "theme"> {
   toggleHiddenCallback: () => void;
   newCallback: () => void;
   archiveCallback: () => void;
+  openActionsMenuCallback: () => void;
 }
 
 export class ActionBar extends Component {
@@ -25,6 +26,7 @@ export class ActionBar extends Component {
   toggleHiddenCallback: () => void;
   newCallback: () => void;
   archiveCallback: () => void;
+  openActionsMenuCallback: () => void;
 
   constructor(options: ActionBarOptions) {
     super(options as unknown as ComponentOptions);
@@ -35,6 +37,7 @@ export class ActionBar extends Component {
     this.toggleHiddenCallback = options.toggleHiddenCallback;
     this.newCallback = options.newCallback;
     this.archiveCallback = options.archiveCallback;
+    this.openActionsMenuCallback = options.openActionsMenuCallback;
 
     this.state.subscribe((state) => {
       Object.keys(this.subComponents).forEach((key) =>
@@ -64,9 +67,9 @@ export class ActionBar extends Component {
       }),
     });
 
-    const help = new ActionBarItem({
-      callBack: () => {},
-      previousItem: {
+    const menu = new ActionBarItem({
+      callBack: this.openActionsMenuCallback,
+      previousItem: { // This is a dummy previous item to position the first item
         rectangle: new Computed(() => {
           const { row } = this.rectangle.value;
           return {
@@ -79,13 +82,13 @@ export class ActionBar extends Component {
         zIndex: this.zIndex,
         parent: this,
       },
-      key: "?",
-      description: "Help",
+      key: "x",
+      description: "Menu",
     });
 
     const quit = new ActionBarItem({
       callBack: () => Deno.exit(),
-      previousItem: help,
+      previousItem: menu,
       key: "q",
       description: "Quit",
     });
@@ -111,7 +114,7 @@ export class ActionBar extends Component {
       description: "Archive",
     });
 
-    help.draw();
+    menu.draw();
     line.draw();
     quit.draw();
     newItem.draw();
@@ -119,7 +122,7 @@ export class ActionBar extends Component {
     archive.draw();
 
     this.drawnObjects.line = line;
-    this.subComponents.help = help;
+    this.subComponents.menu = menu;
     this.subComponents.newItem = newItem;
     this.subComponents.quit = quit;
     this.subComponents.edit = edit;

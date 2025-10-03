@@ -22,3 +22,4 @@ x 2025-10-02 2025-10-02 Recurrent todos @v0.1
 2025-10-02 Github action only on release @v0.1
 2025-10-02 Add multiple tasks at once @zFuture
 2025-10-02 Autocomplete tags and projects in task dialog @zFuture
+2025-10-02 Fix Ok in delete when multiple deletes @v0.1

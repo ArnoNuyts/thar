@@ -43,6 +43,7 @@ export interface TableOptions extends Omit<ComponentOptions, "theme"> {
   toggleStateCallback: (currentTodo: Todo) => void;
   recurrenceCallback: (currentTodo: Todo) => void;
   newCallback: () => Promise<Todo | undefined>;
+  openActionsMenuCallback: () => void;
   data: Computed<Todos>;
 }
 
@@ -64,6 +65,7 @@ export class TodoList extends Component {
   archiveCallback: () => void;
   indexes: Computed<IndexEntry[]>;
   noTodosTextObject: TextObject;
+  openActionsMenuCallback: () => void;
 
   constructor(options: TableOptions) {
     super(options as unknown as ComponentOptions);
@@ -122,7 +124,7 @@ export class TodoList extends Component {
         this.data.value.length === 0 ? message : "" as string
       ),
       rectangle: new Computed(() => {
-            const { column, row, width, height } = this.rectangle.value;
+        const { column, row, width, height } = this.rectangle.value;
 
         const centeredColumn = column + Math.floor((width - messageWidth) / 2);
         const centeredRow = row + Math.floor((height - messageHeight) / 2);
@@ -144,6 +146,7 @@ export class TodoList extends Component {
     this.toggleStateCallback = options.toggleStateCallback;
     this.recurrenceCallback = options.recurrenceCallback;
     this.dueCallback = options.dueCallback;
+    this.openActionsMenuCallback = options.openActionsMenuCallback;
 
     if (this.lastSelectedId === undefined) {
       this.lastSelectedId = options.data.peek()[0]?.id;
@@ -241,6 +244,9 @@ export class TodoList extends Component {
 
       const lastDataRow = this.indexes.peek().length - 1;
       switch (key) {
+        case "x":
+          this.openActionsMenuCallback();
+          return;
         case "a":
           setTimeout(() => this.archiveCallback(), 0);
           return;

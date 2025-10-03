@@ -23,6 +23,7 @@ import editTodo from "./ui/edit-todo.ts";
 import recurrenceAmountDialog from "./ui/recurrence-amount-dialog.ts";
 import { TodoList } from "./ui/todo-list.ts";
 import { disableComponent } from "./ui/tui-helpers.ts";
+import todoActionsMenu from "./ui/todo-actions-menu.ts";
 
 if (Deno.args.length < 1) {
   console.error("Please provide a filename as an argument.");
@@ -105,6 +106,8 @@ const archiveCallback = disableUiWhile(async () => {
   todosOrig.value = new Todos(...todosOrig.peek().filter((x) => !x.isDone()));
 });
 
+const actionsMenu = todoActionsMenu;
+
 todoList = new TodoList({
   parent: tui,
   data: todosSorted,
@@ -164,6 +167,36 @@ todoList = new TodoList({
     );
     todo.setRecurrence(`${amount}${recurrence}`);
   }),
+  openActionsMenuCallback: disableUiWhile(async () => {
+    const action = await actionsMenu(tui);
+    const todo = todoList.getSelectedTodo();
+    if (!todo) {
+      return;
+    }
+    switch (action) {
+      case "Edit":
+        await todoList.editCallback(todo);
+        break;
+      case "Delete":
+        await todoList.deleteCallback(todo);
+        break;
+      case "Toggle Complete":
+        todoList.toggleStateCallback(todo);
+        break;
+      case "Set Due Date":
+        await todoList.dueCallback(todo);
+        break;
+      case "Set Threshold Date":
+        await todoList.thresholdCallback(todo);
+        break;
+      case "Set Recurrence":
+        await todoList.recurrenceCallback(todo);
+        break;
+      case "Toggle Hidden":
+        await todoList.toggleHiddenCallback(todo);
+        break;
+    }
+  }),
 });
 todoList.state.value = "focused";
 
@@ -199,6 +232,7 @@ actionBar = new ActionBar({
   deleteCallback: () => {},
   toggleHiddenCallback: () => {},
   archiveCallback,
+  openActionsMenuCallback: todoList.openActionsMenuCallback,
 });
 
 const readTodosDebounced = debounce(
