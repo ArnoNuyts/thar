@@ -1,12 +1,21 @@
 import { crayon } from "https://deno.land/x/crayon@3.3.3/mod.ts";
-import { clamp, Computed, Tui } from "https://deno.land/x/tui@2.1.11/mod.ts";
+import { clamp, Computed, Tui, Signal } from "https://deno.land/x/tui@2.1.11/mod.ts";
 import { Box } from "https://deno.land/x/tui@2.1.11/src/components/box.ts";
 import { Frame } from "https://deno.land/x/tui@2.1.11/src/components/frame.ts";
-import { List } from "./list.ts";
+import { TodoActionMenuItem } from "./todo-action-menu-item.ts";
 import { keepComponentFocussed } from "./tui-helpers.ts";
 
 export default (
   parent: Tui,
+  callbacks: {
+    edit: () => void;
+    delete: () => void;
+    toggleComplete: () => void;
+    setDueDate: () => void;
+    setThresholdDate: () => void;
+    setRecurrence: () => void;
+    toggleHidden: () => void;
+  },
 ): Promise<string> => {
   const box = new Box({
     parent: parent,
@@ -45,46 +54,49 @@ export default (
   });
 
   const actions = [
-    { name: "Edit" },
-    { name: "Delete" },
-    { name: "Toggle Complete" },
-    { name: "Set Due Date" },
-    { name: "Set Threshold Date" },
-    { name: "Set Recurrence" },
-    { name: "Toggle Hidden" },
+    { name: "Edit", shortcut: "e", callBack: callbacks.edit },
+    { name: "Del", shortcut: "delete", callBack: callbacks.delete },
+    { name: "Toggle Complete", shortcut: "space", callBack: callbacks.toggleComplete },
+    { name: "Set Due Date", shortcut: "d", callBack: callbacks.setDueDate },
+    { name: "Set Threshold Date", shortcut: "t", callBack: callbacks.setThresholdDate },
+    { name: "Set Recurrence", shortcut: "r", callBack: callbacks.setRecurrence },
+    { name: "Toggle Hidden", shortcut: "h", callBack: callbacks.toggleHidden },
   ];
 
-  const list = new List({
-    parent: frame,
-    data: actions.map((a) => [a.name]),
-    theme: {
-      base: crayon.bgBlack.white,
-      frame: { base: crayon.bgBlack },
-      selectedRow: {
-        base: crayon.bold.bgBlue.white,
-        focused: crayon.bold.bgWhite.black,
-        active: crayon.bold.bgWhite.black,
-      },
-    },
-    rectangle: new Computed(() => ({
-      column: frame.rectangle.value.column + 1,
-      row: frame.rectangle.value.row,
-      width: frame.rectangle.value.width - 2,
-      height: frame.rectangle.value.height,
-    })),
-    zIndex: 6,
-  });
 
-  keepComponentFocussed(list);
+  const selectedRow = new Signal(0);
+
+  const menuItems: TodoActionMenuItem[] = actions.map((action, index) => 
+    new TodoActionMenuItem({
+      parent: box,
+      zIndex: new Signal(6),
+      row: new Computed(() => frame.rectangle.value.row + index),
+      key: action.shortcut,
+      description: action.name,
+      callBack: action.callBack,
+    })
+  );
+  box.draw();
+  frame.draw();
+
+  menuItems.forEach((item) => item.draw());
+
+  keepComponentFocussed(box);
 
   return new Promise((resolve, reject) => {
-    list.on("keyPress", ({ key }) => {
+    box.on("keyPress", ({ key }) => {
       if (key === "escape") {
         box.destroy();
         reject("Canceled");
+      } else if (key === "up") {
+        selectedRow.value = Math.max(0, selectedRow.value - 1);
+      } else if (key === "down") {
+        selectedRow.value = Math.min(actions.length - 1, selectedRow.value + 1);
       } else if (key === "return") {
         box.destroy();
-        resolve(actions[list.selectedRow.peek()].name);
+        // Should this be awaited?
+        menuItems[selectedRow.value].callBack();
+        resolve(actions[selectedRow.value].name);
       }
     });
   });

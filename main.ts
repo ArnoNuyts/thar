@@ -106,7 +106,6 @@ const archiveCallback = disableUiWhile(async () => {
   todosOrig.value = new Todos(...todosOrig.peek().filter((x) => !x.isDone()));
 });
 
-const actionsMenu = todoActionsMenu;
 
 todoList = new TodoList({
   parent: tui,
@@ -168,34 +167,16 @@ todoList = new TodoList({
     todo.setRecurrence(`${amount}${recurrence}`);
   }),
   openActionsMenuCallback: disableUiWhile(async () => {
-    const action = await actionsMenu(tui);
-    const todo = todoList.getSelectedTodo();
-    if (!todo) {
-      return;
-    }
-    switch (action) {
-      case "Edit":
-        await todoList.editCallback(todo);
-        break;
-      case "Delete":
-        await todoList.deleteCallback(todo);
-        break;
-      case "Toggle Complete":
-        todoList.toggleStateCallback(todo);
-        break;
-      case "Set Due Date":
-        await todoList.dueCallback(todo);
-        break;
-      case "Set Threshold Date":
-        await todoList.thresholdCallback(todo);
-        break;
-      case "Set Recurrence":
-        await todoList.recurrenceCallback(todo);
-        break;
-      case "Toggle Hidden":
-        await todoList.toggleHiddenCallback(todo);
-        break;
-    }
+    // Probably need here the setTimeout hack aswel. See todo-lits.ts
+    await todoActionsMenu(tui, {
+      delete: () => todoList!.getSelectedTodo() && todoList!.deleteCallback(todoList!.getSelectedTodo() as Todo),
+      edit: () => todoList!.getSelectedTodo() && todoList!.editCallback(todoList!.getSelectedTodo() as Todo),
+      setDueDate: () => todoList!.getSelectedTodo() && todoList!.dueCallback(todoList!.getSelectedTodo() as Todo),
+      setRecurrence: () => todoList!.getSelectedTodo() && todoList!.recurrenceCallback(todoList!.getSelectedTodo() as Todo),
+      setThresholdDate: () => todoList!.getSelectedTodo() && todoList!.thresholdCallback(todoList!.getSelectedTodo() as Todo),
+      toggleComplete: () =>todoList!.getSelectedTodo() &&  todoList!.toggleStateCallback(todoList!.getSelectedTodo() as Todo),
+      toggleHidden: () => todoList!.getSelectedTodo() && todoList!.toggleHiddenCallback(todoList!.getSelectedTodo() as Todo),
+    });
   }),
 });
 todoList.state.value = "focused";
