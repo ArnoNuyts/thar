@@ -176,6 +176,7 @@ todoList = new TodoList({
       setThresholdDate: () => todoList!.getSelectedTodo() && todoList!.thresholdCallback(todoList!.getSelectedTodo() as Todo),
       toggleComplete: () =>todoList!.getSelectedTodo() &&  todoList!.toggleStateCallback(todoList!.getSelectedTodo() as Todo),
       toggleHidden: () => todoList!.getSelectedTodo() && todoList!.toggleHiddenCallback(todoList!.getSelectedTodo() as Todo),
+      archive: archiveCallback,
     });
   }),
 });
