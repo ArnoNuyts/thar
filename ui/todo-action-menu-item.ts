@@ -47,13 +47,17 @@ export class TodoActionMenuItem extends Component {
     this.style = this.baseStyle as unknown as Signal<Style>;
   }
 
+  override interact(method: "keyboard" | "mouse"): void {
+    if (this.state.value !== "disabled" && method == "mouse") {
+      this.callBack();
+    }
+  }
+
   override draw(): void {
 
     super.draw();
 
     const { canvas } = this.tui;
-
-
 
     const key = new TextObject({
       canvas,

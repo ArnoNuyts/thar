@@ -98,8 +98,12 @@ export default (
   });
 
   const selectedRow = new Signal(0);
-
-  const menuItems: (TodoActionMenuItem | TodoActionMenuTitleItem)[] = actions
+  let destroy: () => void;
+  
+  keepComponentFocussed(box);
+ 
+  return new Promise((resolve, reject) => {
+    const menuItems: (TodoActionMenuItem | TodoActionMenuTitleItem)[] = actions
     .map((action, index) => {
       if (!action.callBack) {
         return new TodoActionMenuTitleItem({
@@ -115,19 +119,27 @@ export default (
         row: new Computed(() => frame.rectangle.value.row + index),
         key: action.shortcut as string,
         description: action.name,
-        callBack: action.callBack as () => void,
+        callBack: () => {  
+          setTimeout(
+          action.callBack,
+          0,
+        );
+        destroy();
+        resolve(action.name);
+      },
         isSelected: new Computed(() => index == selectedRow.value),
       });
     });
 
-  keepComponentFocussed(box);
+  destroy = () => {
+      menuItems.forEach((x) => x.destroy());
+      textBox.destroy();
+      box.destroy();
+  }
 
-  return new Promise((resolve, reject) => {
     box.on("keyPress", ({ key }) => {
       if (key === "escape") {
-        menuItems.forEach((x) => x.destroy());
-        textBox.destroy();
-        box.destroy();
+        destroy();
         reject("Canceled");
       } else if (key === "up") {
         let newIndex = selectedRow.value - 1;
@@ -147,10 +159,8 @@ export default (
         }
       } else if (key === "return") {
         if (!actions[selectedRow.value].callBack) return;
-        menuItems.forEach((x) => x.destroy());
-        textBox.destroy();
-        box.destroy();
-        // Should this be awaited?
+        destroy();
+
         setTimeout(
           (menuItems[selectedRow.value] as TodoActionMenuItem).callBack,
           0,
