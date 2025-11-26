@@ -104,7 +104,7 @@ const ContextTitle = memo(({ title, count }: { title: string, count: number }) =
 
 const ActionBar = () => {
     return (
-        <Box borderStyle="single">
+        <Box borderStyle="single" borderTop borderLeft={false} borderRight={false} borderBottom={false}>
             {[{key: "x", text: "Menu"}, {key: "q", text: "Quit"}, {key: "n", text: "New"}, {key: "e", text: "Edit"}, {key: "a", text: "Archive"}].map((item) => {
                 return <Fragment key={item.key}>
                     <Text color="yellow">  {item.key} </Text>
@@ -226,7 +226,7 @@ const App = ({ filename }: { filename: string }) => {
 
   return (
     <Box flexDirection="column" height="100%" width="100%" flexGrow={1}>
-      <Box borderStyle="round" flexDirection="column" height={listHeight}>
+      <Box flexDirection="column" flexGrow={1} height={listHeight}>
         {visibleIndexes.map((entry, index) => {
             const originalIndex = index + offsetRow;
             if (entry.type === IndexType.context) {
@@ -235,7 +235,7 @@ const App = ({ filename }: { filename: string }) => {
             return <TodoItem key={originalIndex} todo={entry.todo} isSelected={originalIndex === selectedRow} />
         })}
       </Box>
-        <ActionBar />
+      <ActionBar />
     </Box>
   );
 };
