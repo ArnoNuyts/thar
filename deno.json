@@ -1,0 +1,14 @@
+{
+  "tasks": {
+    "start": "deno run --allow-sys --allow-env --allow-ffi --allow-read --allow-write main.tsx"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  },
+  "imports": {
+    "ink": "npm:ink@^6.3.1",
+    "react": "npm:react@^19.2.0",
+    "ink-mouse": "npm:@zenobius/ink-mouse@^1.0.0"
+  }
+}
