@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useMemo, useRef } from 'react';
+import React, { useState, useEffect, memo, useMemo, useRef, Fragment } from 'react';
 import { render, Box, Text, useInput, useApp, useStdout } from 'ink';
 import { readTodosFromFile } from './logic/todo-file-helpers.ts';
 import { Todos } from './logic/Todos.ts';
@@ -104,8 +104,13 @@ const ContextTitle = memo(({ title, count }: { title: string, count: number }) =
 
 const ActionBar = () => {
     return (
-        <Box borderStyle="round">
-            <Text> | New | Edit | Due | Rec | Thr | Del | Hid | Arch | Acts |</Text>
+        <Box borderStyle="single">
+            {[{key: "x", text: "Menu"}, {key: "q", text: "Quit"}, {key: "n", text: "New"}, {key: "e", text: "Edit"}, {key: "a", text: "Archive"}].map((item) => {
+                return <Fragment key={item.key}>
+                    <Text color="yellow">  {item.key} </Text>
+                    <Text>{item.text} </Text>
+                </Fragment>;
+            })}
         </Box>
     );
 }
@@ -221,9 +226,6 @@ const App = ({ filename }: { filename: string }) => {
 
   return (
     <Box flexDirection="column" height="100%" width="100%" flexGrow={1}>
-      <Box>
-        <Text>TodoTui - Ink Version</Text>
-      </Box>
       <Box borderStyle="round" flexDirection="column" height={listHeight}>
         {visibleIndexes.map((entry, index) => {
             const originalIndex = index + offsetRow;
