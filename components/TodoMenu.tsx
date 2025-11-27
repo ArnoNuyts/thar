@@ -41,12 +41,12 @@ export const TodoMenu = ({ onSelect, onCancel }: TodoMenuProps) => {
         }
 
         if (key.upArrow) {
-            setSelectedIndex((prev) => (prev > 0 ? prev - 1 : MENU_ITEMS.length - 1));
+            setSelectedIndex((prev: number) => (prev > 0 ? prev - 1 : MENU_ITEMS.length - 1));
             return;
         }
 
         if (key.downArrow) {
-            setSelectedIndex((prev) => (prev < MENU_ITEMS.length - 1 ? prev + 1 : 0));
+            setSelectedIndex((prev: number) => (prev < MENU_ITEMS.length - 1 ? prev + 1 : 0));
             return;
         }
         
