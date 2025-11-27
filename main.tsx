@@ -5,6 +5,7 @@ import { EditTodoModal } from './components/EditTodoModal.tsx';
 import { SetDueDateModal } from './components/SetDueDateModal.tsx';
 import { MenuAction, TodoMenu } from './components/TodoMenu.tsx';
 import { FocusProvider } from './components/focus-context.tsx';
+import { ModalProvider, useModal } from './components/modal-context.tsx';
 import { useFocusedInput } from './hooks/useFocusedInput.ts';
 import { readTodosFromFile } from './logic/todo-file-helpers.ts';
 import { Todo } from './logic/todo.ts';
@@ -133,10 +134,7 @@ const AppContent = ({ filename }: { filename: string }) => {
   const [todos, setTodos] = useState<Todos>(new Todos());
   const [selectedTodoId, setSelectedTodoId] = useState<symbol | undefined>(undefined);
   const [offsetRow, setOffsetRow] = useState(0);
-  const [showModal, setShowModal] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showDueDateModal, setShowDueDateModal] = useState(false);
-  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const { openModal, activeModal } = useModal();
   const { stdout } = useStdout();
   const listHeight = stdout.rows - 4;
 
@@ -170,25 +168,25 @@ const AppContent = ({ filename }: { filename: string }) => {
     }
 
     if (input === 'n') {
-        setShowModal(true);
+        openModal('create-todo');
         return;
     }
 
     if (input === 'e') {
         const selectedEntry = indexes[selectedRow];
         if (selectedEntry?.type === IndexType.todo) {
-            setEditingTodo(selectedEntry.todo);
+            openModal('edit-todo', selectedEntry.todo);
         }
         return;
     }
 
     if (input === 'x') {
-        setShowMenu(true);
+        openModal('todo-menu');
         return;
     }
 
     if (input === 'd') {
-        setShowDueDateModal(true);
+        openModal('set-due-date');
         return;
     }
 
@@ -260,15 +258,13 @@ const AppContent = ({ filename }: { filename: string }) => {
       const newTodo = new Todo(text);
       newTodo.creationDate = new Date();
       setTodos(new Todos(...todos, newTodo));
-      setShowModal(false);
   };
 
   const handleSaveEdit = (text: string) => {
-      if (editingTodo) {
-          editingTodo.setText(text);
-          // Force re-render
+      const selectedEntry = indexes[selectedRow];
+      if (selectedEntry?.type === IndexType.todo) {
+          selectedEntry.todo.setText(text);
           setTodos(new Todos(...todos));
-          setEditingTodo(null);
       }
   };
 
@@ -278,19 +274,21 @@ const AppContent = ({ filename }: { filename: string }) => {
           selectedEntry.todo.setDue(date);
           setTodos(new Todos(...todos));
       }
-      setShowDueDateModal(false);
   };
 
   const handleMenuAction = (action: MenuAction) => {
-      setShowMenu(false);
       const selectedEntry = indexes[selectedRow];
       if (!selectedEntry || selectedEntry.type !== IndexType.todo) return;
       const todo = selectedEntry.todo;
 
       switch (action) {
-          case 'edit':
-              setEditingTodo(todo);
+          case 'edit': {
+              const selectedEntry = indexes[selectedRow];
+              if (selectedEntry?.type === IndexType.todo) {
+                  openModal('edit-todo', selectedEntry.todo);
+              }
               break;
+          }
           case 'delete': {
               const newTodos = todos.filter((t: Todo) => t !== todo);
               setTodos(new Todos(...newTodos));
@@ -312,7 +310,7 @@ const AppContent = ({ filename }: { filename: string }) => {
               break;
           // Placeholder for other actions
           case 'due':
-              setShowDueDateModal(true);
+              openModal('set-due-date');
               break;
           case 'threshold':
           case 'recurrence':
@@ -334,28 +332,24 @@ const AppContent = ({ filename }: { filename: string }) => {
         })}
       </Box>
       <ActionBar />
-      {showModal && (
+      {activeModal === 'create-todo' && (
         <Box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
-            <CreateTodoModal onSave={handleSave} onCancel={() => setShowModal(false)} />
+            <CreateTodoModal onSave={handleSave} />
         </Box>
       )}
-      {editingTodo && (
+      {activeModal === 'edit-todo' && (
         <Box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
-            <EditTodoModal 
-                initialValue={editingTodo.text} 
-                onSave={handleSaveEdit} 
-                onCancel={() => setEditingTodo(null)} 
-            />
+            <EditTodoModal onSave={handleSaveEdit} />
         </Box>
       )}
-      {showMenu && (
+      {activeModal === 'todo-menu' && (
         <Box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
-            <TodoMenu onSelect={handleMenuAction} onCancel={() => setShowMenu(false)} />
+            <TodoMenu onSelect={handleMenuAction} />
         </Box>
       )}
-      {showDueDateModal && (
+      {activeModal === 'set-due-date' && (
         <Box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
-            <SetDueDateModal onSave={handleSaveDueDate} onCancel={() => setShowDueDateModal(false)} />
+            <SetDueDateModal onSave={handleSaveDueDate} />
         </Box>
       )}
     </Box>
@@ -365,9 +359,12 @@ const AppContent = ({ filename }: { filename: string }) => {
 const App = ({ filename }: { filename: string }) => {
     return (
         // @ts-ignore: children prop issue
-        <FocusProvider>
-            <AppContent filename={filename} />
-        </FocusProvider>
+        <ModalProvider>
+            {/* @ts-ignore: children prop issue */}
+            <FocusProvider>
+                <AppContent filename={filename} />
+            </FocusProvider>
+        </ModalProvider>
     );
 };
 

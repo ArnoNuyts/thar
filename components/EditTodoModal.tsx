@@ -3,19 +3,28 @@ import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { useFocusedInput } from '../hooks/useFocusedInput.ts';
 import { Modal } from './Modal.tsx';
+import { useModal } from './modal-context.tsx';
 
 interface EditTodoModalProps {
-    initialValue: string;
     onSave: (text: string) => void;
-    onCancel: () => void;
 }
 
-export const EditTodoModal = ({ initialValue, onSave, onCancel }: EditTodoModalProps) => {
-    const [text, setText] = useState(initialValue);
+export const EditTodoModal = ({ onSave }: EditTodoModalProps) => {
+    const { modalData, closeModal } = useModal();
+    const [text, setText] = useState(modalData?.text || '');
 
     const { isFocused } = useFocusedInput((_input, key) => {
         if (key.escape) {
-            onCancel();
+            closeModal();
+            return;
+        }
+
+        if (key.return) {
+            if (text.trim().length > 0) {
+                onSave(text);
+            }
+            closeModal();
+            return;
         }
     }, { autoFocus: true });
 
@@ -29,7 +38,6 @@ export const EditTodoModal = ({ initialValue, onSave, onCancel }: EditTodoModalP
                     focus={isFocused}
                     value={text}
                     onChange={setText}
-                    onSubmit={onSave}
                 />
             </Box>
             <Text dimColor>Enter = save, Esc = cancel</Text>

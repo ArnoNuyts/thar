@@ -3,10 +3,10 @@ import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { useFocusedInput } from '../hooks/useFocusedInput.ts';
 import { Modal } from './Modal.tsx';
+import { useModal } from './modal-context.tsx';
 
 interface SetDueDateModalProps {
     onSave: (date: Date) => void;
-    onCancel: () => void;
 }
 
 const OPTIONS = [
@@ -17,7 +17,8 @@ const OPTIONS = [
     { label: 'Custom', value: 'custom' },
 ];
 
-export const SetDueDateModal = ({ onSave, onCancel }: SetDueDateModalProps) => {
+export const SetDueDateModal = ({ onSave }: SetDueDateModalProps) => {
+    const { closeModal } = useModal();
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [isCustom, setIsCustom] = useState(false);
     const [customDate, setCustomDate] = useState(() => {
@@ -30,7 +31,7 @@ export const SetDueDateModal = ({ onSave, onCancel }: SetDueDateModalProps) => {
             if (isCustom) {
                 setIsCustom(false);
             } else {
-                onCancel();
+                closeModal();
             }
             return;
         }

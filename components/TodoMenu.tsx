@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { useFocusedInput } from '../hooks/useFocusedInput.ts';
 import { Modal } from './Modal.tsx';
+import { useModal } from './modal-context.tsx';
 
 export type MenuAction = 'edit' | 'delete' | 'toggle' | 'due' | 'threshold' | 'recurrence' | 'toggle-hidden';
 
 interface TodoMenuProps {
     onSelect: (action: MenuAction) => void;
-    onCancel: () => void;
 }
 
 interface MenuItem {
@@ -26,12 +26,13 @@ const MENU_ITEMS: MenuItem[] = [
     { label: 'Toggle Hidden', shortcut: 'h', action: 'toggle-hidden' },
 ];
 
-export const TodoMenu = ({ onSelect, onCancel }: TodoMenuProps) => {
+export const TodoMenu = ({ onSelect }: TodoMenuProps) => {
+    const { closeModal } = useModal();
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     const { isFocused } = useFocusedInput((input, key) => {
         if (key.escape) {
-            onCancel();
+            closeModal();
             return;
         }
 
