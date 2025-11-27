@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { useFocusedInput } from '../hooks/useFocusedInput.ts';
 import { Modal } from './Modal.tsx';
-import { useModal } from './modal-context.tsx';
+import { useModal } from '../contexts/modal-context.tsx';
 
 interface SetDueDateModalProps {
     onSave: (date: Date) => void;

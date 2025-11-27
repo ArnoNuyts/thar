@@ -12,7 +12,7 @@ interface ModalContextType {
 
 const ModalContext = createContext<ModalContextType | null>(null);
 
-export const ModalProvider = ({ children }: { children: ReactNode }) => {
+export const ModalProvider = ({ children }: { children?: ReactNode }) => {
     const [activeModal, setActiveModal] = useState<ModalId | null>(null);
     const [modalData, setModalData] = useState<Todo | null>(null);
 

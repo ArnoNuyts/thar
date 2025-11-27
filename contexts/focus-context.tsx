@@ -8,7 +8,7 @@ interface FocusContextType {
 
 const FocusContext = createContext<FocusContextType | undefined>(undefined);
 
-export const FocusProvider = ({ children }: { children: ReactNode }) => {
+export const FocusProvider = ({ children }: { children?: ReactNode }) => {
     const [stack, setStack] = useState<symbol[]>([]);
 
     const requestFocus = useCallback((id: symbol) => {
