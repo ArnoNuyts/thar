@@ -2,6 +2,7 @@ import { Box, render, Text, useApp, useStdout } from 'ink';
 import React, { Fragment, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { CreateTodoModal } from './components/CreateTodoModal.tsx';
 import { EditTodoModal } from './components/EditTodoModal.tsx';
+import { MenuAction, TodoMenu } from './components/TodoMenu.tsx';
 import { FocusProvider } from './components/focus-context.tsx';
 import { useFocusedInput } from './hooks/useFocusedInput.ts';
 import { readTodosFromFile } from './logic/todo-file-helpers.ts';
@@ -126,6 +127,7 @@ const AppContent = ({ filename }: { filename: string }) => {
   const [selectedTodoId, setSelectedTodoId] = useState<symbol | undefined>(undefined);
   const [offsetRow, setOffsetRow] = useState(0);
   const [showModal, setShowModal] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const { stdout } = useStdout();
   const listHeight = stdout.rows - 4;
@@ -169,6 +171,11 @@ const AppContent = ({ filename }: { filename: string }) => {
         if (selectedEntry?.type === IndexType.todo) {
             setEditingTodo(selectedEntry.todo);
         }
+        return;
+    }
+
+    if (input === 'x') {
+        setShowMenu(true);
         return;
     }
 
@@ -252,6 +259,43 @@ const AppContent = ({ filename }: { filename: string }) => {
       }
   };
 
+  const handleMenuAction = (action: MenuAction) => {
+      setShowMenu(false);
+      const selectedEntry = indexes[selectedRow];
+      if (!selectedEntry || selectedEntry.type !== IndexType.todo) return;
+      const todo = selectedEntry.todo;
+
+      switch (action) {
+          case 'edit':
+              setEditingTodo(todo);
+              break;
+          case 'delete': {
+              const newTodos = todos.filter((t: Todo) => t !== todo);
+              setTodos(new Todos(...newTodos));
+              setSelectedTodoId(undefined);
+              break;
+          }
+          case 'toggle': {
+              const recurring = todo.toggleState();
+              if (recurring) {
+                  setTodos(new Todos(...todos, recurring));
+              } else {
+                  setTodos(new Todos(...todos));
+              }
+              break;
+          }
+          case 'toggle-hidden':
+              todo.toggleHidden();
+              setTodos(new Todos(...todos));
+              break;
+          // Placeholder for other actions
+          case 'due':
+          case 'threshold':
+          case 'recurrence':
+              break;
+      }
+  };
+
   return (
     <Box flexDirection="column" height="100%" width="100%" flexGrow={1}>
       <Box flexDirection="column" flexGrow={1} height={listHeight}>
@@ -278,6 +322,11 @@ const AppContent = ({ filename }: { filename: string }) => {
                 onSave={handleSaveEdit} 
                 onCancel={() => setEditingTodo(null)} 
             />
+        </Box>
+      )}
+      {showMenu && (
+        <Box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
+            <TodoMenu onSelect={handleMenuAction} onCancel={() => setShowMenu(false)} />
         </Box>
       )}
     </Box>
