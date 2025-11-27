@@ -68,21 +68,20 @@ export const TodoMenu = ({ onSelect }: TodoMenuProps) => {
         // @ts-ignore: children prop issue
         <Modal isFocused={isFocused} title="Todo menu">
             <Box flexDirection="column">
-                {MENU_ITEMS.map((item, index) => (
-                    <Box key={item.action}>
-                        <Box width={6} justifyContent="end">
-                            <Text color="yellow">{item.shortcut} </Text>
+                {MENU_ITEMS.map((item, index) => {
+                    const isSelected = index === selectedIndex;
+                    return (
+                        <Box key={item.action} justifyContent="space-between">
+                            <Box>
+                                <Text color="green">{isSelected ? '» ' : '  '}</Text>
+                                <Text>{item.label}</Text>
+                            </Box>
+                            <Box>
+                                <Text color="yellow">{item.shortcut}</Text>
+                            </Box>
                         </Box>
-                        <Box>
-                            <Text
-                                backgroundColor={index === selectedIndex ? 'blue' : undefined}
-                                color={index === selectedIndex ? 'white' : undefined}
-                            >
-                                {item.label}
-                            </Text>
-                        </Box>
-                    </Box>
-                ))}
+                    );
+                })}
             </Box>
         </Modal>
     );
