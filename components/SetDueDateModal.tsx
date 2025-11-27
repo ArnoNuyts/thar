@@ -58,6 +58,7 @@ export const SetDueDateModal = ({ onSave }: SetDueDateModalProps) => {
                         break;
                 }
                 onSave(date);
+                closeModal();
             }
             return;
         }
@@ -77,6 +78,7 @@ export const SetDueDateModal = ({ onSave }: SetDueDateModalProps) => {
         const date = new Date(value);
         if (!isNaN(date.getTime())) {
             onSave(date);
+            closeModal();
         }
     };
 
@@ -86,13 +88,13 @@ export const SetDueDateModal = ({ onSave }: SetDueDateModalProps) => {
             {!isCustom ? (
                 <Box flexDirection="column" paddingX={1}>
                     {OPTIONS.map((option, index) => {
-                        return <Text
-                            {...({ key: option.value } as any)}
-                            backgroundColor={index === selectedIndex ? 'blue' : undefined}
-                            color={index === selectedIndex ? 'white' : undefined}
-                        >
-                            {option.label}
-                        </Text>;
+                        const isSelected = index === selectedIndex;
+                        return (
+                            <Box key={option.value}>
+                                <Text color="green">{isSelected ? '» ' : '  '}</Text>
+                                <Text>{option.label}</Text>
+                            </Box>
+                        );
                     })}
                 </Box>
             ) : (
