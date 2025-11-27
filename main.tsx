@@ -2,6 +2,7 @@ import { Box, render, Text, useApp, useStdout } from 'ink';
 import React, { Fragment, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { CreateTodoModal } from './components/CreateTodoModal.tsx';
 import { EditTodoModal } from './components/EditTodoModal.tsx';
+import { SetDueDateModal } from './components/SetDueDateModal.tsx';
 import { MenuAction, TodoMenu } from './components/TodoMenu.tsx';
 import { FocusProvider } from './components/focus-context.tsx';
 import { useFocusedInput } from './hooks/useFocusedInput.ts';
@@ -89,6 +90,9 @@ const TodoItem = ({ todo, isSelected }: { todo: Todo, isSelected: boolean }) => 
   const priority = todo.priority ? `(${todo.priority})` : '';
   const completionDate = todo.completionDate ? todo.completionDate.toISOString().slice(0, 10) : '';
   const creationDate = todo.creationDate ? todo.creationDate.toISOString().slice(0, 10) : '';
+  const dueDate = todo.tags.due ? `due:${todo.tags.due}` : '';
+  const threshold = todo.tags.t ? `t:${todo.tags.t}` : '';
+  const recurrence = todo.tags.rec ? `rec:${todo.tags.rec}` : '';
 
   return (
     <Box backgroundColor={isSelected ? "gray" : undefined}>
@@ -97,6 +101,9 @@ const TodoItem = ({ todo, isSelected }: { todo: Todo, isSelected: boolean }) => 
       <Text>{completionDate} </Text>
       <Text>{creationDate} </Text>
       {renderTodoText(todo.text)}
+      {dueDate && <Text color="red"> {dueDate}</Text>}
+      {threshold && <Text color="yellow"> {threshold}</Text>}
+      {recurrence && <Text color="cyan"> {recurrence}</Text>}
     </Box>
   );
 };
@@ -128,6 +135,7 @@ const AppContent = ({ filename }: { filename: string }) => {
   const [offsetRow, setOffsetRow] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showDueDateModal, setShowDueDateModal] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const { stdout } = useStdout();
   const listHeight = stdout.rows - 4;
@@ -176,6 +184,11 @@ const AppContent = ({ filename }: { filename: string }) => {
 
     if (input === 'x') {
         setShowMenu(true);
+        return;
+    }
+
+    if (input === 'd') {
+        setShowDueDateModal(true);
         return;
     }
 
@@ -259,6 +272,15 @@ const AppContent = ({ filename }: { filename: string }) => {
       }
   };
 
+  const handleSaveDueDate = (date: Date) => {
+      const selectedEntry = indexes[selectedRow];
+      if (selectedEntry?.type === IndexType.todo) {
+          selectedEntry.todo.setDue(date);
+          setTodos(new Todos(...todos));
+      }
+      setShowDueDateModal(false);
+  };
+
   const handleMenuAction = (action: MenuAction) => {
       setShowMenu(false);
       const selectedEntry = indexes[selectedRow];
@@ -290,6 +312,8 @@ const AppContent = ({ filename }: { filename: string }) => {
               break;
           // Placeholder for other actions
           case 'due':
+              setShowDueDateModal(true);
+              break;
           case 'threshold':
           case 'recurrence':
               break;
@@ -327,6 +351,11 @@ const AppContent = ({ filename }: { filename: string }) => {
       {showMenu && (
         <Box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
             <TodoMenu onSelect={handleMenuAction} onCancel={() => setShowMenu(false)} />
+        </Box>
+      )}
+      {showDueDateModal && (
+        <Box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
+            <SetDueDateModal onSave={handleSaveDueDate} onCancel={() => setShowDueDateModal(false)} />
         </Box>
       )}
     </Box>
