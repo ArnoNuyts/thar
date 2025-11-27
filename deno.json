@@ -6,7 +6,7 @@
     "jsx": "react"
   },
   "imports": {
-    "ink": "npm:ink@^6.3.1",
+    "ink": "npm:ink@^6.5.1",
     "react": "npm:react@^19.2.0",
     "react/jsx-runtime": "npm:react@^19.2.0/jsx-runtime",
     "ink-mouse": "npm:@zenobius/ink-mouse@^1.0.0",

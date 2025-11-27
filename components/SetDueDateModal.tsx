@@ -82,8 +82,7 @@ export const SetDueDateModal = ({ onSave }: SetDueDateModalProps) => {
 
     return (
         // @ts-ignore: children prop issue
-        <Modal isFocused={isFocused}>
-            <Text>Set Due Date:</Text>
+        <Modal isFocused={isFocused} title="Set Due Date">
             {!isCustom ? (
                 <Box flexDirection="column" paddingX={1}>
                     {OPTIONS.map((option, index) => {
