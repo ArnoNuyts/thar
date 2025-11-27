@@ -9,7 +9,7 @@ Double click to complete @zFuture
 (F) Datepicker @v0.2
 /Search/ @v0.3
 Show tags and Projects in colors @v0.3
-2024-12-17 Help with keybindings @v0.1 - same code design as action-bar
+2025-11-27 Help with keybindings @v0.1 - same code design as action-bar
 2024-12-17 Solution for chcp 65001 @v0.2
 2024-12-18 Group edit context title @zFuture by editing when Context is selected
 2024-12-19 Make Todo work with readonly getters @v0.2

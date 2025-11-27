@@ -902,6 +902,7 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@std/async@1.0.14",
       "npm:@zenobius/ink-mouse@1",
       "npm:ink-text-input@6",
       "npm:ink@^6.5.1",

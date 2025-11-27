@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useFocusManager } from '../components/focus-context.tsx';
+import { useFocusManager } from '../contexts/focus-context.tsx';
 
 export interface UseFocusableOptions {
     autoFocus?: boolean;

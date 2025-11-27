@@ -10,6 +10,7 @@
     "react": "npm:react@^19.2.0",
     "react/jsx-runtime": "npm:react@^19.2.0/jsx-runtime",
     "ink-mouse": "npm:@zenobius/ink-mouse@^1.0.0",
-    "ink-text-input": "npm:ink-text-input@^6.0.0"
+    "ink-text-input": "npm:ink-text-input@^6.0.0",
+    "@std/async": "jsr:@std/async@1.0.14"
   }
 }
