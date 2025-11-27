@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { Box } from 'ink';
+import { Box, Text } from 'ink';
 
 interface ModalProps {
     children: ReactNode;
@@ -7,16 +7,18 @@ interface ModalProps {
     title?: string;
 }
 
-export const Modal = ({ children, isFocused = true }: ModalProps) => {
+export const Modal = ({ children, isFocused = true, title }: ModalProps) => {
     return (
-        <Box
-            borderStyle="round"
-            borderColor={isFocused ? "green" : "gray"}
-            flexDirection="column"
-            padding={1}
-            width="50%"
-        >
-            {children}
+        <Box flexDirection="column" width="50%">
+            {title && <Text color="green"> {title}</Text>}
+            <Box
+                borderStyle="round"
+                borderColor={isFocused ? "green" : "gray"}
+                flexDirection="column"
+                padding={1}
+            >
+                {children}
+            </Box>
         </Box>
     );
 };

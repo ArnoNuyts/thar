@@ -30,8 +30,7 @@ export const EditTodoModal = ({ onSave }: EditTodoModalProps) => {
 
     return (
         // @ts-ignore: children prop issue
-        <Modal isFocused={isFocused}>
-            <Text>Edit todo:</Text>
+        <Modal isFocused={isFocused} title="Edit todo">
             <Box>
                 <Text color="green">» </Text>
                 <TextInput

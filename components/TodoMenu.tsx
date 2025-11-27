@@ -66,11 +66,8 @@ export const TodoMenu = ({ onSelect }: TodoMenuProps) => {
 
     return (
         // @ts-ignore: children prop issue
-        <Modal isFocused={isFocused}>
-            <Box borderStyle="single" borderColor="gray" flexDirection="column" paddingX={1}>
-                <Box justifyContent="center" marginBottom={1}>
-                    <Text>| Todo menu |</Text>
-                </Box>
+        <Modal isFocused={isFocused} title="Todo menu">
+            <Box flexDirection="column">
                 {MENU_ITEMS.map((item, index) => (
                     <Box key={item.action}>
                         <Box width={6} justifyContent="end">

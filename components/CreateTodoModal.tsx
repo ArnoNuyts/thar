@@ -30,8 +30,7 @@ export const CreateTodoModal = ({ onSave }: CreateTodoModalProps) => {
 
     return (
         // @ts-ignore: children prop issue
-        <Modal isFocused={isFocused}>
-            <Text>Create new todo:</Text>
+        <Modal isFocused={isFocused} title="Create new todo">
             <Box>
                 <Text color="green">» </Text>
                 <TextInput
