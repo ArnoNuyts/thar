@@ -5,6 +5,7 @@
     "jsr:@std/async@1.0.14": "1.0.14",
     "jsr:@std/streams@*": "1.0.14",
     "npm:@zenobius/ink-mouse@1": "1.0.3_ink@6.3.1__react@19.2.0_react@19.2.0",
+    "npm:ink-text-input@6": "6.0.0_ink@6.3.1__react@19.2.0_react@19.2.0",
     "npm:ink@*": "6.3.1_react@19.2.0",
     "npm:ink@^6.3.1": "6.3.1_react@19.2.0",
     "npm:react@^19.2.0": "19.2.0"
@@ -95,6 +96,15 @@
     },
     "indent-string@5.0.0": {
       "integrity": "sha512-m6FAo/spmsW2Ab2fU35JTYwtOKa2yAwXSwgjSv1TJzh4Mh7mC3lzAOVLBprb72XsTrgkEIsl7YrFNAiDiRhIGg=="
+    },
+    "ink-text-input@6.0.0_ink@6.3.1__react@19.2.0_react@19.2.0": {
+      "integrity": "sha512-Fw64n7Yha5deb1rHY137zHTAbSTNelUKuB5Kkk2HACXEtwIHBCf9OH2tP/LQ9fRYTl1F0dZgbW0zPnZk6FA9Lw==",
+      "dependencies": [
+        "chalk",
+        "ink",
+        "react",
+        "type-fest"
+      ]
     },
     "ink@6.3.1_react@19.2.0": {
       "integrity": "sha512-3wGwITGrzL6rkWsi2gEKzgwdafGn4ZYd3u4oRp+sOPvfoxEHlnoB5Vnk9Uy5dMRUhDOqF3hqr4rLQ4lEzBc2sQ==",
@@ -897,6 +907,7 @@
   "workspace": {
     "dependencies": [
       "npm:@zenobius/ink-mouse@1",
+      "npm:ink-text-input@6",
       "npm:ink@^6.3.1",
       "npm:react@^19.2.0"
     ]
