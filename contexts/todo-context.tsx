@@ -53,10 +53,10 @@ export const TodoProvider = ({
       debounce(async (currentTodos: Todos) => {
         if (justReadFileFlag.current) {
           justReadFileFlag.current = false;
-          justWrittenFileFlag.current = true;
           return;
         }
         await writeTodosToFile(currentTodos, filename);
+        justWrittenFileFlag.current = true;
       }, 50),
     [filename]
   );

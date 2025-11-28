@@ -1,5 +1,5 @@
 import { Box, render, Text, useApp, useStdout } from "ink";
-import React, { useMemo, useState } from "react";
+import React, { memo, useEffect, useMemo, useState } from "react";
 import { ActionBar } from "./components/ActionBar.tsx";
 import { CreateTodoModal } from "./components/CreateTodoModal.tsx";
 import { EditTodoModal } from "./components/EditTodoModal.tsx";
@@ -88,8 +88,8 @@ const renderTodoText = (text: string) => {
   });
 };
 
-const TodoItem = (
-  { todo, isSelected }: { todo: Todo; isSelected: boolean },
+const TodoItem: React.FC<{ todo: Todo; isSelected: boolean }> = (
+  { todo, isSelected },
 ) => {
   const checkbox = todo.isDone() ? "[x]" : "[ ]";
   const priority = todo.priority ? `(${todo.priority})` : "";
@@ -109,8 +109,8 @@ const TodoItem = (
   );
 };
 
-const ContextTitle = 
-  ({ title, count }: { title: string; count: number }) => {
+const ContextTitle: React.FC<{ title: string; count: number }> = memo(
+  ({ title, count }) => {
     return (
       <Box>
         <Text backgroundColor="yellow" color="black">
@@ -118,11 +118,12 @@ const ContextTitle =
         </Text>
       </Box>
     );
-  };
+  },
+);
 
 const AppContent = () => {
   const { todos, setTodos } = useTodo();
-  const [selectedTodoId, setSelectedTodoId] = useState<symbol | undefined>(
+  const [selectedTodoHash, setSelectedTodoHash] = useState<string | undefined>(
     undefined,
   );
   const [offsetRow, setOffsetRow] = useState(0);
@@ -136,7 +137,7 @@ const AppContent = () => {
   }, [todos]);
 
   const selectedRow = useMemo(() => {
-    if (selectedTodoId === undefined) {
+    if (selectedTodoHash === undefined) {
       // Select the first non-context item
       const firstTodoIndex = indexes.findIndex((entry) =>
         entry.type === IndexType.todo
@@ -144,10 +145,18 @@ const AppContent = () => {
       return firstTodoIndex === -1 ? 0 : firstTodoIndex;
     }
     const index = indexes.findIndex((entry) =>
-      entry.type === IndexType.todo && entry.todo.id === selectedTodoId
+      entry.type === IndexType.todo && entry.todo.getHash() === selectedTodoHash
     );
     return index === -1 ? 0 : index;
-  }, [indexes, selectedTodoId]);
+  }, [indexes, selectedTodoHash]);
+
+  useEffect(() => {
+    if (selectedRow < offsetRow) {
+      setOffsetRow(selectedRow);
+    } else if (selectedRow >= offsetRow + listHeight) {
+      setOffsetRow(selectedRow - listHeight + 1);
+    }
+  }, [selectedRow, listHeight]);
 
   const { exit } = useApp();
   useFocusedInput((input, key) => {
@@ -211,7 +220,7 @@ const AppContent = () => {
 
     const selectedEntry = indexes[newSelectedRow];
     if (selectedEntry?.type === IndexType.todo) {
-      setSelectedTodoId(selectedEntry.todo.id);
+      setSelectedTodoHash(selectedEntry.todo.getHash());
     }
 
     setOffsetRow(
@@ -236,6 +245,7 @@ const AppContent = () => {
           // If a new todo was created (recurrence), add it to the list
           setTodos(new Todos(...todos, newTodo));
         }
+        setSelectedTodoHash(selectedEntry.todo.getHash());
       }
     }
   }, { autoFocus: true });
@@ -256,6 +266,7 @@ const AppContent = () => {
     if (selectedEntry?.type === IndexType.todo) {
       selectedEntry.todo.setText(text);
       setTodos(new Todos(...todos));
+      setSelectedTodoHash(selectedEntry.todo.getHash());
     }
   };
 
@@ -264,6 +275,7 @@ const AppContent = () => {
     if (selectedEntry?.type === IndexType.todo) {
       selectedEntry.todo.setDue(date);
       setTodos(new Todos(...todos));
+      setSelectedTodoHash(selectedEntry.todo.getHash());
     }
   };
 
@@ -283,7 +295,7 @@ const AppContent = () => {
       case "delete": {
         const newTodos = todos.filter((t: Todo) => t !== todo);
         setTodos(new Todos(...newTodos));
-        setSelectedTodoId(undefined);
+        setSelectedTodoHash(undefined);
         break;
       }
       case "toggle": {
@@ -293,11 +305,13 @@ const AppContent = () => {
         } else {
           setTodos(new Todos(...todos));
         }
+        setSelectedTodoHash(todo.getHash());
         break;
       }
       case "toggle-hidden":
         todo.toggleHidden();
         setTodos(new Todos(...todos));
+        setSelectedTodoHash(todo.getHash());
         break;
       // Placeholder for other actions
       case "due":
@@ -315,7 +329,6 @@ const AppContent = () => {
         {visibleIndexes.map((entry, index) => {
           const originalIndex = index + offsetRow;
           if (entry.type === IndexType.context) {
-            // @ts-ignore: key prop issue
             return (
               <ContextTitle
                 key={originalIndex}
@@ -324,7 +337,6 @@ const AppContent = () => {
               />
             );
           }
-          // @ts-ignore: key prop issue
           return (
             <TodoItem
               key={originalIndex}
