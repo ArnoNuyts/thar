@@ -120,12 +120,14 @@ export const TodoProvider = ({
     const newTodo = new Todo(text);
     newTodo.creationDate = new Date();
     setTodos(new Todos(...todos, newTodo));
+    setSelectedTodoHash(newTodo.getHash());
   };
 
   const updateTodo = (todo: Todo) => {
     // Since Todo objects are mutable and we are likely modifying the instance directly before calling this,
     // we just need to trigger a re-render and save.
     setTodos(new Todos(...todos));
+    setSelectedTodoHash(todo.getHash());
   };
 
   const deleteTodo = (todo: Todo) => {
@@ -137,25 +139,30 @@ export const TodoProvider = ({
   };
 
   const toggleTodo = (todo: Todo) => {
+    const oldHash = todo.getHash();
     const recurring = todo.toggleState();
+    
     if (recurring) {
       setTodos(new Todos(...todos, recurring));
     } else {
       setTodos(new Todos(...todos));
     }
-    // Ensure selection is maintained or updated if hash changes (though hash shouldn't change on toggle usually, unless it depends on state)
-    // Actually getHash depends on id/text/creationDate usually, so it should be stable.
-    // But if we want to be safe:
-    if (selectedTodoHash === todo.getHash()) {
-        setSelectedTodoHash(todo.getHash());
+    
+    // Update selection to new hash if this todo was selected
+    if (selectedTodoHash === oldHash) {
+      setSelectedTodoHash(todo.getHash());
     }
   };
 
   const toggleHidden = (todo: Todo) => {
+    const oldHash = todo.getHash();
     todo.toggleHidden();
+    
     setTodos(new Todos(...todos));
-    if (selectedTodoHash === todo.getHash()) {
-        setSelectedTodoHash(todo.getHash());
+    
+    // Update selection to new hash if this todo was selected
+    if (selectedTodoHash === oldHash) {
+      setSelectedTodoHash(todo.getHash());
     }
   };
 
