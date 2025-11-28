@@ -12,10 +12,20 @@ import {
   writeTodosToFile,
 } from "../logic/todo-file-helpers.ts";
 import { Todos } from "../logic/Todos.ts";
+import { useModal } from "./modal-context.tsx";
+import { Todo } from "../logic/todo.ts";
 
 interface TodoContextType {
   todos: Todos;
   setTodos: (todos: Todos) => void;
+  selectedTodoHash: string | undefined;
+  setSelectedTodoHash: (hash: string | undefined) => void;
+  addTodo: (text: string) => void;
+  updateTodo: (todo: Todo) => void;
+  deleteTodo: (todo: Todo) => void;
+  toggleTodo: (todo: Todo) => void;
+  toggleHidden: (todo: Todo) => void;
+  useSelectedTodo: () => Todo | undefined;
 }
 
 const TodoContext = createContext<TodoContextType | undefined>(undefined);
@@ -36,8 +46,12 @@ export const TodoProvider = ({
   children?: React.ReactNode;
 }) => {
   const [todos, setTodos] = useState<Todos>(new Todos());
+  const [selectedTodoHash, setSelectedTodoHash] = useState<string | undefined>(
+    undefined,
+  );
   const justReadFileFlag = useRef(false);
   const justWrittenFileFlag = useRef(false);
+  const { openModal } = useModal();
 
   // Initial load
   useEffect(() => {
@@ -58,7 +72,7 @@ export const TodoProvider = ({
         await writeTodosToFile(currentTodos, filename);
         justWrittenFileFlag.current = true;
       }, 50),
-    [filename]
+    [filename],
   );
 
   useEffect(() => {
@@ -71,11 +85,6 @@ export const TodoProvider = ({
     try {
       watcher = Deno.watchFs(filename);
     } catch (error) {
-      // File might not exist yet, or other error.
-      // readTodosFromFile handles creation, so this might be fine if called after initial load?
-      // But initial load is async.
-      // We can ignore error or retry?
-      // main.ts awaits openTodoFileWatcher at the end.
       console.error("Failed to watch file:", error);
     }
 
@@ -107,8 +116,68 @@ export const TodoProvider = ({
     };
   }, [filename]);
 
+  const addTodo = (text: string) => {
+    const newTodo = new Todo(text);
+    newTodo.creationDate = new Date();
+    setTodos(new Todos(...todos, newTodo));
+  };
+
+  const updateTodo = (todo: Todo) => {
+    // Since Todo objects are mutable and we are likely modifying the instance directly before calling this,
+    // we just need to trigger a re-render and save.
+    setTodos(new Todos(...todos));
+  };
+
+  const deleteTodo = (todo: Todo) => {
+    const newTodos = todos.filter((t: Todo) => t !== todo);
+    setTodos(new Todos(...newTodos));
+    if (selectedTodoHash === todo.getHash()) {
+      setSelectedTodoHash(undefined);
+    }
+  };
+
+  const toggleTodo = (todo: Todo) => {
+    const recurring = todo.toggleState();
+    if (recurring) {
+      setTodos(new Todos(...todos, recurring));
+    } else {
+      setTodos(new Todos(...todos));
+    }
+    // Ensure selection is maintained or updated if hash changes (though hash shouldn't change on toggle usually, unless it depends on state)
+    // Actually getHash depends on id/text/creationDate usually, so it should be stable.
+    // But if we want to be safe:
+    if (selectedTodoHash === todo.getHash()) {
+        setSelectedTodoHash(todo.getHash());
+    }
+  };
+
+  const toggleHidden = (todo: Todo) => {
+    todo.toggleHidden();
+    setTodos(new Todos(...todos));
+    if (selectedTodoHash === todo.getHash()) {
+        setSelectedTodoHash(todo.getHash());
+    }
+  };
+
+  const useSelectedTodo = () => {
+    return todos.find((t) => t.getHash() === selectedTodoHash);
+  };
+
   return (
-    <TodoContext.Provider value={{ todos, setTodos }}>
+    <TodoContext.Provider
+      value={{
+        todos,
+        setTodos,
+        selectedTodoHash,
+        setSelectedTodoHash,
+        addTodo,
+        updateTodo,
+        deleteTodo,
+        toggleTodo,
+        toggleHidden,
+        useSelectedTodo,
+      }}
+    >
       {children}
     </TodoContext.Provider>
   );

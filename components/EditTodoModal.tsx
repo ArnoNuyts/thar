@@ -4,14 +4,13 @@ import TextInput from 'ink-text-input';
 import { useFocusedInput } from '../hooks/useFocusedInput.ts';
 import { Modal } from './Modal.tsx';
 import { useModal } from '../contexts/modal-context.tsx';
+import { useTodo } from '../contexts/todo-context.tsx';
 
-interface EditTodoModalProps {
-    onSave: (text: string) => void;
-}
-
-export const EditTodoModal = ({ onSave }: EditTodoModalProps) => {
-    const { modalData, closeModal } = useModal();
-    const [text, setText] = useState(modalData?.text || '');
+export const EditTodoModal = () => {
+    const { closeModal } = useModal();
+    const { useSelectedTodo, updateTodo } = useTodo();
+    const todo = useSelectedTodo();
+    const [text, setText] = useState(todo?.text || '');
 
     const { isFocused } = useFocusedInput((_input, key) => {
         if (key.escape) {
@@ -20,8 +19,9 @@ export const EditTodoModal = ({ onSave }: EditTodoModalProps) => {
         }
 
         if (key.return) {
-            if (text.trim().length > 0) {
-                onSave(text);
+            if (todo && text.trim().length > 0) {
+                todo.setText(text);
+                updateTodo(todo);
             }
             closeModal();
             return;

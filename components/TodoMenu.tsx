@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
+import { useTodo } from "../contexts/todo-context.tsx";
 
 export type MenuAction =
   | "edit"
@@ -12,10 +13,6 @@ export type MenuAction =
   | "threshold"
   | "recurrence"
   | "toggle-hidden";
-
-interface TodoMenuProps {
-  onSelect: (action: MenuAction) => void;
-}
 
 interface MenuItem {
   label: string;
@@ -33,9 +30,39 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
 ];
 
-export const TodoMenu = ({ onSelect }: TodoMenuProps) => {
-  const { closeModal } = useModal();
+export const TodoMenu = () => {
+  const { closeModal, openModal } = useModal();
+  const { useSelectedTodo, deleteTodo, toggleTodo, toggleHidden } = useTodo();
+  const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const handleAction = (action: MenuAction) => {
+    if (!todo) return;
+    switch (action) {
+      case "edit":
+        openModal("edit-todo", todo);
+        break;
+      case "delete":
+        deleteTodo(todo);
+        closeModal();
+        break;
+      case "toggle":
+        toggleTodo(todo);
+        closeModal();
+        break;
+      case "due":
+        openModal("set-due-date");
+        break;
+      case "threshold":
+      case "recurrence":
+        closeModal();
+        break;
+      case "toggle-hidden":
+        toggleHidden(todo);
+        closeModal();
+        break;
+    }
+  };
 
   const { isFocused } = useFocusedInput(
     (input, key) => {
@@ -45,8 +72,7 @@ export const TodoMenu = ({ onSelect }: TodoMenuProps) => {
       }
 
       if (key.return) {
-        onSelect(MENU_ITEMS[selectedIndex].action);
-        closeModal();
+        handleAction(MENU_ITEMS[selectedIndex].action);
         return;
       }
 
@@ -66,36 +92,31 @@ export const TodoMenu = ({ onSelect }: TodoMenuProps) => {
 
       // Shortcut handling
       if (input === "e") {
-        onSelect("edit");
+        handleAction("edit");
       }
 
       if (input === "d") {
-        onSelect("due");
+        handleAction("due");
       }
 
       if (key.delete) {
-        onSelect("delete");
-        closeModal();
+        handleAction("delete");
       }
 
       if (input === " ") {
-        onSelect("toggle");
-        closeModal();
+        handleAction("toggle");
       }
 
       if (input === "t") {
-        onSelect("threshold");
-        closeModal();
+        handleAction("threshold");
       }
 
       if (input === "r") {
-        onSelect("recurrence");
-        closeModal();
+        handleAction("recurrence");
       }
 
       if (input === "h") {
-        onSelect("toggle-hidden");
-        closeModal();
+        handleAction("toggle-hidden");
       }
     },
     { autoFocus: true }
