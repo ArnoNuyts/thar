@@ -183,4 +183,8 @@ export class Todo {
     }
     this.signalChangeHack++;
   }
+
+  getHash(): string {
+    return this.toString();
+  }
 }
