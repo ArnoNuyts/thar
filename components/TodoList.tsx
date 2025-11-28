@@ -114,7 +114,7 @@ const ContextTitle = memo(
 );
 
 export const TodoList = () => {
-  const { todos, selectedTodoHash, setSelectedTodoHash, useSelectedTodo, toggleTodo } = useTodo();
+  const { todos, selectedTodoHash, setSelectedTodoHash, useSelectedTodo, toggleTodo, deleteTodo } = useTodo();
   const [offsetRow, setOffsetRow] = useState(0);
   const { openModal } = useModal();
   const { stdout } = useStdout();
@@ -173,6 +173,13 @@ export const TodoList = () => {
 
     if (input === "d") {
       openModal("set-due-date");
+      return;
+    }
+
+    if (key.delete) {
+      if (todo) {
+        deleteTodo(todo);
+      }
       return;
     }
 
