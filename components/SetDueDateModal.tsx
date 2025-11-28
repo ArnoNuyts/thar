@@ -4,10 +4,7 @@ import TextInput from 'ink-text-input';
 import { useFocusedInput } from '../hooks/useFocusedInput.ts';
 import { Modal } from './Modal.tsx';
 import { useModal } from '../contexts/modal-context.tsx';
-
-interface SetDueDateModalProps {
-    onSave: (date: Date) => void;
-}
+import { useTodo } from '../contexts/todo-context.tsx';
 
 const OPTIONS = [
     { label: 'Today', value: 'today' },
@@ -17,8 +14,10 @@ const OPTIONS = [
     { label: 'Custom', value: 'custom' },
 ];
 
-export const SetDueDateModal = ({ onSave }: SetDueDateModalProps) => {
+export const SetDueDateModal = () => {
     const { closeModal } = useModal();
+    const { useSelectedTodo, updateTodo } = useTodo();
+    const todo = useSelectedTodo();
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [isCustom, setIsCustom] = useState(false);
     const [customDate, setCustomDate] = useState(() => {
@@ -57,7 +56,10 @@ export const SetDueDateModal = ({ onSave }: SetDueDateModalProps) => {
                         date.setMonth(date.getMonth() + 1);
                         break;
                 }
-                onSave(date);
+                if (todo) {
+                    todo.setDue(date);
+                    updateTodo(todo);
+                }
                 closeModal();
             }
             return;
@@ -76,8 +78,9 @@ export const SetDueDateModal = ({ onSave }: SetDueDateModalProps) => {
 
     const handleCustomSubmit = (value: string) => {
         const date = new Date(value);
-        if (!isNaN(date.getTime())) {
-            onSave(date);
+        if (!isNaN(date.getTime()) && todo) {
+            todo.setDue(date);
+            updateTodo(todo);
             closeModal();
         }
     };
