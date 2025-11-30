@@ -148,6 +148,18 @@ export const TodoList = () => {
     }
   }, [selectedRow, listHeight]);
 
+  // Initialize selectedTodoHash if undefined
+  useEffect(() => {
+    if (selectedTodoHash === undefined && indexes.length > 0) {
+      const firstTodoIndex = indexes.findIndex((entry) =>
+        entry.type === IndexType.todo
+      );
+      if (firstTodoIndex !== -1 && indexes[firstTodoIndex].type === IndexType.todo) {
+        setSelectedTodoHash(indexes[firstTodoIndex].todo.getHash());
+      }
+    }
+  }, [indexes, selectedTodoHash, setSelectedTodoHash]);
+
   const { exit } = useApp();
   useFocusedInput((input, key) => {
     if (input === "q") {
