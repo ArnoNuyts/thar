@@ -5,6 +5,7 @@
     "jsr:@std/async@1.0.14": "1.0.14",
     "jsr:@std/streams@*": "1.0.14",
     "npm:@zenobius/ink-mouse@1": "1.0.3_ink@6.5.1__react@19.2.0_react@19.2.0",
+    "npm:date-fns@^4.1.0": "4.1.0",
     "npm:ink-text-input@6": "6.0.0_ink@6.5.1__react@19.2.0_react@19.2.0",
     "npm:ink@^6.5.1": "6.5.1_react@19.2.0",
     "npm:react@^19.2.0": "19.2.0"
@@ -77,6 +78,9 @@
     },
     "convert-to-spaces@2.0.1": {
       "integrity": "sha512-rcQ1bsQO9799wq24uE5AM2tAILy4gXGIK/njFWcVQkGNZ96edlpY+A7bjwvzjYvLDyzmG1MmMLZhpcsb+klNMQ=="
+    },
+    "date-fns@4.1.0": {
+      "integrity": "sha512-Ukq0owbQXxa/U3EGtsdVBkR1w7KOQ5gIBqdH2hkvknzZPYvBxb/aa6E8L7tmjFtkwZBu3UXBbjIgPo/Ez4xaNg=="
     },
     "emoji-regex@10.6.0": {
       "integrity": "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A=="
@@ -904,6 +908,7 @@
     "dependencies": [
       "jsr:@std/async@1.0.14",
       "npm:@zenobius/ink-mouse@1",
+      "npm:date-fns@^4.1.0",
       "npm:ink-text-input@6",
       "npm:ink@^6.5.1",
       "npm:react@^19.2.0"
