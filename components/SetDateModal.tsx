@@ -15,13 +15,27 @@ const OPTIONS = [
     { label: 'Custom', value: 'custom' },
 ];
 
-export const SetDueDateModal = () => {
+interface SetDateModalProps {
+    type: 'due' | 'threshold';
+}
+
+export const SetDateModal = ({ type }: SetDateModalProps) => {
     const { closeModal } = useModal();
     const { useSelectedTodo, updateTodo } = useTodo();
     const todo = useSelectedTodo();
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [isCustom, setIsCustom] = useState(false);
-    const [customDate, setCustomDate] = useState(new Date());
+    const [customDate, setCustomDate] = useState(() => {
+        if (!todo) return new Date();
+        const dateStr = type === 'due' ? todo.tags.due : todo.tags.t;
+        if (typeof dateStr === 'string') {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            return new Date(year, month - 1, day);
+        }
+        return new Date();
+    });
+
+    const title = type === 'due' ? 'Set Due Date' : 'Set Threshold Date';
 
     const { isFocused } = useFocusedInput((_input, key) => {
         if (key.escape) {
@@ -55,7 +69,11 @@ export const SetDueDateModal = () => {
                         break;
                 }
                 if (todo) {
-                    todo.setDue(date);
+                    if (type === 'due') {
+                        todo.setDue(date);
+                    } else {
+                        todo.setThreshold(date);
+                    }
                     updateTodo(todo);
                 }
                 closeModal();
@@ -76,7 +94,11 @@ export const SetDueDateModal = () => {
 
     const handleCustomSubmit = (date: Date) => {
         if (todo) {
-            todo.setDue(date);
+            if (type === 'due') {
+                todo.setDue(date);
+            } else {
+                todo.setThreshold(date);
+            }
             updateTodo(todo);
             closeModal();
         }
@@ -84,7 +106,7 @@ export const SetDueDateModal = () => {
 
     return (
         // @ts-ignore: children prop issue
-        <Modal isFocused={isFocused} title="Set Due Date" width={isCustom ? 30 : "50%"}>
+        <Modal isFocused={isFocused} title={title} width={isCustom ? 30 : "50%"}>
             {!isCustom ? (
                 <Box flexDirection="column" paddingX={1}>
                     {OPTIONS.map((option, index) => {

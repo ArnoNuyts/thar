@@ -188,6 +188,11 @@ export const TodoList = () => {
       return;
     }
 
+    if (input === "t") {
+      openModal("set-threshold-date");
+      return;
+    }
+
     if (key.delete) {
       if (todo) {
         deleteTodo(todo);
