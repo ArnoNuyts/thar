@@ -32,23 +32,33 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, onSubmit, i
     // So maybe only sync if value is completely different?
     // For now, let's just initialize viewDate from value.
 
-    useInput((input, key) => {
+    useInput((_input, key) => {
         if (!isFocused) return;
 
-        if (key.upArrow) {
-            onChange(subWeeks(value, 1));
-        } else if (key.downArrow) {
-            onChange(addWeeks(value, 1));
-        } else if (key.leftArrow) {
-            onChange(subDays(value, 1));
-        } else if (key.rightArrow) {
-            onChange(addDays(value, 1));
-        } else if (input === '<' || (key.shift && input === ',')) {
-             setViewDate(subMonths(viewDate, 1));
-        } else if (input === '>' || (key.shift && input === '.')) {
-             setViewDate(addMonths(viewDate, 1));
-        } else if (key.return) {
-            onSubmit(value);
+        switch (true) {
+            case key.upArrow:
+                onChange(subWeeks(value, 1));
+                break;
+            case key.downArrow:
+                onChange(addWeeks(value, 1));
+                break;
+            case key.leftArrow:
+                if (key.shift || key.ctrl) {
+                    onChange(subMonths(value, 1));
+                } else {
+                    onChange(subDays(value, 1));
+                }
+                break;
+            case key.rightArrow:
+                if (key.shift || key.ctrl) {
+                    onChange(addMonths(value, 1));
+                } else {
+                    onChange(addDays(value, 1));
+                }
+                break;
+            case key.return:
+                onSubmit(value);
+                break;
         }
     });
 
@@ -82,13 +92,11 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, onSubmit, i
     }
 
     return (
-        <Box flexDirection="column" borderStyle="round" borderColor="gray" width={30}>
-            <Box justifyContent="space-between" paddingX={1} marginBottom={1}>
-                <Text>{'< '}</Text>
+        <Box flexDirection="column" width={24}>
+            <Box justifyContent="center" marginBottom={1}>
                 <Text bold>{format(viewDate, 'MMMM yyyy')}</Text>
-                <Text>{' >'}</Text>
             </Box>
-            <Box marginBottom={1} paddingX={1}>
+            <Box marginBottom={0}>
                 {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
                     <Box key={day} width={3} justifyContent="center">
                         <Text dimColor>{day}</Text>
@@ -96,7 +104,7 @@ export const Calendar: React.FC<CalendarProps> = ({ value, onChange, onSubmit, i
                 ))}
             </Box>
             {weeks.map((week, weekIndex) => (
-                <Box key={weekIndex} paddingX={1}>
+                <Box key={weekIndex}>
                     {week.map((day) => {
                         const isSelected = isSameDay(day, value);
                         const isCurrentMonth = isSameMonth(day, viewDate);

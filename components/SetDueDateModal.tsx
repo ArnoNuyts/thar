@@ -84,7 +84,7 @@ export const SetDueDateModal = () => {
 
     return (
         // @ts-ignore: children prop issue
-        <Modal isFocused={isFocused} title="Set Due Date">
+        <Modal isFocused={isFocused} title="Set Due Date" width={isCustom ? 30 : "50%"}>
             {!isCustom ? (
                 <Box flexDirection="column" paddingX={1}>
                     {OPTIONS.map((option, index) => {
@@ -105,7 +105,7 @@ export const SetDueDateModal = () => {
                         onSubmit={handleCustomSubmit}
                         isFocused={isFocused}
                     />
-                    <Box marginTop={1}>
+                    <Box>
                         <Text dimColor>Selected: {format(customDate, 'yyyy-MM-dd')}</Text>
                     </Box>
                 </Box>
