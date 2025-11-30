@@ -5,9 +5,10 @@ interface ModalProps {
   children: ReactNode;
   isFocused?: boolean;
   title?: string;
+  width?: number | string;
 }
 
-export const Modal = ({ children, isFocused = true, title }: ModalProps) => {
+export const Modal = ({ children, isFocused = true, title, width = "50%" }: ModalProps) => {
   return (
     <Box
       position="absolute"
@@ -16,7 +17,7 @@ export const Modal = ({ children, isFocused = true, title }: ModalProps) => {
       alignItems="center"
       justifyContent="center"
     >
-      <Box flexDirection="column" width="50%">
+      <Box flexDirection="column" width={width}>
         {title && <Text color="green">{title}</Text>}
         <Box
           borderStyle="round"
