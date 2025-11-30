@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
 import { useFocusedInput } from '../hooks/useFocusedInput.ts';
 import { Modal } from './Modal.tsx';
 import { useModal } from '../contexts/modal-context.tsx';
 import { useTodo } from '../contexts/todo-context.tsx';
+import { Calendar } from './Calendar.tsx';
+import { format } from 'date-fns';
 
 const OPTIONS = [
     { label: 'Today', value: 'today' },
@@ -20,10 +21,7 @@ export const SetDueDateModal = () => {
     const todo = useSelectedTodo();
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [isCustom, setIsCustom] = useState(false);
-    const [customDate, setCustomDate] = useState(() => {
-        const now = new Date();
-        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`;
-    });
+    const [customDate, setCustomDate] = useState(new Date());
 
     const { isFocused } = useFocusedInput((_input, key) => {
         if (key.escape) {
@@ -35,7 +33,7 @@ export const SetDueDateModal = () => {
             return;
         }
 
-        if (isCustom) return; // Let TextInput handle input when custom is active
+        if (isCustom) return; // Let Calendar handle input when custom is active
 
         if (key.return) {
             const selected = OPTIONS[selectedIndex];
@@ -76,9 +74,8 @@ export const SetDueDateModal = () => {
         }
     }, { autoFocus: true });
 
-    const handleCustomSubmit = (value: string) => {
-        const date = new Date(value);
-        if (!isNaN(date.getTime()) && todo) {
+    const handleCustomSubmit = (date: Date) => {
+        if (todo) {
             todo.setDue(date);
             updateTodo(todo);
             closeModal();
@@ -101,14 +98,16 @@ export const SetDueDateModal = () => {
                     })}
                 </Box>
             ) : (
-                <Box>
-                    <Text color="green">Date (YYYY-MM-DD): </Text>
-                    <TextInput
-                        focus={isFocused}
+                <Box flexDirection="column" alignItems="center">
+                    <Calendar
                         value={customDate}
                         onChange={setCustomDate}
                         onSubmit={handleCustomSubmit}
+                        isFocused={isFocused}
                     />
+                    <Box marginTop={1}>
+                        <Text dimColor>Selected: {format(customDate, 'yyyy-MM-dd')}</Text>
+                    </Box>
                 </Box>
             )}
         </Modal>
