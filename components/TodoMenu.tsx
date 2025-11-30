@@ -54,6 +54,8 @@ export const TodoMenu = () => {
         openModal("set-due-date");
         break;
       case "threshold":
+        openModal("set-threshold-date");
+        break;
       case "recurrence":
         closeModal();
         break;

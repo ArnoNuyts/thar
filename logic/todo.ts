@@ -166,12 +166,18 @@ export class Todo {
   }
 
   setDue(date: Date): void {
-    this.tags.due = date.toISOString().substring(0, 10);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    this.tags.due = `${year}-${month}-${day}`;
     this.signalChangeHack++;
   }
 
   setThreshold(date: Date): void {
-    this.tags.t = date.toISOString().substring(0, 10);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    this.tags.t = `${year}-${month}-${day}`;
     this.signalChangeHack++;
   }
 
