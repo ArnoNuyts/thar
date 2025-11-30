@@ -72,7 +72,7 @@ const renderTodoText = (text: string) => {
   return parts.map((part, i) => {
     if (part.startsWith("@")) {
       // @ts-ignore: key prop issue
-      return <Text key={i} color="green">{part}</Text>;
+      return <Text key={i} color="yellow">{part}</Text>;
     } else if (part.startsWith("+")) {
       // @ts-ignore: key prop issue
       return <Text key={i} color="blue">{part}</Text>;

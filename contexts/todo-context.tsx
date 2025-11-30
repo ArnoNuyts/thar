@@ -26,6 +26,7 @@ interface TodoContextType {
   toggleTodo: (todo: Todo) => void;
   toggleHidden: (todo: Todo) => void;
   useSelectedTodo: () => Todo | undefined;
+  lastReloaded: number | undefined;
 }
 
 const TodoContext = createContext<TodoContextType | undefined>(undefined);
@@ -49,6 +50,7 @@ export const TodoProvider = ({
   const [selectedTodoHash, setSelectedTodoHash] = useState<string | undefined>(
     undefined,
   );
+  const [lastReloaded, setLastReloaded] = useState<number | undefined>(undefined);
   const justReadFileFlag = useRef(false);
   const justWrittenFileFlag = useRef(false);
   const { openModal } = useModal();
@@ -92,6 +94,7 @@ export const TodoProvider = ({
       justReadFileFlag.current = true;
       const todosFromFile = await readTodosFromFile(filename);
       setTodos(new Todos(...todosFromFile));
+      setLastReloaded(Date.now());
     }, 500);
 
     const processEvents = async () => {
@@ -101,7 +104,7 @@ export const TodoProvider = ({
           // Prevent write-read loop
           if (justWrittenFileFlag.current) {
             justWrittenFileFlag.current = false;
-            return;
+            continue;
           }
           readTodosDebounced();
         }
@@ -183,6 +186,7 @@ export const TodoProvider = ({
         toggleTodo,
         toggleHidden,
         useSelectedTodo,
+        lastReloaded,
       }}
     >
       {children}
