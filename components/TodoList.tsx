@@ -71,13 +71,10 @@ const renderTodoText = (text: string, isSelected: boolean) => {
   const parts = text.split(/(@[^ ]+|\+[^ ]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith("@")) {
-      // @ts-ignore: key prop issue
       return <Text key={i} color="yellow">{part}</Text>;
     } else if (part.startsWith("+")) {
-      // @ts-ignore: key prop issue
       return <Text key={i} color="blue">{part}</Text>;
     }
-    // @ts-ignore: key prop issue
     return <Text key={i} color={isSelected ? "black" : undefined}>{part}</Text>;
   });
 };
