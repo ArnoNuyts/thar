@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.201.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { readTodosFromFile } from "../logic/todo-file-helpers.ts";
 
 Deno.test("readTodosFromFile - should return empty Todos and create file if not found", async () => {

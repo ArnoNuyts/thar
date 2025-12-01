@@ -1,10 +1,10 @@
-import { assertEquals } from "https://deno.land/std@0.201.0/assert/mod.ts";
 import {
   formatDate,
   lightFormat,
-} from "https://esm.sh/v135/date-fns@4.1.0/index.js";
-import { startOfTomorrow } from "https://esm.sh/v135/date-fns@4.1.0/startOfTomorrow.js";
-import { startOfYesterday } from "https://esm.sh/v135/date-fns@4.1.0/startOfYesterday.js";
+  startOfTomorrow,
+  startOfYesterday,
+} from "date-fns";
+import { assertEquals } from "@std/assert";
 import { Todo } from "../logic/todo.ts"; // Adjust the path as needed
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";

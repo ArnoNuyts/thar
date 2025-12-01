@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
 } from "react";
+import { Todo } from "../logic/todo.ts";
 
 export type ModalId =
   | "create-todo"
@@ -32,7 +33,7 @@ export const ModalProvider = ({ children }: { children?: ReactNode }) => {
   // deno-lint-ignore no-explicit-any
   const [modalData, setModalData] = useState<any | null>(null);
 
-  const openModal = useCallback((id: ModalId, data?: any) => {
+  const openModal = useCallback((id: ModalId, data?: Todo) => {
     setActiveModal(id);
     setModalData(data || null);
   }, []);
