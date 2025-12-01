@@ -83,7 +83,13 @@ const renderTodoText = (text: string, isSelected: boolean) => {
 };
 
 const TodoItem = (
-  { todo, isSelected }: { todo: Todo; isSelected: boolean; key?: React.Key },
+  { todo, isSelected, number, maxDigits }: {
+    todo: Todo;
+    isSelected: boolean;
+    number: number;
+    maxDigits: number;
+    key?: React.Key;
+  },
 ) => {
   const checkbox = todo.isDone() ? "[x]" : "[ ]";
   const priority = todo.priority ? `(${todo.priority})` : "";
@@ -91,10 +97,16 @@ const TodoItem = (
   const threshold = todo.tags.t ? `t:${todo.tags.t}` : "";
   const recurrence = todo.tags.rec ? `rec:${todo.tags.rec}` : "";
 
+  // Pad the number with spaces to align with the maximum number of digits
+  const paddedNumber = number.toString().padStart(maxDigits, " ");
+
   return (
     <Box
       backgroundColor={isSelected ? "white" : undefined}
     >
+      <Text dimColor color={isSelected ? "black" : undefined}>
+        {`${paddedNumber} `}
+      </Text>
       <Text color={isSelected ? "black" : undefined}>{`${checkbox} `}</Text>
       {priority && (
         <Text color={isSelected ? "black" : undefined}>{`${priority} `}</Text>
@@ -298,6 +310,11 @@ export const TodoList = () => {
     [listHeight, offsetRow, indexes],
   );
 
+  // Calculate the maximum number of digits needed for numbering
+  const totalTodoCount =
+    indexes.filter((e) => e.type === IndexType.todo).length;
+  const maxDigits = totalTodoCount.toString().length;
+
   return (
     <Box flexDirection="column" flexGrow={1} height={listHeight}>
       {visibleIndexes.map((entry, index) => {
@@ -311,11 +328,17 @@ export const TodoList = () => {
             />
           );
         }
+        // Calculate the todo number by counting all todo entries before this one
+        const todoNumber = indexes.slice(0, originalIndex + 1).filter(
+          (e) => e.type === IndexType.todo,
+        ).length;
         return (
           <TodoItem
             key={originalIndex}
             todo={entry.todo}
             isSelected={originalIndex === selectedRow}
+            number={todoNumber}
+            maxDigits={maxDigits}
           />
         );
       })}

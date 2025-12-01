@@ -60,5 +60,4 @@ const filename = Deno.args[0] || "todo.txt";
 
 render(<App filename={filename} />, {
   incrementalRendering: true,
-  incrementalRenderingInterval: 1000,
 });
