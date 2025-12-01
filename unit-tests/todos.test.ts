@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.201.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { Todo } from "../logic/todo.ts"; // Adjust the path as needed
 import { Todos } from "../logic/Todos.ts";
 

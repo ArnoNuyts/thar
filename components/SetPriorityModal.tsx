@@ -6,7 +6,14 @@ import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { UpperCaseLetter } from "../types/types.ts";
 
-const PRIORITIES: UpperCaseLetter[] = ["A", "B", "C", "D", "E", "F"];
+const PRIORITIES: (UpperCaseLetter | "Unset")[] = [
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+];
 
 export const SetPriorityModal = () => {
   const { closeModal } = useModal();

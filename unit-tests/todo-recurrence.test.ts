@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.201.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { Todo } from "../logic/todo.ts";
 
 Deno.test("setRecurrence - sets correctly", () => {
