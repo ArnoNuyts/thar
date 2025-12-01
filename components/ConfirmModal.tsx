@@ -1,0 +1,44 @@
+import React from "react";
+import { Box, Text } from "ink";
+import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { Modal } from "./Modal.tsx";
+import { useModal } from "../contexts/modal-context.tsx";
+
+export interface ConfirmModalProps {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}
+
+export const ConfirmModal = ({ title, message, onConfirm, onCancel }: ConfirmModalProps) => {
+  const { closeModal } = useModal();
+
+  const { isFocused } = useFocusedInput(
+    (_input, key) => {
+      if (key.escape) {
+        if (onCancel) onCancel();
+        closeModal();
+        return;
+      }
+
+      if (key.return) {
+        onConfirm();
+        closeModal();
+        return;
+      }
+    },
+    { autoFocus: true }
+  );
+
+  return (
+    <Modal isFocused={isFocused} title={title}>
+      <Box flexDirection="column" padding={1}>
+        <Text>{message}</Text>
+        <Box marginTop={1}>
+          <Text color="gray">Enter to continue, Esc to cancel</Text>
+        </Box>
+      </Box>
+    </Modal>
+  );
+};

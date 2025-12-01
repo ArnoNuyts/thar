@@ -114,7 +114,7 @@ const ContextTitle = memo(
 );
 
 export const TodoList = () => {
-  const { todos, selectedTodoHash, setSelectedTodoHash, useSelectedTodo, toggleTodo, deleteTodo } = useTodo();
+  const { todos, selectedTodoHash, setSelectedTodoHash, useSelectedTodo, toggleTodo, deleteTodo, archiveCompletedTodos } = useTodo();
   const [offsetRow, setOffsetRow] = useState(0);
   const { openModal } = useModal();
   const { stdout } = useStdout();
@@ -200,8 +200,25 @@ export const TodoList = () => {
 
     if (key.delete) {
       if (todo) {
-        deleteTodo(todo);
+        openModal("confirm-modal", {
+          title: "Delete Todo",
+          message: "Are you sure you want to delete this todo?",
+          onConfirm: () => {
+            deleteTodo(todo);
+          },
+        });
       }
+      return;
+    }
+
+    if (input === "a") {
+      openModal("confirm-modal", {
+        title: "Archive Completed",
+        message: "Archive all completed todos to done.txt?",
+        onConfirm: () => {
+          archiveCompletedTodos();
+        },
+      });
       return;
     }
 

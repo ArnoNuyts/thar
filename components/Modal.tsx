@@ -2,7 +2,7 @@ import React, { ReactNode } from "react";
 import { Box, Text } from "ink";
 
 interface ModalProps {
-  children: ReactNode;
+  children?: ReactNode;
   isFocused?: boolean;
   title?: string;
   width?: number | string;

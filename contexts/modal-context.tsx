@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Todo } from '../logic/todo.ts';
 
-export type ModalId = 'create-todo' | 'edit-todo' | 'todo-menu' | 'set-due-date' | 'set-threshold-date' | 'set-recurrence';
+export type ModalId = 'create-todo' | 'edit-todo' | 'todo-menu' | 'set-due-date' | 'set-threshold-date' | 'set-recurrence' | 'confirm-modal';
 
 interface ModalContextType {
     activeModal: ModalId | null;
-    modalData: Todo | null;
-    openModal: (id: ModalId, data?: Todo) => void;
+    // deno-lint-ignore no-explicit-any
+    modalData: any | null;
+    // deno-lint-ignore no-explicit-any
+    openModal: (id: ModalId, data?: any) => void;
     closeModal: () => void;
 }
 
@@ -14,9 +15,10 @@ const ModalContext = createContext<ModalContextType | null>(null);
 
 export const ModalProvider = ({ children }: { children?: ReactNode }) => {
     const [activeModal, setActiveModal] = useState<ModalId | null>(null);
-    const [modalData, setModalData] = useState<Todo | null>(null);
+    // deno-lint-ignore no-explicit-any
+    const [modalData, setModalData] = useState<any | null>(null);
 
-    const openModal = useCallback((id: ModalId, data?: Todo) => {
+    const openModal = useCallback((id: ModalId, data?: any) => {
         setActiveModal(id);
         setModalData(data || null);
     }, []);

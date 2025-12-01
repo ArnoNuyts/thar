@@ -12,7 +12,8 @@ export type MenuAction =
   | "due"
   | "threshold"
   | "recurrence"
-  | "toggle-hidden";
+  | "toggle-hidden"
+  | "archive";
 
 interface MenuItem {
   label: string;
@@ -28,11 +29,12 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Set Threshold Date", shortcut: "t", action: "threshold" },
   { label: "Set Recurrence", shortcut: "r", action: "recurrence" },
   { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
+  { label: "Archive Completed", shortcut: "a", action: "archive" },
 ];
 
 export const TodoMenu = () => {
   const { closeModal, openModal } = useModal();
-  const { useSelectedTodo, deleteTodo, toggleTodo, toggleHidden } = useTodo();
+  const { useSelectedTodo, deleteTodo, toggleTodo, toggleHidden, archiveCompletedTodos } = useTodo();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -43,8 +45,13 @@ export const TodoMenu = () => {
         openModal("edit-todo", todo);
         break;
       case "delete":
-        deleteTodo(todo);
-        closeModal();
+        openModal("confirm-modal", {
+          title: "Delete Todo",
+          message: "Are you sure you want to delete this todo?",
+          onConfirm: () => {
+            deleteTodo(todo);
+          },
+        });
         break;
       case "toggle":
         toggleTodo(todo);
@@ -62,6 +69,15 @@ export const TodoMenu = () => {
       case "toggle-hidden":
         toggleHidden(todo);
         closeModal();
+        break;
+      case "archive":
+        openModal("confirm-modal", {
+          title: "Archive Completed",
+          message: "Archive all completed todos to done.txt?",
+          onConfirm: () => {
+            archiveCompletedTodos();
+          },
+        });
         break;
     }
   };
@@ -119,6 +135,10 @@ export const TodoMenu = () => {
 
       if (input === "h") {
         handleAction("toggle-hidden");
+      }
+
+      if (input === "a") {
+        handleAction("archive");
       }
     },
     { autoFocus: true }
