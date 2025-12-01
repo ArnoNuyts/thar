@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import React, { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useTodo } from "../contexts/todo-context.tsx";
 
 export const ActionBar = () => {
@@ -42,7 +42,7 @@ export const ActionBar = () => {
         })}
       </Box>
       {showFlash && (
-        <Box>
+        <Box padding={0}>
           <Text color="green">File reloaded</Text>
         </Box>
       )}
