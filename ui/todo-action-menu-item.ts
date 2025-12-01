@@ -4,7 +4,7 @@ import {
   Computed,
   Signal,
   Style,
-  TextObject
+  TextObject,
 } from "https://deno.land/x/tui@2.1.11/mod.ts";
 
 export interface TodoActionMenuItemOptions {
@@ -25,25 +25,28 @@ export class TodoActionMenuItem extends Component {
 
   constructor(options: TodoActionMenuItemOptions) {
     const rectangle = new Computed(() => (
-       {
+      {
         column: options.parent.rectangle.value.column + 1,
         height: 1,
         row: options.row.value,
         width: options.parent.rectangle.value.width,
-      }));
+      }
+    ));
 
     super(
       {
         parent: options.parent,
         zIndex: options.zIndex,
         rectangle,
-        theme: {}
+        theme: {},
       },
     );
     this.key = options.key;
     this.description = options.description;
     this.callBack = options.callBack;
-    this.baseStyle = new Computed(() => options.isSelected.value ? crayon.bgWhite: crayon.bgBlack);
+    this.baseStyle = new Computed(() =>
+      options.isSelected.value ? crayon.bgWhite : crayon.bgBlack
+    );
     this.style = this.baseStyle as unknown as Signal<Style>;
   }
 
@@ -54,7 +57,6 @@ export class TodoActionMenuItem extends Component {
   }
 
   override draw(): void {
-
     super.draw();
 
     const { canvas } = this.tui;
@@ -80,12 +82,19 @@ export class TodoActionMenuItem extends Component {
       view: this.view,
       zIndex: this.zIndex.value + 1,
       style: new Computed(() => this.baseStyle.value.lightCyan as Style),
-      value: new Computed(() => " " + this.description.padEnd(this.rectangle.value.width - (this.key.length < 5 ? 5 : this.key.length) -4, " ")),
+      value: new Computed(() =>
+        " " +
+        this.description.padEnd(
+          this.rectangle.value.width -
+            (this.key.length < 5 ? 5 : this.key.length) - 4,
+          " ",
+        )
+      ),
       rectangle: new Computed(() => {
         const { column, row } = this.rectangle.value;
 
         return {
-          column: column + (this.key.length < 5 ? 5 : this.key.length) +1,
+          column: column + (this.key.length < 5 ? 5 : this.key.length) + 1,
           row: row,
         };
       }),
@@ -97,4 +106,3 @@ export class TodoActionMenuItem extends Component {
     this.drawnObjects.description = description;
   }
 }
-

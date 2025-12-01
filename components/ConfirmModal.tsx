@@ -10,7 +10,9 @@ export interface ConfirmModalProps {
   onCancel?: () => void;
 }
 
-export const ConfirmModal = ({ title, message, onConfirm, onCancel }: ConfirmModalProps) => {
+export const ConfirmModal = (
+  { title, message, onConfirm, onCancel }: ConfirmModalProps,
+) => {
   const { closeModal } = useModal();
 
   const { isFocused } = useFocusedInput(
@@ -27,7 +29,7 @@ export const ConfirmModal = ({ title, message, onConfirm, onCancel }: ConfirmMod
         return;
       }
     },
-    { autoFocus: true }
+    { autoFocus: true },
   );
 
   return (

@@ -46,7 +46,7 @@ export class TodoActionMenuTitleItem extends Component {
       style: crayon.bgYellow.black,
       value: new Computed(() => {
         const text = ` ${this.description} `;
-        return text
+        return text;
       }),
       rectangle: this.rectangle as unknown as SignalOfObject<TextRectangle>,
     });

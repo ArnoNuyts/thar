@@ -50,10 +50,11 @@ export const TodoProvider = ({
   const [selectedTodoHash, setSelectedTodoHash] = useState<string | undefined>(
     undefined,
   );
-  const [lastReloaded, setLastReloaded] = useState<number | undefined>(undefined);
+  const [lastReloaded, setLastReloaded] = useState<number | undefined>(
+    undefined,
+  );
   const justReadFileFlag = useRef(false);
   const justWrittenFileFlag = useRef(false);
-
 
   // Initial load
   useEffect(() => {
@@ -144,13 +145,13 @@ export const TodoProvider = ({
   const toggleTodo = (todo: Todo) => {
     const oldHash = todo.getHash();
     const recurring = todo.toggleState();
-    
+
     if (recurring) {
       setTodos(new Todos(...todos, recurring));
     } else {
       setTodos(new Todos(...todos));
     }
-    
+
     // Update selection to new hash if this todo was selected
     if (selectedTodoHash === oldHash) {
       setSelectedTodoHash(todo.getHash());
@@ -160,9 +161,9 @@ export const TodoProvider = ({
   const toggleHidden = (todo: Todo) => {
     const oldHash = todo.getHash();
     todo.toggleHidden();
-    
+
     setTodos(new Todos(...todos));
-    
+
     // Update selection to new hash if this todo was selected
     if (selectedTodoHash === oldHash) {
       setSelectedTodoHash(todo.getHash());
@@ -186,24 +187,29 @@ export const TodoProvider = ({
     const separator = filename.includes("\\") ? "\\" : "/";
     const lastIndex = filename.lastIndexOf(separator);
     let doneFile = "done.txt";
-    
+
     if (lastIndex !== -1) {
-        const dir = filename.substring(0, lastIndex);
-        doneFile = `${dir}${separator}done.txt`;
+      const dir = filename.substring(0, lastIndex);
+      doneFile = `${dir}${separator}done.txt`;
     }
 
-    await writeTodosToFile(completedTodos, doneFile, { append: true, create: true });
+    await writeTodosToFile(completedTodos, doneFile, {
+      append: true,
+      create: true,
+    });
 
     // Remove from current todos
     const remainingTodos = todos.filter((t: Todo) => !t.isDone());
     setTodos(new Todos(...remainingTodos));
-    
+
     // Clear selection if selected todo was archived
     if (selectedTodoHash) {
-        const selected = todos.find((t: Todo) => t.getHash() === selectedTodoHash);
-        if (selected && selected.isDone()) {
-            setSelectedTodoHash(undefined);
-        }
+      const selected = todos.find((t: Todo) =>
+        t.getHash() === selectedTodoHash
+      );
+      if (selected && selected.isDone()) {
+        setSelectedTodoHash(undefined);
+      }
     }
   };
 
