@@ -12,7 +12,6 @@ import {
   writeTodosToFile,
 } from "../logic/todo-file-helpers.ts";
 import { Todos } from "../logic/Todos.ts";
-import { useModal } from "./modal-context.tsx";
 import { Todo } from "../logic/todo.ts";
 
 interface TodoContextType {
@@ -27,6 +26,7 @@ interface TodoContextType {
   toggleHidden: (todo: Todo) => void;
   useSelectedTodo: () => Todo | undefined;
   lastReloaded: number | undefined;
+  archiveCompletedTodos: () => Promise<void>;
 }
 
 const TodoContext = createContext<TodoContextType | undefined>(undefined);
@@ -53,7 +53,7 @@ export const TodoProvider = ({
   const [lastReloaded, setLastReloaded] = useState<number | undefined>(undefined);
   const justReadFileFlag = useRef(false);
   const justWrittenFileFlag = useRef(false);
-  const { openModal } = useModal();
+
 
   // Initial load
   useEffect(() => {
@@ -173,6 +173,40 @@ export const TodoProvider = ({
     return todos.find((t) => t.getHash() === selectedTodoHash);
   };
 
+  const archiveCompletedTodos = async () => {
+    const completedTodos = todos.filter((t: Todo) => t.isDone());
+    if (completedTodos.length === 0) return;
+
+    // Append to done.txt
+    // Assuming done.txt is in the same directory as the main file
+    // We need to construct the path. Since we don't have 'path' module easily available in browser/Deno hybrid context without import,
+    // we can try to infer it or just assume it's "done.txt" relative to CWD if filename is relative, or same dir if absolute.
+    // However, `filename` in context is the full path usually.
+    // Let's use string manipulation to get the directory.
+    const separator = filename.includes("\\") ? "\\" : "/";
+    const lastIndex = filename.lastIndexOf(separator);
+    let doneFile = "done.txt";
+    
+    if (lastIndex !== -1) {
+        const dir = filename.substring(0, lastIndex);
+        doneFile = `${dir}${separator}done.txt`;
+    }
+
+    await writeTodosToFile(completedTodos, doneFile, { append: true, create: true });
+
+    // Remove from current todos
+    const remainingTodos = todos.filter((t: Todo) => !t.isDone());
+    setTodos(new Todos(...remainingTodos));
+    
+    // Clear selection if selected todo was archived
+    if (selectedTodoHash) {
+        const selected = todos.find((t: Todo) => t.getHash() === selectedTodoHash);
+        if (selected && selected.isDone()) {
+            setSelectedTodoHash(undefined);
+        }
+    }
+  };
+
   return (
     <TodoContext.Provider
       value={{
@@ -187,6 +221,7 @@ export const TodoProvider = ({
         toggleHidden,
         useSelectedTodo,
         lastReloaded,
+        archiveCompletedTodos,
       }}
     >
       {children}

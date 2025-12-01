@@ -5,6 +5,7 @@ import { CreateTodoModal } from "./components/CreateTodoModal.tsx";
 import { EditTodoModal } from "./components/EditTodoModal.tsx";
 import { SetDateModal } from "./components/SetDateModal.tsx";
 import { SetRecurrenceModal } from "./components/SetRecurrenceModal.tsx";
+import { ConfirmModal } from "./components/ConfirmModal.tsx";
 import { TodoMenu } from "./components/TodoMenu.tsx";
 import { TodoList } from "./components/TodoList.tsx";
 import { FocusProvider } from "./contexts/focus-context.tsx";
@@ -12,7 +13,7 @@ import { ModalProvider, useModal } from "./contexts/modal-context.tsx";
 import { TodoProvider } from "./contexts/todo-context.tsx";
 
 const AppContent = () => {
-  const { activeModal } = useModal();
+  const { activeModal, modalData } = useModal();
 
   return (
     <Box flexDirection="column" height="100%" width="100%" flexGrow={1}>
@@ -28,6 +29,14 @@ const AppContent = () => {
         <SetDateModal type="threshold" />
       )}
       {activeModal === "set-recurrence" && <SetRecurrenceModal />}
+      {activeModal === "confirm-modal" && (
+        <ConfirmModal
+          title={modalData?.title}
+          message={modalData?.message}
+          onConfirm={modalData?.onConfirm}
+          onCancel={modalData?.onCancel}
+        />
+      )}
     </Box>
   );
 };
