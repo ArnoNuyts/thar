@@ -1,13 +1,12 @@
 import { Box, render } from "ink";
-import React from "react";
 import { ActionBar } from "./components/ActionBar.tsx";
+import { ConfirmModal } from "./components/ConfirmModal.tsx";
 import { CreateTodoModal } from "./components/CreateTodoModal.tsx";
 import { EditTodoModal } from "./components/EditTodoModal.tsx";
 import { SetDateModal } from "./components/SetDateModal.tsx";
 import { SetRecurrenceModal } from "./components/SetRecurrenceModal.tsx";
-import { ConfirmModal } from "./components/ConfirmModal.tsx";
-import { TodoMenu } from "./components/TodoMenu.tsx";
 import { TodoList } from "./components/TodoList.tsx";
+import { TodoMenu } from "./components/TodoMenu.tsx";
 import { FocusProvider } from "./contexts/focus-context.tsx";
 import { ModalProvider, useModal } from "./contexts/modal-context.tsx";
 import { TodoProvider } from "./contexts/todo-context.tsx";

@@ -1,8 +1,7 @@
-import React from "react";
 import { Box, Text } from "ink";
+import { useModal } from "../contexts/modal-context.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Modal } from "./Modal.tsx";
-import { useModal } from "../contexts/modal-context.tsx";
 
 export interface ConfirmModalProps {
   title: string;
