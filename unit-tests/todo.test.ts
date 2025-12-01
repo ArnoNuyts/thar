@@ -425,3 +425,20 @@ Deno.test("setThreshold - sets correctly", () => {
     );
   }
 });
+
+Deno.test("Todo toString - puts completion date before creation date", () => {
+  const creationDate = new Date("2023-01-01");
+  const completionDate = new Date("2023-01-02");
+  
+  const todo = new Todo("Test task");
+  todo.creationDate = creationDate;
+  todo.completionDate = completionDate;
+  todo.state = TodoStateEnum.done;
+
+  const str = todo.toString();
+  
+  const parts = str.split(" ");
+  assertEquals(parts[0], "x");
+  assertEquals(parts[1], "2023-01-02"); // Completion date should be first
+  assertEquals(parts[2], "2023-01-01"); // Creation date should be second
+});

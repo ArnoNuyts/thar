@@ -3,6 +3,7 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Todo } from "../logic/todo.ts";
 import { Todos } from "../logic/Todos.ts";
+import { UpperCaseLetter } from "../types/types.ts";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 
@@ -106,7 +107,25 @@ const TodoItem = (
       </Text>
       <Text color={isSelected ? "black" : undefined}>{`${checkbox} `}</Text>
       {priority && (
-        <Text color={isSelected ? "black" : undefined}>{`${priority} `}</Text>
+        <Text
+          color={isSelected
+            ? "black"
+            : todo.priority === "A"
+            ? "cyan"
+            : todo.priority === "B"
+            ? "magenta"
+            : todo.priority === "C"
+            ? "yellow"
+            : todo.priority === "D"
+            ? "blue"
+            : todo.priority === "E"
+            ? "green"
+            : todo.priority === "F"
+            ? "red"
+            : undefined}
+        >
+          {`${priority} `}
+        </Text>
       )}
       {renderTodoText(todo.text, isSelected)}
       {dueDate && <Text color="red">{` ${dueDate}`}</Text>}
@@ -137,6 +156,7 @@ export const TodoList = () => {
     toggleTodo,
     deleteTodo,
     archiveCompletedTodos,
+    updateTodo,
   } = useTodo();
   const [offsetRow, setOffsetRow] = useState(0);
   const { openModal } = useModal();
@@ -298,6 +318,18 @@ export const TodoList = () => {
     if (input === " ") {
       if (todo) {
         toggleTodo(todo);
+      }
+    }
+
+    if (["A", "B", "C", "D", "E", "F"].includes(input.toUpperCase())) {
+      if (todo) {
+        const newPriority = input.toUpperCase() as UpperCaseLetter;
+        if (todo.priority === newPriority) {
+          todo.setPriority(undefined);
+        } else {
+          todo.setPriority(newPriority);
+        }
+        updateTodo(todo);
       }
     }
   }, { autoFocus: true });

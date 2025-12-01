@@ -5,6 +5,7 @@ import { CreateTodoModal } from "./components/CreateTodoModal.tsx";
 import { EditTodoModal } from "./components/EditTodoModal.tsx";
 import { SetDateModal } from "./components/SetDateModal.tsx";
 import { SetRecurrenceModal } from "./components/SetRecurrenceModal.tsx";
+import { SetPriorityModal } from "./components/SetPriorityModal.tsx";
 import { TodoList } from "./components/TodoList.tsx";
 import { TodoMenu } from "./components/TodoMenu.tsx";
 import { FocusProvider } from "./contexts/focus-context.tsx";
@@ -32,6 +33,7 @@ const AppContent = () => {
       {activeModal === "set-threshold-date" &&
         <SetDateModal type="threshold" />}
       {activeModal === "set-recurrence" && <SetRecurrenceModal />}
+      {activeModal === "set-priority" && <SetPriorityModal />}
       {activeModal === "confirm-modal" && (
         <ConfirmModal
           title={modalData?.title}

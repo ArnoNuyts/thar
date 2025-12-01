@@ -22,7 +22,7 @@ x 2025-11-28 2025-10-02 Github action only on release @v0.1
 x 2025-10-02 2025-11-28 Fix Ok in delete when multiple deletes @v0.1
 x 2025-12-01 2025-12-01 Numbering for todo's @v0.1
 2025-12-01 Fix reloading issue @v0.1
-2025-12-01 Add priorities + priorities colors + menu way of doing priorities @v0.1
+x 2025-12-01 2025-12-01 Add priorities + priorities colors + menu way of doing priorities @v0.1
 2025-12-01 Move github actions to ink version @v0.1
 2025-12-01 Mouse support @v0.3?
 2025-12-01 Fix follow selected todo issue @v0.1
