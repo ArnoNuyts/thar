@@ -1,4 +1,4 @@
-import { Box, render, Spacer } from "ink";
+import { Box, render } from "ink";
 import { ActionBar } from "./components/ActionBar.tsx";
 import { ConfirmModal } from "./components/ConfirmModal.tsx";
 import { CreateTodoModal } from "./components/CreateTodoModal.tsx";
@@ -20,6 +20,7 @@ const AppContent = () => {
         flexDirection="column"
         height="100%"
         width="100%"
+        justifyContent="space-between"
       >
         <TodoList />
         <ActionBar />
@@ -56,4 +57,8 @@ const App = ({ filename }: { filename: string }) => {
 };
 
 const filename = Deno.args[0] || "todo.txt";
-render(<App filename={filename} />);
+
+render(<App filename={filename} />, {
+  incrementalRendering: true,
+  incrementalRenderingInterval: 1000,
+});

@@ -1,5 +1,5 @@
-import { ReactNode } from "react";
 import { Box, Text } from "ink";
+import { ReactNode } from "react";
 
 interface ModalProps {
   children?: ReactNode;
@@ -8,7 +8,9 @@ interface ModalProps {
   width?: number | string;
 }
 
-export const Modal = ({ children, isFocused = true, title, width = "50%" }: ModalProps) => {
+export const Modal = (
+  { children, title, width = "50%" }: ModalProps,
+) => {
   return (
     <Box
       position="absolute"
@@ -18,10 +20,12 @@ export const Modal = ({ children, isFocused = true, title, width = "50%" }: Moda
       justifyContent="center"
     >
       <Box flexDirection="column" width={width}>
-        {title && <Text color="green">{title}</Text>}
+        {title && (
+          <Text color="black" backgroundColor="yellow">{` ${title} `}</Text>
+        )}
         <Box
-          borderStyle="round"
-          borderColor={isFocused ? "green" : "gray"}
+          borderStyle="double"
+          borderColor="yellow"
           flexDirection="column"
           backgroundColor="black"
         >

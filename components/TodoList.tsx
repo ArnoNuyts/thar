@@ -67,7 +67,7 @@ const createIndexes = (todos: Todos): IndexEntry[] => {
   return indexArray;
 };
 
-const renderTodoText = (text: string) => {
+const renderTodoText = (text: string, isSelected: boolean) => {
   const parts = text.split(/(@[^ ]+|\+[^ ]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith("@")) {
@@ -78,7 +78,7 @@ const renderTodoText = (text: string) => {
       return <Text key={i} color="blue">{part}</Text>;
     }
     // @ts-ignore: key prop issue
-    return <Text key={i}>{part}</Text>;
+    return <Text key={i} color={isSelected ? "black" : undefined}>{part}</Text>;
   });
 };
 
@@ -92,10 +92,14 @@ const TodoItem = (
   const recurrence = todo.tags.rec ? `rec:${todo.tags.rec}` : "";
 
   return (
-    <Box backgroundColor={isSelected ? "gray" : undefined}>
-      <Text>{`${checkbox} `}</Text>
-      {priority && <Text>{`${priority} `}</Text>}
-      {renderTodoText(todo.text)}
+    <Box
+      backgroundColor={isSelected ? "white" : undefined}
+    >
+      <Text color={isSelected ? "black" : undefined}>{`${checkbox} `}</Text>
+      {priority && (
+        <Text color={isSelected ? "black" : undefined}>{`${priority} `}</Text>
+      )}
+      {renderTodoText(todo.text, isSelected)}
       {dueDate && <Text color="red">{` ${dueDate}`}</Text>}
       {threshold && <Text color="yellow">{` ${threshold}`}</Text>}
       {recurrence && <Text color="cyan">{` ${recurrence}`}</Text>}
