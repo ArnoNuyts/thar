@@ -3,7 +3,8 @@
     "start": "deno run --allow-sys --allow-env --allow-ffi --allow-read --allow-write main.tsx"
   },
   "compilerOptions": {
-    "jsx": "react"
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
   },
   "imports": {
     "ink": "npm:ink@^6.5.1",
@@ -12,6 +13,7 @@
     "ink-mouse": "npm:@zenobius/ink-mouse@^1.0.0",
     "ink-text-input": "npm:ink-text-input@^6.0.0",
     "@std/async": "jsr:@std/async@1.0.14",
-    "date-fns": "npm:date-fns@^4.1.0"
+    "date-fns": "npm:date-fns@^4.1.0",
+    "@types/react": "npm:@types/react@^19.2.0"
   }
 }

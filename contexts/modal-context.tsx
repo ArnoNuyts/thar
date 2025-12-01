@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
 export type ModalId = 'create-todo' | 'edit-todo' | 'todo-menu' | 'set-due-date' | 'set-threshold-date' | 'set-recurrence' | 'confirm-modal';
 

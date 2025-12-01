@@ -1,5 +1,5 @@
 import { Box, Text, useApp, useStdout } from "ink";
-import React, { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Todo } from "../logic/todo.ts";
 import { Todos } from "../logic/Todos.ts";
