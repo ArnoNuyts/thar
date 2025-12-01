@@ -40,12 +40,15 @@ export default (
       shortcut: "t",
       callBack: callbacks.setThresholdDate,
     },
-    { name: "Set Recurrence", shortcut: "r", callBack: callbacks.setRecurrence },
+    {
+      name: "Set Recurrence",
+      shortcut: "r",
+      callBack: callbacks.setRecurrence,
+    },
     { name: "Toggle Hidden", shortcut: "h", callBack: callbacks.toggleHidden },
-   /* { name: "General" },
+    /* { name: "General" },
     { name: "Archive completed todos", shortcut: "a", callBack: callbacks.archive },
     { name: "Quit", shortcut: "q", callBack: Deno.exit },*/
-
   ];
 
   const box = new Box({
@@ -99,43 +102,43 @@ export default (
 
   const selectedRow = new Signal(0);
   let destroy: () => void;
-  
+
   keepComponentFocussed(box);
- 
+
   return new Promise((resolve, reject) => {
     const menuItems: (TodoActionMenuItem | TodoActionMenuTitleItem)[] = actions
-    .map((action, index) => {
-      if (!action.callBack) {
-        return new TodoActionMenuTitleItem({
+      .map((action, index) => {
+        if (!action.callBack) {
+          return new TodoActionMenuTitleItem({
+            parent: box,
+            zIndex: new Signal(6),
+            row: new Computed(() => frame.rectangle.value.row + index),
+            description: action.name,
+          });
+        }
+        return new TodoActionMenuItem({
           parent: box,
           zIndex: new Signal(6),
           row: new Computed(() => frame.rectangle.value.row + index),
+          key: action.shortcut as string,
           description: action.name,
+          callBack: () => {
+            setTimeout(
+              action.callBack,
+              0,
+            );
+            destroy();
+            resolve(action.name);
+          },
+          isSelected: new Computed(() => index == selectedRow.value),
         });
-      }
-      return new TodoActionMenuItem({
-        parent: box,
-        zIndex: new Signal(6),
-        row: new Computed(() => frame.rectangle.value.row + index),
-        key: action.shortcut as string,
-        description: action.name,
-        callBack: () => {  
-          setTimeout(
-          action.callBack,
-          0,
-        );
-        destroy();
-        resolve(action.name);
-      },
-        isSelected: new Computed(() => index == selectedRow.value),
       });
-    });
 
-  destroy = () => {
+    destroy = () => {
       menuItems.forEach((x) => x.destroy());
       textBox.destroy();
       box.destroy();
-  }
+    };
 
     box.on("keyPress", ({ key }) => {
       if (key === "escape") {

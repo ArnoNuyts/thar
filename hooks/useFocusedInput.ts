@@ -1,19 +1,19 @@
-import { useRef } from 'react';
-import { useInput, Key } from 'ink';
-import { useFocusable, UseFocusableOptions } from './useFocusable.ts';
+import { useRef } from "react";
+import { Key, useInput } from "ink";
+import { useFocusable, UseFocusableOptions } from "./useFocusable.ts";
 
 export const useFocusedInput = (
-    handler: (input: string, key: Key) => void,
-    options: UseFocusableOptions = {}
+  handler: (input: string, key: Key) => void,
+  options: UseFocusableOptions = {},
 ) => {
-    const { isFocused } = useFocusable(options);
-    const handlerRef = useRef(handler);
-    handlerRef.current = handler;
+  const { isFocused } = useFocusable(options);
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
 
-    useInput((input, key) => {
-        if (!isFocused) return;
-        handlerRef.current(input, key);
-    });
+  useInput((input, key) => {
+    if (!isFocused) return;
+    handlerRef.current(input, key);
+  });
 
-    return { isFocused };
+  return { isFocused };
 };
