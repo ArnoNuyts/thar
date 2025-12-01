@@ -87,17 +87,17 @@ export class Todo {
   toString() {
     return (this.isDone() ? "x " : "") +
       (this.priority ? `(${this.priority}) ` : "") +
-      (this.creationDate
-        ? this.creationDate!.toISOString().substring(0, 10) + " "
-        : "") +
       (this.completionDate
         ? this.completionDate!.toISOString().substring(0, 10) + " "
+        : "") +
+      (this.creationDate
+        ? this.creationDate!.toISOString().substring(0, 10) + " "
         : "") +
       this.text +
       (Object.keys(this.tags).length > 0 ? " " : "") +
       (Object.keys(this.tags).map((k) => k + ":" + this.tags[k]).join(" "));
   }
-  setPriority(key: UpperCaseLetter) {
+  setPriority(key?: UpperCaseLetter) {
     this.priority = key;
   }
 

@@ -13,6 +13,7 @@ export type MenuAction =
   | "threshold"
   | "recurrence"
   | "toggle-hidden"
+  | "priority"
   | "archive";
 
 interface MenuItem {
@@ -28,13 +29,20 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Set Due Date", shortcut: "d", action: "due" },
   { label: "Set Threshold Date", shortcut: "t", action: "threshold" },
   { label: "Set Recurrence", shortcut: "r", action: "recurrence" },
+  { label: "Set Priority", shortcut: "p", action: "priority" },
   { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
   { label: "Archive Completed", shortcut: "a", action: "archive" },
 ];
 
 export const TodoMenu = () => {
   const { closeModal, openModal } = useModal();
-  const { useSelectedTodo, deleteTodo, toggleTodo, toggleHidden, archiveCompletedTodos } = useTodo();
+  const {
+    useSelectedTodo,
+    deleteTodo,
+    toggleTodo,
+    toggleHidden,
+    archiveCompletedTodos,
+  } = useTodo();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -65,6 +73,9 @@ export const TodoMenu = () => {
         break;
       case "recurrence":
         openModal("set-recurrence");
+        break;
+      case "priority":
+        openModal("set-priority");
         break;
       case "toggle-hidden":
         toggleHidden(todo);
@@ -133,6 +144,10 @@ export const TodoMenu = () => {
         handleAction("recurrence");
       }
 
+      if (input === "p") {
+        handleAction("priority");
+      }
+
       if (input === "h") {
         handleAction("toggle-hidden");
       }
@@ -141,7 +156,7 @@ export const TodoMenu = () => {
         handleAction("archive");
       }
     },
-    { autoFocus: true }
+    { autoFocus: true },
   );
 
   return (
