@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { Todo } from '../logic/todo.ts';
 
-export type ModalId = 'create-todo' | 'edit-todo' | 'todo-menu' | 'set-due-date' | 'set-threshold-date';
+export type ModalId = 'create-todo' | 'edit-todo' | 'todo-menu' | 'set-due-date' | 'set-threshold-date' | 'set-recurrence';
 
 interface ModalContextType {
     activeModal: ModalId | null;

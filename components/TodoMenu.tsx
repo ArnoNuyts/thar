@@ -57,7 +57,7 @@ export const TodoMenu = () => {
         openModal("set-threshold-date");
         break;
       case "recurrence":
-        closeModal();
+        openModal("set-recurrence");
         break;
       case "toggle-hidden":
         toggleHidden(todo);
