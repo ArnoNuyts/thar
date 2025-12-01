@@ -82,7 +82,9 @@ const renderTodoText = (text: string) => {
   });
 };
 
-const TodoItem = ({ todo, isSelected }: { todo: Todo; isSelected: boolean; key?: React.Key }) => {
+const TodoItem = (
+  { todo, isSelected }: { todo: Todo; isSelected: boolean; key?: React.Key },
+) => {
   const checkbox = todo.isDone() ? "[x]" : "[ ]";
   const priority = todo.priority ? `(${todo.priority})` : "";
   const dueDate = todo.tags.due ? `due:${todo.tags.due}` : "";
@@ -114,11 +116,19 @@ const ContextTitle = memo(
 );
 
 export const TodoList = () => {
-  const { todos, selectedTodoHash, setSelectedTodoHash, useSelectedTodo, toggleTodo, deleteTodo, archiveCompletedTodos } = useTodo();
+  const {
+    todos,
+    selectedTodoHash,
+    setSelectedTodoHash,
+    useSelectedTodo,
+    toggleTodo,
+    deleteTodo,
+    archiveCompletedTodos,
+  } = useTodo();
   const [offsetRow, setOffsetRow] = useState(0);
   const { openModal } = useModal();
   const { stdout } = useStdout();
-  const listHeight = stdout.rows - 4;
+  const listHeight = stdout.rows - 2;
   const todo = useSelectedTodo();
 
   const indexes: IndexEntry[] = useMemo(() => {
@@ -154,7 +164,9 @@ export const TodoList = () => {
       const firstTodoIndex = indexes.findIndex((entry) =>
         entry.type === IndexType.todo
       );
-      if (firstTodoIndex !== -1 && indexes[firstTodoIndex].type === IndexType.todo) {
+      if (
+        firstTodoIndex !== -1 && indexes[firstTodoIndex].type === IndexType.todo
+      ) {
         setSelectedTodoHash(indexes[firstTodoIndex].todo.getHash());
       }
     }

@@ -1,4 +1,4 @@
-import { Box, render } from "ink";
+import { Box, render, Spacer } from "ink";
 import { ActionBar } from "./components/ActionBar.tsx";
 import { ConfirmModal } from "./components/ConfirmModal.tsx";
 import { CreateTodoModal } from "./components/CreateTodoModal.tsx";
@@ -15,18 +15,21 @@ const AppContent = () => {
   const { activeModal, modalData } = useModal();
 
   return (
-    <Box flexDirection="column" height="100%" width="100%" flexGrow={1}>
-      <TodoList />
-      <ActionBar />
+    <>
+      <Box
+        flexDirection="column"
+        height="100%"
+        width="100%"
+      >
+        <TodoList />
+        <ActionBar />
+      </Box>
       {activeModal === "create-todo" && <CreateTodoModal />}
       {activeModal === "edit-todo" && <EditTodoModal />}
       {activeModal === "todo-menu" && <TodoMenu />}
-      {activeModal === "set-due-date" && (
-        <SetDateModal type="due" />
-      )}
-      {activeModal === "set-threshold-date" && (
-        <SetDateModal type="threshold" />
-      )}
+      {activeModal === "set-due-date" && <SetDateModal type="due" />}
+      {activeModal === "set-threshold-date" &&
+        <SetDateModal type="threshold" />}
       {activeModal === "set-recurrence" && <SetRecurrenceModal />}
       {activeModal === "confirm-modal" && (
         <ConfirmModal
@@ -36,7 +39,7 @@ const AppContent = () => {
           onCancel={modalData?.onCancel}
         />
       )}
-    </Box>
+    </>
   );
 };
 
@@ -52,5 +55,5 @@ const App = ({ filename }: { filename: string }) => {
   );
 };
 
-const filename = Deno.args[0] || "test.txt";
+const filename = Deno.args[0] || "todo.txt";
 render(<App filename={filename} />);
