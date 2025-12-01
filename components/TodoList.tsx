@@ -193,6 +193,11 @@ export const TodoList = () => {
       return;
     }
 
+    if (input === "r") {
+      openModal("set-recurrence");
+      return;
+    }
+
     if (key.delete) {
       if (todo) {
         deleteTodo(todo);
