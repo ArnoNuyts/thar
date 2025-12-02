@@ -11,10 +11,10 @@
     "ink": "npm:ink@^6.5.1",
     "react": "npm:react@^19.2.0",
     "react/jsx-runtime": "npm:react@^19.2.0/jsx-runtime",
-    "ink-mouse": "npm:@zenobius/ink-mouse@^1.0.0",
     "ink-text-input": "npm:ink-text-input@^6.0.0",
     "@std/async": "jsr:@std/async@1.0.14",
     "date-fns": "npm:date-fns@^4.1.0",
-    "@types/react": "npm:@types/react@^19.2.0"
+    "@types/react": "npm:@types/react@^19.2.0",
+    "ink-testing-library": "npm:ink-testing-library@^4.0.0"
   }
 }

@@ -19,10 +19,8 @@ export type ModalId =
 
 interface ModalContextType {
   activeModal: ModalId | null;
-  // deno-lint-ignore no-explicit-any
-  modalData: any | null;
-  // deno-lint-ignore no-explicit-any
-  openModal: (id: ModalId, data?: any) => void;
+  modalData: Todo | null;
+  openModal: (id: ModalId, data?: Todo) => void;
   closeModal: () => void;
 }
 
@@ -30,8 +28,7 @@ const ModalContext = createContext<ModalContextType | null>(null);
 
 export const ModalProvider = ({ children }: { children?: ReactNode }) => {
   const [activeModal, setActiveModal] = useState<ModalId | null>(null);
-  // deno-lint-ignore no-explicit-any
-  const [modalData, setModalData] = useState<any | null>(null);
+  const [modalData, setModalData] = useState<Todo | null>(null);
 
   const openModal = useCallback((id: ModalId, data?: Todo) => {
     setActiveModal(id);
