@@ -7,10 +7,10 @@
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/streams@*": "1.0.14",
     "npm:@types/react@^19.2.0": "19.2.7",
-    "npm:@zenobius/ink-mouse@1": "1.0.3_ink@6.5.1__react@19.2.0_react@19.2.0",
     "npm:date-fns@^4.1.0": "4.1.0",
-    "npm:ink-text-input@6": "6.0.0_ink@6.5.1__react@19.2.0_react@19.2.0",
-    "npm:ink@^6.5.1": "6.5.1_react@19.2.0",
+    "npm:ink-testing-library@4": "4.0.0_@types+react@19.2.7",
+    "npm:ink-text-input@6": "6.0.0_ink@6.5.1__@types+react@19.2.7__react@19.2.0_react@19.2.0_@types+react@19.2.7",
+    "npm:ink@^6.5.1": "6.5.1_@types+react@19.2.7_react@19.2.0",
     "npm:react@^19.2.0": "19.2.0"
   },
   "jsr": {
@@ -45,13 +45,6 @@
       "integrity": "sha512-MWtvHrGZLFttgeEj28VXHxpmwYbor/ATPYbBfSFZEIRK0ecCFLl2Qo55z52Hss+UV9CRN7trSeq1zbgx7YDWWg==",
       "dependencies": [
         "csstype"
-      ]
-    },
-    "@zenobius/ink-mouse@1.0.3_ink@6.5.1__react@19.2.0_react@19.2.0": {
-      "integrity": "sha512-2rEsLgIniTWf0+mXXuRnMEGQ/Tcg/mScbCfZeFUNCDA+hb9hev/bzZM66mq+PoSFd243146RISLagO2NJaTXuQ==",
-      "dependencies": [
-        "ink",
-        "react"
       ]
     },
     "ansi-escapes@7.2.0": {
@@ -121,7 +114,16 @@
     "indent-string@5.0.0": {
       "integrity": "sha512-m6FAo/spmsW2Ab2fU35JTYwtOKa2yAwXSwgjSv1TJzh4Mh7mC3lzAOVLBprb72XsTrgkEIsl7YrFNAiDiRhIGg=="
     },
-    "ink-text-input@6.0.0_ink@6.5.1__react@19.2.0_react@19.2.0": {
+    "ink-testing-library@4.0.0_@types+react@19.2.7": {
+      "integrity": "sha512-yF92kj3pmBvk7oKbSq5vEALO//o7Z9Ck/OaLNlkzXNeYdwfpxMQkSowGTFUCS5MSu9bWfSZMewGpp7bFc66D7Q==",
+      "dependencies": [
+        "@types/react"
+      ],
+      "optionalPeers": [
+        "@types/react"
+      ]
+    },
+    "ink-text-input@6.0.0_ink@6.5.1__@types+react@19.2.7__react@19.2.0_react@19.2.0_@types+react@19.2.7": {
       "integrity": "sha512-Fw64n7Yha5deb1rHY137zHTAbSTNelUKuB5Kkk2HACXEtwIHBCf9OH2tP/LQ9fRYTl1F0dZgbW0zPnZk6FA9Lw==",
       "dependencies": [
         "chalk",
@@ -130,10 +132,11 @@
         "type-fest"
       ]
     },
-    "ink@6.5.1_react@19.2.0": {
+    "ink@6.5.1_@types+react@19.2.7_react@19.2.0": {
       "integrity": "sha512-wF3j/DmkM8q5E+OtfdQhCRw8/0ahkc8CUTgEddxZzpEWPslu7YPL3t64MWRoI9m6upVGpfAg4ms2BBvxCdKRLQ==",
       "dependencies": [
         "@alcalzone/ansi-tokenize",
+        "@types/react",
         "ansi-escapes",
         "ansi-styles",
         "auto-bind",
@@ -157,6 +160,9 @@
         "wrap-ansi",
         "ws",
         "yoga-layout"
+      ],
+      "optionalPeers": [
+        "@types/react"
       ]
     },
     "is-fullwidth-code-point@5.1.0": {
@@ -996,8 +1002,8 @@
       "jsr:@std/assert@^1.0.16",
       "jsr:@std/async@1.0.14",
       "npm:@types/react@^19.2.0",
-      "npm:@zenobius/ink-mouse@1",
       "npm:date-fns@^4.1.0",
+      "npm:ink-testing-library@4",
       "npm:ink-text-input@6",
       "npm:ink@^6.5.1",
       "npm:react@^19.2.0"

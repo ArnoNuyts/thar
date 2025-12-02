@@ -23,7 +23,6 @@ export const SetPriorityModal = () => {
 
   const options = [...PRIORITIES];
   if (todo?.priority) {
-    // @ts-ignore: Adding string to UpperCaseLetter array for display purposes
     options.push("Unset");
   }
 
@@ -63,7 +62,6 @@ export const SetPriorityModal = () => {
   }, { autoFocus: true });
 
   return (
-    // @ts-ignore: children prop issue
     <Modal isFocused={isFocused} title="Set Priority" width={30}>
       <Box flexDirection="column" paddingX={1}>
         {options.map((option, index) => {

@@ -20,9 +20,8 @@ export async function readTodosFromFile(filename: string) {
       ...data.split("\n").filter((x) => x.trim()).map((x) => new Todo(x)),
     );
 
-    // deno-lint-ignore no-explicit-any
-  } catch (err: any) {
-    console.error(`Error reading file "${filename}":`, err.message);
+  } catch (err: unknown) {
+    console.error(`Error reading file "${filename}":`, (err as Error).message);
     Deno.exit(1);
   }
 }

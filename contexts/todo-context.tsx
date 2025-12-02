@@ -54,7 +54,7 @@ export const TodoProvider = ({
     undefined,
   );
   const justReadFileFlag = useRef(false);
-  const justWrittenFileFlag = useRef(false);
+  const lastWriteTimeRef = useRef(0);
 
   // Initial load
   useEffect(() => {
@@ -72,8 +72,9 @@ export const TodoProvider = ({
           justReadFileFlag.current = false;
           return;
         }
+        lastWriteTimeRef.current = Date.now();
         await writeTodosToFile(currentTodos, filename);
-        justWrittenFileFlag.current = true;
+        lastWriteTimeRef.current = Date.now();
       }, 50),
     [filename],
   );
@@ -103,8 +104,7 @@ export const TodoProvider = ({
       for await (const event of watcher) {
         if (event.kind === "modify") {
           // Prevent write-read loop
-          if (justWrittenFileFlag.current) {
-            justWrittenFileFlag.current = false;
+          if (Date.now() - lastWriteTimeRef.current < 1000) {
             continue;
           }
           readTodosDebounced();
@@ -180,10 +180,6 @@ export const TodoProvider = ({
 
     // Append to done.txt
     // Assuming done.txt is in the same directory as the main file
-    // We need to construct the path. Since we don't have 'path' module easily available in browser/Deno hybrid context without import,
-    // we can try to infer it or just assume it's "done.txt" relative to CWD if filename is relative, or same dir if absolute.
-    // However, `filename` in context is the full path usually.
-    // Let's use string manipulation to get the directory.
     const separator = filename.includes("\\") ? "\\" : "/";
     const lastIndex = filename.lastIndexOf(separator);
     let doneFile = "done.txt";
