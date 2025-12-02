@@ -9,7 +9,11 @@ import { SetPriorityModal } from "./components/SetPriorityModal.tsx";
 import { TodoList } from "./components/TodoList.tsx";
 import { TodoMenu } from "./components/TodoMenu.tsx";
 import { FocusProvider } from "./contexts/focus-context.tsx";
-import { ModalProvider, useModal } from "./contexts/modal-context.tsx";
+import {
+  isConfirmModalData,
+  ModalProvider,
+  useModal,
+} from "./contexts/modal-context.tsx";
 import { TodoProvider } from "./contexts/todo-context.tsx";
 
 const AppContent = () => {
@@ -34,12 +38,13 @@ const AppContent = () => {
         <SetDateModal type="threshold" />}
       {activeModal === "set-recurrence" && <SetRecurrenceModal />}
       {activeModal === "set-priority" && <SetPriorityModal />}
-      {activeModal === "confirm-modal" && (
+      {activeModal === "confirm-modal" &&
+        isConfirmModalData(modalData) && (
         <ConfirmModal
-          title={modalData?.title}
-          message={modalData?.message}
-          onConfirm={modalData?.onConfirm}
-          onCancel={modalData?.onCancel}
+          title={modalData.title}
+          message={modalData.message}
+          onConfirm={modalData.onConfirm}
+          onCancel={modalData.onCancel}
         />
       )}
     </>

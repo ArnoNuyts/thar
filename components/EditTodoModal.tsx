@@ -32,7 +32,7 @@ export const EditTodoModal = () => {
     // @ts-ignore: children prop issue
     <Modal isFocused={isFocused} title="Edit todo">
       <Box>
-        <Text color="green">»</Text>
+        <Text color="green">{`» `}</Text>
         <TextInput
           focus={isFocused}
           value={text}

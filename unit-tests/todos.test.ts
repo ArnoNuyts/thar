@@ -77,3 +77,18 @@ Deno.test("filterHidden - should hide correct todos", () => {
     );
   }
 });
+
+Deno.test("removeDue and removeThreshold - should remove tags", () => {
+  const todo = new Todo("Test todo due:2023-01-01 t:2023-01-01");
+  
+  assertEquals(todo.tags.due, "2023-01-01");
+  assertEquals(todo.tags.t, "2023-01-01");
+
+  todo.removeDue();
+  assertEquals(todo.tags.due, undefined);
+  assertEquals(todo.tags.t, "2023-01-01");
+
+  todo.removeThreshold();
+  assertEquals(todo.tags.due, undefined);
+  assertEquals(todo.tags.t, undefined);
+});
