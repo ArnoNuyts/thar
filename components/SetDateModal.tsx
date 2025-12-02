@@ -7,7 +7,7 @@ import { useTodo } from "../contexts/todo-context.tsx";
 import { Calendar } from "./Calendar.tsx";
 import { format } from "date-fns";
 
-const OPTIONS = [
+const BASE_OPTIONS = [
   { label: "Today", value: "today" },
   { label: "Tomorrow", value: "tomorrow" },
   { label: "Next Week", value: "next-week" },
@@ -35,6 +35,15 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     return new Date();
   });
 
+  const options = [...BASE_OPTIONS];
+  if (todo) {
+    if (type === "due" && todo.tags.due) {
+      options.push({ label: "Reset", value: "reset" });
+    } else if (type === "threshold" && todo.tags.t) {
+      options.push({ label: "Reset", value: "reset" });
+    }
+  }
+
   const title = type === "due" ? "Set Due Date" : "Set Threshold Date";
 
   const { isFocused } = useFocusedInput((_input, key) => {
@@ -50,9 +59,19 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     if (isCustom) return; // Let Calendar handle input when custom is active
 
     if (key.return) {
-      const selected = OPTIONS[selectedIndex];
+      const selected = options[selectedIndex];
       if (selected.value === "custom") {
         setIsCustom(true);
+      } else if (selected.value === "reset") {
+        if (todo) {
+          if (type === "due") {
+            todo.removeDue();
+          } else {
+            todo.removeThreshold();
+          }
+          updateTodo(todo);
+          closeModal();
+        }
       } else {
         const date = new Date();
         switch (selected.value) {
@@ -84,14 +103,14 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     if (key.upArrow) {
       setSelectedIndex((
         prev: number,
-      ) => (prev > 0 ? prev - 1 : OPTIONS.length - 1));
+      ) => (prev > 0 ? prev - 1 : options.length - 1));
       return;
     }
 
     if (key.downArrow) {
       setSelectedIndex((
         prev: number,
-      ) => (prev < OPTIONS.length - 1 ? prev + 1 : 0));
+      ) => (prev < options.length - 1 ? prev + 1 : 0));
       return;
     }
   }, { autoFocus: true });
@@ -114,7 +133,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
       {!isCustom
         ? (
           <Box flexDirection="column" paddingX={1}>
-            {OPTIONS.map((option, index) => {
+            {options.map((option, index) => {
               const isSelected = index === selectedIndex;
               return (
                 <Box key={option.value}>

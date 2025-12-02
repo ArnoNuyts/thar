@@ -8,8 +8,6 @@ const CONTEXT_REGEX = /\s+\@(?<name>[\w.\_\-]+)/g;
 const TAG_REGEX = /\s+(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
 
 export class Todo {
-  // TODO: Find something better than this
-  private signalChangeHack = 0;
   readonly id = Symbol();
   text: string = "";
   state: TodoStateEnum = TodoStateEnum.todo;
@@ -162,7 +160,6 @@ export class Todo {
 
   setRecurrence(recurrence: string): void {
     this.tags.rec = recurrence;
-    this.signalChangeHack++;
   }
 
   setDue(date: Date): void {
@@ -170,7 +167,6 @@ export class Todo {
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     this.tags.due = `${year}-${month}-${day}`;
-    this.signalChangeHack++;
   }
 
   setThreshold(date: Date): void {
@@ -178,7 +174,14 @@ export class Todo {
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     this.tags.t = `${year}-${month}-${day}`;
-    this.signalChangeHack++;
+  }
+
+  removeDue(): void {
+    delete this.tags.due;
+  }
+
+  removeThreshold(): void {
+    delete this.tags.t;
   }
 
   toggleHidden(): void {
@@ -187,7 +190,6 @@ export class Todo {
     } else {
       this.tags.h = "1";
     }
-    this.signalChangeHack++;
   }
 
   getHash(): string {

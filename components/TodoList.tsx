@@ -68,7 +68,11 @@ const createIndexes = (todos: Todos): IndexEntry[] => {
   return indexArray;
 };
 
-const renderTodoText = (text: string, isSelected: boolean) => {
+const renderTodoText = (
+  text: string,
+  isSelected: boolean,
+  isOverdue: boolean,
+) => {
   const parts = text.split(/(@[^ ]+|\+[^ ]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith("@")) {
@@ -76,7 +80,14 @@ const renderTodoText = (text: string, isSelected: boolean) => {
     } else if (part.startsWith("+")) {
       return <Text key={i} color="blue">{part}</Text>;
     }
-    return <Text key={i} color={isSelected ? "black" : undefined}>{part}</Text>;
+    return (
+      <Text
+        key={i}
+        color={isSelected ? "black" : (isOverdue ? "red" : undefined)}
+      >
+        {part}
+      </Text>
+    );
   });
 };
 
@@ -94,18 +105,24 @@ const TodoItem = (
   const dueDate = todo.tags.due ? `due:${todo.tags.due}` : "";
   const threshold = todo.tags.t ? `t:${todo.tags.t}` : "";
   const recurrence = todo.tags.rec ? `rec:${todo.tags.rec}` : "";
+  const isOverdue = todo.isOverdue();
 
   // Pad the number with spaces to align with the maximum number of digits
   const paddedNumber = number.toString().padStart(maxDigits, " ");
 
   return (
     <Box
-      backgroundColor={isSelected ? "white" : undefined}
+      backgroundColor={isSelected ? (isOverdue ? "red" : "white") : undefined}
     >
-      <Text dimColor color={isSelected ? "black" : undefined}>
+      <Text
+        dimColor
+        color={isSelected ? "black" : (isOverdue ? "red" : undefined)}
+      >
         {`${paddedNumber} `}
       </Text>
-      <Text color={isSelected ? "black" : undefined}>{`${checkbox} `}</Text>
+      <Text color={isSelected ? "black" : (isOverdue ? "red" : undefined)}>
+        {`${checkbox} `}
+      </Text>
       {priority && (
         <Text
           color={isSelected
@@ -127,7 +144,7 @@ const TodoItem = (
           {`${priority} `}
         </Text>
       )}
-      {renderTodoText(todo.text, isSelected)}
+      {renderTodoText(todo.text, isSelected, isOverdue)}
       {dueDate && <Text color="red">{` ${dueDate}`}</Text>}
       {threshold && <Text color="yellow">{` ${threshold}`}</Text>}
       {recurrence && <Text color="cyan">{` ${recurrence}`}</Text>}

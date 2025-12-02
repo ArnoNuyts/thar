@@ -17,10 +17,31 @@ export type ModalId =
   | "set-priority"
   | "confirm-modal";
 
+export interface ConfirmModalData {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}
+
+export function isConfirmModalData(
+  data: ModalData | null,
+): data is ConfirmModalData {
+  return (
+    data !== null &&
+    typeof data === "object" &&
+    "title" in data &&
+    "message" in data &&
+    "onConfirm" in data
+  );
+}
+
+export type ModalData = Todo | ConfirmModalData;
+
 interface ModalContextType {
   activeModal: ModalId | null;
-  modalData: Todo | null;
-  openModal: (id: ModalId, data?: Todo) => void;
+  modalData: ModalData | null;
+  openModal: (id: ModalId, data?: ModalData) => void;
   closeModal: () => void;
 }
 
@@ -28,9 +49,9 @@ const ModalContext = createContext<ModalContextType | null>(null);
 
 export const ModalProvider = ({ children }: { children?: ReactNode }) => {
   const [activeModal, setActiveModal] = useState<ModalId | null>(null);
-  const [modalData, setModalData] = useState<Todo | null>(null);
+  const [modalData, setModalData] = useState<ModalData | null>(null);
 
-  const openModal = useCallback((id: ModalId, data?: Todo) => {
+  const openModal = useCallback((id: ModalId, data?: ModalData) => {
     setActiveModal(id);
     setModalData(data || null);
   }, []);
