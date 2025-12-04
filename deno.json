@@ -12,6 +12,7 @@
     "react": "npm:react@^19.2.0",
     "react/jsx-runtime": "npm:react@^19.2.0/jsx-runtime",
     "ink-text-input": "npm:ink-text-input@^6.0.0",
+    "chalk": "npm:chalk@^5.0.0",
     "@std/async": "jsr:@std/async@1.0.14",
     "date-fns": "npm:date-fns@^4.1.0",
     "@types/react": "npm:@types/react@^19.2.0",
