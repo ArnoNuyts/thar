@@ -65,8 +65,45 @@ const App = ({ filename }: { filename: string }) => {
 
 const filename = Deno.args[0] || "todo.txt";
 
-render(<App filename={filename} />, {
+const isWindows = Deno.build.os === "windows";
+let originalChcp: string | null = null;
+
+if (isWindows) {
+  try {
+    const command = new Deno.Command("cmd", {
+      args: ["/c", "chcp"],
+    });
+    const { stdout } = await command.output();
+    const output = new TextDecoder().decode(stdout);
+    const match = output.match(/\d+/);
+    if (match) {
+      originalChcp = match[0];
+    }
+
+    const setUtf8 = new Deno.Command("cmd", {
+      args: ["/c", "chcp", "65001"],
+    });
+    await setUtf8.output();
+  } catch (_e) {
+    // Ignore errors
+  }
+}
+
+const instance = render(<App filename={filename} />, {
   incrementalRendering: true,
   patchConsole: true,
   exitOnCtrlC: true,
 });
+
+await instance.waitUntilExit();
+
+if (isWindows && originalChcp) {
+  try {
+    const restore = new Deno.Command("cmd", {
+      args: ["/c", "chcp", originalChcp],
+    });
+    await restore.output();
+  } catch (_e) {
+    // Ignore
+  }
+}
