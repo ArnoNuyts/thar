@@ -31,4 +31,9 @@ x 2025-12-01 2025-12-01 Delete old implementation in Deno Tui @v0.1
 x (A) 2025-12-02 2025-12-02 Mark todo red when overdue @v0.1
 (A) 2025-12-04 Put a message when no TODO's present @v0.2 
 2025-12-04 Autocomplete has small overlap bug with text "Enter = save" text. Fix that +bug @v0.2!
-2025-12-04 Autocomplete bug with text on secondline @v0.2 +bug 
+(C) 2025-12-04 Autocomplete bug with text on secondline @v0.2 +bug 
+x 2025-12-05 2025-12-05 Copy todos @v0.2
+2025-12-05 +Toaster: recurrent todo created @v0.3 
+2025-12-05 Paste todo(s) @v0.4 
+2025-12-05 Undo @v0.4: specially for pasting todo's. Think about archive
+2025-12-05 +Toaster when using undo @v0.4 

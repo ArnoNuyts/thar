@@ -4,6 +4,8 @@ import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
+import { useToaster } from "../contexts/toaster-context.tsx";
+import { copyToClipboard } from "../logic/clipboard.ts";
 
 export type MenuAction =
   | "edit"
@@ -14,7 +16,8 @@ export type MenuAction =
   | "recurrence"
   | "toggle-hidden"
   | "priority"
-  | "archive";
+  | "archive"
+  | "copy";
 
 interface MenuItem {
   label: string;
@@ -32,6 +35,7 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Set Priority", shortcut: "p", action: "priority" },
   { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
   { label: "Archive Completed", shortcut: "a", action: "archive" },
+  { label: "Copy", shortcut: "c", action: "copy" },
 ];
 
 export const TodoMenu = () => {
@@ -43,6 +47,7 @@ export const TodoMenu = () => {
     toggleHidden,
     archiveCompletedTodos,
   } = useTodo();
+  const { showToaster } = useToaster();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -89,6 +94,11 @@ export const TodoMenu = () => {
             archiveCompletedTodos();
           },
         });
+        break;
+      case "copy":
+        copyToClipboard(todo.toString());
+        showToaster("Todo copied");
+        closeModal();
         break;
     }
   };
@@ -154,6 +164,10 @@ export const TodoMenu = () => {
 
       if (input === "a") {
         handleAction("archive");
+      }
+
+      if (input === "c") {
+        handleAction("copy");
       }
     },
     { autoFocus: true },

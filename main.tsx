@@ -15,6 +15,7 @@ import {
   useModal,
 } from "./contexts/modal-context.tsx";
 import { TodoProvider } from "./contexts/todo-context.tsx";
+import { ToasterProvider } from "./contexts/toaster-context.tsx";
 
 const AppContent = () => {
   const { activeModal, modalData } = useModal();
@@ -54,11 +55,13 @@ const AppContent = () => {
 const App = ({ filename }: { filename: string }) => {
   return (
     <ModalProvider>
-      <TodoProvider filename={filename}>
-        <FocusProvider>
-          <AppContent />
-        </FocusProvider>
-      </TodoProvider>
+      <ToasterProvider>
+        <TodoProvider filename={filename}>
+          <FocusProvider>
+            <AppContent />
+          </FocusProvider>
+        </TodoProvider>
+      </ToasterProvider>
     </ModalProvider>
   );
 };

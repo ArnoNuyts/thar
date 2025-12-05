@@ -13,6 +13,7 @@ import {
 } from "../logic/todo-file-helpers.ts";
 import { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
+import { useToaster } from "./toaster-context.tsx";
 
 interface TodoContextType {
   todos: Todos;
@@ -25,7 +26,6 @@ interface TodoContextType {
   toggleTodo: (todo: Todo) => void;
   toggleHidden: (todo: Todo) => void;
   useSelectedTodo: () => Todo | undefined;
-  lastReloaded: number | undefined;
   archiveCompletedTodos: () => Promise<void>;
 }
 
@@ -50,9 +50,7 @@ export const TodoProvider = ({
   const [selectedTodoHash, setSelectedTodoHash] = useState<string | undefined>(
     undefined,
   );
-  const [lastReloaded, setLastReloaded] = useState<number | undefined>(
-    undefined,
-  );
+  const { showToaster } = useToaster();
   const justReadFileFlag = useRef(false);
   const lastWriteTimeRef = useRef(0);
 
@@ -96,7 +94,7 @@ export const TodoProvider = ({
       justReadFileFlag.current = true;
       const todosFromFile = await readTodosFromFile(filename);
       setTodos(new Todos(...todosFromFile));
-      setLastReloaded(Date.now());
+      showToaster("File reloaded");
     }, 500);
 
     const processEvents = async () => {
@@ -222,7 +220,6 @@ export const TodoProvider = ({
         toggleTodo,
         toggleHidden,
         useSelectedTodo,
-        lastReloaded,
         archiveCompletedTodos,
       }}
     >
