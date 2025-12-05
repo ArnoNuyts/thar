@@ -374,31 +374,53 @@ export const TodoList = () => {
 
   return (
     <Box flexDirection="column" flexGrow={1} height={listHeight}>
-      {visibleIndexes.map((entry, index) => {
-        const originalIndex = index + offsetRow;
-        if (entry.type === IndexType.context) {
+      {visibleIndexes.length === 0
+        ? (
+          <Box
+            width="100%"
+            height="100%"
+            justifyContent="center"
+            alignItems="center"
+            flexDirection="column"
+          >
+            <Text>
+              I love deadlines. I love the whooshing noise they make as they go
+              by.
+            </Text>
+            <Text color="gray">
+              - Douglas Adams
+            </Text>
+            <Text>{"\n"}</Text>
+            <Text color="gray" dimColor>
+              Press &apos;n&apos; to create a new todo.
+            </Text>
+          </Box>
+        )
+        : visibleIndexes.map((entry, index) => {
+          const originalIndex = index + offsetRow;
+          if (entry.type === IndexType.context) {
+            return (
+              <ContextTitle
+                key={originalIndex}
+                title={entry.contextName}
+                count={entry.todoCount}
+              />
+            );
+          }
+          // Calculate the todo number by counting all todo entries before this one
+          const todoNumber = indexes.slice(0, originalIndex + 1).filter(
+            (e) => e.type === IndexType.todo,
+          ).length;
           return (
-            <ContextTitle
+            <TodoItem
               key={originalIndex}
-              title={entry.contextName}
-              count={entry.todoCount}
+              todo={entry.todo}
+              isSelected={originalIndex === selectedRow}
+              number={todoNumber}
+              maxDigits={maxDigits}
             />
           );
-        }
-        // Calculate the todo number by counting all todo entries before this one
-        const todoNumber = indexes.slice(0, originalIndex + 1).filter(
-          (e) => e.type === IndexType.todo,
-        ).length;
-        return (
-          <TodoItem
-            key={originalIndex}
-            todo={entry.todo}
-            isSelected={originalIndex === selectedRow}
-            number={todoNumber}
-            maxDigits={maxDigits}
-          />
-        );
-      })}
+        })}
     </Box>
   );
 };
