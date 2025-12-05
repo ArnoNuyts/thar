@@ -30,8 +30,9 @@ export const SuggestionOverlay = () => {
           backgroundColor={index === selectedIndex ? "white" : undefined}
           wrap="truncate-end"
         >
+          {" "}
           {type === "project" ? "+" : "@"}
-          {suggestion}
+          {suggestion.padEnd(suggestionMaxLenth + 1, " ")}
         </Text>
       ))}
     </Box>

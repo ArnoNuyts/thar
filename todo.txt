@@ -29,7 +29,7 @@ x 2025-12-02 2025-12-01 Fix follow selected todo issue @v0.1
 2025-12-01 Hidden todo support + way to show all hidden todos to toggle them @v0.3
 x 2025-12-01 2025-12-01 Delete old implementation in Deno Tui @v0.1
 x (A) 2025-12-02 2025-12-02 Mark todo red when overdue @v0.1
-(A) 2025-12-04 Put a message when no TODO's present @v0.2 
+x (A) 2025-12-05 2025-12-04 Put a message when no TODO's present @v0.2 
 x 2025-12-05 2025-12-04 Autocomplete has small overlap bug with text "Enter = save" text. Fix that +bug @v0.2!
 x (C) 2025-12-05 2025-12-04 Autocomplete bug with text on secondline @v0.2 +bug 
 x 2025-12-05 2025-12-05 Copy todos @v0.2
