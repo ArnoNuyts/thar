@@ -3,9 +3,9 @@ import { UpperCaseLetter } from "../types/types.ts";
 
 const TODO_REGEX =
   /^((?<done>[x])\s){0,1}(\((?<prio>[A-Z])\)\s){0,1}((?<completionDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}((?<creationDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}(?<rest>[^\n\r]+)\s*$/;
-const PROJECT_REGEX = /\s+\+(?<name>[\w.\_\-]+)/g;
-const CONTEXT_REGEX = /\s+\@(?<name>[\w.\_\-]+)/g;
-const TAG_REGEX = /\s+(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
+const PROJECT_REGEX = /(^|\s)\+(?<name>[\w.\_\-]+)/g;
+const CONTEXT_REGEX = /(^|\s)\@(?<name>[\w.\_\-]+)/g;
+const TAG_REGEX = /(^|\s)(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
 
 export class Todo {
   readonly id = Symbol();
