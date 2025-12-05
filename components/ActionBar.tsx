@@ -1,20 +1,9 @@
 import { Box, Text } from "ink";
-import { Fragment, useEffect, useState } from "react";
-import { useTodo } from "../contexts/todo-context.tsx";
+import { Fragment } from "react";
+import { useToaster } from "../contexts/toaster-context.tsx";
 
 export const ActionBar = () => {
-  const { lastReloaded } = useTodo();
-  const [showFlash, setShowFlash] = useState(false);
-
-  useEffect(() => {
-    if (lastReloaded) {
-      setShowFlash(true);
-      const timer = setTimeout(() => {
-        setShowFlash(false);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [lastReloaded]);
+  const { toasterMessage } = useToaster();
 
   return (
     <Box
@@ -41,9 +30,9 @@ export const ActionBar = () => {
           );
         })}
       </Box>
-      {showFlash && (
+      {toasterMessage && (
         <Box padding={0}>
-          <Text color="green">File reloaded</Text>
+          <Text color="green">{toasterMessage}</Text>
         </Box>
       )}
     </Box>

@@ -6,6 +6,8 @@ import { Todos } from "../logic/Todos.ts";
 import { UpperCaseLetter } from "../types/types.ts";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
+import { copyToClipboard } from "../logic/clipboard.ts";
+import { useToaster } from "../contexts/toaster-context.tsx";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
@@ -175,6 +177,7 @@ export const TodoList = () => {
     archiveCompletedTodos,
     updateTodo,
   } = useTodo();
+  const { showToaster } = useToaster();
   const [offsetRow, setOffsetRow] = useState(0);
   const { openModal } = useModal();
   const { stdout } = useStdout();
@@ -281,6 +284,14 @@ export const TodoList = () => {
           archiveCompletedTodos();
         },
       });
+      return;
+    }
+
+    if (input === "c") {
+      if (todo) {
+        copyToClipboard(todo.toString());
+        showToaster("Todo copied");
+      }
       return;
     }
 
