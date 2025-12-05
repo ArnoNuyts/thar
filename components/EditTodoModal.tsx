@@ -30,8 +30,8 @@ export const EditTodoModal = () => {
         initialValue={todo?.text || ""}
         onSubmit={handleSubmit}
         onCancel={closeModal}
+        footer={<Text dimColor>Enter = save, Esc = cancel</Text>}
       />
-      <Text dimColor>Enter = save, Esc = cancel</Text>
     </Modal>
   );
 };

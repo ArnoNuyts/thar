@@ -156,6 +156,7 @@ Deno.test("Todo constructor - extracts projects correctly", () => {
     { input: "Todo @snake_case", expected: ["snake_case"] },
     { input: "Todo @camelCase", expected: ["camelCase"] },
     { input: "Todo @StartWithUppercase", expected: ["StartWithUppercase"] },
+    { input: "@ContextAtStart", expected: ["ContextAtStart"] },
   ];
 
   for (const { input, expected } of testCases) {
@@ -182,6 +183,7 @@ Deno.test("Todo constructor - extracts contexts correctly", () => {
     { input: "Todo +snake_case", expected: ["snake_case"] },
     { input: "Todo +camelCase", expected: ["camelCase"] },
     { input: "Todo +StartWithUppercase", expected: ["StartWithUppercase"] },
+    { input: "+ProjectAtStart", expected: ["ProjectAtStart"] },
   ];
 
   for (const { input, expected } of testCases) {

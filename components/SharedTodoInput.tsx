@@ -8,6 +8,7 @@ interface SharedTodoInputProps {
   onSubmit: (value: string) => void;
   onCancel: () => void;
   isFocused: boolean;
+  footer?: React.ReactNode;
 }
 
 export const SharedTodoInput = ({
@@ -15,6 +16,7 @@ export const SharedTodoInput = ({
   onSubmit,
   onCancel,
   isFocused: parentIsFocused,
+  footer,
 }: SharedTodoInputProps) => {
   const [value, setValue] = useState(initialValue);
   const { todos } = useTodo();
@@ -187,6 +189,8 @@ export const SharedTodoInput = ({
           cursorOffset={cursorPos}
         />
       </Box>
+
+      {footer}
       {suggestions.length > 0 && (
         <Box
           flexDirection="column"
