@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
+import { useSuggestion } from "../contexts/suggestion-context.tsx";
 
 interface SharedTodoInputProps {
   initialValue?: string;
@@ -9,6 +10,7 @@ interface SharedTodoInputProps {
   onCancel: () => void;
   isFocused: boolean;
   footer?: React.ReactNode;
+  maxWidth?: number;
 }
 
 export const SharedTodoInput = ({
@@ -17,23 +19,48 @@ export const SharedTodoInput = ({
   onCancel,
   isFocused: parentIsFocused,
   footer,
+  maxWidth,
 }: SharedTodoInputProps) => {
   const [value, setValue] = useState(initialValue);
   const { todos } = useTodo();
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [suggestionType, setSuggestionType] = useState<
-    "project" | "context" | null
-  >(null);
+  const {
+    suggestions,
+    setSuggestions,
+    selectedIndex,
+    setSelectedIndex,
+    type: suggestionType,
+    setType: setSuggestionType,
+    setPosition,
+    clearSuggestions,
+  } = useSuggestion();
+
   const [wordStartIndex, setWordStartIndex] = useState(0);
 
   // Get terminal width for line wrap calculation
   const { stdout } = useStdout();
-  const terminalWidth = stdout?.columns || 80;
+  const terminalWidth = stdout?.columns;
+  const terminalHeight = stdout?.rows;
 
   // We need to track cursor position manually because ink-text-input doesn't expose it in onChange
   // Initialize to end of string
   const [cursorPos, setCursorPos] = useState(initialValue.length);
+  /* const [debugInfo, setDebugInfo] = useState<{
+    col?: number;
+    line?: number;
+    modalLeft?: number;
+    modalTop?: number;
+    absLeft?: number;
+    absTop?: number;
+    termW?: number;
+    termH?: number;
+  }>({}); */
+
+  // Clear suggestions when unmounting or losing focus
+  useEffect(() => {
+    if (!parentIsFocused) {
+      clearSuggestions();
+    }
+  }, [parentIsFocused]);
 
   // Extract all unique projects and contexts
   const { allProjects, allContexts } = useMemo(() => {
@@ -50,20 +77,63 @@ export const SharedTodoInput = ({
   }, [todos]);
 
   // Calculate dropdown position based on word start and terminal width
-  const { dropdownLeft, dropdownTop } = useMemo(() => {
+  useEffect(() => {
+    if (suggestions.length === 0) return;
+
     // Account for the "» " prefix (2 characters)
-    const prefixLen = 2;
-    const effectivePos = wordStartIndex + prefixLen;
+    const effectivePos = wordStartIndex;
 
-    // Calculate which line and column the word starts on
-    const line = Math.floor(effectivePos / terminalWidth);
-    const col = effectivePos % terminalWidth;
+    // Calculate which line and column the word starts on relative to the input box
+    const inputWidth = Math.floor(terminalWidth / 2 - 3);
+    const line = Math.floor(effectivePos / inputWidth);
+    const col = effectivePos % inputWidth;
+    const modalHeight = 4 + line;
 
-    return {
-      dropdownLeft: col,
-      dropdownTop: line + 1, // +1 to appear below the text line
-    };
-  }, [wordStartIndex, terminalWidth]);
+    // Approximate modal position (centered)
+    // We assume the modal width is maxWidth
+    // We assume the modal height is roughly 10 lines (title + input + footer + padding)
+    // This is a rough estimation and might need tuning or a better way to get absolute coordinates
+
+    // If maxWidth is provided, it means we are in a constrained box (modal)
+    // The modal is centered in the terminal
+    const modalLeft = Math.floor((terminalWidth / 2) - inputWidth / 2);
+    const modalTop = Math.floor(
+      (terminalHeight - 2) / 2 - (modalHeight / 2) + 4,
+    );
+
+    // Absolute position
+    // +1 for the border of the modal
+    // +1 for the title of the modal
+    // +1 to appear below the text line
+    // User feedback: 1 char too much to the right -> remove +1
+    // User feedback: 4 lines too high -> add 4 to +3 = +7
+    const absLeft = modalLeft + col;
+    const absTop = modalTop + line;
+
+    // Debug info
+    /* setDebugInfo({
+      col,
+      line,
+      modalLeft,
+      modalTop,
+      absLeft,
+      absTop,
+      termW: terminalWidth,
+      termH: terminalHeight,
+    }); */
+
+    setPosition({
+      left: absLeft,
+      top: absTop,
+    });
+  }, [
+    wordStartIndex,
+    terminalWidth,
+    suggestions.length,
+    stdout?.columns,
+    terminalHeight,
+    maxWidth,
+  ]);
 
   const updateSuggestions = (text: string, cursor: number) => {
     // Find word at cursor
@@ -94,8 +164,7 @@ export const SharedTodoInput = ({
       }
     }
 
-    setSuggestions([]);
-    setSuggestionType(null);
+    clearSuggestions();
   };
 
   const handleChange = (newValue: string) => {
@@ -145,14 +214,12 @@ export const SharedTodoInput = ({
           setValue(newValue);
           // Set cursor to end of new value to ensure it moves forward
           setCursorPos(newLeft.length);
-          setSuggestions([]);
-          setSuggestionType(null);
+          clearSuggestions();
         }
         return;
       }
       if (key.escape) {
-        setSuggestions([]);
-        setSuggestionType(null);
+        clearSuggestions();
         return;
       }
     }
@@ -178,6 +245,14 @@ export const SharedTodoInput = ({
 
   return (
     <Box flexDirection="column" position="relative">
+      {/* Debug Info */}
+      {
+        /* <Box position="absolute" marginTop={-5} marginLeft={0}>
+        <Text color="magenta">
+          {`DEBUG: col=${debugInfo.col} line=${debugInfo.line} modalLeft=${debugInfo.modalLeft} modalTop=${debugInfo.modalTop} absLeft=${debugInfo.absLeft} absTop=${debugInfo.absTop}`}
+        </Text>
+      </Box> */
+      }
       <Box>
         <Text color="green">{`» `}</Text>
         <ControlledTextInput
@@ -191,28 +266,6 @@ export const SharedTodoInput = ({
       </Box>
 
       {footer}
-      {suggestions.length > 0 && (
-        <Box
-          flexDirection="column"
-          borderStyle="single"
-          borderColor="yellow"
-          position="absolute"
-          marginTop={dropdownTop}
-          marginLeft={dropdownLeft}
-          backgroundColor="black"
-        >
-          {suggestions.map((suggestion, index) => (
-            <Text
-              key={suggestion}
-              color={index === selectedIndex ? "blue" : "white"}
-              backgroundColor={index === selectedIndex ? "white" : undefined}
-            >
-              {suggestionType === "project" ? "+" : "@"}
-              {suggestion}
-            </Text>
-          ))}
-        </Box>
-      )}
     </Box>
   );
 };

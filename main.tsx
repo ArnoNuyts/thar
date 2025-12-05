@@ -17,6 +17,9 @@ import {
 import { TodoProvider } from "./contexts/todo-context.tsx";
 import { ToasterProvider } from "./contexts/toaster-context.tsx";
 
+import { SuggestionOverlay } from "./components/SuggestionOverlay.tsx";
+import { SuggestionProvider } from "./contexts/suggestion-context.tsx";
+
 const AppContent = () => {
   const { activeModal, modalData } = useModal();
 
@@ -48,6 +51,7 @@ const AppContent = () => {
           onCancel={modalData.onCancel}
         />
       )}
+      <SuggestionOverlay />
     </>
   );
 };
@@ -58,7 +62,9 @@ const App = ({ filename }: { filename: string }) => {
       <ToasterProvider>
         <TodoProvider filename={filename}>
           <FocusProvider>
-            <AppContent />
+            <SuggestionProvider>
+              <AppContent />
+            </SuggestionProvider>
           </FocusProvider>
         </TodoProvider>
       </ToasterProvider>
