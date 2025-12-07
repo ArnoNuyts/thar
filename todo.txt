@@ -37,5 +37,5 @@ x 2025-12-05 2025-12-05 Copy todos @v0.2
 2025-12-05 Paste todo(s) @v0.4 
 2025-12-05 Undo @v0.4: specially for pasting todo's. Think about archive
 2025-12-05 +Toaster when using undo @v0.4 
-2025-12-05 +bug Issue with input going one or two chars too long in edit modal @v0.2 
+x 2025-12-07 2025-12-05 +bug Issue with input going one or two chars too long in edit modal @v0.2 
 x 2025-12-07 2025-12-05 +bug suggestions in edit modal stay visible after space is inserted @v0.2 

@@ -253,16 +253,20 @@ export const SharedTodoInput = ({
         </Text>
       </Box> */
       }
-      <Box>
-        <Text color="green">{`» `}</Text>
-        <ControlledTextInput
-          focus={parentIsFocused}
-          value={value}
-          onChange={handleChange}
-          onSubmit={suggestions.length === 0 ? handleSubmit : undefined}
-          onCursorChange={handleCursorChange}
-          cursorOffset={cursorPos}
-        />
+      <Box flexDirection="row">
+        <Box width={2}>
+          <Text color="green">{`» `}</Text>
+        </Box>
+        <Box flexGrow={1}>
+          <ControlledTextInput
+            focus={parentIsFocused}
+            value={value}
+            onChange={handleChange}
+            onSubmit={suggestions.length === 0 ? handleSubmit : undefined}
+            onCursorChange={handleCursorChange}
+            cursorOffset={cursorPos}
+          />
+        </Box>
       </Box>
 
       {footer}
