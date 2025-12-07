@@ -120,7 +120,7 @@ export const TodoProvider = ({
 
   const addTodo = (text: string) => {
     const newTodo = new Todo(text);
-    newTodo.creationDate = new Date();
+    newTodo.setCreationDate(new Date());
     setTodos(new Todos(...todos, newTodo));
     setSelectedTodoHash(newTodo.getHash());
   };

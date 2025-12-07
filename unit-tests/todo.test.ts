@@ -433,9 +433,9 @@ Deno.test("Todo toString - puts completion date before creation date", () => {
   const completionDate = new Date("2023-01-02");
 
   const todo = new Todo("Test task");
-  todo.creationDate = creationDate;
-  todo.completionDate = completionDate;
-  todo.state = TodoStateEnum.done;
+  todo.setCreationDate(creationDate);
+  todo.setCompletionDate(completionDate);
+  todo.setState(TodoStateEnum.done);
 
   const str = todo.toString();
 
