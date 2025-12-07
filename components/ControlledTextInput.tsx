@@ -7,7 +7,7 @@ interface ControlledTextInputProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit?: (value: string) => void;
-  onCursorChange?: (offset: number) => void;
+  onCursorChange?: (offset: number, newValue: string) => void;
   placeholder?: string;
   focus?: boolean;
   showCursor?: boolean;
@@ -68,7 +68,7 @@ export function ControlledTextInput({
 
     if (internalCursorOffset > newValue.length) {
       setInternalCursorOffset(newValue.length);
-      onCursorChange?.(newValue.length);
+      onCursorChange?.(newValue.length, newValue);
     }
   }, [originalValue, focus, showCursor, internalCursorOffset, onCursorChange]);
 
@@ -161,7 +161,7 @@ export function ControlledTextInput({
       }
 
       setInternalCursorOffset(nextCursorOffset);
-      onCursorChange?.(nextCursorOffset);
+      onCursorChange?.(nextCursorOffset, nextValue);
 
       if (nextValue !== originalValue) {
         onChange(nextValue);
