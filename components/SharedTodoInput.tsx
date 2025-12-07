@@ -171,9 +171,9 @@ export const SharedTodoInput = ({
     setValue(newValue);
   };
 
-  const handleCursorChange = (newCursor: number) => {
+  const handleCursorChange = (newCursor: number, newValue: string) => {
     setCursorPos(newCursor);
-    updateSuggestions(value, newCursor);
+    updateSuggestions(newValue, newCursor);
   };
 
   useInput((_input, key) => {
