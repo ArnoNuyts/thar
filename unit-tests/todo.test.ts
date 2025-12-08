@@ -444,3 +444,52 @@ Deno.test("Todo toString - puts completion date before creation date", () => {
   assertEquals(parts[1], "2023-01-02"); // Completion date should be first
   assertEquals(parts[2], "2023-01-01"); // Creation date should be second
 });
+
+Deno.test("setRecurrence - sets correctly", () => {
+  const testCases = [
+    { text: "todo", input: "1d", expected: "1d" },
+    { text: "todo", input: "2w", expected: "2w" },
+    { text: "todo", input: "3m", expected: "3m" },
+    { text: "todo", input: "1y", expected: "1y" },
+    { text: "todo rec:1d", input: "2w", expected: "2w" },
+  ];
+
+  for (const { text, input, expected } of testCases) {
+    const todo = new Todo(text);
+    todo.setRecurrence(input);
+
+    assertEquals(
+      todo.tags.rec,
+      expected,
+      `Input "${input}" should be: ${expected}`,
+    );
+  }
+});
+
+Deno.test("removeRecurrence - removes correctly", () => {
+  const testCases = [
+    { text: "todo rec:1d", expectedHasRec: false },
+    { text: "todo rec:2w", expectedHasRec: false },
+    { text: "todo", expectedHasRec: false },
+  ];
+
+  for (const { text, expectedHasRec } of testCases) {
+    const todo = new Todo(text);
+    todo.removeRecurrence();
+
+    assertEquals(
+      todo.tags.rec !== undefined,
+      expectedHasRec,
+      `After removing recurrence, todo "${text}" should have rec: ${expectedHasRec}`,
+    );
+  }
+});
+
+Deno.test("removeRecurrence - preserves other tags", () => {
+  const todo = new Todo("todo rec:1d due:2024-01-01 t:2024-01-01");
+  todo.removeRecurrence();
+
+  assertEquals(todo.tags.rec, undefined);
+  assertEquals(todo.tags.due, "2024-01-01");
+  assertEquals(todo.tags.t, "2024-01-01");
+});

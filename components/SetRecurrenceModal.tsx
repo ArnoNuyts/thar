@@ -13,10 +13,16 @@ const BASE_OPTIONS = [
   { label: "Yearly", value: "y", unit: "year(s)" },
 ];
 
+const RESET_OPTION = { label: "Reset", value: "reset", unit: "" };
+
 export const SetRecurrenceModal = () => {
   const { closeModal } = useModal();
   const { useSelectedTodo, updateTodo } = useTodo();
   const todo = useSelectedTodo();
+  const hasRecurrence = todo?.tags.rec !== undefined;
+  const options = hasRecurrence
+    ? [...BASE_OPTIONS, RESET_OPTION]
+    : BASE_OPTIONS;
   const [step, setStep] = useState<"base" | "amount">("base");
   const [selectedBaseIndex, setSelectedBaseIndex] = useState(0);
   const [amount, setAmount] = useState("1");
@@ -30,21 +36,29 @@ export const SetRecurrenceModal = () => {
         closeModal();
         break;
       case step === "base" && key.return:
-        setStep("amount");
+        if (options[selectedBaseIndex].value === "reset") {
+          if (todo) {
+            todo.removeRecurrence();
+            updateTodo(todo);
+            closeModal();
+          }
+        } else {
+          setStep("amount");
+        }
         break;
       case step === "base" && key.upArrow:
         setSelectedBaseIndex((
           prev: number,
-        ) => (prev > 0 ? prev - 1 : BASE_OPTIONS.length - 1));
+        ) => (prev > 0 ? prev - 1 : options.length - 1));
         break;
       case step === "base" && key.downArrow:
         setSelectedBaseIndex((
           prev: number,
-        ) => (prev < BASE_OPTIONS.length - 1 ? prev + 1 : 0));
+        ) => (prev < options.length - 1 ? prev + 1 : 0));
         break;
       case step === "amount" && key.return:
         if (todo && amount.trim().length > 0) {
-          const base = BASE_OPTIONS[selectedBaseIndex].value;
+          const base = options[selectedBaseIndex].value;
           const recurrenceString = `${amount}${base}`;
           todo.setRecurrence(recurrenceString);
           updateTodo(todo);
@@ -66,7 +80,7 @@ export const SetRecurrenceModal = () => {
       {step === "base"
         ? (
           <Box flexDirection="column" paddingX={1}>
-            {BASE_OPTIONS.map((option, index) => {
+            {options.map((option, index) => {
               const isSelected = index === selectedBaseIndex;
               return (
                 <Box key={option.value}>

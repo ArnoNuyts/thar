@@ -199,6 +199,10 @@ export class Todo {
     this._tags.rec = recurrence;
   }
 
+  removeRecurrence(): void {
+    delete this._tags.rec;
+  }
+
   setDue(date: Date): void {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
