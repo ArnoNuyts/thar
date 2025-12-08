@@ -39,5 +39,5 @@ x 2025-12-08 2025-12-05 +Toaster: recurrent todo created @v0.3
 2025-12-05 +Toaster when using undo @v0.4 
 x 2025-12-07 2025-12-05 +bug Issue with input going one or two chars too long in edit modal @v0.2 
 x 2025-12-07 2025-12-05 +bug suggestions in edit modal stay visible after space is inserted @v0.2 
-2025-12-08 Add reset recurring todo in todo menu @v0.3 
+x 2025-12-08 2025-12-08 Add reset recurring todo in todo menu @v0.3 
 2025-12-08 Trim todo's to avoid spaces at the end (result of tags / projects) @v0.3 
