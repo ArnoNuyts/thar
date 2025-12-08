@@ -1,4 +1,10 @@
-import { createContext, ReactNode, useContext, useState } from "react";
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useState,
+} from "react";
 
 interface Position {
   left: number;
@@ -27,11 +33,11 @@ export const SuggestionProvider = ({ children }: { children: ReactNode }) => {
   const [type, setType] = useState<"project" | "context" | null>(null);
   const [position, setPosition] = useState<Position>({ left: 0, top: 0 });
 
-  const clearSuggestions = () => {
+  const clearSuggestions = useCallback(() => {
     setSuggestions([]);
     setSelectedIndex(0);
     setType(null);
-  };
+  }, []);
 
   return (
     <SuggestionContext.Provider

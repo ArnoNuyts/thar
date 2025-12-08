@@ -8,6 +8,7 @@ import { useTodo } from "../contexts/todo-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { copyToClipboard } from "../logic/clipboard.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
+import { useSearch } from "../contexts/search-context.tsx";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
@@ -181,13 +182,30 @@ export const TodoList = () => {
   const [offsetRow, setOffsetRow] = useState(0);
   const { openModal } = useModal();
   const { stdout } = useStdout();
-  const listHeight = stdout.rows - 2;
+  const listHeight = stdout.rows - 3; // -3 for search input and action bar
   const todo = useSelectedTodo();
+  const { searchQuery, focusRef } = useSearch();
 
   const indexes: IndexEntry[] = useMemo(() => {
-    const sortedTodos = todos.sortByImportance().filterHidden();
-    return createIndexes(sortedTodos);
-  }, [todos]);
+    let filteredTodos = todos.sortByImportance().filterHidden();
+
+    // Apply search filter if query exists
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filteredTodos = new Todos(...filteredTodos.filter((todo) => {
+        const text = todo.text.toLowerCase();
+        const contexts = Array.from(todo.contexts).map((c) => c.toLowerCase());
+        const projects = Array.from(todo.projects).map((p) => p.toLowerCase());
+
+        // Check if query matches text, contexts, or projects
+        return text.includes(query) ||
+          contexts.some((c) => c.includes(query.replace("@", ""))) ||
+          projects.some((p) => p.includes(query.replace("+", "")));
+      }));
+    }
+
+    return createIndexes(filteredTodos);
+  }, [todos, searchQuery]);
 
   const selectedRow = useMemo(() => {
     if (selectedTodoHash === undefined) {
@@ -229,6 +247,11 @@ export const TodoList = () => {
   useFocusedInput((input, key) => {
     if (input === "q") {
       exit();
+    }
+
+    if (input === "/") {
+      focusRef.current?.();
+      return;
     }
 
     if (input === "n") {
