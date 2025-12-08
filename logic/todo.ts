@@ -192,7 +192,7 @@ export class Todo {
       }
       text = text.replace(tag[0], "");
     }
-    this._text = text;
+    this._text = text.trim();
   }
 
   setRecurrence(recurrence: string): void {
