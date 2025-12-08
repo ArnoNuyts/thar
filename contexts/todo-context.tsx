@@ -146,6 +146,7 @@ export const TodoProvider = ({
 
     if (recurring) {
       setTodos(new Todos(...todos, recurring));
+      showToaster("Recurring todo created");
     } else {
       setTodos(new Todos(...todos));
     }
