@@ -19,6 +19,8 @@ import { ToasterProvider } from "./contexts/toaster-context.tsx";
 
 import { SuggestionOverlay } from "./components/SuggestionOverlay.tsx";
 import { SuggestionProvider } from "./contexts/suggestion-context.tsx";
+import { SearchProvider } from "./contexts/search-context.tsx";
+import { SearchInput } from "./components/SearchInput.tsx";
 
 const AppContent = () => {
   const { activeModal, modalData } = useModal();
@@ -31,6 +33,7 @@ const AppContent = () => {
         width="100%"
         justifyContent="space-between"
       >
+        <SearchInput />
         <TodoList />
         <ActionBar />
       </Box>
@@ -63,7 +66,9 @@ const App = ({ filename }: { filename: string }) => {
         <TodoProvider filename={filename}>
           <FocusProvider>
             <SuggestionProvider>
-              <AppContent />
+              <SearchProvider>
+                <AppContent />
+              </SearchProvider>
             </SuggestionProvider>
           </FocusProvider>
         </TodoProvider>
