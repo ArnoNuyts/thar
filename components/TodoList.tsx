@@ -182,9 +182,11 @@ export const TodoList = () => {
   const [offsetRow, setOffsetRow] = useState(0);
   const { openModal } = useModal();
   const { stdout } = useStdout();
-  const listHeight = stdout.rows - 3; // -3 for search input and action bar
   const todo = useSelectedTodo();
-  const { searchQuery, focusRef } = useSearch();
+  const { searchQuery, focusRef, isSearchFocused } = useSearch();
+  // Search bar takes 2 rows (content + border) when visible
+  const searchBarVisible = isSearchFocused || searchQuery.length > 0;
+  const listHeight = stdout.rows - 2 - (searchBarVisible ? 2 : 0);
 
   const indexes: IndexEntry[] = useMemo(() => {
     let filteredTodos = todos.sortByImportance().filterHidden();

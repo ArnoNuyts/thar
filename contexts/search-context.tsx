@@ -11,12 +11,15 @@ interface SearchContextType {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   focusRef: MutableRefObject<(() => void) | null>;
+  isSearchFocused: boolean;
+  setIsSearchFocused: (focused: boolean) => void;
 }
 
 const SearchContext = createContext<SearchContextType | undefined>(undefined);
 
 export const SearchProvider = ({ children }: { children: ReactNode }) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const focusRef = useRef<(() => void) | null>(null);
 
   return (
@@ -25,6 +28,8 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
         searchQuery,
         setSearchQuery,
         focusRef,
+        isSearchFocused,
+        setIsSearchFocused,
       }}
     >
       {children}
