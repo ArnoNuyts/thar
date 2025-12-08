@@ -7,7 +7,8 @@ import { useSearch } from "../contexts/search-context.tsx";
 import { useFocusable } from "../hooks/useFocusable.ts";
 
 export const SearchInput = () => {
-  const { searchQuery, setSearchQuery, focusRef } = useSearch();
+  const { searchQuery, setSearchQuery, focusRef, setIsSearchFocused } =
+    useSearch();
   const { todos } = useTodo();
   const {
     suggestions,
@@ -32,7 +33,9 @@ export const SearchInput = () => {
     if (!isFocused) {
       clearSuggestions();
     }
-  }, [isFocused, clearSuggestions]);
+    // Sync focus state with context
+    setIsSearchFocused(isFocused);
+  }, [isFocused, clearSuggestions, setIsSearchFocused]);
 
   // Extract all unique projects and contexts
   const { allProjects, allContexts } = useMemo(() => {
@@ -160,8 +163,22 @@ export const SearchInput = () => {
     }
   });
 
+  // Hide search bar when unfocused and empty
+  const isVisible = isFocused || searchQuery.length > 0;
+
+  if (!isVisible) {
+    return null;
+  }
+
   return (
-    <Box flexDirection="row">
+    <Box
+      flexDirection="row"
+      borderStyle="single"
+      borderTop={false}
+      borderLeft={false}
+      borderRight={false}
+      borderBottom
+    >
       <Box width={3}>
         <Text color={isFocused ? "green" : "gray"}>{`/ `}</Text>
       </Box>
@@ -177,8 +194,8 @@ export const SearchInput = () => {
             />
           )
           : (
-            <Text color={searchQuery ? "white" : "gray"}>
-              {searchQuery || "Press / to search..."}
+            <Text color="white">
+              {searchQuery}
             </Text>
           )}
       </Box>

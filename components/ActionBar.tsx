@@ -20,6 +20,7 @@ export const ActionBar = () => {
           { key: "q", text: "Quit" },
           { key: "n", text: "New" },
           { key: "e", text: "Edit" },
+          { key: "/", text: "Search" },
           { key: "a", text: "Archive" },
         ].map((item) => {
           return (
