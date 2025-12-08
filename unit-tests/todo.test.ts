@@ -28,12 +28,12 @@ Deno.test("Todo constructor - sets text correctly", () => {
     },
     {
       input: "x    excessive space before",
-      expected: "   excessive space before",
-    }, // Should this be trimmed?
+      expected: "excessive space before",
+    },
     {
       input: "x excessive space after    ",
-      expected: "excessive space after    ",
-    }, // Should this be trimmed?
+      expected: "excessive space after",
+    },
   ];
 
   for (const { input, expected } of testCases) {
@@ -492,4 +492,51 @@ Deno.test("removeRecurrence - preserves other tags", () => {
   assertEquals(todo.tags.rec, undefined);
   assertEquals(todo.tags.due, "2024-01-01");
   assertEquals(todo.tags.t, "2024-01-01");
+});
+
+Deno.test("Todo constructor - trims leading and trailing whitespace", () => {
+  const testCases = [
+    { input: "x    excessive space before", expected: "excessive space before" },
+    { input: "x excessive space after    ", expected: "excessive space after" },
+    { input: "  leading spaces", expected: "leading spaces" },
+    { input: "trailing spaces  ", expected: "trailing spaces" },
+    { input: "  both sides  ", expected: "both sides" },
+    { input: "\ttab before", expected: "tab before" },
+    { input: "tab after\t", expected: "tab after" },
+    { input: "  \t  mixed whitespace  \t  ", expected: "mixed whitespace" },
+    { input: "no extra spaces", expected: "no extra spaces" },
+    { input: "(A)   priority with spaces", expected: "priority with spaces" },
+    { input: "2024-06-02   creation date with spaces", expected: "creation date with spaces" },
+  ];
+
+  for (const { input, expected } of testCases) {
+    const todo = new Todo(input);
+
+    assertEquals(
+      todo.text,
+      expected,
+      `Input "${input}" should have trimmed text: "${expected}", got: "${todo.text}"`,
+    );
+  }
+});
+
+Deno.test("Todo setText - trims leading and trailing whitespace", () => {
+  const todo = new Todo("initial");
+
+  const testCases = [
+    { input: "  leading", expected: "leading" },
+    { input: "trailing  ", expected: "trailing" },
+    { input: "  both  ", expected: "both" },
+    { input: "no spaces", expected: "no spaces" },
+  ];
+
+  for (const { input, expected } of testCases) {
+    todo.setText(input);
+
+    assertEquals(
+      todo.text,
+      expected,
+      `setText("${input}") should result in trimmed text: "${expected}", got: "${todo.text}"`,
+    );
+  }
 });
