@@ -5,6 +5,7 @@ import { useTodo } from "../contexts/todo-context.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
 import { useFocusable } from "../hooks/useFocusable.ts";
+import { useNavigation } from "../contexts/navigation-context.tsx";
 
 export const SearchInput = () => {
   const { searchQuery, setSearchQuery, focusRef, setIsSearchFocused } =
@@ -22,6 +23,9 @@ export const SearchInput = () => {
   } = useSuggestion();
 
   const { isFocused, focus, blur } = useFocusable();
+  // Get navigation functions
+  const { navigateUp, navigateDown, navigatePageUp, navigatePageDown } =
+    useNavigation();
   const [cursorPos, setCursorPos] = useState(searchQuery.length);
   const [wordStartIndex, setWordStartIndex] = useState(0);
 
@@ -146,6 +150,24 @@ export const SearchInput = () => {
         clearSuggestions();
         return;
       }
+    }
+
+    // Navigation fallback when no suggestions
+    if (key.upArrow) {
+      navigateUp();
+      return;
+    }
+    if (key.downArrow) {
+      navigateDown();
+      return;
+    }
+    if (key.pageUp) {
+      navigatePageUp();
+      return;
+    }
+    if (key.pageDown) {
+      navigatePageDown();
+      return;
     }
 
     if (key.return) {

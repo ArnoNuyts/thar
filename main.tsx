@@ -20,6 +20,7 @@ import { ToasterProvider } from "./contexts/toaster-context.tsx";
 import { SuggestionOverlay } from "./components/SuggestionOverlay.tsx";
 import { SuggestionProvider } from "./contexts/suggestion-context.tsx";
 import { SearchProvider } from "./contexts/search-context.tsx";
+import { NavigationProvider } from "./contexts/navigation-context.tsx";
 import { SearchInput } from "./components/SearchInput.tsx";
 
 const AppContent = () => {
@@ -67,7 +68,9 @@ const App = ({ filename }: { filename: string }) => {
           <FocusProvider>
             <SuggestionProvider>
               <SearchProvider>
-                <AppContent />
+                <NavigationProvider>
+                  <AppContent />
+                </NavigationProvider>
               </SearchProvider>
             </SuggestionProvider>
           </FocusProvider>
