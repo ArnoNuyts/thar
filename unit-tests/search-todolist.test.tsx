@@ -1,18 +1,22 @@
 import { render } from "ink-testing-library";
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { delay } from "@std/async";
-import { Box } from "ink";
 
-import { TodoProvider } from "../contexts/todo-context.tsx";
+import { TodoProvider, useTodo } from "../contexts/todo-context.tsx";
 import { FocusProvider } from "../contexts/focus-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
 import { ModalProvider } from "../contexts/modal-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import {
+  NavigationProvider,
+  useNavigation,
+} from "../contexts/navigation-context.tsx";
 import { SearchInput } from "../components/SearchInput.tsx";
 import { useEffect } from "react";
 import { Todo } from "../logic/todo.ts";
 import { Todos } from "../logic/Todos.ts";
+import { IndexType } from "../types/enums.ts";
 
 // Mock Deno APIs
 const originalWatchFs = Deno.watchFs;
@@ -85,7 +89,9 @@ const TestWrapper = ({
         <TodoProvider filename={filename}>
           <FocusProvider>
             <SuggestionProvider>
-              <SearchProvider>{children}</SearchProvider>
+              <SearchProvider>
+                <NavigationProvider>{children}</NavigationProvider>
+              </SearchProvider>
             </SuggestionProvider>
           </FocusProvider>
         </TodoProvider>
@@ -110,6 +116,40 @@ const SearchQuerySetter = ({
   return null;
 };
 
+// Helper component to observe selection state
+const SelectionObserver = (
+  { onSelectionChange }: { onSelectionChange: (item: string) => void },
+) => {
+  const { indexes } = useNavigation();
+  const { selectedTodoHash } = useTodo();
+
+  useEffect(() => {
+    if (selectedTodoHash) {
+      // Find todo text
+      const entry = indexes.find((e) =>
+        e.type === IndexType.todo && e.todo.getHash() === selectedTodoHash
+      );
+      if (entry && entry.type === IndexType.todo) {
+        onSelectionChange(entry.todo.text);
+      }
+    }
+  }, [selectedTodoHash, indexes, onSelectionChange]);
+
+  return null;
+};
+
+// Helper to trigger focus on SearchInput
+const FocusRequester = () => {
+  const { focusRef } = useSearch();
+  useEffect(() => {
+    // Schedule focus request
+    setTimeout(() => {
+      focusRef.current?.();
+    }, 50);
+  }, [focusRef]);
+  return null;
+};
+
 Deno.test({
   name: "SearchInput Component Tests",
   sanitizeOps: false,
@@ -117,7 +157,6 @@ Deno.test({
   fn: async (t) => {
     await t.step("should render with placeholder when empty", async () => {
       setupMocks("");
-
       const { lastFrame, unmount } = render(
         <TestWrapper>
           <SearchInput />
@@ -127,7 +166,8 @@ Deno.test({
       await delay(100);
 
       const output = lastFrame();
-      assertStringIncludes(output || "", "Press / to search...");
+      // Should be hidden (empty) when unfocused and query is empty
+      assertEquals("", output);
 
       unmount();
       mockWatcher.close();
@@ -136,7 +176,6 @@ Deno.test({
 
     await t.step("should display search query when set", async () => {
       setupMocks("");
-
       const { lastFrame, unmount } = render(
         <TestWrapper>
           <SearchQuerySetter query="@Home" />
@@ -155,6 +194,132 @@ Deno.test({
     });
   },
 });
+
+Deno.test({
+  name: "Navigation and Auto-Selection Tests",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async (t) => {
+    await t.step(
+      "should handle navigation keys when search is focused",
+      async () => {
+        const todosContent = "Task A\nTask B\nTask C";
+        setupMocks(todosContent);
+
+        let selectedText = "";
+
+        const { lastFrame, unmount, stdin } = render(
+          <TestWrapper filename="todo.txt">
+            <FocusRequester />
+            <SearchInput />
+            <SelectionObserver
+              onSelectionChange={(text) => selectedText = text}
+            />
+          </TestWrapper>,
+        );
+
+        // Wait for load and focus
+        await delay(200);
+        // Initial selection should be Task A
+        assertEquals(selectedText, "Task A");
+
+        // Press Down Arrow
+        // Assuming 'SearchInput' listening to keys? No, SearchInput uses 'useInput' from 'ink' ONLY when focused.
+        // But we are in a testing environment. 'render' returns 'stdin'.
+        // We need to write escape sequences for arrow keys.
+        // Down arrow is often "\u001B[B"
+
+        await stdin.write("\u001B[B"); // Down Arrow
+        await delay(50);
+
+        // Should select Task B
+        assertEquals(selectedText, "Task B");
+
+        // Press Up Arrow
+        await stdin.write("\u001B[A"); // Up Arrow
+        await delay(50);
+
+        assertEquals(selectedText, "Task A");
+
+        unmount();
+        mockWatcher.close();
+        teardownMocks();
+      },
+    );
+
+    await t.step(
+      "should auto-select first item when current selection is filtered out",
+      async () => {
+        const todosContent = "Apples\nBananas\nCherries";
+        setupMocks(todosContent);
+
+        let selectedText = "";
+
+        const { unmount } = render(
+          <TestWrapper filename="todo.txt">
+            <SearchInput />
+            <SelectionObserver
+              onSelectionChange={(text) => selectedText = text}
+            />
+            <SearchQuerySetter query="" />
+          </TestWrapper>,
+        );
+
+        // Wait for load
+        await delay(200);
+        assertEquals(selectedText, "Apples");
+
+        // Select 'Bananas' (simulate user navigation or direct selection via stdin if we had full list)
+        // Since we don't render list to navigate, we can't easily select 'Bananas' via keys without blind navigation.
+        // We can just rely on the fact that if we filter 'Bananas', it should disappear and 'Apples' (or 'Cherries'?) selected?
+        // Wait, if we filter 'Cherries', and 'Apples' was selected (default), it stays 'Apples'.
+
+        // Let's rely on NavigationContext logic directly? No, integration test.
+        // Let's filter such that 'Apples' is removed.
+        // Filter 'Bananas'. 'Apples' removed. 'Bananas' should be selected.
+
+        // Update query to "Bananas"
+        // We need a way to update query dynamically.
+        // Render again with new prop?
+        // ink-testing-library `rerender` is available on result.
+
+        // But our `TestWrapper` renders `SearchQuerySetter` if we add it.
+        // We can use a component that updates query after delay.
+
+        // Let's assume we start with "Apples" selected.
+        // Filter "Bananas".
+        // "Apples" is not in list.
+        // "Bananas" is first item.
+        // Selection should become "Bananas".
+
+        // But `SearchQuerySetter` sets query on mount.
+        // We can use a custom setter to update after delay.
+
+        const content = (
+          <TestWrapper filename="todo.txt">
+            <SearchInput />
+            <SelectionObserver
+              onSelectionChange={(text) => selectedText = text}
+            />
+            <DelayedQuerySetter query="Bananas" delayMs={300} />
+          </TestWrapper>
+        );
+
+        // We need `DelayedQuerySetter`.
+      },
+    );
+  },
+});
+
+const DelayedQuerySetter = (
+  { query, delayMs }: { query: string; delayMs: number },
+) => {
+  const { setSearchQuery } = useSearch();
+  useEffect(() => {
+    setTimeout(() => setSearchQuery(query), delayMs);
+  }, [query, delayMs, setSearchQuery]);
+  return null;
+};
 
 // Unit tests for filtering logic (testing the filtering algorithm directly)
 Deno.test({

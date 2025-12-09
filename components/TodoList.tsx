@@ -1,75 +1,16 @@
-import { Box, Text, useApp, useStdout } from "ink";
-import { memo, useEffect, useMemo, useState } from "react";
+import { Box, Newline, Text, useApp } from "ink";
+import { memo, useMemo } from "react";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
-import { UpperCaseLetter } from "../types/types.ts";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { copyToClipboard } from "../logic/clipboard.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, value));
-
-enum IndexType {
-  context,
-  todo,
-}
-
-type ContextIndexEntry = {
-  type: IndexType.context;
-  todoCount: number;
-  contextName: string;
-};
-
-type TodoIndexEntry = {
-  type: IndexType.todo;
-  todo: Todo;
-};
-
-type IndexEntry = ContextIndexEntry | TodoIndexEntry;
-
-const createIndexes = (todos: Todos): IndexEntry[] => {
-  const indexArray: IndexEntry[] = [];
-  let prevTodo: Todo | null = null;
-  let currHeader: ContextIndexEntry | null = null;
-  let currHeaderTodoCounter = 0;
-
-  for (const todo of todos) {
-    if (!todo?.id) {
-      continue;
-    }
-
-    const currentContext = todo?.contexts?.values().next().value;
-    const prevContext = prevTodo?.contexts?.values().next().value;
-
-    if (prevTodo === null || currentContext != prevContext) {
-      if (currHeader) {
-        currHeader.todoCount = currHeaderTodoCounter;
-        currHeaderTodoCounter = 0;
-      }
-
-      currHeader = {
-        type: IndexType.context,
-        todoCount: 0,
-        contextName: currentContext ?? "None",
-      };
-      indexArray.push(currHeader);
-    }
-
-    indexArray.push({ type: IndexType.todo, todo });
-    currHeaderTodoCounter++;
-    prevTodo = todo;
-  }
-
-  if (currHeader) {
-    currHeader.todoCount = currHeaderTodoCounter;
-  }
-
-  return indexArray;
-};
+import { useNavigation } from "../contexts/navigation-context.tsx";
+import { IndexType } from "../types/enums.ts";
+import { UpperCaseLetter } from "../types/types.ts";
+import { IndexEntry } from "../logic/indexes.ts";
 
 const renderTodoText = (
   text: string,
@@ -168,140 +109,63 @@ const ContextTitle = memo(
 );
 
 export const TodoList = () => {
+  const { exit } = useApp();
   const {
-    todos,
-    selectedTodoHash,
-    setSelectedTodoHash,
     useSelectedTodo,
     toggleTodo,
     deleteTodo,
     archiveCompletedTodos,
     updateTodo,
   } = useTodo();
-  const { showToaster } = useToaster();
-  const [offsetRow, setOffsetRow] = useState(0);
+  const {
+    indexes,
+    offsetRow,
+    listHeight,
+    navigateUp,
+    navigateDown,
+    navigatePageUp,
+    navigatePageDown,
+  } = useNavigation();
+
   const { openModal } = useModal();
-  const { stdout } = useStdout();
+  const { showToaster } = useToaster();
+  const { focusRef } = useSearch();
+
   const todo = useSelectedTodo();
-  const { searchQuery, focusRef, isSearchFocused } = useSearch();
-  // Search bar takes 2 rows (content + border) when visible
-  const searchBarVisible = isSearchFocused || searchQuery.length > 0;
-  const listHeight = stdout.rows - 2 - (searchBarVisible ? 2 : 0);
 
-  const indexes: IndexEntry[] = useMemo(() => {
-    let filteredTodos = todos.sortByImportance().filterHidden();
-
-    // Apply search filter if query exists
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filteredTodos = new Todos(...filteredTodos.filter((todo) => {
-        const text = todo.text.toLowerCase();
-        const contexts = Array.from(todo.contexts).map((c) => c.toLowerCase());
-        const projects = Array.from(todo.projects).map((p) => p.toLowerCase());
-
-        // Check if query matches text, contexts, or projects
-        return text.includes(query) ||
-          contexts.some((c) => c.includes(query.replace("@", ""))) ||
-          projects.some((p) => p.includes(query.replace("+", "")));
-      }));
-    }
-
-    return createIndexes(filteredTodos);
-  }, [todos, searchQuery]);
-
-  const selectedRow = useMemo(() => {
-    if (selectedTodoHash === undefined) {
-      // Select the first non-context item
-      const firstTodoIndex = indexes.findIndex((entry) =>
-        entry.type === IndexType.todo
-      );
-      return firstTodoIndex === -1 ? 0 : firstTodoIndex;
-    }
-    const index = indexes.findIndex((entry) =>
-      entry.type === IndexType.todo && entry.todo.getHash() === selectedTodoHash
-    );
-    return index === -1 ? 0 : index;
-  }, [indexes, selectedTodoHash]);
-
-  useEffect(() => {
-    if (selectedRow < offsetRow) {
-      setOffsetRow(selectedRow);
-    } else if (selectedRow >= offsetRow + listHeight) {
-      setOffsetRow(selectedRow - listHeight + 1);
-    }
-  }, [selectedRow, listHeight]);
-
-  // Initialize selectedTodoHash if undefined
-  useEffect(() => {
-    if (selectedTodoHash === undefined && indexes.length > 0) {
-      const firstTodoIndex = indexes.findIndex((entry) =>
-        entry.type === IndexType.todo
-      );
-      if (
-        firstTodoIndex !== -1 && indexes[firstTodoIndex].type === IndexType.todo
-      ) {
-        setSelectedTodoHash(indexes[firstTodoIndex].todo.getHash());
-      }
-    }
-  }, [indexes, selectedTodoHash, setSelectedTodoHash]);
-
-  const { exit } = useApp();
+  // Handle global shortcuts (only when focused)
   useFocusedInput((input, key) => {
-    if (input === "q") {
-      exit();
-    }
-
     if (input === "/") {
       focusRef.current?.();
       return;
     }
 
-    if (input === "n") {
-      openModal("create-todo");
+    if (input === "q") {
+      exit();
       return;
     }
 
-    if (input === "e") {
+    if (key.upArrow) {
+      navigateUp();
+    } else if (key.downArrow) {
+      navigateDown();
+    } else if (key.pageUp) {
+      navigatePageUp();
+    } else if (key.pageDown) {
+      navigatePageDown();
+    } else if (input === " ") {
       if (todo) {
-        openModal("edit-todo", todo);
+        toggleTodo(todo);
       }
-      return;
-    }
-
-    if (input === "x") {
+    } else if (input === "x") {
       openModal("todo-menu");
-      return;
-    }
-
-    if (input === "d") {
-      openModal("set-due-date");
-      return;
-    }
-
-    if (input === "t") {
-      openModal("set-threshold-date");
-      return;
-    }
-
-    if (input === "r") {
-      openModal("set-recurrence");
-      return;
-    }
-
-    if (key.delete) {
-      if (todo) {
-        openModal("confirm-modal", {
-          title: "Delete Todo",
-          message: "Are you sure you want to delete this todo?",
-          onConfirm: () => {
-            deleteTodo(todo);
-          },
-        });
-      }
-      return;
-    }
-
-    if (input === "a") {
+    } else if (key.return) {
+      openModal("todo-menu");
+    } else if (input === "n") {
+      openModal("create-todo");
+    } else if (input === "e") {
+      if (todo) openModal("edit-todo", todo);
+    } else if (input === "a") {
       openModal("confirm-modal", {
         title: "Archive Completed",
         message: "Archive all completed todos to done.txt?",
@@ -309,72 +173,26 @@ export const TodoList = () => {
           archiveCompletedTodos();
         },
       });
-      return;
-    }
-
-    if (input === "c") {
+    } else if (input === "d") {
+      openModal("set-due-date");
+    } else if (input === "t") {
+      openModal("set-threshold-date");
+    } else if (input === "r") {
+      openModal("set-recurrence");
+    } else if (key.delete) {
+      if (todo) {
+        openModal("confirm-modal", {
+          title: "Delete Todo",
+          message: "Are you sure you want to delete this todo?",
+          onConfirm: () => deleteTodo(todo),
+        });
+      }
+    } else if (input === "c") {
       if (todo) {
         copyToClipboard(todo.toString());
         showToaster("Todo copied");
       }
-      return;
-    }
-
-    let newSelectedRow = selectedRow;
-    let direction = 0;
-
-    if (key.upArrow) {
-      newSelectedRow = Math.max(0, selectedRow - 1);
-      direction = -1;
-    }
-
-    if (key.downArrow) {
-      newSelectedRow = Math.min(indexes.length - 1, selectedRow + 1);
-      direction = 1;
-    }
-
-    if (key.pageUp) {
-      newSelectedRow = Math.max(0, selectedRow - 5);
-      direction = -1;
-    }
-
-    if (key.pageDown) {
-      newSelectedRow = Math.min(indexes.length - 1, selectedRow + 5);
-      direction = 1;
-    }
-
-    while (indexes[newSelectedRow]?.type === IndexType.context) {
-      newSelectedRow += direction;
-      if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
-        newSelectedRow = selectedRow;
-        break;
-      }
-    }
-
-    const selectedEntry = indexes[newSelectedRow];
-    if (selectedEntry?.type === IndexType.todo) {
-      setSelectedTodoHash(selectedEntry.todo.getHash());
-    }
-
-    setOffsetRow(
-      clamp(
-        clamp(
-          offsetRow,
-          newSelectedRow - (listHeight - 2),
-          newSelectedRow - 1,
-        ),
-        0,
-        indexes.length - listHeight,
-      ),
-    );
-
-    if (input === " ") {
-      if (todo) {
-        toggleTodo(todo);
-      }
-    }
-
-    if (["A", "B", "C", "D", "E", "F"].includes(input.toUpperCase())) {
+    } else if (["A", "B", "C", "D", "E", "F"].includes(input)) {
       if (todo) {
         const newPriority = input.toUpperCase() as UpperCaseLetter;
         if (todo.priority === newPriority) {
@@ -387,6 +205,7 @@ export const TodoList = () => {
     }
   }, { autoFocus: true });
 
+  // Derived state for rendering
   const visibleIndexes: IndexEntry[] = useMemo(
     () => indexes.slice(offsetRow, offsetRow + listHeight),
     [listHeight, offsetRow, indexes],
@@ -415,7 +234,7 @@ export const TodoList = () => {
             <Text color="gray">
               - Douglas Adams
             </Text>
-            <Text>{"\n"}</Text>
+            <Newline />
             <Text color="gray" dimColor>
               Press &apos;n&apos; to create a new todo.
             </Text>
@@ -436,11 +255,14 @@ export const TodoList = () => {
           const todoNumber = indexes.slice(0, originalIndex + 1).filter(
             (e) => e.type === IndexType.todo,
           ).length;
+          // Check if this specific todo is selected
+          const isSelected = entry.todo === todo;
+
           return (
             <TodoItem
               key={originalIndex}
               todo={entry.todo}
-              isSelected={originalIndex === selectedRow}
+              isSelected={isSelected}
               number={todoNumber}
               maxDigits={maxDigits}
             />
