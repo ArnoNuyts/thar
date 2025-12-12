@@ -5,6 +5,7 @@ import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
+import { useNavigation } from "../contexts/navigation-context.tsx";
 import { copyToClipboard } from "../logic/clipboard.ts";
 
 export type MenuAction =
@@ -41,12 +42,12 @@ const MENU_ITEMS: MenuItem[] = [
 export const TodoMenu = () => {
   const { closeModal, openModal } = useModal();
   const {
-    useSelectedTodo,
     deleteTodo,
     toggleTodo,
     toggleHidden,
     archiveCompletedTodos,
   } = useTodo();
+  const { useSelectedTodo } = useNavigation();
   const { showToaster } = useToaster();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);

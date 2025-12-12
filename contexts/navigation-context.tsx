@@ -12,6 +12,7 @@ import { useStdout } from "ink";
 import { Todos } from "../logic/Todos.ts";
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
 import { IndexType } from "../types/enums.ts";
+import { Todo } from "../logic/todo.ts";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
@@ -24,6 +25,9 @@ interface NavigationContextType {
   navigateDown: () => void;
   navigatePageUp: () => void;
   navigatePageDown: () => void;
+  selectedTodoHash: string | undefined;
+  setSelectedTodoHash: (hash: string | undefined) => void;
+  useSelectedTodo: () => Todo | undefined;
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(
@@ -31,14 +35,13 @@ const NavigationContext = createContext<NavigationContextType | undefined>(
 );
 
 export const NavigationProvider = ({ children }: { children: ReactNode }) => {
-  const {
-    todos,
-    selectedTodoHash,
-    setSelectedTodoHash,
-  } = useTodo();
+  const { todos } = useTodo();
   const { searchQuery, isSearchFocused } = useSearch();
   const { stdout } = useStdout();
   const [offsetRow, setOffsetRow] = useState(0);
+  const [selectedTodoHash, setSelectedTodoHash] = useState<string | undefined>(
+    undefined,
+  );
 
   // Search bar takes 2 rows (content + border) when visible
   // Search bar is visible when focused OR has query
@@ -94,7 +97,7 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
         setSelectedTodoHash(indexes[firstTodoIndex].todo.getHash());
       }
     }
-  }, [indexes, selectedTodoHash, setSelectedTodoHash]);
+  }, [indexes, selectedTodoHash]); // Removed setSelectedTodoHash from deps as it's stable
 
   // Calculate selectedRow derived from selectedTodoHash
   const selectedRow = useMemo(() => {
@@ -114,10 +117,7 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
     } else if (selectedRow >= offsetRow + listHeight) {
       setOffsetRow(selectedRow - listHeight + 1);
     }
-  }, [selectedRow, listHeight, offsetRow]); // Added offsetRow to deps as logic depends on it, but beware cycles?
-  // Wait, setting offsetRow depends on offsetRow. logic:
-  // If selectedRow is OUT of view [offsetRow, offsetRow+Height], scroll it into view.
-  // This is stable.
+  }, [selectedRow, listHeight, offsetRow]);
 
   const doNavigate = (step: number) => {
     let newSelectedRow = selectedRow;
@@ -136,14 +136,16 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
     if (selectedEntry?.type === IndexType.todo) {
       setSelectedTodoHash(selectedEntry.todo.getHash());
     }
-
-    // Offset update is handled by the useEffect above reacting to selectedTodoHash change via selectedRow
   };
 
   const navigateUp = () => doNavigate(-1);
   const navigateDown = () => doNavigate(1);
   const navigatePageUp = () => doNavigate(-5);
   const navigatePageDown = () => doNavigate(5);
+
+  const useSelectedTodo = () => {
+    return todos.find((t) => t.getHash() === selectedTodoHash);
+  };
 
   return (
     <NavigationContext.Provider
@@ -155,6 +157,9 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
         navigateDown,
         navigatePageUp,
         navigatePageDown,
+        selectedTodoHash,
+        setSelectedTodoHash,
+        useSelectedTodo,
       }}
     >
       {children}
