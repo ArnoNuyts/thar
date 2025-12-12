@@ -111,14 +111,14 @@ interface TodoListProps {
   toggleTodo: (todo: Todo) => void;
   deleteTodo: (todo: Todo) => void;
   archiveCompletedTodos: () => Promise<void>;
-  updateTodo: (todo: Todo) => void;
+  refreshTodos: () => void;
 }
 
 export const TodoList = ({
   toggleTodo,
   deleteTodo,
   archiveCompletedTodos,
-  updateTodo,
+  refreshTodos,
 }: TodoListProps) => {
   const { exit } = useApp();
   const {
@@ -205,7 +205,7 @@ export const TodoList = ({
         } else {
           todo.setPriority(newPriority);
         }
-        updateTodo(todo);
+        refreshTodos();
       }
     }
   }, { autoFocus: true });

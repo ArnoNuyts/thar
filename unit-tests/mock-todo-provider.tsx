@@ -22,7 +22,7 @@ export const MockTodoProvider = ({
     return newTodo;
   };
 
-  const updateTodo = (_todo: Todo) => {
+  const refreshTodos = () => {
     setTodos(new Todos(...todos));
   };
 
@@ -59,7 +59,7 @@ export const MockTodoProvider = ({
         todos,
         setTodos,
         addTodo,
-        updateTodo,
+        refreshTodos,
         deleteTodo,
         toggleTodo,
         toggleHidden,

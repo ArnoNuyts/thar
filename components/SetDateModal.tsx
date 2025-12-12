@@ -22,7 +22,7 @@ interface SetDateModalProps {
 
 export const SetDateModal = ({ type }: SetDateModalProps) => {
   const { closeModal } = useModal();
-  const { updateTodo } = useTodo();
+  const { refreshTodos } = useTodo();
   const { useSelectedTodo } = useNavigation();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -71,7 +71,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
           } else {
             todo.removeThreshold();
           }
-          updateTodo(todo);
+          refreshTodos();
           closeModal();
         }
       } else {
@@ -95,7 +95,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
           } else {
             todo.setThreshold(date);
           }
-          updateTodo(todo);
+          refreshTodos();
         }
         closeModal();
       }
@@ -124,7 +124,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
       } else {
         todo.setThreshold(date);
       }
-      updateTodo(todo);
+      refreshTodos();
       closeModal();
     }
   };

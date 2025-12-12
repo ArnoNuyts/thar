@@ -25,7 +25,7 @@ import { SearchInput } from "./components/SearchInput.tsx";
 
 const AppContent = () => {
   const { activeModal, modalData } = useModal();
-  const { todos, toggleTodo, deleteTodo, archiveCompletedTodos, updateTodo } =
+  const { todos, toggleTodo, deleteTodo, archiveCompletedTodos, refreshTodos } =
     useTodo();
 
   return (
@@ -41,7 +41,7 @@ const AppContent = () => {
           toggleTodo={toggleTodo}
           deleteTodo={deleteTodo}
           archiveCompletedTodos={archiveCompletedTodos}
-          updateTodo={updateTodo}
+          refreshTodos={refreshTodos}
         />
         <ActionBar />
       </Box>
