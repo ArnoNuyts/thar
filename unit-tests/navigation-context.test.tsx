@@ -259,5 +259,82 @@ Deno.test({
         unmount();
       },
     );
+
+    await t.step(
+      "should select next todo after deletion",
+      async () => {
+        const todo1 = new Todo("Todo 1");
+        const todo2 = new Todo("Todo 2");
+        const todo3 = new Todo("Todo 3");
+        const todos = new Todos(todo1, todo2, todo3);
+        // deno-lint-ignore no-explicit-any
+        let navContext: any;
+
+        const { rerender, unmount } = render(
+          <TestWrapper todos={todos}>
+            <NavigationTester onContext={(ctx) => navContext = ctx} />
+          </TestWrapper>,
+        );
+        await delay(100);
+
+        // Select Todo 2
+        navContext.navigateDown();
+        await delay(50);
+        assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
+
+        // Delete Todo 2
+        const newTodos = new Todos(todo1, todo3);
+        rerender(
+          <TestWrapper todos={newTodos}>
+            <NavigationTester onContext={(ctx) => navContext = ctx} />
+          </TestWrapper>,
+        );
+        await delay(100);
+
+        // Should select Todo 3 (next item)
+        const selected = navContext.useSelectedTodo();
+        assertEquals(selected?.text, "Todo 3");
+
+        unmount();
+      },
+    );
+
+    await t.step(
+      "should select previous todo when deleting last item",
+      async () => {
+        const todo1 = new Todo("Todo 1");
+        const todo2 = new Todo("Todo 2");
+        const todos = new Todos(todo1, todo2);
+        // deno-lint-ignore no-explicit-any
+        let navContext: any;
+
+        const { rerender, unmount } = render(
+          <TestWrapper todos={todos}>
+            <NavigationTester onContext={(ctx) => navContext = ctx} />
+          </TestWrapper>,
+        );
+        await delay(100);
+
+        // Select Todo 2 (last)
+        navContext.navigateDown();
+        await delay(50);
+        assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
+
+        // Delete Todo 2
+        const newTodos = new Todos(todo1);
+        rerender(
+          <TestWrapper todos={newTodos}>
+            <NavigationTester onContext={(ctx) => navContext = ctx} />
+          </TestWrapper>,
+        );
+        await delay(100);
+
+        // Should select Todo 1 (previous/last remaining)
+        const selected = navContext.useSelectedTodo();
+        assertEquals(selected?.text, "Todo 1");
+
+        unmount();
+      },
+    );
   },
 });

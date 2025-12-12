@@ -76,18 +76,27 @@ export const NavigationProvider = (
     return createIndexes(filteredTodos);
   }, [todos, searchQuery]);
 
-  // Track last selected hash to handle file reloads (where IDs change but content might match)
+  // Track last selected hash to handle file reloads
   const lastSelectedHash = useRef<string | undefined>(undefined);
+  // Track last selected index to handle deletion (select next/prev item)
+  const lastSelectedIndex = useRef<number>(0);
 
-  // Update lastSelectedHash whenever selectedTodoId changes and points to a valid todo
+  // Update tracking refs whenever selectedTodoId changes and points to a valid todo
   useEffect(() => {
     if (selectedTodoId) {
-      const todo = todos.find((t) => t.id === selectedTodoId);
-      if (todo) {
-        lastSelectedHash.current = todo.getHash();
+      const index = indexes.findIndex((entry) =>
+        entry.type === IndexType.todo && entry.todo.id === selectedTodoId
+      );
+
+      if (index !== -1) {
+        lastSelectedIndex.current = index;
+        const entry = indexes[index];
+        if (entry.type === IndexType.todo) {
+          lastSelectedHash.current = entry.todo.getHash();
+        }
       }
     }
-  }, [selectedTodoId, todos]);
+  }, [selectedTodoId, indexes, todos]);
 
   // Ensure valid selection (select first if undefined or filtered out)
   useEffect(() => {
@@ -119,7 +128,43 @@ export const NavigationProvider = (
         }
       }
 
-      // Fallback 2: Default to first item
+      // Fallback 2: Try to match by index (handle deletion - select next/prev)
+      const targetIndex = clamp(
+        lastSelectedIndex.current,
+        0,
+        indexes.length - 1,
+      );
+
+      // If target hits a non-todo (e.g. header), search forward then backward
+      let foundTodoIndex = -1;
+
+      // Forward search
+      for (let i = targetIndex; i < indexes.length; i++) {
+        if (indexes[i].type === IndexType.todo) {
+          foundTodoIndex = i;
+          break;
+        }
+      }
+
+      // Backward search if not found forward
+      if (foundTodoIndex === -1) {
+        for (let i = targetIndex - 1; i >= 0; i--) {
+          if (indexes[i].type === IndexType.todo) {
+            foundTodoIndex = i;
+            break;
+          }
+        }
+      }
+
+      if (foundTodoIndex !== -1) {
+        const entry = indexes[foundTodoIndex];
+        if (entry.type === IndexType.todo) {
+          setSelectedTodoId(entry.todo.id);
+          return;
+        }
+      }
+
+      // Fallback 3: Default to first item (safety net)
       if (indexes[firstTodoIndex].type === IndexType.todo) {
         setSelectedTodoId(indexes[firstTodoIndex].todo.id);
       }
