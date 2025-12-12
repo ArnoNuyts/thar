@@ -18,14 +18,11 @@ import { useToaster } from "./toaster-context.tsx";
 interface TodoContextType {
   todos: Todos;
   setTodos: (todos: Todos) => void;
-  selectedTodoHash: string | undefined;
-  setSelectedTodoHash: (hash: string | undefined) => void;
-  addTodo: (text: string) => void;
+  addTodo: (text: string) => Todo;
   updateTodo: (todo: Todo) => void;
   deleteTodo: (todo: Todo) => void;
   toggleTodo: (todo: Todo) => void;
   toggleHidden: (todo: Todo) => void;
-  useSelectedTodo: () => Todo | undefined;
   archiveCompletedTodos: () => Promise<void>;
 }
 
@@ -47,9 +44,6 @@ export const TodoProvider = ({
   children?: React.ReactNode;
 }) => {
   const [todos, setTodos] = useState<Todos>(new Todos());
-  const [selectedTodoHash, setSelectedTodoHash] = useState<string | undefined>(
-    undefined,
-  );
   const { showToaster } = useToaster();
   const justReadFileFlag = useRef(false);
   const lastWriteTimeRef = useRef(0);
@@ -118,30 +112,25 @@ export const TodoProvider = ({
     };
   }, [filename]);
 
-  const addTodo = (text: string) => {
+  const addTodo = (text: string): Todo => {
     const newTodo = new Todo(text);
     newTodo.setCreationDate(new Date());
     setTodos(new Todos(...todos, newTodo));
-    setSelectedTodoHash(newTodo.getHash());
+    return newTodo;
   };
 
   const updateTodo = (todo: Todo) => {
     // Since Todo objects are mutable and we are likely modifying the instance directly before calling this,
     // we just need to trigger a re-render and save.
     setTodos(new Todos(...todos));
-    setSelectedTodoHash(todo.getHash());
   };
 
   const deleteTodo = (todo: Todo) => {
     const newTodos = todos.filter((t: Todo) => t !== todo);
     setTodos(new Todos(...newTodos));
-    if (selectedTodoHash === todo.getHash()) {
-      setSelectedTodoHash(undefined);
-    }
   };
 
   const toggleTodo = (todo: Todo) => {
-    const oldHash = todo.getHash();
     const recurring = todo.toggleState();
 
     if (recurring) {
@@ -150,27 +139,11 @@ export const TodoProvider = ({
     } else {
       setTodos(new Todos(...todos));
     }
-
-    // Update selection to new hash if this todo was selected
-    if (selectedTodoHash === oldHash) {
-      setSelectedTodoHash(todo.getHash());
-    }
   };
 
   const toggleHidden = (todo: Todo) => {
-    const oldHash = todo.getHash();
     todo.toggleHidden();
-
     setTodos(new Todos(...todos));
-
-    // Update selection to new hash if this todo was selected
-    if (selectedTodoHash === oldHash) {
-      setSelectedTodoHash(todo.getHash());
-    }
-  };
-
-  const useSelectedTodo = () => {
-    return todos.find((t) => t.getHash() === selectedTodoHash);
   };
 
   const archiveCompletedTodos = async () => {
@@ -196,16 +169,6 @@ export const TodoProvider = ({
     // Remove from current todos
     const remainingTodos = todos.filter((t: Todo) => !t.isDone());
     setTodos(new Todos(...remainingTodos));
-
-    // Clear selection if selected todo was archived
-    if (selectedTodoHash) {
-      const selected = todos.find((t: Todo) =>
-        t.getHash() === selectedTodoHash
-      );
-      if (selected && selected.isDone()) {
-        setSelectedTodoHash(undefined);
-      }
-    }
   };
 
   return (
@@ -213,14 +176,11 @@ export const TodoProvider = ({
       value={{
         todos,
         setTodos,
-        selectedTodoHash,
-        setSelectedTodoHash,
         addTodo,
         updateTodo,
         deleteTodo,
         toggleTodo,
         toggleHidden,
-        useSelectedTodo,
         archiveCompletedTodos,
       }}
     >

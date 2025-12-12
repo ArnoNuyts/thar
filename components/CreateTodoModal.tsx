@@ -2,12 +2,14 @@ import { Text, useStdout } from "ink";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
+import { useNavigation } from "../contexts/navigation-context.tsx";
 import { SharedTodoInput } from "./SharedTodoInput.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 
 export const CreateTodoModal = () => {
   const { closeModal } = useModal();
   const { addTodo } = useTodo();
+  const { setSelectedTodoHash } = useNavigation();
 
   const { isFocused } = useFocusedInput(() => {}, { autoFocus: true });
   const { stdout } = useStdout();
@@ -15,7 +17,8 @@ export const CreateTodoModal = () => {
 
   const handleSubmit = (value: string) => {
     if (value.trim().length > 0) {
-      addTodo(value);
+      const newTodo = addTodo(value);
+      setSelectedTodoHash(newTodo.getHash());
     }
     closeModal();
   };

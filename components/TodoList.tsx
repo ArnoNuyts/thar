@@ -111,7 +111,6 @@ const ContextTitle = memo(
 export const TodoList = () => {
   const { exit } = useApp();
   const {
-    useSelectedTodo,
     toggleTodo,
     deleteTodo,
     archiveCompletedTodos,
@@ -125,6 +124,7 @@ export const TodoList = () => {
     navigateDown,
     navigatePageUp,
     navigatePageDown,
+    useSelectedTodo,
   } = useNavigation();
 
   const { openModal } = useModal();
