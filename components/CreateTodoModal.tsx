@@ -9,7 +9,7 @@ import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 export const CreateTodoModal = () => {
   const { closeModal } = useModal();
   const { addTodo, todos } = useTodo();
-  const { setSelectedTodoHash } = useNavigation();
+  const { setSelectedTodoId } = useNavigation();
 
   const { isFocused } = useFocusedInput(() => {}, { autoFocus: true });
   const { stdout } = useStdout();
@@ -18,7 +18,7 @@ export const CreateTodoModal = () => {
   const handleSubmit = (value: string) => {
     if (value.trim().length > 0) {
       const newTodo = addTodo(value);
-      setSelectedTodoHash(newTodo.getHash());
+      setSelectedTodoId(newTodo.id);
     }
     closeModal();
   };

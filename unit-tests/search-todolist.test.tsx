@@ -74,19 +74,19 @@ const SearchQuerySetter = ({
 const SelectionObserver = (
   { onSelectionChange }: { onSelectionChange: (item: string) => void },
 ) => {
-  const { indexes, selectedTodoHash } = useNavigation();
+  const { indexes, selectedTodoId } = useNavigation();
 
   useEffect(() => {
-    if (selectedTodoHash) {
+    if (selectedTodoId) {
       // Find todo text
       const entry = indexes.find((e) =>
-        e.type === IndexType.todo && e.todo.getHash() === selectedTodoHash
+        e.type === IndexType.todo && e.todo.id === selectedTodoId
       );
       if (entry && entry.type === IndexType.todo) {
         onSelectionChange(entry.todo.text);
       }
     }
-  }, [selectedTodoHash, indexes, onSelectionChange]);
+  }, [selectedTodoId, indexes, onSelectionChange]);
 
   return null;
 };
