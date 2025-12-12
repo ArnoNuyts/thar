@@ -8,7 +8,7 @@ import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 
 export const EditTodoModal = () => {
   const { closeModal } = useModal();
-  const { updateTodo } = useTodo();
+  const { updateTodo, todos } = useTodo();
   const { useSelectedTodo } = useNavigation();
   const todo = useSelectedTodo();
 
@@ -36,6 +36,7 @@ export const EditTodoModal = () => {
         onCancel={closeModal}
         footer={<Text dimColor>Enter = save, Esc = cancel</Text>}
         maxWidth={maxWidth}
+        todos={todos}
       />
     </Modal>
   );

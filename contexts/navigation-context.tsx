@@ -6,7 +6,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useTodo } from "./todo-context.tsx";
 import { useSearch } from "./search-context.tsx";
 import { useStdout } from "ink";
 import { Todos } from "../logic/Todos.ts";
@@ -34,8 +33,9 @@ const NavigationContext = createContext<NavigationContextType | undefined>(
   undefined,
 );
 
-export const NavigationProvider = ({ children }: { children: ReactNode }) => {
-  const { todos } = useTodo();
+export const NavigationProvider = (
+  { children, todos }: { children: ReactNode; todos: Todos },
+) => {
   const { searchQuery, isSearchFocused } = useSearch();
   const { stdout } = useStdout();
   const [offsetRow, setOffsetRow] = useState(0);

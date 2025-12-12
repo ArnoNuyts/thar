@@ -26,7 +26,9 @@ interface TodoContextType {
   archiveCompletedTodos: () => Promise<void>;
 }
 
-const TodoContext = createContext<TodoContextType | undefined>(undefined);
+export const TodoContext = createContext<TodoContextType | undefined>(
+  undefined,
+);
 
 export const useTodo = () => {
   const context = useContext(TodoContext);
@@ -119,7 +121,7 @@ export const TodoProvider = ({
     return newTodo;
   };
 
-  const updateTodo = (todo: Todo) => {
+  const updateTodo = (_todo: Todo) => {
     // Since Todo objects are mutable and we are likely modifying the instance directly before calling this,
     // we just need to trigger a re-render and save.
     setTodos(new Todos(...todos));

@@ -5,6 +5,7 @@ import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
+import { useNavigation } from "../contexts/navigation-context.tsx";
 
 const BASE_OPTIONS = [
   { label: "Daily", value: "d", unit: "day(s)" },
@@ -17,7 +18,8 @@ const RESET_OPTION = { label: "Reset", value: "reset", unit: "" };
 
 export const SetRecurrenceModal = () => {
   const { closeModal } = useModal();
-  const { useSelectedTodo, updateTodo } = useTodo();
+  const { updateTodo } = useTodo();
+  const { useSelectedTodo } = useNavigation();
   const todo = useSelectedTodo();
   const hasRecurrence = todo?.tags.rec !== undefined;
   const options = hasRecurrence

@@ -14,7 +14,7 @@ import {
   ModalProvider,
   useModal,
 } from "./contexts/modal-context.tsx";
-import { TodoProvider } from "./contexts/todo-context.tsx";
+import { TodoProvider, useTodo } from "./contexts/todo-context.tsx";
 import { ToasterProvider } from "./contexts/toaster-context.tsx";
 
 import { SuggestionOverlay } from "./components/SuggestionOverlay.tsx";
@@ -25,6 +25,8 @@ import { SearchInput } from "./components/SearchInput.tsx";
 
 const AppContent = () => {
   const { activeModal, modalData } = useModal();
+  const { todos, toggleTodo, deleteTodo, archiveCompletedTodos, updateTodo } =
+    useTodo();
 
   return (
     <>
@@ -34,8 +36,13 @@ const AppContent = () => {
         width="100%"
         justifyContent="space-between"
       >
-        <SearchInput />
-        <TodoList />
+        <SearchInput todos={todos} />
+        <TodoList
+          toggleTodo={toggleTodo}
+          deleteTodo={deleteTodo}
+          archiveCompletedTodos={archiveCompletedTodos}
+          updateTodo={updateTodo}
+        />
         <ActionBar />
       </Box>
       {activeModal === "create-todo" && <CreateTodoModal />}
@@ -60,6 +67,15 @@ const AppContent = () => {
   );
 };
 
+const NavigationWrapper = ({ children }: { children: React.ReactNode }) => {
+  const { todos } = useTodo();
+  return (
+    <NavigationProvider todos={todos}>
+      {children}
+    </NavigationProvider>
+  );
+};
+
 const App = ({ filename }: { filename: string }) => {
   return (
     <ModalProvider>
@@ -68,9 +84,9 @@ const App = ({ filename }: { filename: string }) => {
           <FocusProvider>
             <SuggestionProvider>
               <SearchProvider>
-                <NavigationProvider>
+                <NavigationWrapper>
                   <AppContent />
-                </NavigationProvider>
+                </NavigationWrapper>
               </SearchProvider>
             </SuggestionProvider>
           </FocusProvider>
