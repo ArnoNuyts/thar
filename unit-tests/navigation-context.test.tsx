@@ -336,5 +336,95 @@ Deno.test({
         unmount();
       },
     );
+
+    await t.step(
+      "should preserve selection after priority update",
+      async () => {
+        const todo1 = new Todo("Todo 1");
+        const todo2 = new Todo("Todo 2"); // Target
+        const todo3 = new Todo("Todo 3");
+        const todos = new Todos(todo1, todo2, todo3);
+        // deno-lint-ignore no-explicit-any
+        let navContext: any;
+
+        const { rerender, unmount } = render(
+          <TestWrapper todos={todos}>
+            <NavigationTester onContext={(ctx) => navContext = ctx} />
+          </TestWrapper>,
+        );
+
+        await delay(100);
+
+        // Select Todo 2
+        navContext.navigateDown();
+        await delay(50);
+        assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
+
+        // Change Priority (mutating in place)
+        todo2.setPriority("A");
+        const newTodos = new Todos(todo1, todo2, todo3);
+
+        // Re-render
+        rerender(
+          <TestWrapper todos={newTodos}>
+            <NavigationTester onContext={(ctx) => navContext = ctx} />
+          </TestWrapper>,
+        );
+
+        await delay(100);
+
+        // Selection should follow the todo
+        const selected = navContext.useSelectedTodo();
+        assertEquals(selected?.text, "Todo 2");
+        assertEquals(selected?.priority, "A");
+
+        unmount();
+      },
+    );
+
+    await t.step(
+      "should preserve selection after toggling completion",
+      async () => {
+        const todo1 = new Todo("Todo 1");
+        const todo2 = new Todo("Todo 2"); // Target
+        const todo3 = new Todo("Todo 3");
+        const todos = new Todos(todo1, todo2, todo3);
+        // deno-lint-ignore no-explicit-any
+        let navContext: any;
+
+        const { rerender, unmount } = render(
+          <TestWrapper todos={todos}>
+            <NavigationTester onContext={(ctx) => navContext = ctx} />
+          </TestWrapper>,
+        );
+
+        await delay(100);
+
+        // Select Todo 2
+        navContext.navigateDown();
+        await delay(50);
+        assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
+
+        // Toggle completion (mutating in place)
+        todo2.toggleState();
+        const newTodos = new Todos(todo1, todo2, todo3);
+
+        // Re-render
+        rerender(
+          <TestWrapper todos={newTodos}>
+            <NavigationTester onContext={(ctx) => navContext = ctx} />
+          </TestWrapper>,
+        );
+
+        await delay(100);
+
+        // Selection should follow the todo
+        const selected = navContext.useSelectedTodo();
+        assertEquals(selected?.text, "Todo 2");
+        assertEquals(selected?.isDone(), true);
+
+        unmount();
+      },
+    );
   },
 });
