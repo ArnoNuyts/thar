@@ -496,7 +496,10 @@ Deno.test("removeRecurrence - preserves other tags", () => {
 
 Deno.test("Todo constructor - trims leading and trailing whitespace", () => {
   const testCases = [
-    { input: "x    excessive space before", expected: "excessive space before" },
+    {
+      input: "x    excessive space before",
+      expected: "excessive space before",
+    },
     { input: "x excessive space after    ", expected: "excessive space after" },
     { input: "  leading spaces", expected: "leading spaces" },
     { input: "trailing spaces  ", expected: "trailing spaces" },
@@ -506,7 +509,10 @@ Deno.test("Todo constructor - trims leading and trailing whitespace", () => {
     { input: "  \t  mixed whitespace  \t  ", expected: "mixed whitespace" },
     { input: "no extra spaces", expected: "no extra spaces" },
     { input: "(A)   priority with spaces", expected: "priority with spaces" },
-    { input: "2024-06-02   creation date with spaces", expected: "creation date with spaces" },
+    {
+      input: "2024-06-02   creation date with spaces",
+      expected: "creation date with spaces",
+    },
   ];
 
   for (const { input, expected } of testCases) {
