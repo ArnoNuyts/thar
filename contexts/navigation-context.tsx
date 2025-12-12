@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useSearch } from "./search-context.tsx";
@@ -24,8 +25,8 @@ interface NavigationContextType {
   navigateDown: () => void;
   navigatePageUp: () => void;
   navigatePageDown: () => void;
-  selectedTodoHash: string | undefined;
-  setSelectedTodoHash: (hash: string | undefined) => void;
+  selectedTodoId: symbol | undefined;
+  setSelectedTodoId: (id: symbol | undefined) => void;
   useSelectedTodo: () => Todo | undefined;
 }
 
@@ -39,7 +40,7 @@ export const NavigationProvider = (
   const { searchQuery, isSearchFocused } = useSearch();
   const { stdout } = useStdout();
   const [offsetRow, setOffsetRow] = useState(0);
-  const [selectedTodoHash, setSelectedTodoHash] = useState<string | undefined>(
+  const [selectedTodoId, setSelectedTodoId] = useState<symbol | undefined>(
     undefined,
   );
 
@@ -75,6 +76,19 @@ export const NavigationProvider = (
     return createIndexes(filteredTodos);
   }, [todos, searchQuery]);
 
+  // Track last selected hash to handle file reloads (where IDs change but content might match)
+  const lastSelectedHash = useRef<string | undefined>(undefined);
+
+  // Update lastSelectedHash whenever selectedTodoId changes and points to a valid todo
+  useEffect(() => {
+    if (selectedTodoId) {
+      const todo = todos.find((t) => t.id === selectedTodoId);
+      if (todo) {
+        lastSelectedHash.current = todo.getHash();
+      }
+    }
+  }, [selectedTodoId, todos]);
+
   // Ensure valid selection (select first if undefined or filtered out)
   useEffect(() => {
     if (indexes.length === 0) return;
@@ -86,29 +100,42 @@ export const NavigationProvider = (
     if (firstTodoIndex === -1) return;
 
     // Check if current selection is valid (exists and is in the current list)
-    const isSelectionValid = selectedTodoHash !== undefined &&
+    const isSelectionValid = selectedTodoId !== undefined &&
       indexes.some((entry) =>
         entry.type === IndexType.todo &&
-        entry.todo.getHash() === selectedTodoHash
+        entry.todo.id === selectedTodoId
       );
 
     if (!isSelectionValid) {
+      // Fallback 1: Try to match by hash (handle file reload)
+      if (lastSelectedHash.current) {
+        const hashMatch = indexes.find((entry) =>
+          entry.type === IndexType.todo &&
+          entry.todo.getHash() === lastSelectedHash.current
+        );
+        if (hashMatch && hashMatch.type === IndexType.todo) {
+          setSelectedTodoId(hashMatch.todo.id);
+          return;
+        }
+      }
+
+      // Fallback 2: Default to first item
       if (indexes[firstTodoIndex].type === IndexType.todo) {
-        setSelectedTodoHash(indexes[firstTodoIndex].todo.getHash());
+        setSelectedTodoId(indexes[firstTodoIndex].todo.id);
       }
     }
-  }, [indexes, selectedTodoHash]); // Removed setSelectedTodoHash from deps as it's stable
+  }, [indexes, selectedTodoId]); // Removed setSelectedTodoId from deps as it's stable
 
-  // Calculate selectedRow derived from selectedTodoHash
+  // Calculate selectedRow derived from selectedTodoId
   const selectedRow = useMemo(() => {
-    if (!selectedTodoHash) return 0;
+    if (!selectedTodoId) return 0;
     const index = indexes.findIndex(
       (entry) =>
         entry.type === IndexType.todo &&
-        entry.todo.getHash() === selectedTodoHash,
+        entry.todo.id === selectedTodoId,
     );
     return index !== -1 ? index : 0;
-  }, [indexes, selectedTodoHash]);
+  }, [indexes, selectedTodoId]);
 
   // Ensure selection is visible (scroll into view)
   useEffect(() => {
@@ -134,7 +161,7 @@ export const NavigationProvider = (
 
     const selectedEntry = indexes[newSelectedRow];
     if (selectedEntry?.type === IndexType.todo) {
-      setSelectedTodoHash(selectedEntry.todo.getHash());
+      setSelectedTodoId(selectedEntry.todo.id);
     }
   };
 
@@ -144,7 +171,7 @@ export const NavigationProvider = (
   const navigatePageDown = () => doNavigate(5);
 
   const useSelectedTodo = () => {
-    return todos.find((t) => t.getHash() === selectedTodoHash);
+    return todos.find((t) => t.id === selectedTodoId);
   };
 
   return (
@@ -157,8 +184,8 @@ export const NavigationProvider = (
         navigateDown,
         navigatePageUp,
         navigatePageDown,
-        selectedTodoHash,
-        setSelectedTodoHash,
+        selectedTodoId,
+        setSelectedTodoId,
         useSelectedTodo,
       }}
     >
