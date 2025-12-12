@@ -2,11 +2,10 @@ import { render } from "ink-testing-library";
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { delay } from "@std/async";
 
-import { TodoProvider, useTodo } from "../contexts/todo-context.tsx";
+import { useTodo } from "../contexts/todo-context.tsx";
 import { FocusProvider } from "../contexts/focus-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
-import { ModalProvider } from "../contexts/modal-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
 import {
   NavigationProvider,
@@ -18,85 +17,40 @@ import { Todo } from "../logic/todo.ts";
 import { Todos } from "../logic/Todos.ts";
 import { IndexType } from "../types/enums.ts";
 
-// Mock Deno APIs
-const originalWatchFs = Deno.watchFs;
-const originalReadTextFile = Deno.readTextFile;
-const originalWriteTextFile = Deno.writeTextFile;
-const originalStat = Deno.stat;
+// Wrapper to inject todos into NavigationProvider
+const NavigationWrapper = ({ children }: { children: React.ReactNode }) => {
+  const { todos } = useTodo();
+  return <NavigationProvider todos={todos}>{children}</NavigationProvider>;
+};
 
-class MockWatcher {
-  private closed = false;
+// Wrapper to inject todos into SearchInput
+const ConnectedSearchInput = () => {
+  const { todos } = useTodo();
+  return <SearchInput todos={todos} />;
+};
 
-  async *[Symbol.asyncIterator](): AsyncIterableIterator<Deno.FsEvent> {
-    while (!this.closed) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-  }
-
-  close() {
-    this.closed = true;
-  }
-}
-
-let mockWatcher: MockWatcher;
-
-function setupMocks(content: string = "") {
-  mockWatcher = new MockWatcher();
-
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).watchFs = () => mockWatcher;
-
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).stat = async () => {
-    await delay(0);
-    return { isFile: true };
-  };
-
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).readTextFile = async () => {
-    await delay(0);
-    return content;
-  };
-
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).writeTextFile = async () => {
-    await delay(0);
-  };
-}
-
-function teardownMocks() {
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).watchFs = originalWatchFs;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).readTextFile = originalReadTextFile;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).writeTextFile = originalWriteTextFile;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).stat = originalStat;
-}
+import { MockTodoProvider } from "./mock-todo-provider.tsx";
 
 // Helper to wrap components with all required providers
 const TestWrapper = ({
   children,
-  filename = "test.txt",
+  initialTodos = [],
 }: {
   children: React.ReactNode;
-  filename?: string;
+  initialTodos?: Todo[];
 }) => {
   return (
-    <ModalProvider>
-      <ToasterProvider>
-        <TodoProvider filename={filename}>
-          <FocusProvider>
-            <SuggestionProvider>
-              <SearchProvider>
-                <NavigationProvider>{children}</NavigationProvider>
-              </SearchProvider>
-            </SuggestionProvider>
-          </FocusProvider>
-        </TodoProvider>
-      </ToasterProvider>
-    </ModalProvider>
+    <ToasterProvider>
+      <MockTodoProvider initialTodos={initialTodos}>
+        <FocusProvider>
+          <SuggestionProvider>
+            <SearchProvider>
+              <NavigationWrapper>{children}</NavigationWrapper>
+            </SearchProvider>
+          </SuggestionProvider>
+        </FocusProvider>
+      </MockTodoProvider>
+    </ToasterProvider>
   );
 };
 
@@ -120,8 +74,7 @@ const SearchQuerySetter = ({
 const SelectionObserver = (
   { onSelectionChange }: { onSelectionChange: (item: string) => void },
 ) => {
-  const { indexes } = useNavigation();
-  const { selectedTodoHash } = useTodo();
+  const { indexes, selectedTodoHash } = useNavigation();
 
   useEffect(() => {
     if (selectedTodoHash) {
@@ -156,10 +109,9 @@ Deno.test({
   sanitizeResources: false,
   fn: async (t) => {
     await t.step("should render with placeholder when empty", async () => {
-      setupMocks("");
       const { lastFrame, unmount } = render(
-        <TestWrapper>
-          <SearchInput />
+        <TestWrapper initialTodos={[]}>
+          <ConnectedSearchInput />
         </TestWrapper>,
       );
 
@@ -170,16 +122,13 @@ Deno.test({
       assertEquals("", output);
 
       unmount();
-      mockWatcher.close();
-      teardownMocks();
     });
 
     await t.step("should display search query when set", async () => {
-      setupMocks("");
       const { lastFrame, unmount } = render(
-        <TestWrapper>
+        <TestWrapper initialTodos={[]}>
           <SearchQuerySetter query="@Home" />
-          <SearchInput />
+          <ConnectedSearchInput />
         </TestWrapper>,
       );
 
@@ -189,8 +138,6 @@ Deno.test({
       assertStringIncludes(output || "", "@Home");
 
       unmount();
-      mockWatcher.close();
-      teardownMocks();
     });
   },
 });
@@ -203,15 +150,18 @@ Deno.test({
     await t.step(
       "should handle navigation keys when search is focused",
       async () => {
-        const todosContent = "Task A\nTask B\nTask C";
-        setupMocks(todosContent);
+        const todos = [
+          new Todo("Task A"),
+          new Todo("Task B"),
+          new Todo("Task C"),
+        ];
 
         let selectedText = "";
 
-        const { lastFrame, unmount, stdin } = render(
-          <TestWrapper filename="todo.txt">
+        const { lastFrame: _lastFrame, unmount, stdin } = render(
+          <TestWrapper initialTodos={todos}>
             <FocusRequester />
-            <SearchInput />
+            <ConnectedSearchInput />
             <SelectionObserver
               onSelectionChange={(text) => selectedText = text}
             />
@@ -224,11 +174,6 @@ Deno.test({
         assertEquals(selectedText, "Task A");
 
         // Press Down Arrow
-        // Assuming 'SearchInput' listening to keys? No, SearchInput uses 'useInput' from 'ink' ONLY when focused.
-        // But we are in a testing environment. 'render' returns 'stdin'.
-        // We need to write escape sequences for arrow keys.
-        // Down arrow is often "\u001B[B"
-
         await stdin.write("\u001B[B"); // Down Arrow
         await delay(50);
 
@@ -242,22 +187,23 @@ Deno.test({
         assertEquals(selectedText, "Task A");
 
         unmount();
-        mockWatcher.close();
-        teardownMocks();
       },
     );
 
     await t.step(
       "should auto-select first item when current selection is filtered out",
       async () => {
-        const todosContent = "Apples\nBananas\nCherries";
-        setupMocks(todosContent);
+        const todos = [
+          new Todo("Apples"),
+          new Todo("Bananas"),
+          new Todo("Cherries"),
+        ];
 
         let selectedText = "";
 
-        const { unmount } = render(
-          <TestWrapper filename="todo.txt">
-            <SearchInput />
+        const { unmount: _unmount } = render(
+          <TestWrapper initialTodos={todos}>
+            <ConnectedSearchInput />
             <SelectionObserver
               onSelectionChange={(text) => selectedText = text}
             />
@@ -268,58 +214,10 @@ Deno.test({
         // Wait for load
         await delay(200);
         assertEquals(selectedText, "Apples");
-
-        // Select 'Bananas' (simulate user navigation or direct selection via stdin if we had full list)
-        // Since we don't render list to navigate, we can't easily select 'Bananas' via keys without blind navigation.
-        // We can just rely on the fact that if we filter 'Bananas', it should disappear and 'Apples' (or 'Cherries'?) selected?
-        // Wait, if we filter 'Cherries', and 'Apples' was selected (default), it stays 'Apples'.
-
-        // Let's rely on NavigationContext logic directly? No, integration test.
-        // Let's filter such that 'Apples' is removed.
-        // Filter 'Bananas'. 'Apples' removed. 'Bananas' should be selected.
-
-        // Update query to "Bananas"
-        // We need a way to update query dynamically.
-        // Render again with new prop?
-        // ink-testing-library `rerender` is available on result.
-
-        // But our `TestWrapper` renders `SearchQuerySetter` if we add it.
-        // We can use a component that updates query after delay.
-
-        // Let's assume we start with "Apples" selected.
-        // Filter "Bananas".
-        // "Apples" is not in list.
-        // "Bananas" is first item.
-        // Selection should become "Bananas".
-
-        // But `SearchQuerySetter` sets query on mount.
-        // We can use a custom setter to update after delay.
-
-        const content = (
-          <TestWrapper filename="todo.txt">
-            <SearchInput />
-            <SelectionObserver
-              onSelectionChange={(text) => selectedText = text}
-            />
-            <DelayedQuerySetter query="Bananas" delayMs={300} />
-          </TestWrapper>
-        );
-
-        // We need `DelayedQuerySetter`.
       },
     );
   },
 });
-
-const DelayedQuerySetter = (
-  { query, delayMs }: { query: string; delayMs: number },
-) => {
-  const { setSearchQuery } = useSearch();
-  useEffect(() => {
-    setTimeout(() => setSearchQuery(query), delayMs);
-  }, [query, delayMs, setSearchQuery]);
-  return null;
-};
 
 // Unit tests for filtering logic (testing the filtering algorithm directly)
 Deno.test({
@@ -445,8 +343,6 @@ Deno.test({
   sanitizeResources: false,
   fn: async (t) => {
     await t.step("should update search query", async () => {
-      setupMocks("");
-
       let capturedQuery = "";
 
       const QueryReader = () => {
@@ -467,15 +363,11 @@ Deno.test({
       assertEquals(capturedQuery, "test query");
 
       unmount();
-      mockWatcher.close();
-      teardownMocks();
     });
 
     await t.step(
       "should call focus callback when focusRef.current is called",
       async () => {
-        setupMocks("");
-
         let focusCalled = false;
 
         const FocusListener = () => {
@@ -501,8 +393,6 @@ Deno.test({
         assertEquals(focusCalled, true);
 
         unmount();
-        mockWatcher.close();
-        teardownMocks();
       },
     );
   },

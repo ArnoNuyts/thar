@@ -4,6 +4,7 @@ import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
+import { useNavigation } from "../contexts/navigation-context.tsx";
 import { Calendar } from "./Calendar.tsx";
 import { format } from "date-fns";
 
@@ -21,7 +22,8 @@ interface SetDateModalProps {
 
 export const SetDateModal = ({ type }: SetDateModalProps) => {
   const { closeModal } = useModal();
-  const { useSelectedTodo, updateTodo } = useTodo();
+  const { updateTodo } = useTodo();
+  const { useSelectedTodo } = useNavigation();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isCustom, setIsCustom] = useState(false);
