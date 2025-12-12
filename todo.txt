@@ -44,3 +44,4 @@ x 2025-12-08 2025-12-08 Trim todo's to avoid spaces at the end (result of tags /
 2025-12-10 When deleting todo: select next one instead of jumping to the first todo in the list @v0.3
 2025-12-10 When navigation up and down take one extra line in the screenview. This way we will see the upper context when going back up. @v0.3
 2025-12-10 What to do with multiline todos? @v0.3
+2025-12-12 Make Todo.js immutable -> that way it is easier for react to know it needs to update. @v0.3

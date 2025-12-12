@@ -19,7 +19,7 @@ interface TodoContextType {
   todos: Todos;
   setTodos: (todos: Todos) => void;
   addTodo: (text: string) => Todo;
-  updateTodo: (todo: Todo) => void;
+  refreshTodos: () => void;
   deleteTodo: (todo: Todo) => void;
   toggleTodo: (todo: Todo) => void;
   toggleHidden: (todo: Todo) => void;
@@ -121,7 +121,7 @@ export const TodoProvider = ({
     return newTodo;
   };
 
-  const updateTodo = (_todo: Todo) => {
+  const refreshTodos = () => {
     // Since Todo objects are mutable and we are likely modifying the instance directly before calling this,
     // we just need to trigger a re-render and save.
     setTodos(new Todos(...todos));
@@ -179,7 +179,7 @@ export const TodoProvider = ({
         todos,
         setTodos,
         addTodo,
-        updateTodo,
+        refreshTodos,
         deleteTodo,
         toggleTodo,
         toggleHidden,

@@ -8,7 +8,7 @@ import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 
 export const EditTodoModal = () => {
   const { closeModal } = useModal();
-  const { updateTodo, todos } = useTodo();
+  const { refreshTodos, todos } = useTodo();
   const { useSelectedTodo } = useNavigation();
   const todo = useSelectedTodo();
 
@@ -21,7 +21,7 @@ export const EditTodoModal = () => {
   const handleSubmit = (value: string) => {
     if (todo && value.trim().length > 0) {
       todo.setText(value);
-      updateTodo(todo);
+      refreshTodos();
     }
     closeModal();
   };
