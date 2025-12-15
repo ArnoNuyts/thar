@@ -2,7 +2,6 @@ import { Box, Newline, Text, useApp } from "ink";
 import { memo, useMemo } from "react";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Todo } from "../logic/todo.ts";
-import { useTodo } from "../contexts/todo-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { copyToClipboard } from "../logic/clipboard.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
@@ -108,15 +107,20 @@ const ContextTitle = memo(
   },
 );
 
-export const TodoList = () => {
+interface TodoListProps {
+  toggleTodo: (todo: Todo) => void;
+  deleteTodo: (todo: Todo) => void;
+  archiveCompletedTodos: () => Promise<void>;
+  refreshTodos: () => void;
+}
+
+export const TodoList = ({
+  toggleTodo,
+  deleteTodo,
+  archiveCompletedTodos,
+  refreshTodos,
+}: TodoListProps) => {
   const { exit } = useApp();
-  const {
-    useSelectedTodo,
-    toggleTodo,
-    deleteTodo,
-    archiveCompletedTodos,
-    updateTodo,
-  } = useTodo();
   const {
     indexes,
     offsetRow,
@@ -125,6 +129,7 @@ export const TodoList = () => {
     navigateDown,
     navigatePageUp,
     navigatePageDown,
+    useSelectedTodo,
   } = useNavigation();
 
   const { openModal } = useModal();
@@ -200,7 +205,7 @@ export const TodoList = () => {
         } else {
           todo.setPriority(newPriority);
         }
-        updateTodo(todo);
+        refreshTodos();
       }
     }
   }, { autoFocus: true });

@@ -19,7 +19,6 @@ export async function readTodosFromFile(filename: string) {
     return new Todos(
       ...data.split("\n").filter((x) => x.trim()).map((x) => new Todo(x)),
     );
-
   } catch (err: unknown) {
     console.error(`Error reading file "${filename}":`, (err as Error).message);
     Deno.exit(1);

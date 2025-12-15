@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
-import { useTodo } from "../contexts/todo-context.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
 import { useFocusable } from "../hooks/useFocusable.ts";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 
-export const SearchInput = () => {
+import { Todos } from "../logic/Todos.ts";
+
+export const SearchInput = ({ todos }: { todos: Todos }) => {
   const { searchQuery, setSearchQuery, focusRef, setIsSearchFocused } =
     useSearch();
-  const { todos } = useTodo();
   const {
     suggestions,
     setSuggestions,
