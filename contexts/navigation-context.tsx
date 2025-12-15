@@ -4,14 +4,15 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { useTodo } from "./todo-context.tsx";
 import { useSearch } from "./search-context.tsx";
 import { useStdout } from "ink";
 import { Todos } from "../logic/Todos.ts";
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
 import { IndexType } from "../types/enums.ts";
+import { Todo } from "../logic/todo.ts";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
@@ -24,21 +25,24 @@ interface NavigationContextType {
   navigateDown: () => void;
   navigatePageUp: () => void;
   navigatePageDown: () => void;
+  selectedTodoId: symbol | undefined;
+  setSelectedTodoId: (id: symbol | undefined) => void;
+  useSelectedTodo: () => Todo | undefined;
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(
   undefined,
 );
 
-export const NavigationProvider = ({ children }: { children: ReactNode }) => {
-  const {
-    todos,
-    selectedTodoHash,
-    setSelectedTodoHash,
-  } = useTodo();
+export const NavigationProvider = (
+  { children, todos }: { children: ReactNode; todos: Todos },
+) => {
   const { searchQuery, isSearchFocused } = useSearch();
   const { stdout } = useStdout();
   const [offsetRow, setOffsetRow] = useState(0);
+  const [selectedTodoId, setSelectedTodoId] = useState<symbol | undefined>(
+    undefined,
+  );
 
   // Search bar takes 2 rows (content + border) when visible
   // Search bar is visible when focused OR has query
@@ -72,6 +76,28 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
     return createIndexes(filteredTodos);
   }, [todos, searchQuery]);
 
+  // Track last selected hash to handle file reloads
+  const lastSelectedHash = useRef<string | undefined>(undefined);
+  // Track last selected index to handle deletion (select next/prev item)
+  const lastSelectedIndex = useRef<number>(0);
+
+  // Update tracking refs whenever selectedTodoId changes and points to a valid todo
+  useEffect(() => {
+    if (selectedTodoId) {
+      const index = indexes.findIndex((entry) =>
+        entry.type === IndexType.todo && entry.todo.id === selectedTodoId
+      );
+
+      if (index !== -1) {
+        lastSelectedIndex.current = index;
+        const entry = indexes[index];
+        if (entry.type === IndexType.todo) {
+          lastSelectedHash.current = entry.todo.getHash();
+        }
+      }
+    }
+  }, [selectedTodoId, indexes, todos]);
+
   // Ensure valid selection (select first if undefined or filtered out)
   useEffect(() => {
     if (indexes.length === 0) return;
@@ -83,29 +109,78 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
     if (firstTodoIndex === -1) return;
 
     // Check if current selection is valid (exists and is in the current list)
-    const isSelectionValid = selectedTodoHash !== undefined &&
+    const isSelectionValid = selectedTodoId !== undefined &&
       indexes.some((entry) =>
         entry.type === IndexType.todo &&
-        entry.todo.getHash() === selectedTodoHash
+        entry.todo.id === selectedTodoId
       );
 
     if (!isSelectionValid) {
+      // Fallback 1: Try to match by hash (handle file reload)
+      if (lastSelectedHash.current) {
+        const hashMatch = indexes.find((entry) =>
+          entry.type === IndexType.todo &&
+          entry.todo.getHash() === lastSelectedHash.current
+        );
+        if (hashMatch && hashMatch.type === IndexType.todo) {
+          setSelectedTodoId(hashMatch.todo.id);
+          return;
+        }
+      }
+
+      // Fallback 2: Try to match by index (handle deletion - select next/prev)
+      const targetIndex = clamp(
+        lastSelectedIndex.current,
+        0,
+        indexes.length - 1,
+      );
+
+      // If target hits a non-todo (e.g. header), search forward then backward
+      let foundTodoIndex = -1;
+
+      // Forward search
+      for (let i = targetIndex; i < indexes.length; i++) {
+        if (indexes[i].type === IndexType.todo) {
+          foundTodoIndex = i;
+          break;
+        }
+      }
+
+      // Backward search if not found forward
+      if (foundTodoIndex === -1) {
+        for (let i = targetIndex - 1; i >= 0; i--) {
+          if (indexes[i].type === IndexType.todo) {
+            foundTodoIndex = i;
+            break;
+          }
+        }
+      }
+
+      if (foundTodoIndex !== -1) {
+        const entry = indexes[foundTodoIndex];
+        if (entry.type === IndexType.todo) {
+          setSelectedTodoId(entry.todo.id);
+          return;
+        }
+      }
+
+      // Fallback 3: Default to first item (safety net)
       if (indexes[firstTodoIndex].type === IndexType.todo) {
-        setSelectedTodoHash(indexes[firstTodoIndex].todo.getHash());
+        setSelectedTodoId(indexes[firstTodoIndex].todo.id);
       }
     }
-  }, [indexes, selectedTodoHash, setSelectedTodoHash]);
+  }, [indexes, selectedTodoId]); // Removed setSelectedTodoId from deps as it's stable
 
-  // Calculate selectedRow derived from selectedTodoHash
+  // Calculate selectedRow derived from selectedTodoId
   const selectedRow = useMemo(() => {
-    if (!selectedTodoHash) return 0;
+    if (!selectedTodoId) return 0;
     const index = indexes.findIndex(
       (entry) =>
         entry.type === IndexType.todo &&
-        entry.todo.getHash() === selectedTodoHash,
+        entry.todo.id === selectedTodoId,
     );
     return index !== -1 ? index : 0;
-  }, [indexes, selectedTodoHash]);
+  }, [indexes, selectedTodoId]);
 
   // Ensure selection is visible (scroll into view)
   useEffect(() => {
@@ -114,10 +189,7 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
     } else if (selectedRow >= offsetRow + listHeight) {
       setOffsetRow(selectedRow - listHeight + 1);
     }
-  }, [selectedRow, listHeight, offsetRow]); // Added offsetRow to deps as logic depends on it, but beware cycles?
-  // Wait, setting offsetRow depends on offsetRow. logic:
-  // If selectedRow is OUT of view [offsetRow, offsetRow+Height], scroll it into view.
-  // This is stable.
+  }, [selectedRow, listHeight, offsetRow]);
 
   const doNavigate = (step: number) => {
     let newSelectedRow = selectedRow;
@@ -134,16 +206,18 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
 
     const selectedEntry = indexes[newSelectedRow];
     if (selectedEntry?.type === IndexType.todo) {
-      setSelectedTodoHash(selectedEntry.todo.getHash());
+      setSelectedTodoId(selectedEntry.todo.id);
     }
-
-    // Offset update is handled by the useEffect above reacting to selectedTodoHash change via selectedRow
   };
 
   const navigateUp = () => doNavigate(-1);
   const navigateDown = () => doNavigate(1);
   const navigatePageUp = () => doNavigate(-5);
   const navigatePageDown = () => doNavigate(5);
+
+  const useSelectedTodo = () => {
+    return todos.find((t) => t.id === selectedTodoId);
+  };
 
   return (
     <NavigationContext.Provider
@@ -155,6 +229,9 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
         navigateDown,
         navigatePageUp,
         navigatePageDown,
+        selectedTodoId,
+        setSelectedTodoId,
+        useSelectedTodo,
       }}
     >
       {children}

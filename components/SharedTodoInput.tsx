@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
-import { useTodo } from "../contexts/todo-context.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
+
+import { Todos } from "../logic/Todos.ts";
 
 interface SharedTodoInputProps {
   initialValue?: string;
@@ -11,6 +12,7 @@ interface SharedTodoInputProps {
   isFocused: boolean;
   footer?: React.ReactNode;
   maxWidth?: number;
+  todos: Todos;
 }
 
 export const SharedTodoInput = ({
@@ -20,9 +22,9 @@ export const SharedTodoInput = ({
   isFocused: parentIsFocused,
   footer,
   maxWidth,
+  todos,
 }: SharedTodoInputProps) => {
   const [value, setValue] = useState(initialValue);
-  const { todos } = useTodo();
   const {
     suggestions,
     setSuggestions,

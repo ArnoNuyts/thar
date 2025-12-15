@@ -2,45 +2,14 @@ import { useEffect } from "react";
 import { render } from "ink-testing-library";
 import { Text } from "ink";
 import { TodoProvider, useTodo } from "../contexts/todo-context.tsx";
+import { ToasterProvider } from "../contexts/toaster-context.tsx";
 import { assertEquals } from "@std/assert";
 import { delay } from "@std/async";
 
+import { MockWatcher, restoreDenoMocks } from "./test-utils.ts";
+
 // Mock setup
-const originalWatchFs = Deno.watchFs;
-const originalReadTextFile = Deno.readTextFile;
-const originalWriteTextFile = Deno.writeTextFile;
-const originalStat = Deno.stat;
-
-// Event emitter for watcher
-class MockWatcher {
-  private listeners: ((event: Deno.FsEvent) => void)[] = [];
-  private closed = false;
-
-  async *[Symbol.asyncIterator](): AsyncIterableIterator<Deno.FsEvent> {
-    while (!this.closed) {
-      const event = await new Promise<Deno.FsEvent>((resolve) => {
-        this.listeners.push(resolve);
-      });
-      if (this.closed) break;
-      yield event;
-    }
-  }
-
-  emit(kind: "modify") {
-    const event: Deno.FsEvent = { kind, paths: ["test.txt"], flag: undefined };
-    const listeners = this.listeners;
-    this.listeners = [];
-    listeners.forEach((l) => l(event));
-  }
-
-  close() {
-    this.closed = true;
-    this.listeners.forEach((l) =>
-      l({ kind: "any", paths: [], flag: undefined })
-    );
-    this.listeners = [];
-  }
-}
+// (Originals are imported from test-utils)
 
 let mockWatcher: MockWatcher;
 let readCount = 0;
@@ -81,14 +50,7 @@ function setupMocks() {
 }
 
 function teardownMocks() {
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).watchFs = originalWatchFs;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).readTextFile = originalReadTextFile;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).writeTextFile = originalWriteTextFile;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).stat = originalStat;
+  restoreDenoMocks();
 }
 
 const App = (
@@ -112,9 +74,11 @@ Deno.test({
       let addTodoFn: ((text: string) => void) | undefined;
 
       const { unmount } = render(
-        <TodoProvider filename="test.txt">
-          <App onMount={(fn) => addTodoFn = fn} />
-        </TodoProvider>,
+        <ToasterProvider>
+          <TodoProvider filename="test.txt">
+            <App onMount={(fn) => addTodoFn = fn} />
+          </TodoProvider>
+        </ToasterProvider>,
       );
 
       // Wait for initial load
@@ -140,9 +104,11 @@ Deno.test({
       setupMocks();
 
       const { unmount } = render(
-        <TodoProvider filename="test.txt">
-          <Text>Test</Text>
-        </TodoProvider>,
+        <ToasterProvider>
+          <TodoProvider filename="test.txt">
+            <Text>Test</Text>
+          </TodoProvider>
+        </ToasterProvider>,
       );
 
       // Wait for initial load

@@ -4,6 +4,7 @@ import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
+import { useNavigation } from "../contexts/navigation-context.tsx";
 import { UpperCaseLetter } from "../types/types.ts";
 
 const PRIORITIES: (UpperCaseLetter | "Unset")[] = [
@@ -17,7 +18,8 @@ const PRIORITIES: (UpperCaseLetter | "Unset")[] = [
 
 export const SetPriorityModal = () => {
   const { closeModal } = useModal();
-  const { useSelectedTodo, updateTodo } = useTodo();
+  const { refreshTodos } = useTodo();
+  const { useSelectedTodo } = useNavigation();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -41,7 +43,7 @@ export const SetPriorityModal = () => {
       } else {
         todo.setPriority(selected as UpperCaseLetter);
       }
-      updateTodo(todo);
+      refreshTodos();
       closeModal();
       return;
     }

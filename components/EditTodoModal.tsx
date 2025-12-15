@@ -2,12 +2,14 @@ import { Text, useStdout } from "ink";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
+import { useNavigation } from "../contexts/navigation-context.tsx";
 import { SharedTodoInput } from "./SharedTodoInput.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 
 export const EditTodoModal = () => {
   const { closeModal } = useModal();
-  const { useSelectedTodo, updateTodo } = useTodo();
+  const { refreshTodos, todos } = useTodo();
+  const { useSelectedTodo } = useNavigation();
   const todo = useSelectedTodo();
 
   // We still need useFocusedInput to determine if the modal itself is focused/active in the focus chain
@@ -19,7 +21,7 @@ export const EditTodoModal = () => {
   const handleSubmit = (value: string) => {
     if (todo && value.trim().length > 0) {
       todo.setText(value);
-      updateTodo(todo);
+      refreshTodos();
     }
     closeModal();
   };
@@ -34,6 +36,7 @@ export const EditTodoModal = () => {
         onCancel={closeModal}
         footer={<Text dimColor>Enter = save, Esc = cancel</Text>}
         maxWidth={maxWidth}
+        todos={todos}
       />
     </Modal>
   );
