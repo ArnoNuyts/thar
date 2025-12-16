@@ -44,3 +44,29 @@ export function restoreDenoMocks() {
   // deno-lint-ignore no-explicit-any
   (Deno as any).stat = originalStat;
 }
+
+import { delay } from "@std/async";
+
+export async function waitFor(
+  callback: () => void | Promise<void>,
+  options?: {timeout?: number, interval?: number}
+) {
+  const timeout = options?.timeout ?? 5000;
+  const interval = options?.interval ?? 50;
+  
+  const start = Date.now();
+  let lastError: unknown;
+
+  while (Date.now() - start < timeout) {
+    try {
+      await callback();
+      return;
+    } catch (e) {
+      lastError = e;
+      await delay(interval);
+    }
+  }
+
+  const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`Timed out after ${timeout}ms. Last error: ${errorMessage}`);
+}

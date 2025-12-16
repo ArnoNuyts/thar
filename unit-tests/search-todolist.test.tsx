@@ -1,6 +1,5 @@
 import { render } from "ink-testing-library";
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { delay } from "@std/async";
 
 import { useTodo } from "../contexts/todo-context.tsx";
 import { FocusProvider } from "../contexts/focus-context.tsx";
@@ -30,6 +29,8 @@ const ConnectedSearchInput = () => {
 };
 
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
+import { waitFor } from "./test-utils.ts";
+import { delay } from "@std/async";
 
 // Helper to wrap components with all required providers
 const TestWrapper = ({
@@ -115,11 +116,11 @@ Deno.test({
         </TestWrapper>,
       );
 
-      await delay(100);
-
-      const output = lastFrame();
-      // Should be hidden (empty) when unfocused and query is empty
-      assertEquals("", output);
+      await waitFor(() => {
+        const output = lastFrame();
+        // Should be hidden (empty) when unfocused and query is empty
+        assertEquals("", output);
+      });
 
       unmount();
     });
@@ -132,10 +133,10 @@ Deno.test({
         </TestWrapper>,
       );
 
-      await delay(100);
-
-      const output = lastFrame();
-      assertStringIncludes(output || "", "@Home");
+      await waitFor(() => {
+        const output = lastFrame();
+        assertStringIncludes(output || "", "@Home");
+      });
 
       unmount();
     });
@@ -157,6 +158,7 @@ Deno.test({
         ];
 
         let selectedText = "";
+        const getSelectedText = () => selectedText;
 
         const { lastFrame: _lastFrame, unmount, stdin } = render(
           <TestWrapper initialTodos={todos}>
@@ -169,22 +171,27 @@ Deno.test({
         );
 
         // Wait for load and focus
+        await waitFor(() => {
+          console.log("selectedText", selectedText);
+          assertEquals(selectedText, "Task A");
+        });
         await delay(200);
-        // Initial selection should be Task A
-        assertEquals(selectedText, "Task A");
 
         // Press Down Arrow
-        await stdin.write("\u001B[B"); // Down Arrow
-        await delay(50);
+        stdin.write("\u001B[B");
 
-        // Should select Task B
-        assertEquals(selectedText, "Task B");
+        await waitFor(() => {
+          // Should select Task B
+          console.log("selectedText", selectedText);
+          assertEquals(selectedText, "Task B");
+        });
 
         // Press Up Arrow
-        await stdin.write("\u001B[A"); // Up Arrow
-        await delay(50);
+        stdin.write("\u001B[A");
 
-        assertEquals(selectedText, "Task A");
+        await waitFor(() => {
+          assertEquals(selectedText, "Task A");
+        });
 
         unmount();
       },
@@ -212,8 +219,9 @@ Deno.test({
         );
 
         // Wait for load
-        await delay(200);
-        assertEquals(selectedText, "Apples");
+        await waitFor(() => {
+          assertEquals(selectedText, "Apples");
+        });
       },
     );
   },
@@ -358,9 +366,9 @@ Deno.test({
         </TestWrapper>,
       );
 
-      await delay(100);
-
-      assertEquals(capturedQuery, "test query");
+      await waitFor(() => {
+        assertEquals(capturedQuery, "test query");
+      });
 
       unmount();
     });
@@ -388,9 +396,9 @@ Deno.test({
           </TestWrapper>,
         );
 
-        await delay(200);
-
-        assertEquals(focusCalled, true);
+        await waitFor(() => {
+          assertEquals(focusCalled, true);
+        });
 
         unmount();
       },
