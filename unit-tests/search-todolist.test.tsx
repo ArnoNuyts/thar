@@ -104,303 +104,290 @@ const FocusRequester = () => {
   return null;
 };
 
-Deno.test({
-  name: "SearchInput Component Tests",
-  sanitizeOps: false,
+Deno.test("should render with placeholder when empty", {
   sanitizeResources: false,
-  fn: async (t) => {
-    await t.step("should render with placeholder when empty", async () => {
-      const { lastFrame, unmount } = render(
-        <TestWrapper initialTodos={[]}>
-          <ConnectedSearchInput />
-        </TestWrapper>,
-      );
+  sanitizeOps: false,
+}, async () => {
+  const { lastFrame, unmount } = render(
+    <TestWrapper initialTodos={[]}>
+      <ConnectedSearchInput />
+    </TestWrapper>,
+  );
 
-      await waitFor(() => {
-        const output = lastFrame();
-        // Should be hidden (empty) when unfocused and query is empty
-        assertEquals("", output);
-      });
+  await waitFor(() => {
+    const output = lastFrame();
+    // Should be hidden (empty) when unfocused and query is empty
+    assertEquals("", output);
+  });
 
-      unmount();
-    });
-
-    await t.step("should display search query when set", async () => {
-      const { lastFrame, unmount } = render(
-        <TestWrapper initialTodos={[]}>
-          <SearchQuerySetter query="@Home" />
-          <ConnectedSearchInput />
-        </TestWrapper>,
-      );
-
-      await waitFor(() => {
-        const output = lastFrame();
-        assertStringIncludes(output || "", "@Home");
-      });
-
-      unmount();
-    });
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "Navigation and Auto-Selection Tests",
-  sanitizeOps: false,
+Deno.test("should display search query when set", {
   sanitizeResources: false,
-  fn: async (t) => {
-    await t.step(
-      "should handle navigation keys when search is focused",
-      async () => {
-        const todos = [
-          new Todo("Task A"),
-          new Todo("Task B"),
-          new Todo("Task C"),
-        ];
+  sanitizeOps: false,
+}, async () => {
+  const { lastFrame, unmount } = render(
+    <TestWrapper initialTodos={[]}>
+      <SearchQuerySetter query="@Home" />
+      <ConnectedSearchInput />
+    </TestWrapper>,
+  );
 
-        let selectedText = "";
+  await waitFor(() => {
+    const output = lastFrame();
+    assertStringIncludes(output || "", "@Home");
+  });
 
-        const { lastFrame: _lastFrame, unmount, stdin } = render(
-          <TestWrapper initialTodos={todos}>
-            <FocusRequester />
-            <ConnectedSearchInput />
-            <SelectionObserver
-              onSelectionChange={(text) => selectedText = text}
-            />
-          </TestWrapper>,
-        );
-
-        // Wait for load and focus
-        await waitFor(() => {
-          console.log("selectedText", selectedText);
-          assertEquals(selectedText, "Task A");
-        });
-        await delay(200);
-
-        // Press Down Arrow
-        stdin.write("\u001B[B");
-
-        await waitFor(() => {
-          // Should select Task B
-          console.log("selectedText", selectedText);
-          assertEquals(selectedText, "Task B");
-        });
-
-        // Press Up Arrow
-        stdin.write("\u001B[A");
-
-        await waitFor(() => {
-          assertEquals(selectedText, "Task A");
-        });
-
-        unmount();
-      },
-    );
-
-    await t.step(
-      "should auto-select first item when current selection is filtered out",
-      async () => {
-        const todos = [
-          new Todo("Apples"),
-          new Todo("Bananas"),
-          new Todo("Cherries"),
-        ];
-
-        let selectedText = "";
-
-        const { unmount: _unmount } = render(
-          <TestWrapper initialTodos={todos}>
-            <ConnectedSearchInput />
-            <SelectionObserver
-              onSelectionChange={(text) => selectedText = text}
-            />
-            <SearchQuerySetter query="" />
-          </TestWrapper>,
-        );
-
-        // Wait for load
-        await waitFor(() => {
-          assertEquals(selectedText, "Apples");
-        });
-      },
-    );
-  },
+  unmount();
 });
+
+Deno.test(
+  "should handle navigation keys when search is focused",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = [
+      new Todo("Task A"),
+      new Todo("Task B"),
+      new Todo("Task C"),
+    ];
+
+    let selectedText = "";
+
+    const { lastFrame: _lastFrame, unmount, stdin } = render(
+      <TestWrapper initialTodos={todos}>
+        <FocusRequester />
+        <ConnectedSearchInput />
+        <SelectionObserver
+          onSelectionChange={(text) => selectedText = text}
+        />
+      </TestWrapper>,
+    );
+
+    // Wait for load and focus
+    await waitFor(() => {
+      console.log("selectedText", selectedText);
+      assertEquals(selectedText, "Task A");
+    });
+    await delay(200);
+
+    // Press Down Arrow
+    stdin.write("\u001B[B");
+
+    await waitFor(() => {
+      // Should select Task B
+      console.log("selectedText", selectedText);
+      assertEquals(selectedText, "Task B");
+    });
+
+    // Press Up Arrow
+    stdin.write("\u001B[A");
+
+    await waitFor(() => {
+      assertEquals(selectedText, "Task A");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should auto-select first item when current selection is filtered out",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = [
+      new Todo("Apples"),
+      new Todo("Bananas"),
+      new Todo("Cherries"),
+    ];
+
+    let selectedText = "";
+
+    const { unmount: _unmount } = render(
+      <TestWrapper initialTodos={todos}>
+        <ConnectedSearchInput />
+        <SelectionObserver
+          onSelectionChange={(text) => selectedText = text}
+        />
+        <SearchQuerySetter query="" />
+      </TestWrapper>,
+    );
+
+    // Wait for load
+    await waitFor(() => {
+      assertEquals(selectedText, "Apples");
+    });
+  },
+);
 
 // Unit tests for filtering logic (testing the filtering algorithm directly)
-Deno.test({
-  name: "Todo Filtering Logic Tests",
-  fn: async (t) => {
-    await t.step("should filter by context", () => {
-      const todos = new Todos(
-        new Todo("Buy groceries @Home +Shopping"),
-        new Todo("Fix bug @Work +Development"),
-        new Todo("Call mom @Home"),
+
+Deno.test("should filter by context", {
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, () => {
+  const todos = new Todos(
+    new Todo("Buy groceries @Home +Shopping"),
+    new Todo("Fix bug @Work +Development"),
+    new Todo("Call mom @Home"),
+  );
+
+  const query = "@work";
+  const filteredTodos = new Todos(
+    ...todos.filter((todo) => {
+      const text = todo.text.toLowerCase();
+      const contexts = Array.from(todo.contexts).map((c) => c.toLowerCase());
+      const projects = Array.from(todo.projects).map((p) => p.toLowerCase());
+
+      return (
+        text.includes(query) ||
+        contexts.some((c) => c.includes(query.replace("@", ""))) ||
+        projects.some((p) => p.includes(query.replace("+", "")))
       );
+    }),
+  );
 
-      const query = "@work";
-      const filteredTodos = new Todos(
-        ...todos.filter((todo) => {
-          const text = todo.text.toLowerCase();
-          const contexts = Array.from(todo.contexts).map((c) =>
-            c.toLowerCase()
-          );
-          const projects = Array.from(todo.projects).map((p) =>
-            p.toLowerCase()
-          );
+  assertEquals(filteredTodos.length, 1);
+  assertStringIncludes(filteredTodos[0].text, "Fix bug");
+});
 
-          return (
-            text.includes(query) ||
-            contexts.some((c) => c.includes(query.replace("@", ""))) ||
-            projects.some((p) => p.includes(query.replace("+", "")))
-          );
-        }),
+Deno.test("should filter by project", {
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, () => {
+  const todos = new Todos(
+    new Todo("Buy groceries @Home +Shopping"),
+    new Todo("Fix bug @Work +Development"),
+    new Todo("Call mom @Home"),
+  );
+
+  const query = "+shopping";
+  const filteredTodos = new Todos(
+    ...todos.filter((todo) => {
+      const text = todo.text.toLowerCase();
+      const contexts = Array.from(todo.contexts).map((c) => c.toLowerCase());
+      const projects = Array.from(todo.projects).map((p) => p.toLowerCase());
+
+      return (
+        text.includes(query) ||
+        contexts.some((c) => c.includes(query.replace("@", ""))) ||
+        projects.some((p) => p.includes(query.replace("+", "")))
       );
+    }),
+  );
 
-      assertEquals(filteredTodos.length, 1);
-      assertStringIncludes(filteredTodos[0].text, "Fix bug");
-    });
+  assertEquals(filteredTodos.length, 1);
+  assertStringIncludes(filteredTodos[0].text, "Buy groceries");
+});
 
-    await t.step("should filter by project", () => {
-      const todos = new Todos(
-        new Todo("Buy groceries @Home +Shopping"),
-        new Todo("Fix bug @Work +Development"),
-        new Todo("Call mom @Home"),
+Deno.test("should filter by text content (case-insensitive)", {
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, () => {
+  const todos = new Todos(
+    new Todo("Buy groceries @Home +Shopping"),
+    new Todo("Fix bug @Work +Development"),
+    new Todo("Call mom @Home"),
+  );
+
+  const query = "grocer";
+  const filteredTodos = new Todos(
+    ...todos.filter((todo) => {
+      const text = todo.text.toLowerCase();
+      const contexts = Array.from(todo.contexts).map((c) => c.toLowerCase());
+      const projects = Array.from(todo.projects).map((p) => p.toLowerCase());
+
+      return (
+        text.includes(query) ||
+        contexts.some((c) => c.includes(query.replace("@", ""))) ||
+        projects.some((p) => p.includes(query.replace("+", "")))
       );
+    }),
+  );
 
-      const query = "+shopping";
-      const filteredTodos = new Todos(
-        ...todos.filter((todo) => {
-          const text = todo.text.toLowerCase();
-          const contexts = Array.from(todo.contexts).map((c) =>
-            c.toLowerCase()
-          );
-          const projects = Array.from(todo.projects).map((p) =>
-            p.toLowerCase()
-          );
+  assertEquals(filteredTodos.length, 1);
+  assertStringIncludes(filteredTodos[0].text, "Buy groceries");
+});
 
-          return (
-            text.includes(query) ||
-            contexts.some((c) => c.includes(query.replace("@", ""))) ||
-            projects.some((p) => p.includes(query.replace("+", "")))
-          );
-        }),
-      );
+Deno.test("should return all todos when query is empty", {
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, () => {
+  const todos = new Todos(
+    new Todo("Buy groceries @Home +Shopping"),
+    new Todo("Fix bug @Work +Development"),
+    new Todo("Call mom @Home"),
+  );
 
-      assertEquals(filteredTodos.length, 1);
-      assertStringIncludes(filteredTodos[0].text, "Buy groceries");
-    });
+  const query = "";
+  // Empty query should not filter
+  const filteredTodos = query.trim()
+    ? new Todos(
+      ...todos.filter((todo) => {
+        const text = todo.text.toLowerCase();
+        return text.includes(query.toLowerCase());
+      }),
+    )
+    : todos;
 
-    await t.step("should filter by text content (case-insensitive)", () => {
-      const todos = new Todos(
-        new Todo("Buy groceries @Home +Shopping"),
-        new Todo("Fix bug @Work +Development"),
-        new Todo("Call mom @Home"),
-      );
-
-      const query = "grocer";
-      const filteredTodos = new Todos(
-        ...todos.filter((todo) => {
-          const text = todo.text.toLowerCase();
-          const contexts = Array.from(todo.contexts).map((c) =>
-            c.toLowerCase()
-          );
-          const projects = Array.from(todo.projects).map((p) =>
-            p.toLowerCase()
-          );
-
-          return (
-            text.includes(query) ||
-            contexts.some((c) => c.includes(query.replace("@", ""))) ||
-            projects.some((p) => p.includes(query.replace("+", "")))
-          );
-        }),
-      );
-
-      assertEquals(filteredTodos.length, 1);
-      assertStringIncludes(filteredTodos[0].text, "Buy groceries");
-    });
-
-    await t.step("should return all todos when query is empty", () => {
-      const todos = new Todos(
-        new Todo("Buy groceries @Home +Shopping"),
-        new Todo("Fix bug @Work +Development"),
-        new Todo("Call mom @Home"),
-      );
-
-      const query = "";
-      // Empty query should not filter
-      const filteredTodos = query.trim()
-        ? new Todos(
-          ...todos.filter((todo) => {
-            const text = todo.text.toLowerCase();
-            return text.includes(query.toLowerCase());
-          }),
-        )
-        : todos;
-
-      assertEquals(filteredTodos.length, 3);
-    });
-  },
+  assertEquals(filteredTodos.length, 3);
 });
 
 // Test SearchContext behavior
-Deno.test({
-  name: "SearchContext Tests",
-  sanitizeOps: false,
+Deno.test("should update search query", {
   sanitizeResources: false,
-  fn: async (t) => {
-    await t.step("should update search query", async () => {
-      let capturedQuery = "";
+  sanitizeOps: false,
+}, async () => {
+  let capturedQuery = "";
 
-      const QueryReader = () => {
-        const { searchQuery } = useSearch();
-        capturedQuery = searchQuery;
-        return null;
-      };
+  const QueryReader = () => {
+    const { searchQuery } = useSearch();
+    capturedQuery = searchQuery;
+    return null;
+  };
 
-      const { unmount } = render(
-        <TestWrapper>
-          <SearchQuerySetter query="test query" />
-          <QueryReader />
-        </TestWrapper>,
-      );
+  const { unmount } = render(
+    <TestWrapper>
+      <SearchQuerySetter query="test query" />
+      <QueryReader />
+    </TestWrapper>,
+  );
 
-      await waitFor(() => {
-        assertEquals(capturedQuery, "test query");
-      });
+  await waitFor(() => {
+    assertEquals(capturedQuery, "test query");
+  });
 
-      unmount();
+  unmount();
+});
+
+Deno.test(
+  "should call focus callback when focusRef.current is called",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    let focusCalled = false;
+
+    const FocusListener = () => {
+      const { focusRef } = useSearch();
+      useEffect(() => {
+        focusRef.current = () => {
+          focusCalled = true;
+        };
+        // Trigger focus request
+        setTimeout(() => focusRef.current?.(), 50);
+      }, [focusRef]);
+      return null;
+    };
+
+    const { unmount } = render(
+      <TestWrapper>
+        <FocusListener />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => {
+      assertEquals(focusCalled, true);
     });
 
-    await t.step(
-      "should call focus callback when focusRef.current is called",
-      async () => {
-        let focusCalled = false;
-
-        const FocusListener = () => {
-          const { focusRef } = useSearch();
-          useEffect(() => {
-            focusRef.current = () => {
-              focusCalled = true;
-            };
-            // Trigger focus request
-            setTimeout(() => focusRef.current?.(), 50);
-          }, [focusRef]);
-          return null;
-        };
-
-        const { unmount } = render(
-          <TestWrapper>
-            <FocusListener />
-          </TestWrapper>,
-        );
-
-        await waitFor(() => {
-          assertEquals(focusCalled, true);
-        });
-
-        unmount();
-      },
-    );
+    unmount();
   },
-});
+);
