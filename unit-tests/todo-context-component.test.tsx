@@ -6,11 +6,9 @@ import { ToasterProvider } from "../contexts/toaster-context.tsx";
 import { assertEquals } from "@std/assert";
 import { delay } from "@std/async";
 
-import { MockWatcher, restoreDenoMocks } from "./test-utils.ts";
+import { MockWatcher, restoreDenoMocks, waitFor } from "./test-utils.ts";
 
 // Mock setup
-// (Originals are imported from test-utils)
-
 let mockWatcher: MockWatcher;
 let readCount = 0;
 let writeCount = 0;
@@ -26,9 +24,7 @@ function setupMocks() {
   // deno-lint-ignore no-explicit-any
   (Deno as any).stat = async () => {
     await delay(0);
-    return {
-      isFile: true,
-    };
+    return { isFile: true };
   };
 
   // deno-lint-ignore no-explicit-any
@@ -64,68 +60,72 @@ const App = (
 };
 
 Deno.test({
-  name: "TodoContext Component - Integration",
+  name: "TodoContext: should write and NOT read back immediately",
   sanitizeOps: false,
   sanitizeResources: false,
-  fn: async (t) => {
-    await t.step("should write and NOT read back immediately", async () => {
-      setupMocks();
+  async fn() {
+    setupMocks();
 
-      let addTodoFn: ((text: string) => void) | undefined;
+    let addTodoFn: ((text: string) => void) | undefined;
+    const { unmount } = render(
+      <ToasterProvider>
+        <TodoProvider filename="test.txt">
+          <App onMount={(fn) => (addTodoFn = fn)} />
+        </TodoProvider>
+      </ToasterProvider>,
+    );
 
-      const { unmount } = render(
-        <ToasterProvider>
-          <TodoProvider filename="test.txt">
-            <App onMount={(fn) => addTodoFn = fn} />
-          </TodoProvider>
-        </ToasterProvider>,
-      );
+    // Wait for initial load
+    await waitFor(() => assertEquals(readCount, 1));
 
-      // Wait for initial load
-      await delay(100);
-      assertEquals(readCount, 1, "Initial read");
-      readCount = 0; // Reset for test
+    // Allow the initial save (which is a no-op) to complete
+    await delay(100);
 
-      // Trigger add
-      if (addTodoFn) addTodoFn("New Todo");
+    readCount = 0; // Reset for test
 
-      // Wait for debounce write (50ms) + mock write delay (10ms) + debounce read (500ms)
-      await delay(1000);
+    // Trigger add
+    if (addTodoFn) addTodoFn("New Todo");
 
-      assertEquals(writeCount, 1, "Should have written");
-      assertEquals(readCount, 0, "Should NOT have read back");
+    // Wait for the write to happen
+    await waitFor(() => assertEquals(writeCount, 1));
 
-      unmount();
-      mockWatcher.close();
-      teardownMocks();
-    });
+    // Now, wait a bit more to ensure no read-back happens
+    await delay(600); // Wait past the 500ms debounce
+    assertEquals(readCount, 0, "Should NOT have read back");
 
-    await t.step("should read on external change", async () => {
-      setupMocks();
+    unmount();
+    mockWatcher.close();
+    teardownMocks();
+  },
+});
 
-      const { unmount } = render(
-        <ToasterProvider>
-          <TodoProvider filename="test.txt">
-            <Text>Test</Text>
-          </TodoProvider>
-        </ToasterProvider>,
-      );
+Deno.test({
+  name: "TodoContext: should read on external change",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    setupMocks();
 
-      // Wait for initial load
-      await delay(100);
-      readCount = 0;
+    const { unmount } = render(
+      <ToasterProvider>
+        <TodoProvider filename="test.txt">
+          <Text>Test</Text>
+        </TodoProvider>
+      </ToasterProvider>,
+    );
 
-      // Simulate external change
-      mockWatcher.emit("modify");
+    // Wait for initial load
+    await waitFor(() => assertEquals(readCount, 1));
+    readCount = 0;
 
-      // Wait for debounce read (500ms)
-      await delay(800);
+    // Simulate external change
+    mockWatcher.emit("modify");
 
-      assertEquals(readCount, 1, "Should have read external change");
+    // Wait for the read to happen due to the FS event
+    await waitFor(() => assertEquals(readCount, 1));
 
-      unmount();
-      mockWatcher.close();
-      teardownMocks();
-    });
+    unmount();
+    mockWatcher.close();
+    teardownMocks();
   },
 });
