@@ -1,9 +1,5 @@
 hooks:
   pre-commit:
-    - id: deno-fmt
-      run: deno task fmt
-      pass_filenames: true
+    - "deno fmt"
   pre-push:
-    - id: deno-test
-      run: deno task test
-      pass_filenames: false
+    - "deno test -A"

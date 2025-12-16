@@ -66,7 +66,10 @@ Deno.test("should initialize with first todo selected", {
   unmount();
 });
 
-Deno.test("should navigate down", { sanitizeResources: false }, async () => {
+Deno.test("should navigate down", {
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, async () => {
   const todos = new Todos(
     new Todo("Todo 1"),
     new Todo("Todo 2"),
@@ -94,7 +97,10 @@ Deno.test("should navigate down", { sanitizeResources: false }, async () => {
   unmount();
 });
 
-Deno.test("should navigate up", { sanitizeResources: false }, async () => {
+Deno.test("should navigate up", {
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, async () => {
   const todos = new Todos(
     new Todo("Todo 1"),
     new Todo("Todo 2"),
@@ -130,7 +136,7 @@ Deno.test("should navigate up", { sanitizeResources: false }, async () => {
 
 Deno.test(
   "should clamp navigation at bounds",
-  { sanitizeResources: false },
+  { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todos = new Todos(
       new Todo("Todo 1"),
@@ -173,7 +179,7 @@ Deno.test(
 
 Deno.test(
   "should preserve selection after todo update",
-  { sanitizeResources: false },
+  { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2"); // Target for selection
@@ -228,7 +234,7 @@ Deno.test(
 
 Deno.test(
   "should preserve selection after file reload (new instances, same hash)",
-  { sanitizeResources: false },
+  { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2");
@@ -285,7 +291,7 @@ Deno.test(
 
 Deno.test(
   "should select next todo after deletion",
-  { sanitizeResources: false },
+  { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2");
@@ -328,7 +334,7 @@ Deno.test(
 
 Deno.test(
   "should select previous todo when deleting last item",
-  { sanitizeResources: false },
+  { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2");
@@ -369,7 +375,7 @@ Deno.test(
 
 Deno.test(
   "should preserve selection after priority update",
-  { sanitizeResources: false },
+  { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2"); // Target
@@ -417,7 +423,7 @@ Deno.test(
 
 Deno.test(
   "should preserve selection after toggling completion",
-  { sanitizeResources: false },
+  { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2"); // Target
