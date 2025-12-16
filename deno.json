@@ -1,6 +1,9 @@
 {
   "tasks": {
-    "start": "deno run --allow-sys --allow-env --allow-ffi --allow-read --allow-write main.tsx"
+    "start": "deno run --allow-sys --allow-env --allow-ffi --allow-read --allow-write main.tsx",
+    "fmt": "deno fmt",
+    "test": "deno test -A",
+    "install-hooks": "deno run --allow-read --allow-write --allow-run jsr:@theswanfactory/deno-hooks/install"
   },
   "compilerOptions": {
     "jsx": "react-jsx",
