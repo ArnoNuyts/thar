@@ -1,3 +1,7 @@
+export type MockedStdout = {
+  rows: number;
+};
+
 export class MockWatcher {
   private listeners: ((event: Deno.FsEvent) => void)[] = [];
   private closed = false;

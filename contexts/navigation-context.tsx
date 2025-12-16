@@ -220,9 +220,14 @@ export const NavigationProvider = (
   }, [selectedRow, listHeight, offsetRow]);
 
   const doNavigate = (step: number) => {
-    let newSelectedRow = selectedRow;
+    const todoIndex = indexes.findIndex(
+      (entry) =>
+        entry.type === IndexType.todo &&
+        entry.todo.id === selectedTodoId,
+    );
+    const selectedRow = todoIndex === -1 ? 0 : todoIndex;
     const direction = step > 0 ? 1 : -1;
-    newSelectedRow = clamp(selectedRow + step, 0, indexes.length - 1);
+    let newSelectedRow = clamp(selectedRow + step, 0, indexes.length - 1);
 
     while (indexes[newSelectedRow]?.type === IndexType.context) {
       newSelectedRow += direction;
