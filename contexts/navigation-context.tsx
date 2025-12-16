@@ -35,7 +35,11 @@ const NavigationContext = createContext<NavigationContextType | undefined>(
 );
 
 export const NavigationProvider = (
-  { children, todos }: { children: ReactNode; todos: Todos },
+  { children, todos, listHeightForTest }: {
+    children: ReactNode;
+    todos: Todos;
+    listHeightForTest?: number;
+  },
 ) => {
   const { searchQuery, isSearchFocused } = useSearch();
   const { stdout } = useStdout();
@@ -47,7 +51,8 @@ export const NavigationProvider = (
   // Search bar takes 2 rows (content + border) when visible
   // Search bar is visible when focused OR has query
   const searchBarVisible = isSearchFocused || searchQuery.length > 0;
-  const listHeight = stdout.rows - 2 - (searchBarVisible ? 2 : 0);
+  const listHeight = listHeightForTest ??
+    (stdout.rows - 2 - (searchBarVisible ? 2 : 0));
 
   const indexes: IndexEntry[] = useMemo(() => {
     let filteredTodos = todos.sortByImportance().filterHidden();
@@ -184,10 +189,33 @@ export const NavigationProvider = (
 
   // Ensure selection is visible (scroll into view)
   useEffect(() => {
-    if (selectedRow < offsetRow) {
-      setOffsetRow(selectedRow);
-    } else if (selectedRow >= offsetRow + listHeight) {
-      setOffsetRow(selectedRow - listHeight + 1);
+    const scrollPadding = 1;
+
+    // Avoid scroll thrashing when listHeight is too small for padding
+    if (listHeight <= 2 * scrollPadding) {
+      if (selectedRow < offsetRow) {
+        setOffsetRow(selectedRow);
+      } else if (selectedRow >= offsetRow + listHeight) {
+        setOffsetRow(selectedRow - listHeight + 1);
+      }
+      return;
+    }
+
+    // Scrolling up with padding
+    if (selectedRow < offsetRow + scrollPadding) {
+      setOffsetRow(Math.max(0, selectedRow - scrollPadding));
+    } // Scrolling down with padding
+    else if (
+      selectedRow >=
+        offsetRow + listHeight - scrollPadding
+    ) {
+      setOffsetRow(
+        // This Math.max is for safety, should not be needed with the listHeight check
+        Math.max(
+          0,
+          selectedRow - listHeight + 1 + scrollPadding,
+        ),
+      );
     }
   }, [selectedRow, listHeight, offsetRow]);
 
