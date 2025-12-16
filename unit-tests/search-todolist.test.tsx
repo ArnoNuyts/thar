@@ -158,7 +158,6 @@ Deno.test({
         ];
 
         let selectedText = "";
-        const getSelectedText = () => selectedText;
 
         const { lastFrame: _lastFrame, unmount, stdin } = render(
           <TestWrapper initialTodos={todos}>
