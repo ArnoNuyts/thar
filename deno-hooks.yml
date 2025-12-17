@@ -1,5 +1,0 @@
-hooks:
-  pre-commit:
-    - "deno fmt"
-  pre-push:
-    - "deno test -A"
