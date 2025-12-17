@@ -12,14 +12,14 @@ import { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 
 const TestWrapper = (
-  { children, todos }: {
-    children: React.ReactNode;
+  { todos, onContext }: {
     todos: Todos;
+    onContext: (ctx: any) => void;
   },
 ) => (
   <SearchProvider>
     <NavigationProvider todos={todos}>
-      {children}
+      <NavigationTester onContext={onContext} />
     </NavigationProvider>
   </SearchProvider>
 );
@@ -46,9 +46,7 @@ Deno.test("should initialize with first todo selected", {
   let navContext: any;
 
   const { unmount } = render(
-    <TestWrapper todos={todos}>
-      <NavigationTester onContext={(ctx) => navContext = ctx} />
-    </TestWrapper>,
+    <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
   );
 
   await waitFor(() => {
@@ -79,9 +77,7 @@ Deno.test("should navigate down", {
   let navContext: any;
 
   const { unmount } = render(
-    <TestWrapper todos={todos}>
-      <NavigationTester onContext={(ctx) => navContext = ctx} />
-    </TestWrapper>,
+    <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
   );
 
   await waitFor(() =>
@@ -109,9 +105,7 @@ Deno.test("should navigate up", {
   let navContext: any;
 
   const { unmount } = render(
-    <TestWrapper todos={todos}>
-      <NavigationTester onContext={(ctx) => navContext = ctx} />
-    </TestWrapper>,
+    <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
   );
 
   await waitFor(() =>
@@ -146,9 +140,7 @@ Deno.test(
     let navContext: any;
 
     const { unmount } = render(
-      <TestWrapper todos={todos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
     );
 
     await waitFor(() =>
@@ -189,13 +181,7 @@ Deno.test(
     let navContext: any;
 
     const { rerender, unmount } = render(
-      <TestWrapper todos={todos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
-    );
-
-    await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
     );
 
     // Select Todo 2
@@ -210,9 +196,7 @@ Deno.test(
 
     // Re-render
     rerender(
-      <TestWrapper todos={newTodos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
+      <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
     );
 
     await waitFor(() => {
@@ -246,17 +230,15 @@ Deno.test(
     let navContext: any;
 
     const { rerender, unmount } = render(
-      <TestWrapper todos={initialTodos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
-    );
-
-    await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      <TestWrapper
+        todos={initialTodos}
+        onContext={(ctx) => navContext = ctx}
+      />,
     );
 
     // Select "Todo 2"
     navContext.navigateDown();
+
     await waitFor(() =>
       assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
     );
@@ -269,9 +251,10 @@ Deno.test(
 
     // Re-render with new instances
     rerender(
-      <TestWrapper todos={reloadedTodos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
+      <TestWrapper
+        todos={reloadedTodos}
+        onContext={(ctx) => navContext = ctx}
+      />,
     );
 
     await waitFor(() => { // Verify "Todo 2" is still selected (by hash fallback)
@@ -301,12 +284,7 @@ Deno.test(
     let navContext: any;
 
     const { rerender, unmount } = render(
-      <TestWrapper todos={todos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
-    );
-    await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
     );
 
     // Select Todo 2
@@ -319,9 +297,7 @@ Deno.test(
     // Delete Todo 2
     const newTodos = new Todos(todo1, todo3);
     rerender(
-      <TestWrapper todos={newTodos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
+      <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
     );
     await waitFor(() => { // Should select Todo 3 (next item)
       const selected = navContext.useSelectedTodo();
@@ -343,12 +319,7 @@ Deno.test(
     let navContext: any;
 
     const { rerender, unmount } = render(
-      <TestWrapper todos={todos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
-    );
-    await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
     );
 
     // Select Todo 2 (last)
@@ -360,9 +331,7 @@ Deno.test(
     // Delete Todo 2
     const newTodos = new Todos(todo1);
     rerender(
-      <TestWrapper todos={newTodos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
+      <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
     );
     await waitFor(() =>
       // Should select Todo 1 (previous/last remaining)
@@ -385,17 +354,12 @@ Deno.test(
     let navContext: any;
 
     const { rerender, unmount } = render(
-      <TestWrapper todos={todos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
     );
-
-    await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
-    });
 
     // Select Todo 2
     navContext.navigateDown();
+
     await waitFor(() => {
       assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
     });
@@ -406,9 +370,7 @@ Deno.test(
 
     // Re-render
     rerender(
-      <TestWrapper todos={newTodos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
+      <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
     );
 
     await waitFor(() => { // Selection should follow the todo
@@ -433,14 +395,8 @@ Deno.test(
     let navContext: any;
 
     const { rerender, unmount } = render(
-      <TestWrapper todos={todos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
     );
-
-    await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
-    });
 
     // Select Todo 2
     navContext.navigateDown();
@@ -454,9 +410,7 @@ Deno.test(
 
     // Re-render
     rerender(
-      <TestWrapper todos={newTodos}>
-        <NavigationTester onContext={(ctx) => navContext = ctx} />
-      </TestWrapper>,
+      <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
     );
 
     await waitFor(() => {});

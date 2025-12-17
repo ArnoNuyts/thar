@@ -166,7 +166,6 @@ Deno.test(
 
     // Wait for load and focus
     await waitFor(() => {
-      console.log("selectedText", selectedText);
       assertEquals(selectedText, "Task A");
     });
     await delay(200);
@@ -176,7 +175,6 @@ Deno.test(
 
     await waitFor(() => {
       // Should select Task B
-      console.log("selectedText", selectedText);
       assertEquals(selectedText, "Task B");
     });
 
