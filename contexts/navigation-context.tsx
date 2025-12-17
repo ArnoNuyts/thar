@@ -213,34 +213,41 @@ export const NavigationProvider = (
         // This Math.max is for safety, should not be needed with the listHeight check
         Math.max(
           0,
-          selectedRow - listHeight + 1 + scrollPadding,
+          Math.min(
+            selectedRow - listHeight + 1 + scrollPadding,
+            indexes.length - listHeight,
+          ),
         ),
       );
     }
   }, [selectedRow, listHeight, offsetRow]);
 
   const doNavigate = (step: number) => {
-    const todoIndex = indexes.findIndex(
-      (entry) =>
-        entry.type === IndexType.todo &&
-        entry.todo.id === selectedTodoId,
-    );
-    const selectedRow = todoIndex === -1 ? 0 : todoIndex;
-    const direction = step > 0 ? 1 : -1;
-    let newSelectedRow = clamp(selectedRow + step, 0, indexes.length - 1);
+    setSelectedTodoId((prevId) => {
+      const todoIndex = indexes.findIndex(
+        (entry) =>
+          entry.type === IndexType.todo &&
+          entry.todo.id === prevId,
+      );
+      const selectedRow = todoIndex === -1 ? 0 : todoIndex;
+      const direction = step > 0 ? 1 : -1;
+      let newSelectedRow = clamp(selectedRow + step, 0, indexes.length - 1);
 
-    while (indexes[newSelectedRow]?.type === IndexType.context) {
-      newSelectedRow += direction;
-      if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
-        newSelectedRow = selectedRow;
-        break;
+      while (indexes[newSelectedRow]?.type === IndexType.context) {
+        newSelectedRow += direction;
+        if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
+          newSelectedRow = selectedRow;
+          break;
+        }
       }
-    }
 
-    const selectedEntry = indexes[newSelectedRow];
-    if (selectedEntry?.type === IndexType.todo) {
-      setSelectedTodoId(selectedEntry.todo.id);
-    }
+      const selectedEntry = indexes[newSelectedRow];
+      if (selectedEntry?.type === IndexType.todo) {
+        return selectedEntry.todo.id;
+      } else {
+        return prevId;
+      }
+    });
   };
 
   const navigateUp = () => doNavigate(-1);

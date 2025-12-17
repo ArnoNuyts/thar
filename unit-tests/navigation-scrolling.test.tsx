@@ -60,11 +60,11 @@ Deno.test(
       // Navigate to selectedRow 8 (index 9 with header).
       for (let i = 0; i < 7; i++) {
         navContext.navigateDown();
-        await waitFor(() => {
-          assertEquals(navContext.useSelectedTodo()?.text, `Todo ${i + 2}`);
-          assertEquals(navContext.offsetRow, 0);
-        });
       }
+      await waitFor(() => {
+        assertEquals(navContext.useSelectedTodo()?.text, `Todo 8`);
+        assertEquals(navContext.offsetRow, 0);
+      });
 
       // First scroll ("1 deep")
       navContext.navigateDown();
@@ -106,27 +106,20 @@ Deno.test(
       // Scroll down to row 15 to establish an offset
       for (let i = 0; i < 14; i++) {
         navContext.navigateDown();
-        await waitFor(() => {
-          console.log(navContext.useSelectedTodo()?.text, navContext.offsetRow);
-
-          assertEquals(navContext.useSelectedTodo()?.text, `Todo ${i + 2}`);
-        });
       }
-
-      // selectedRow is 15. offset=1. trigger is 15 >= 14.
-      // new offset = 15-10+1+1 = 7
-      assertEquals(navContext.offsetRow, 7);
+      await waitFor(() => {
+        assertEquals(navContext.useSelectedTodo()?.text, "Todo 15");
+        assertEquals(navContext.offsetRow, 7);
+      });
 
       // Navigate up to the padded edge (selectedRow 8)
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 7; i++) {
         navContext.navigateUp();
-        await waitFor(() => {
-          console.log(navContext.useSelectedTodo()?.text, navContext.offsetRow);
-
-          assertEquals(navContext.useSelectedTodo()?.text, `Todo ${15 - i}`);
-        });
       }
-      assertEquals(navContext.offsetRow, 7);
+      await waitFor(() => {
+        assertEquals(navContext.useSelectedTodo()?.text, "Todo 8");
+        assertEquals(navContext.offsetRow, 7);
+      });
 
       // First scroll up
       navContext.navigateUp();
@@ -144,6 +137,36 @@ Deno.test(
         // selectedRow is 6. offset=6. trigger up is 6 < 6+1=7. true.
         // new offset = 6 - 1 = 5.
         assertEquals(navContext.offsetRow, 5);
+      });
+
+      unmount();
+    });
+
+    await t.step("should not scroll past the end of the list", async () => {
+      const todos = new Todos(
+        ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i + 1}`)),
+      );
+      // deno-lint-ignore no-explicit-any
+      let navContext: any;
+
+      const { unmount } = render(
+        <TestWrapper todos={todos} listHeight={10}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </TestWrapper>,
+      );
+
+      await waitFor(() => {
+        assertEquals(navContext.listHeight, 10);
+        assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+      });
+
+      // Navigate to the last item
+      for (let i = 0; i < 19; i++) {
+        navContext.navigateDown();
+      }
+      await waitFor(() => {
+        assertEquals(navContext.useSelectedTodo()?.text, "Todo 20");
+        assertEquals(navContext.offsetRow, 11);
       });
 
       unmount();
