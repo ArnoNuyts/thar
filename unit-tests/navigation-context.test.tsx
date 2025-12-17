@@ -14,6 +14,7 @@ import { waitFor } from "./test-utils.ts";
 const TestWrapper = (
   { todos, onContext }: {
     todos: Todos;
+    // deno-lint-ignore no-explicit-any
     onContext: (ctx: any) => void;
   },
 ) => (
