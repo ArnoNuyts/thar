@@ -10,6 +10,7 @@ import { useNavigation } from "../contexts/navigation-context.tsx";
 import { IndexType } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
 import { IndexEntry } from "../logic/indexes.ts";
+import { ExtendedKey } from "../hooks/useFocusedInput.ts";
 
 const renderTodoText = (
   text: string,
@@ -129,6 +130,8 @@ export const TodoList = ({
     navigateDown,
     navigatePageUp,
     navigatePageDown,
+    navigateHome,
+    navigateEnd,
     useSelectedTodo,
   } = useNavigation();
 
@@ -139,7 +142,7 @@ export const TodoList = ({
   const todo = useSelectedTodo();
 
   // Handle global shortcuts (only when focused)
-  useFocusedInput((input, key) => {
+  useFocusedInput((input, key: ExtendedKey) => {
     if (input === "/") {
       focusRef.current?.();
       return;
@@ -158,6 +161,10 @@ export const TodoList = ({
       navigatePageUp();
     } else if (key.pageDown) {
       navigatePageDown();
+    } else if (key.home) {
+      navigateHome();
+    } else if (key.end) {
+      navigateEnd();
     } else if (input === " ") {
       if (todo) {
         toggleTodo(todo);

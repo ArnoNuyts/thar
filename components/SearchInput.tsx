@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useStdin } from "ink";
+import { Buffer } from "node:buffer";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
@@ -24,8 +25,14 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
 
   const { isFocused, focus, blur } = useFocusable();
   // Get navigation functions
-  const { navigateUp, navigateDown, navigatePageUp, navigatePageDown } =
-    useNavigation();
+  const {
+    navigateUp,
+    navigateDown,
+    navigatePageUp,
+    navigatePageDown,
+    navigateHome,
+    navigateEnd,
+  } = useNavigation();
   const [cursorPos, setCursorPos] = useState(searchQuery.length);
   const [wordStartIndex, setWordStartIndex] = useState(0);
 
@@ -40,6 +47,26 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
     // Sync focus state with context
     setIsSearchFocused(isFocused);
   }, [isFocused, clearSuggestions, setIsSearchFocused]);
+
+  const { stdin } = useStdin();
+
+  useEffect(() => {
+    if (!stdin || !isFocused || suggestions.length > 0) return;
+
+    const onData = (data: Buffer) => {
+      const seq = data.toString();
+      if (seq === "\x1b[H") {
+        navigateHome();
+      } else if (seq === "\x1b[F") {
+        navigateEnd();
+      }
+    };
+
+    stdin.on("data", onData);
+    return () => {
+      stdin.off("data", onData);
+    };
+  }, [stdin, isFocused, suggestions.length, navigateHome, navigateEnd]);
 
   // Extract all unique projects and contexts
   const { allProjects, allContexts } = useMemo(() => {

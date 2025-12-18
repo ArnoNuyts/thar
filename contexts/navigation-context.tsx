@@ -25,6 +25,8 @@ interface NavigationContextType {
   navigateDown: () => void;
   navigatePageUp: () => void;
   navigatePageDown: () => void;
+  navigateHome: () => void;
+  navigateEnd: () => void;
   selectedTodoId: symbol | undefined;
   setSelectedTodoId: (id: symbol | undefined) => void;
   useSelectedTodo: () => Todo | undefined;
@@ -255,6 +257,30 @@ export const NavigationProvider = (
   const navigatePageUp = () => doNavigate(-5);
   const navigatePageDown = () => doNavigate(5);
 
+  const navigateHome = () => {
+    const firstTodoIndex = indexes.findIndex((entry) =>
+      entry.type === IndexType.todo
+    );
+    if (firstTodoIndex !== -1) {
+      const entry = indexes[firstTodoIndex];
+      if (entry.type === IndexType.todo) {
+        setSelectedTodoId(entry.todo.id);
+      }
+    }
+  };
+
+  const navigateEnd = () => {
+    const lastTodoIndex = indexes.findLastIndex((entry) =>
+      entry.type === IndexType.todo
+    );
+    if (lastTodoIndex !== -1) {
+      const entry = indexes[lastTodoIndex];
+      if (entry.type === IndexType.todo) {
+        setSelectedTodoId(entry.todo.id);
+      }
+    }
+  };
+
   const useSelectedTodo = () => {
     return todos.find((t) => t.id === selectedTodoId);
   };
@@ -269,6 +295,8 @@ export const NavigationProvider = (
         navigateDown,
         navigatePageUp,
         navigatePageDown,
+        navigateHome,
+        navigateEnd,
         selectedTodoId,
         setSelectedTodoId,
         useSelectedTodo,
