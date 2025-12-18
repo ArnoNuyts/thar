@@ -389,3 +389,49 @@ Deno.test(
     unmount();
   },
 );
+
+Deno.test(
+  "should handle home/end keys when search is focused",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = [
+      new Todo("Task A"),
+      new Todo("Task B"),
+      new Todo("Task C"),
+    ];
+
+    let selectedText = "";
+
+    const { unmount, stdin } = render(
+      <TestWrapper initialTodos={todos}>
+        <FocusRequester />
+        <ConnectedSearchInput />
+        <SelectionObserver
+          onSelectionChange={(text) => selectedText = text}
+        />
+      </TestWrapper>,
+    );
+
+    // Wait for load and focus
+    await waitFor(() => {
+      assertEquals(selectedText, "Task A");
+    });
+    await delay(100);
+
+    // Press End key (\u001B[F)
+    stdin.write("\u001B[F");
+
+    await waitFor(() => {
+      assertEquals(selectedText, "Task C");
+    });
+
+    // Press Home key (\u001B[H)
+    stdin.write("\u001B[H");
+
+    await waitFor(() => {
+      assertEquals(selectedText, "Task A");
+    });
+
+    unmount();
+  },
+);

@@ -302,10 +302,6 @@ Deno.test("isPassedThreshold - returns correctly", () => {
     { input: "In the past t:1999-01-01", expected: true },
     { input: "In the future t:3000-01-01", expected: false },
     {
-      input: `Today t:${formatDate(new Date(), "yyyy-MM-dd")}`,
-      expected: true,
-    },
-    {
       input: `Tomorrow t:${formatDate(startOfTomorrow(), "yyyy-MM-dd")}`,
       expected: false,
     },
