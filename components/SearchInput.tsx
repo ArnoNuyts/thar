@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
+import { useInput } from "../hooks/useInput.ts";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
@@ -24,8 +25,14 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
 
   const { isFocused, focus, blur } = useFocusable();
   // Get navigation functions
-  const { navigateUp, navigateDown, navigatePageUp, navigatePageDown } =
-    useNavigation();
+  const {
+    navigateUp,
+    navigateDown,
+    navigatePageUp,
+    navigatePageDown,
+    navigateHome,
+    navigateEnd,
+  } = useNavigation();
   const [cursorPos, setCursorPos] = useState(searchQuery.length);
   const [wordStartIndex, setWordStartIndex] = useState(0);
 
@@ -167,6 +174,14 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
     }
     if (key.pageDown) {
       navigatePageDown();
+      return;
+    }
+    if (key.home) {
+      navigateHome();
+      return;
+    }
+    if (key.end) {
+      navigateEnd();
       return;
     }
 

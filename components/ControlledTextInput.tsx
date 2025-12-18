@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { Text, useInput, useStdin } from "ink";
+import { useEffect, useState } from "react";
+import { Text } from "ink";
 import chalk from "chalk";
-import { Buffer } from "node:buffer";
+import { useInput } from "../hooks/useInput.ts";
 
 interface ControlledTextInputProps {
   value: string;
@@ -28,28 +28,11 @@ export function ControlledTextInput({
     (originalValue || "").length,
   );
 
-  // Track the last raw key sequence to distinguish backspace from delete
-  // Use ref instead of state to avoid race condition with useInput
-  const lastRawKeyRef = useRef<string>("");
-  const { stdin } = useStdin();
-
   // Use controlled cursor offset if provided, otherwise use internal state
   const cursorOffset = controlledCursorOffset ?? internalCursorOffset;
 
   // Listen to raw stdin to capture actual key sequences
-  useEffect(() => {
-    if (!stdin || !focus) return;
-
-    const handleRawData = (data: Buffer) => {
-      const str = data.toString();
-      lastRawKeyRef.current = str;
-    };
-
-    stdin.on("data", handleRawData);
-    return () => {
-      stdin.off("data", handleRawData);
-    };
-  }, [stdin, focus]);
+  // DELETED: Raw data listener is now handled in custom useInput
 
   // Sync cursor when controlled offset changes
   useEffect(() => {
@@ -126,17 +109,12 @@ export function ControlledTextInput({
           nextCursorOffset = Math.min(originalValue.length, cursorOffset + 1);
         }
       } else if (key.backspace || key.delete) {
-        // On Windows, backspace sends \x7f and delete sends \x1b[3~
-        // Use the raw key sequence to distinguish them
-        const isActualBackspace = lastRawKeyRef.current === "\x7f" ||
-          key.backspace;
-
-        if (isActualBackspace && cursorOffset > 0) {
+        if (key.backspace && cursorOffset > 0) {
           // Backspace: delete character before cursor
           nextValue = originalValue.slice(0, cursorOffset - 1) +
             originalValue.slice(cursorOffset, originalValue.length);
           nextCursorOffset = cursorOffset - 1;
-        } else if (!isActualBackspace && cursorOffset < originalValue.length) {
+        } else if (key.delete && cursorOffset < originalValue.length) {
           // Delete: delete character at cursor
           nextValue = originalValue.slice(0, cursorOffset) +
             originalValue.slice(cursorOffset + 1, originalValue.length);
