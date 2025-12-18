@@ -1,6 +1,8 @@
 import { useRef } from "react";
-import { Key, useInput } from "ink";
 import { useFocusable, UseFocusableOptions } from "./useFocusable.ts";
+import { Key, useInput } from "./useInput.ts";
+
+export type ExtendedKey = Key;
 
 export const useFocusedInput = (
   handler: (input: string, key: Key) => void,
@@ -13,7 +15,7 @@ export const useFocusedInput = (
   useInput((input, key) => {
     if (!isFocused) return;
     handlerRef.current(input, key);
-  });
+  }, { isActive: isFocused });
 
   return { isFocused };
 };

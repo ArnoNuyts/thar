@@ -14,7 +14,8 @@ import {
   subMonths,
   subWeeks,
 } from "date-fns";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
+import { useInput } from "../hooks/useInput.ts";
 import { useEffect, useState } from "react";
 
 interface CalendarProps {

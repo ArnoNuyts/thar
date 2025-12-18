@@ -424,3 +424,70 @@ Deno.test(
     unmount();
   },
 );
+
+Deno.test(
+  "should navigate home (first item)",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("Todo 1"),
+      new Todo("Todo 2"),
+      new Todo("Todo 3"),
+    );
+    // deno-lint-ignore no-explicit-any
+    let navContext: any;
+
+    const { unmount } = render(
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
+    );
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+    });
+
+    navContext.navigateDown();
+    navContext.navigateDown();
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 3");
+    });
+
+    navContext.navigateHome();
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should navigate to end (last item)",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("Todo 1"),
+      new Todo("Todo 2"),
+      new Todo("Todo 3"),
+    );
+    // deno-lint-ignore no-explicit-any
+    let navContext: any;
+
+    const { unmount } = render(
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
+    );
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+    });
+
+    navContext.navigateEnd();
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 3");
+    });
+
+    unmount();
+  },
+);
