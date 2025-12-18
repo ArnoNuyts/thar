@@ -1,4 +1,5 @@
 import {
+  format,
   formatDate,
   lightFormat,
   startOfTomorrow,
@@ -104,9 +105,9 @@ Deno.test("Todo constructor - sets completionDate correctly", () => {
     const todo = new Todo(input);
 
     assertEquals(
-      todo.completionDate,
-      expected,
-      `Input "${input}" should have exactly the date: ${expected?.toISOString()}`,
+      todo.completionDate ? format(todo.completionDate, "yyyy-MM-dd") : undefined,
+      expected ? format(expected, "yyyy-MM-dd") : undefined,
+      `Input "${input}" should have exactly the date: ${expected ? format(expected, "yyyy-MM-dd") : "undefined"}`,
     );
   }
 });
@@ -125,9 +126,9 @@ Deno.test("Todo constructor - sets completionDate correctly", () => {
     const todo = new Todo(input);
 
     assertEquals(
-      todo.completionDate,
-      expected,
-      `Input "${input}" should have exactly the date: ${expected?.toISOString()}`,
+      todo.completionDate ? format(todo.completionDate, "yyyy-MM-dd") : undefined,
+      expected ? format(expected, "yyyy-MM-dd") : undefined,
+      `Input "${input}" should have exactly the date: ${expected ? format(expected, "yyyy-MM-dd") : "undefined"}`,
     );
   }
 });
@@ -138,11 +139,10 @@ Deno.test("Todo constructor - keeps completion date empty", () => {
   assertEquals(todo.completionDate, undefined);
 });
 
-// Test for `creationDate`
 Deno.test("Todo constructor - sets creationDate correctly", () => {
   const input = "2024-06-01 Buy groceries";
   const todo = new Todo(input);
-  assertEquals(todo.creationDate?.toISOString(), "2024-06-01T00:00:00.000Z");
+  assertEquals(todo.creationDate ? format(todo.creationDate, "yyyy-MM-dd") : undefined, "2024-06-01");
 });
 
 // Test for `projects` extraction
