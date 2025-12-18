@@ -1,3 +1,14 @@
+import {
+  addDays,
+  addMonths,
+  addWeeks,
+  addYears,
+  format,
+  isBefore,
+  isSameDay,
+  parseISO,
+  startOfDay,
+} from "date-fns";
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
 
@@ -48,11 +59,11 @@ export class Todo {
     if (match?.groups) {
       this._completionDate =
         match.groups.creationDate && match.groups.completionDate
-          ? new Date(match.groups.completionDate)
+          ? parseISO(match.groups.completionDate)
           : undefined;
       this._creationDate =
         match.groups.creationDate || match.groups.completionDate
-          ? new Date(match.groups.creationDate || match.groups.completionDate)
+          ? parseISO(match.groups.creationDate || match.groups.completionDate)
           : undefined;
       this._priority = match.groups.prio as UpperCaseLetter;
       text = match.groups.rest as string;
@@ -82,23 +93,23 @@ export class Todo {
       if (match) {
         const amount = parseInt(match[1]);
         const unit = match[2];
-        const newDueDate = new Date();
+        let newDueDate = new Date();
         /*if (this._tags.due) {
-          newDueDate = new Date(this._tags.due as string);
+          newDueDate = parseISO(this._tags.due as string);
         }*/
 
         switch (unit) {
           case "d":
-            newDueDate.setDate(newDueDate.getDate() + amount);
+            newDueDate = addDays(newDueDate, amount);
             break;
           case "w":
-            newDueDate.setDate(newDueDate.getDate() + amount * 7);
+            newDueDate = addWeeks(newDueDate, amount);
             break;
           case "m":
-            newDueDate.setMonth(newDueDate.getMonth() + amount);
+            newDueDate = addMonths(newDueDate, amount);
             break;
           case "y":
-            newDueDate.setFullYear(newDueDate.getFullYear() + amount);
+            newDueDate = addYears(newDueDate, amount);
             break;
         }
         newTodo.setDue(newDueDate);
@@ -111,10 +122,10 @@ export class Todo {
     return (this.isDone() ? "x " : "") +
       (this._priority ? `(${this._priority}) ` : "") +
       (this._completionDate
-        ? this._completionDate!.toISOString().substring(0, 10) + " "
+        ? format(this._completionDate, "yyyy-MM-dd") + " "
         : "") +
       (this._creationDate
-        ? this._creationDate!.toISOString().substring(0, 10) + " "
+        ? format(this._creationDate, "yyyy-MM-dd") + " "
         : "") +
       this._text +
       (Object.keys(this._tags).length > 0 ? " " : "") +
@@ -149,13 +160,18 @@ export class Todo {
   }
 
   isOverdue() {
-    return typeof this._tags.due === "string" &&
-      new Date() > new Date(this._tags.due);
+    if (typeof this._tags.due !== "string") return false;
+    const dueDate = startOfDay(parseISO(this._tags.due));
+    const today = startOfDay(new Date());
+    // isOverdue returns true if today >= dueDate
+    return isSameDay(today, dueDate) || isBefore(dueDate, today);
   }
 
   isPassedThreshold() {
-    return typeof this._tags.t !== "string" ||
-      new Date() >= new Date(this._tags.t);
+    if (typeof this._tags.t !== "string") return true;
+    const thresholdDate = startOfDay(parseISO(this._tags.t));
+    const today = startOfDay(new Date());
+    return isSameDay(today, thresholdDate) || isBefore(thresholdDate, today);
   }
 
   setText(text: string) {
@@ -192,6 +208,7 @@ export class Todo {
       }
       text = text.replace(tag[0], "");
     }
+    this._tags = { ...this._tags }; // Trigger state update if needed, though here it's fine
     this._text = text.trim();
   }
 
@@ -204,17 +221,11 @@ export class Todo {
   }
 
   setDue(date: Date): void {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    this._tags.due = `${year}-${month}-${day}`;
+    this._tags.due = format(date, "yyyy-MM-dd");
   }
 
   setThreshold(date: Date): void {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    this._tags.t = `${year}-${month}-${day}`;
+    this._tags.t = format(date, "yyyy-MM-dd");
   }
 
   removeDue(): void {
