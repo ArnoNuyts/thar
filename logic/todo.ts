@@ -208,7 +208,7 @@ export class Todo {
       }
       text = text.replace(tag[0], "");
     }
-    this._tags = { ...this._tags }; // Trigger state update if needed, though here it's fine
+    this._text = text.trim();
     this._text = text.trim();
   }
 
