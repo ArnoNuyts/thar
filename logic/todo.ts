@@ -19,7 +19,7 @@ const CONTEXT_REGEX = /(^|\s)\@(?<name>[\w.\_\-]+)/g;
 const TAG_REGEX = /(^|\s)(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
 
 export class Todo {
-  readonly id = Symbol();
+  readonly id: symbol;
   private _text: string = "";
   private _state: TodoStateEnum = TodoStateEnum.todo;
   private _completionDate: undefined | Date;
@@ -55,6 +55,7 @@ export class Todo {
   }
 
   constructor(text: string) {
+    this.id = Symbol();
     const match = text.match(TODO_REGEX);
     if (match?.groups) {
       this._completionDate =
@@ -69,24 +70,40 @@ export class Todo {
       text = match.groups.rest as string;
       this._state = match.groups.done ? TodoStateEnum.done : TodoStateEnum.todo;
     }
-    this.setText(text);
+    this.internalParseText(text);
   }
-  toggleState() {
-    this._state = this._state == TodoStateEnum.todo
+
+  private clone(): Todo {
+    const next = Object.create(Todo.prototype);
+    Object.assign(next, this);
+    next._projects = new Set(this._projects);
+    next._contexts = new Set(this._contexts);
+    next._tags = { ...this._tags };
+    for (const key in next._tags) {
+      if (Array.isArray(next._tags[key])) {
+        next._tags[key] = [...(next._tags[key] as string[])];
+      }
+    }
+    return next;
+  }
+
+  toggleState(): { updated: Todo; recurring?: Todo } {
+    const next = this.clone();
+    next._state = next._state == TodoStateEnum.todo
       ? TodoStateEnum.done
       : TodoStateEnum.todo;
-    if (this._state === TodoStateEnum.done && this._creationDate) {
-      this._completionDate = new Date();
+    if (next._state === TodoStateEnum.done && next._creationDate) {
+      next._completionDate = new Date();
     }
-    if (this._state === TodoStateEnum.todo && this._completionDate) {
-      this._completionDate = undefined;
+    if (next._state === TodoStateEnum.todo && next._completionDate) {
+      next._completionDate = undefined;
     }
 
-    if (this._state === TodoStateEnum.done && this._tags.rec) {
-      const recurrence = this._tags.rec as string;
-      const newTodo = new Todo(this.toString());
-      newTodo._state = TodoStateEnum.todo;
-      newTodo._completionDate = undefined;
+    if (next._state === TodoStateEnum.done && next._tags.rec) {
+      const recurrence = next._tags.rec as string;
+      let newTodo = new Todo(next.toString());
+      newTodo = newTodo.setState(TodoStateEnum.todo);
+      newTodo = newTodo.setCompletionDate(undefined);
 
       const regex = /(\d+)([dwmy])/;
       const match = recurrence.match(regex);
@@ -112,11 +129,13 @@ export class Todo {
             newDueDate = addYears(newDueDate, amount);
             break;
         }
-        newTodo.setDue(newDueDate);
+        newTodo = newTodo.setDue(newDueDate);
       }
 
-      return newTodo;
+      return { updated: next, recurring: newTodo };
     }
+
+    return { updated: next };
   }
   toString() {
     return (this.isDone() ? "x " : "") +
@@ -131,20 +150,28 @@ export class Todo {
       (Object.keys(this._tags).length > 0 ? " " : "") +
       (Object.keys(this._tags).map((k) => k + ":" + this._tags[k]).join(" "));
   }
-  setPriority(key?: UpperCaseLetter) {
-    this._priority = key;
+  setPriority(key?: UpperCaseLetter): Todo {
+    const next = this.clone();
+    next._priority = key;
+    return next;
   }
 
-  setCreationDate(date: Date) {
-    this._creationDate = date;
+  setCreationDate(date: Date): Todo {
+    const next = this.clone();
+    next._creationDate = date;
+    return next;
   }
 
-  setCompletionDate(date: Date | undefined) {
-    this._completionDate = date;
+  setCompletionDate(date: Date | undefined): Todo {
+    const next = this.clone();
+    next._completionDate = date;
+    return next;
   }
 
-  setState(state: TodoStateEnum) {
-    this._state = state;
+  setState(state: TodoStateEnum): Todo {
+    const next = this.clone();
+    next._state = state;
+    return next;
   }
 
   isDone() {
@@ -174,7 +201,13 @@ export class Todo {
     return isSameDay(today, thresholdDate) || isBefore(thresholdDate, today);
   }
 
-  setText(text: string) {
+  setText(text: string): Todo {
+    const next = this.clone();
+    next.internalParseText(text);
+    return next;
+  }
+
+  private internalParseText(text: string) {
     this._projects.clear();
 
     const matchProjects = text.matchAll(PROJECT_REGEX);
@@ -193,7 +226,7 @@ export class Todo {
       switch (typeof this._tags[tag.groups!.key]) {
         case "object":
           this._tags[tag.groups!.key] = [
-            ...this._tags[tag.groups!.key],
+            ...(this._tags[tag.groups!.key] as string[]),
             tag.groups!.value,
           ];
           break;
@@ -211,36 +244,50 @@ export class Todo {
     this._text = text.trim();
   }
 
-  setRecurrence(recurrence: string): void {
-    this._tags.rec = recurrence;
+  setRecurrence(recurrence: string): Todo {
+    const next = this.clone();
+    next._tags.rec = recurrence;
+    return next;
   }
 
-  removeRecurrence(): void {
-    delete this._tags.rec;
+  removeRecurrence(): Todo {
+    const next = this.clone();
+    delete next._tags.rec;
+    return next;
   }
 
-  setDue(date: Date): void {
-    this._tags.due = format(date, "yyyy-MM-dd");
+  setDue(date: Date): Todo {
+    const next = this.clone();
+    next._tags.due = format(date, "yyyy-MM-dd");
+    return next;
   }
 
-  setThreshold(date: Date): void {
-    this._tags.t = format(date, "yyyy-MM-dd");
+  setThreshold(date: Date): Todo {
+    const next = this.clone();
+    next._tags.t = format(date, "yyyy-MM-dd");
+    return next;
   }
 
-  removeDue(): void {
-    delete this._tags.due;
+  removeDue(): Todo {
+    const next = this.clone();
+    delete next._tags.due;
+    return next;
   }
 
-  removeThreshold(): void {
-    delete this._tags.t;
+  removeThreshold(): Todo {
+    const next = this.clone();
+    delete next._tags.t;
+    return next;
   }
 
-  toggleHidden(): void {
-    if (this._tags.h && this._tags.h !== "0") {
-      delete this._tags.h;
+  toggleHidden(): Todo {
+    const next = this.clone();
+    if (next._tags.h && next._tags.h !== "0") {
+      delete next._tags.h;
     } else {
-      this._tags.h = "1";
+      next._tags.h = "1";
     }
+    return next;
   }
 
   getHash(): string {
