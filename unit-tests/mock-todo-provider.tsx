@@ -38,7 +38,6 @@ export const MockTodoProvider = ({
     setTodos(nextTodos);
   };
 
-
   const addTodo = (text: string): Todo => {
     pushHistory();
     const newTodo = new Todo(text).setCreationDate(new Date());
@@ -75,13 +74,13 @@ export const MockTodoProvider = ({
       // In MockTodoProvider, updateTodo calls pushHistory.
       // In real provider, I removed pushHistory from toggleTodo start, and let sub-calls handle it or handle it manually.
       // Here I added pushHistory at the start.
-      
+
       // If I call updateTodo below:
       /*
       updateTodo(todo, updated);
       */
       // It calls pushHistory(). So double push.
-      
+
       // Let's remove pushHistory() from here and match real provider logic roughly.
       setTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
     }

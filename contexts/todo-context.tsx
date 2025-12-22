@@ -189,11 +189,10 @@ export const TodoProvider = ({
     updateTodo(todo, updated);
   };
 
-
   const archiveCompletedTodos = async () => {
     const completedTodos = todos.filter((t: Todo) => t.isDone());
     if (completedTodos.length === 0) return;
-    
+
     pushHistory();
 
     // Append to done.txt
@@ -216,7 +215,6 @@ export const TodoProvider = ({
     const remainingTodos = todos.filter((t: Todo) => !t.isDone());
     setTodos(new Todos(...remainingTodos));
   };
-
 
   return (
     <TodoContext.Provider
