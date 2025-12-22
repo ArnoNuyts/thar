@@ -7,6 +7,7 @@ import { copyToClipboard } from "../logic/clipboard.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
+import { useTodo } from "../contexts/todo-context.tsx";
 import { IndexType } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
 import { IndexEntry } from "../logic/indexes.ts";
@@ -108,19 +109,7 @@ const ContextTitle = memo(
   },
 );
 
-interface TodoListProps {
-  toggleTodo: (todo: Todo) => void;
-  deleteTodo: (todo: Todo) => void;
-  archiveCompletedTodos: () => Promise<void>;
-  refreshTodos: () => void;
-}
-
-export const TodoList = ({
-  toggleTodo,
-  deleteTodo,
-  archiveCompletedTodos,
-  refreshTodos,
-}: TodoListProps) => {
+export const TodoList = () => {
   const { exit } = useApp();
   const {
     indexes,
@@ -138,6 +127,8 @@ export const TodoList = ({
   const { openModal } = useModal();
   const { showToaster } = useToaster();
   const { focusRef } = useSearch();
+  const { toggleTodo, deleteTodo, archiveCompletedTodos, updateTodo } =
+    useTodo();
 
   const todo = useSelectedTodo();
 
@@ -207,12 +198,10 @@ export const TodoList = ({
     } else if (["A", "B", "C", "D", "E", "F"].includes(input)) {
       if (todo) {
         const newPriority = input.toUpperCase() as UpperCaseLetter;
-        if (todo.priority === newPriority) {
-          todo.setPriority(undefined);
-        } else {
-          todo.setPriority(newPriority);
-        }
-        refreshTodos();
+        const updatedTodo = todo.priority === newPriority
+          ? todo.setPriority(undefined)
+          : todo.setPriority(newPriority);
+        updateTodo(todo, updatedTodo);
       }
     }
   }, { autoFocus: true });

@@ -16,10 +16,13 @@ export const MockTodoProvider = ({
   const { showToaster } = useToaster();
 
   const addTodo = (text: string): Todo => {
-    const newTodo = new Todo(text);
-    newTodo.setCreationDate(new Date());
+    const newTodo = new Todo(text).setCreationDate(new Date());
     setTodos(new Todos(...todos, newTodo));
     return newTodo;
+  };
+
+  const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
+    setTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
   };
 
   const refreshTodos = () => {
@@ -32,18 +35,20 @@ export const MockTodoProvider = ({
   };
 
   const toggleTodo = (todo: Todo) => {
-    const recurring = todo.toggleState();
+    const { updated, recurring } = todo.toggleState();
     if (recurring) {
-      setTodos(new Todos(...todos, recurring));
+      setTodos(
+        new Todos(...todos.map((t) => (t === todo ? updated : t)), recurring),
+      );
       showToaster("Recurring todo created");
     } else {
-      setTodos(new Todos(...todos));
+      updateTodo(todo, updated);
     }
   };
 
   const toggleHidden = (todo: Todo) => {
-    todo.toggleHidden();
-    setTodos(new Todos(...todos));
+    const updated = todo.toggleHidden();
+    updateTodo(todo, updated);
   };
 
   const archiveCompletedTodos = () => {
@@ -59,6 +64,7 @@ export const MockTodoProvider = ({
         todos,
         setTodos,
         addTodo,
+        updateTodo,
         refreshTodos,
         deleteTodo,
         toggleTodo,

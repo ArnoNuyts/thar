@@ -19,6 +19,7 @@ interface TodoContextType {
   todos: Todos;
   setTodos: (todos: Todos) => void;
   addTodo: (text: string) => Todo;
+  updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
   refreshTodos: () => void;
   deleteTodo: (todo: Todo) => void;
   toggleTodo: (todo: Todo) => void;
@@ -115,15 +116,16 @@ export const TodoProvider = ({
   }, [filename]);
 
   const addTodo = (text: string): Todo => {
-    const newTodo = new Todo(text);
-    newTodo.setCreationDate(new Date());
+    const newTodo = new Todo(text).setCreationDate(new Date());
     setTodos(new Todos(...todos, newTodo));
     return newTodo;
   };
 
+  const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
+    setTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
+  };
+
   const refreshTodos = () => {
-    // Since Todo objects are mutable and we are likely modifying the instance directly before calling this,
-    // we just need to trigger a re-render and save.
     setTodos(new Todos(...todos));
   };
 
@@ -133,19 +135,21 @@ export const TodoProvider = ({
   };
 
   const toggleTodo = (todo: Todo) => {
-    const recurring = todo.toggleState();
+    const { updated, recurring } = todo.toggleState();
 
     if (recurring) {
-      setTodos(new Todos(...todos, recurring));
+      setTodos(
+        new Todos(...todos.map((t) => (t === todo ? updated : t)), recurring),
+      );
       showToaster("Recurring todo created");
     } else {
-      setTodos(new Todos(...todos));
+      updateTodo(todo, updated);
     }
   };
 
   const toggleHidden = (todo: Todo) => {
-    todo.toggleHidden();
-    setTodos(new Todos(...todos));
+    const updated = todo.toggleHidden();
+    updateTodo(todo, updated);
   };
 
   const archiveCompletedTodos = async () => {
@@ -179,6 +183,7 @@ export const TodoProvider = ({
         todos,
         setTodos,
         addTodo,
+        updateTodo,
         refreshTodos,
         deleteTodo,
         toggleTodo,

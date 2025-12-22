@@ -342,10 +342,10 @@ Deno.test("toggleState - sets state correctly", () => {
 
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
-    todo.toggleState();
+    const { updated } = todo.toggleState();
 
     assertEquals(
-      todo.state,
+      updated.state,
       expected,
       `Input "${input}" should have exactly the state: ${expected}`,
     );
@@ -362,10 +362,10 @@ Deno.test("toggleHidden - sets hidden correctly", () => {
 
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
-    todo.toggleHidden();
+    const updated = todo.toggleHidden();
 
     assertEquals(
-      todo.isHidden(),
+      updated.isHidden(),
       expected,
       `Input "${input}" should be: ${expected}`,
     );
@@ -381,10 +381,10 @@ Deno.test("setPriority - sets priority correctly", () => {
 
   for (const { text, input, expected } of testCases) {
     const todo = new Todo(text);
-    todo.setPriority(input);
+    const updated = todo.setPriority(input);
 
     assertEquals(
-      todo.priority,
+      updated.priority,
       expected,
       `Input "${input}" should be: ${expected}`,
     );
@@ -403,10 +403,10 @@ Deno.test("setDue - sets correctly", () => {
 
   for (const { text, input, expected } of testCases) {
     const todo = new Todo(text);
-    todo.setDue(input);
+    const updated = todo.setDue(input);
 
     assertEquals(
-      todo.tags.due,
+      updated.tags.due,
       expected,
       `Input "${input}" should be: ${expected}`,
     );
@@ -425,10 +425,10 @@ Deno.test("setThreshold - sets correctly", () => {
 
   for (const { text, input, expected } of testCases) {
     const todo = new Todo(text);
-    todo.setThreshold(input);
+    const updated = todo.setThreshold(input);
 
     assertEquals(
-      todo.tags.t,
+      updated.tags.t,
       expected,
       `Input "${input}" should be: ${expected}`,
     );
@@ -439,10 +439,10 @@ Deno.test("Todo toString - puts completion date before creation date", () => {
   const creationDate = new Date("2023-01-01");
   const completionDate = new Date("2023-01-02");
 
-  const todo = new Todo("Test task");
-  todo.setCreationDate(creationDate);
-  todo.setCompletionDate(completionDate);
-  todo.setState(TodoStateEnum.done);
+  let todo = new Todo("Test task");
+  todo = todo.setCreationDate(creationDate);
+  todo = todo.setCompletionDate(completionDate);
+  todo = todo.setState(TodoStateEnum.done);
 
   const str = todo.toString();
 
@@ -463,10 +463,10 @@ Deno.test("setRecurrence - sets correctly", () => {
 
   for (const { text, input, expected } of testCases) {
     const todo = new Todo(text);
-    todo.setRecurrence(input);
+    const updated = todo.setRecurrence(input);
 
     assertEquals(
-      todo.tags.rec,
+      updated.tags.rec,
       expected,
       `Input "${input}" should be: ${expected}`,
     );
@@ -482,10 +482,10 @@ Deno.test("removeRecurrence - removes correctly", () => {
 
   for (const { text, expectedHasRec } of testCases) {
     const todo = new Todo(text);
-    todo.removeRecurrence();
+    const updated = todo.removeRecurrence();
 
     assertEquals(
-      todo.tags.rec !== undefined,
+      updated.tags.rec !== undefined,
       expectedHasRec,
       `After removing recurrence, todo "${text}" should have rec: ${expectedHasRec}`,
     );
@@ -494,11 +494,11 @@ Deno.test("removeRecurrence - removes correctly", () => {
 
 Deno.test("removeRecurrence - preserves other tags", () => {
   const todo = new Todo("todo rec:1d due:2024-01-01 t:2024-01-01");
-  todo.removeRecurrence();
+  const updated = todo.removeRecurrence();
 
-  assertEquals(todo.tags.rec, undefined);
-  assertEquals(todo.tags.due, "2024-01-01");
-  assertEquals(todo.tags.t, "2024-01-01");
+  assertEquals(updated.tags.rec, undefined);
+  assertEquals(updated.tags.due, "2024-01-01");
+  assertEquals(updated.tags.t, "2024-01-01");
 });
 
 Deno.test("Todo constructor - trims leading and trailing whitespace", () => {
@@ -544,12 +544,12 @@ Deno.test("Todo setText - trims leading and trailing whitespace", () => {
   ];
 
   for (const { input, expected } of testCases) {
-    todo.setText(input);
+    const updated = todo.setText(input);
 
     assertEquals(
-      todo.text,
+      updated.text,
       expected,
-      `setText("${input}") should result in trimmed text: "${expected}", got: "${todo.text}"`,
+      `setText("${input}") should result in trimmed text: "${expected}", got: "${updated.text}"`,
     );
   }
 });
