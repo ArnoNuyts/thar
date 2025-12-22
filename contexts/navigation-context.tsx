@@ -238,7 +238,19 @@ export const NavigationProvider = (
       while (indexes[newSelectedRow]?.type === IndexType.context) {
         newSelectedRow += direction;
         if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
-          newSelectedRow = selectedRow;
+          if (direction === -1) {
+            const firstTodoIndex = indexes.findIndex((e) =>
+              e.type === IndexType.todo
+            );
+            newSelectedRow = firstTodoIndex !== -1
+              ? firstTodoIndex
+              : selectedRow;
+          } else {
+            const lastTodoIndex = indexes.findLastIndex((e) =>
+              e.type === IndexType.todo
+            );
+            newSelectedRow = lastTodoIndex !== -1 ? lastTodoIndex : selectedRow;
+          }
           break;
         }
       }
