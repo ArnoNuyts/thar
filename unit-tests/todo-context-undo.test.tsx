@@ -32,7 +32,6 @@ function setupMocks() {
     return "";
   };
 
-
   // deno-lint-ignore no-explicit-any
   (Deno as any).writeTextFile = async () => {
     await delay(0);
@@ -114,17 +113,17 @@ Deno.test({
     // 4. Multiple actions
     currentApi!.addTodo("Todo 2");
     await waitFor(() => assertEquals(currentApi!.todos.length, 2));
-    
+
     currentApi!.undo(); // back to [Todo 1]
     await waitFor(() => assertEquals(currentApi!.todos.length, 1));
-    
+
     currentApi!.undo(); // back to []
     await waitFor(() => assertEquals(currentApi!.todos.length, 0));
-    
+
     currentApi!.redo(); // back to [Todo 1]
     await waitFor(() => assertEquals(currentApi!.todos.length, 1));
     assertEquals(currentApi!.todos[0].text, "Todo 1");
-    
+
     currentApi!.redo(); // back to [Todo 1, Todo 2]
     await waitFor(() => assertEquals(currentApi!.todos.length, 2));
     assertEquals(currentApi!.todos[1].text, "Todo 2");
@@ -132,11 +131,11 @@ Deno.test({
     // 5. New action clears redo stack
     currentApi!.undo(); // back to [Todo 1]
     await waitFor(() => assertEquals(currentApi!.todos.length, 1));
-    
+
     currentApi!.addTodo("Todo 3"); // Redo stack (which had Todo 2) should be cleared
     await waitFor(() => assertEquals(currentApi!.todos.length, 2));
     assertEquals(currentApi!.todos[1].text, "Todo 3");
-    
+
     currentApi!.redo(); // should do nothing
     await delay(100);
     assertEquals(currentApi!.todos.length, 2);
