@@ -25,8 +25,7 @@ import { SearchInput } from "./components/SearchInput.tsx";
 
 const AppContent = () => {
   const { activeModal, modalData } = useModal();
-  const { todos, toggleTodo, deleteTodo, archiveCompletedTodos, refreshTodos } =
-    useTodo();
+  const { todos } = useTodo();
 
   return (
     <>
@@ -37,12 +36,7 @@ const AppContent = () => {
         justifyContent="space-between"
       >
         <SearchInput todos={todos} />
-        <TodoList
-          toggleTodo={toggleTodo}
-          deleteTodo={deleteTodo}
-          archiveCompletedTodos={archiveCompletedTodos}
-          refreshTodos={refreshTodos}
-        />
+        <TodoList />
         <ActionBar />
       </Box>
       {activeModal === "create-todo" && <CreateTodoModal />}

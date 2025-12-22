@@ -41,8 +41,8 @@ x 2025-12-07 2025-12-05 +bug Issue with input going one or two chars too long in
 x 2025-12-07 2025-12-05 +bug suggestions in edit modal stay visible after space is inserted @v0.2
 x 2025-12-08 2025-12-08 Add reset recurring todo in todo menu @v0.3
 x 2025-12-08 2025-12-08 Trim todo's to avoid spaces at the end (result of tags / projects) @v0.3
-2025-12-10 When deleting todo: select next one instead of jumping to the first todo in the list @v0.3
+x 2025-12-22 2025-12-10 When deleting todo: select next one instead of jumping to the first todo in the list @v0.3
 x (C) 2025-12-22 2025-12-10 When navigation up and down take one extra line in the screenview. This way we will see the upper context when going back up. @v0.3
 2025-12-10 What to do with multiline todos? @v0.3
-2025-12-12 Make Todo.js immutable -> that way it is easier for react to know it needs to update. @v0.3
+x 2025-12-22 2025-12-12 Make Todo.js immutable -> that way it is easier for react to know it needs to update. @v0.3
 x 2025-12-22 2025-12-16 Implement home / end for navigation @v0.3

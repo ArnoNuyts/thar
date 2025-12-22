@@ -22,7 +22,7 @@ interface SetDateModalProps {
 
 export const SetDateModal = ({ type }: SetDateModalProps) => {
   const { closeModal } = useModal();
-  const { refreshTodos } = useTodo();
+  const { updateTodo } = useTodo();
   const { useSelectedTodo } = useNavigation();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -66,12 +66,10 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
         setIsCustom(true);
       } else if (selected.value === "reset") {
         if (todo) {
-          if (type === "due") {
-            todo.removeDue();
-          } else {
-            todo.removeThreshold();
-          }
-          refreshTodos();
+          const updatedTodo = type === "due"
+            ? todo.removeDue()
+            : todo.removeThreshold();
+          updateTodo(todo, updatedTodo);
           closeModal();
         }
       } else {
@@ -90,12 +88,10 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
             break;
         }
         if (todo) {
-          if (type === "due") {
-            todo.setDue(date);
-          } else {
-            todo.setThreshold(date);
-          }
-          refreshTodos();
+          const updatedTodo = type === "due"
+            ? todo.setDue(date)
+            : todo.setThreshold(date);
+          updateTodo(todo, updatedTodo);
         }
         closeModal();
       }
@@ -119,12 +115,10 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
 
   const handleCustomSubmit = (date: Date) => {
     if (todo) {
-      if (type === "due") {
-        todo.setDue(date);
-      } else {
-        todo.setThreshold(date);
-      }
-      refreshTodos();
+      const updatedTodo = type === "due"
+        ? todo.setDue(date)
+        : todo.setThreshold(date);
+      updateTodo(todo, updatedTodo);
       closeModal();
     }
   };

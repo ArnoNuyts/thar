@@ -192,8 +192,8 @@ Deno.test(
     );
 
     // Mutate Todo 2
-    todo2.setText("Todo 2 Updated");
-    const newTodos = new Todos(todo1, todo2, todo3);
+    const updatedTodo2 = todo2.setText("Todo 2 Updated");
+    const newTodos = new Todos(todo1, updatedTodo2, todo3);
 
     // Re-render
     rerender(
@@ -365,9 +365,9 @@ Deno.test(
       assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
     });
 
-    // Change Priority (mutating in place)
-    todo2.setPriority("A");
-    const newTodos = new Todos(todo1, todo2, todo3);
+    // Change Priority
+    const updatedTodo2 = todo2.setPriority("A");
+    const newTodos = new Todos(todo1, updatedTodo2, todo3);
 
     // Re-render
     rerender(
@@ -405,9 +405,9 @@ Deno.test(
       assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
     });
 
-    // Toggle completion (mutating in place)
-    todo2.toggleState();
-    const newTodos = new Todos(todo1, todo2, todo3);
+    // Toggle completion
+    const { updated: updatedTodo2 } = todo2.toggleState();
+    const newTodos = new Todos(todo1, updatedTodo2, todo3);
 
     // Re-render
     rerender(
