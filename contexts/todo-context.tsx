@@ -25,6 +25,10 @@ interface TodoContextType {
   toggleTodo: (todo: Todo) => void;
   toggleHidden: (todo: Todo) => void;
   archiveCompletedTodos: () => Promise<void>;
+  undo: () => void;
+  canUndo: boolean;
+  redo: () => void;
+  canRedo: boolean;
 }
 
 export const TodoContext = createContext<TodoContextType | undefined>(
@@ -47,6 +51,8 @@ export const TodoProvider = ({
   children?: React.ReactNode;
 }) => {
   const [todos, setTodos] = useState<Todos>(new Todos());
+  const [history, setHistory] = useState<Todos[]>([]);
+  const [redoStack, setRedoStack] = useState<Todos[]>([]);
   const { showToaster } = useToaster();
   const justReadFileFlag = useRef(false);
   const lastWriteTimeRef = useRef(0);
@@ -56,6 +62,8 @@ export const TodoProvider = ({
     readTodosFromFile(filename).then((initialTodos) => {
       justReadFileFlag.current = true;
       setTodos(new Todos(...initialTodos));
+      setHistory([]);
+      setRedoStack([]);
     });
   }, [filename]);
 
@@ -91,6 +99,8 @@ export const TodoProvider = ({
       justReadFileFlag.current = true;
       const todosFromFile = await readTodosFromFile(filename);
       setTodos(new Todos(...todosFromFile));
+      setHistory([]);
+      setRedoStack([]);
       showToaster("File reloaded");
     }, 500);
 
@@ -115,13 +125,38 @@ export const TodoProvider = ({
     };
   }, [filename]);
 
+  const pushHistory = () => {
+    setHistory((prev) => [...prev, todos]);
+    setRedoStack([]);
+  };
+
+  const undo = () => {
+    if (history.length === 0) return;
+    const previousTodos = history[history.length - 1];
+    setHistory((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [...prev, todos]);
+    setTodos(previousTodos);
+    showToaster("Undo successful");
+  };
+
+  const redo = () => {
+    if (redoStack.length === 0) return;
+    const nextTodos = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, -1));
+    setHistory((prev) => [...prev, todos]);
+    setTodos(nextTodos);
+    showToaster("Redo successful");
+  };
+
   const addTodo = (text: string): Todo => {
+    pushHistory();
     const newTodo = new Todo(text).setCreationDate(new Date());
     setTodos(new Todos(...todos, newTodo));
     return newTodo;
   };
 
   const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
+    pushHistory();
     setTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
   };
 
@@ -130,11 +165,13 @@ export const TodoProvider = ({
   };
 
   const deleteTodo = (todo: Todo) => {
+    pushHistory();
     const newTodos = todos.filter((t: Todo) => t !== todo);
     setTodos(new Todos(...newTodos));
   };
 
   const toggleTodo = (todo: Todo) => {
+    pushHistory();
     const { updated, recurring } = todo.toggleState();
 
     if (recurring) {
@@ -143,7 +180,7 @@ export const TodoProvider = ({
       );
       showToaster("Recurring todo created");
     } else {
-      updateTodo(todo, updated);
+      setTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
     }
   };
 
@@ -152,9 +189,12 @@ export const TodoProvider = ({
     updateTodo(todo, updated);
   };
 
+
   const archiveCompletedTodos = async () => {
     const completedTodos = todos.filter((t: Todo) => t.isDone());
     if (completedTodos.length === 0) return;
+    
+    pushHistory();
 
     // Append to done.txt
     // Assuming done.txt is in the same directory as the main file
@@ -177,6 +217,7 @@ export const TodoProvider = ({
     setTodos(new Todos(...remainingTodos));
   };
 
+
   return (
     <TodoContext.Provider
       value={{
@@ -189,6 +230,10 @@ export const TodoProvider = ({
         toggleTodo,
         toggleHidden,
         archiveCompletedTodos,
+        undo,
+        canUndo: history.length > 0,
+        redo,
+        canRedo: redoStack.length > 0,
       }}
     >
       {children}
