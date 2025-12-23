@@ -35,74 +35,94 @@ const NavigationTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
   return <Text>Tester</Text>;
 };
 
-Deno.test("Multi-selection: Shift+Down from first item selects both first and second", {
+Deno.test(
+  "Multi-selection: Shift+Down from first item selects both first and second",
+  {
     sanitizeResources: false,
     sanitizeOps: false,
-}, async () => {
-  const todos = new Todos(new Todo("Todo 1"), new Todo("Todo 2"), new Todo("Todo 3"));
-  let navContext: any;
-  const { unmount } = render(<TestWrapper todos={todos} onContext={c => navContext = c} />);
-  
-  await waitFor(() => assertEquals(navContext.useSelectedTodo()?.text, "Todo 1"));
-  
-  navContext.navigateDown(true);
-  
-  await waitFor(() => {
-     assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
-     assertEquals(navContext.selectedTodoIds.size, 2);
-  });
+  },
+  async () => {
+    const todos = new Todos(
+      new Todo("Todo 1"),
+      new Todo("Todo 2"),
+      new Todo("Todo 3"),
+    );
+    let navContext: any;
+    const { unmount } = render(
+      <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
+    );
 
-  unmount();
-});
+    await waitFor(() =>
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+    );
 
-Deno.test("Multi-selection: Shift+Up from second item selects both first and second", {
+    navContext.navigateDown(true);
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
+      assertEquals(navContext.selectedTodoIds.size, 2);
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "Multi-selection: Shift+Up from second item selects both first and second",
+  {
     sanitizeResources: false,
     sanitizeOps: false,
-}, async () => {
-  const todos = new Todos(new Todo("1"), new Todo("2"), new Todo("3"));
-  let navContext: any;
-  const { unmount } = render(<TestWrapper todos={todos} onContext={c => navContext = c} />);
-  
-  await waitFor(() => assertEquals(navContext.useSelectedTodo()?.text, "1"));
-  
-  navContext.navigateDown(false); 
-  await waitFor(() => assertEquals(navContext.useSelectedTodo()?.text, "2"));
+  },
+  async () => {
+    const todos = new Todos(new Todo("1"), new Todo("2"), new Todo("3"));
+    let navContext: any;
+    const { unmount } = render(
+      <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
+    );
 
-  navContext.navigateUp(true); 
-  
-  await waitFor(() => {
-     assertEquals(navContext.useSelectedTodo()?.text, "1");
-     assertEquals(navContext.selectedTodoIds.size, 2);
-  });
-  
-  unmount();
-});
+    await waitFor(() => assertEquals(navContext.useSelectedTodo()?.text, "1"));
+
+    navContext.navigateDown(false);
+    await waitFor(() => assertEquals(navContext.useSelectedTodo()?.text, "2"));
+
+    navContext.navigateUp(true);
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "1");
+      assertEquals(navContext.selectedTodoIds.size, 2);
+    });
+
+    unmount();
+  },
+);
 
 Deno.test("Multi-selection: Moving without shift clears selection", {
-    sanitizeResources: false,
-    sanitizeOps: false,
+  sanitizeResources: false,
+  sanitizeOps: false,
 }, async () => {
   const todos = new Todos(new Todo("1"), new Todo("2"), new Todo("3"));
   let navContext: any;
-  const { unmount } = render(<TestWrapper todos={todos} onContext={c => navContext = c} />);
-  
+  const { unmount } = render(
+    <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
+  );
+
   await waitFor(() => assertEquals(navContext.useSelectedTodo()?.text, "1"));
-  
-  navContext.navigateDown(true); 
+
+  navContext.navigateDown(true);
   await waitFor(() => assertEquals(navContext.selectedTodoIds.size, 2));
-  
-  navContext.navigateDown(false); 
+
+  navContext.navigateDown(false);
   await waitFor(() => {
-     assertEquals(navContext.useSelectedTodo()?.text, "3");
-     assertEquals(navContext.selectedTodoIds.size, 0);
+    assertEquals(navContext.useSelectedTodo()?.text, "3");
+    assertEquals(navContext.selectedTodoIds.size, 0);
   });
-  
+
   unmount();
 });
 
 Deno.test("Multi-selection: Selection across context headers works", {
-    sanitizeResources: false,
-    sanitizeOps: false,
+  sanitizeResources: false,
+  sanitizeOps: false,
 }, async () => {
   // Use names that don't reorder if possible, or expect reordered
   // Home (H) comes before Work (W)
@@ -111,61 +131,69 @@ Deno.test("Multi-selection: Selection across context headers works", {
     new Todo("A @Work"),
   );
   let navContext: any;
-  const { unmount } = render(<TestWrapper todos={todos} onContext={c => navContext = c} />);
-  
-  await waitFor(() => assertEquals(navContext.useSelectedTodo()?.text, "B @Home"));
-  
+  const { unmount } = render(
+    <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
+  );
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "B @Home")
+  );
+
   navContext.navigateDown(true);
-  
+
   await waitFor(() => {
-     assertEquals(navContext.useSelectedTodo()?.text, "A @Work");
-     assertEquals(navContext.selectedTodoIds.size, 2);
+    assertEquals(navContext.useSelectedTodo()?.text, "A @Work");
+    assertEquals(navContext.selectedTodoIds.size, 2);
   });
-  
+
   unmount();
 });
 
 Deno.test("Multi-selection: Continuous Shift+Down expands range", {
-    sanitizeResources: false,
-    sanitizeOps: false,
+  sanitizeResources: false,
+  sanitizeOps: false,
 }, async () => {
   const todos = new Todos(new Todo("1"), new Todo("2"), new Todo("3"));
   let navContext: any;
-  const { unmount } = render(<TestWrapper todos={todos} onContext={c => navContext = c} />);
-  
+  const { unmount } = render(
+    <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
+  );
+
   await waitFor(() => assertEquals(navContext.useSelectedTodo()?.text, "1"));
-  
-  navContext.navigateDown(true); 
+
+  navContext.navigateDown(true);
   await waitFor(() => assertEquals(navContext.selectedTodoIds.size, 2));
-  
-  navContext.navigateDown(true); 
+
+  navContext.navigateDown(true);
   await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "3");
-      assertEquals(navContext.selectedTodoIds.size, 3);
+    assertEquals(navContext.useSelectedTodo()?.text, "3");
+    assertEquals(navContext.selectedTodoIds.size, 3);
   });
-  
+
   unmount();
 });
 
 Deno.test("Multi-selection: Pressing Esc clears selection", {
-    sanitizeResources: false,
-    sanitizeOps: false,
+  sanitizeResources: false,
+  sanitizeOps: false,
 }, async () => {
   const todos = new Todos(new Todo("1"), new Todo("2"), new Todo("3"));
   let navContext: any;
-  const { unmount, stdin } = render(<TestWrapper todos={todos} onContext={c => navContext = c} />);
-  
+  const { unmount, stdin } = render(
+    <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
+  );
+
   await waitFor(() => assertEquals(navContext.useSelectedTodo()?.text, "1"));
-  
+
   navContext.navigateDown(true); // 1, 2 selected
   await waitFor(() => assertEquals(navContext.selectedTodoIds.size, 2));
-  
-  // Simulate Esc key press (\x1b is Escape) 
-  // Actually, useFocusedInput handles key.escape. 
+
+  // Simulate Esc key press (\x1b is Escape)
+  // Actually, useFocusedInput handles key.escape.
   // We can call a function from navContext or simulate the key if we were testing TodoList.
-  // Since this test tests NavigationProvider directly via navContext calls, 
+  // Since this test tests NavigationProvider directly via navContext calls,
   // I should check if I added clearMultiSelect to navContext.
-  
+
   if (navContext.clearMultiSelect) {
     navContext.clearMultiSelect();
   } else {
@@ -175,9 +203,9 @@ Deno.test("Multi-selection: Pressing Esc clears selection", {
   }
 
   await waitFor(() => {
-     assertEquals(navContext.selectedTodoIds.size, 0);
-     assertEquals(navContext.useSelectedTodo()?.text, "2"); // Cursor should stay at 2
+    assertEquals(navContext.selectedTodoIds.size, 0);
+    assertEquals(navContext.useSelectedTodo()?.text, "2"); // Cursor should stay at 2
   });
-  
+
   unmount();
 });

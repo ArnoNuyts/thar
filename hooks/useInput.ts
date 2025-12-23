@@ -185,7 +185,7 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
         key.home = name === "home";
         key.end = name === "end";
         key.delete = name === "delete";
-        
+
         // Check for Shift+Arrow keys
         if (["\x1b[1;2A", "\x1b[1;2B", "\x1b[1;2C", "\x1b[1;2D"].includes(s)) {
           key.shift = true;
