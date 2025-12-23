@@ -123,6 +123,8 @@ export const TodoList = () => {
     navigateEnd,
     setSelectedTodoId,
     useSelectedTodo,
+    toggleShowHidden,
+    showHidden,
   } = useNavigation();
 
   const { openModal } = useModal();
@@ -245,6 +247,10 @@ export const TodoList = () => {
           copyToClipboard(todo.toString());
           showToaster("Todo copied");
         }
+        break;
+      case "h":
+        toggleShowHidden();
+        showToaster(showHidden ? "Hidden todos hidden" : "Hidden todos shown");
         break;
       default:
         if (["A", "B", "C", "D", "E", "F"].includes(input)) {

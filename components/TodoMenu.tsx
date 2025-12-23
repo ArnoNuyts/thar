@@ -21,7 +21,8 @@ export type MenuAction =
   | "copy"
   | "undo"
   | "redo"
-  | "paste";
+  | "paste"
+  | "toggle-view-hidden";
 
 interface MenuItem {
   label: string;
@@ -38,6 +39,7 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Set Recurrence", shortcut: "r", action: "recurrence" },
   { label: "Set Priority", shortcut: "p", action: "priority" },
   { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
+  { label: "Show/Hide Hidden", shortcut: "H", action: "toggle-view-hidden" },
   { label: "Archive Completed", shortcut: "a", action: "archive" },
   { label: "Copy", shortcut: "c", action: "copy" },
   { label: "Undo", shortcut: "z", action: "undo" },
@@ -56,7 +58,7 @@ export const TodoMenu = () => {
     redo,
     addTodos,
   } = useTodo();
-  const { useSelectedTodo, setSelectedTodoId } = useNavigation();
+  const { useSelectedTodo, setSelectedTodoId, toggleShowHidden } = useNavigation();
   const { showToaster } = useToaster();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -100,6 +102,10 @@ export const TodoMenu = () => {
           toggleHidden(todo);
           closeModal();
         }
+        break;
+      case "toggle-view-hidden":
+        toggleShowHidden();
+        closeModal();
         break;
       case "archive":
         openModal("confirm-modal", {
@@ -227,6 +233,10 @@ export const TodoMenu = () => {
 
       if (input === "h") {
         handleAction("toggle-hidden");
+      }
+
+      if (input === "H") {
+        handleAction("toggle-view-hidden");
       }
 
       if (input === "a") {

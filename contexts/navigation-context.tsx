@@ -30,6 +30,8 @@ interface NavigationContextType {
   selectedTodoId: symbol | undefined;
   setSelectedTodoId: (id: symbol | undefined) => void;
   useSelectedTodo: () => Todo | undefined;
+  showHidden: boolean;
+  toggleShowHidden: () => void;
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(
@@ -49,6 +51,9 @@ export const NavigationProvider = (
   const [selectedTodoId, setSelectedTodoId] = useState<symbol | undefined>(
     undefined,
   );
+  const [showHidden, setShowHidden] = useState(false);
+
+  const toggleShowHidden = () => setShowHidden((prev) => !prev);
 
   // Search bar takes 2 rows (content + border) when visible
   // Search bar is visible when focused OR has query
@@ -57,7 +62,11 @@ export const NavigationProvider = (
     (stdout.rows - 2 - (searchBarVisible ? 2 : 0));
 
   const indexes: IndexEntry[] = useMemo(() => {
-    let filteredTodos = todos.sortByImportance().filterHidden();
+    let filteredTodos = todos.sortByImportance();
+
+    if (!showHidden) {
+      filteredTodos = filteredTodos.filterHidden();
+    }
 
     // Apply search filter if query exists
     if (searchQuery.trim()) {
@@ -81,7 +90,7 @@ export const NavigationProvider = (
       );
     }
     return createIndexes(filteredTodos);
-  }, [todos, searchQuery]);
+  }, [todos, searchQuery, showHidden]);
 
   // Track last selected hash to handle file reloads
   const lastSelectedHash = useRef<string | undefined>(undefined);
@@ -355,6 +364,8 @@ export const NavigationProvider = (
         selectedTodoId,
         setSelectedTodoId,
         useSelectedTodo,
+        showHidden,
+        toggleShowHidden,
       }}
     >
       {children}
