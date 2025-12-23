@@ -20,11 +20,14 @@ interface TodoContextType {
   setTodos: (todos: Todos) => void;
   addTodo: (text: string) => Todo;
   updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
-  refreshTodos: () => void;
   deleteTodo: (todo: Todo) => void;
   toggleTodo: (todo: Todo) => void;
   toggleHidden: (todo: Todo) => void;
   archiveCompletedTodos: () => Promise<void>;
+  undo: () => void;
+  canUndo: boolean;
+  redo: () => void;
+  canRedo: boolean;
 }
 
 export const TodoContext = createContext<TodoContextType | undefined>(
@@ -47,6 +50,8 @@ export const TodoProvider = ({
   children?: React.ReactNode;
 }) => {
   const [todos, setTodos] = useState<Todos>(new Todos());
+  const [history, setHistory] = useState<Todos[]>([]);
+  const [redoStack, setRedoStack] = useState<Todos[]>([]);
   const { showToaster } = useToaster();
   const justReadFileFlag = useRef(false);
   const lastWriteTimeRef = useRef(0);
@@ -56,6 +61,8 @@ export const TodoProvider = ({
     readTodosFromFile(filename).then((initialTodos) => {
       justReadFileFlag.current = true;
       setTodos(new Todos(...initialTodos));
+      setHistory([]);
+      setRedoStack([]);
     });
   }, [filename]);
 
@@ -78,6 +85,11 @@ export const TodoProvider = ({
     saveTodos(todos);
   }, [todos, saveTodos]);
 
+  const pushHistory = () => {
+    setHistory((prev) => [...prev, todos]);
+    setRedoStack([]);
+  };
+
   // Watcher effect
   useEffect(() => {
     let watcher: Deno.FsWatcher | undefined;
@@ -91,6 +103,8 @@ export const TodoProvider = ({
       justReadFileFlag.current = true;
       const todosFromFile = await readTodosFromFile(filename);
       setTodos(new Todos(...todosFromFile));
+      setHistory([]);
+      setRedoStack([]);
       showToaster("File reloaded");
     }, 500);
 
@@ -115,26 +129,50 @@ export const TodoProvider = ({
     };
   }, [filename]);
 
+  const undo = () => {
+    if (history.length === 0) return;
+    const previousTodos = history[history.length - 1];
+
+    // We need to save current state to redo stack before undoing
+    setRedoStack((prev) => [...prev, todos]);
+
+    setTodos(previousTodos);
+    setHistory((prev) => prev.slice(0, -1));
+    showToaster("Undo successful");
+  };
+
+  const redo = () => {
+    if (redoStack.length === 0) return;
+    const nextTodos = redoStack[redoStack.length - 1];
+
+    // We need to save current state to history before redoing
+    setHistory((prev) => [...prev, todos]);
+
+    setRedoStack((prev) => prev.slice(0, -1));
+    setTodos(nextTodos);
+    showToaster("Redo successful");
+  };
+
   const addTodo = (text: string): Todo => {
+    pushHistory();
     const newTodo = new Todo(text).setCreationDate(new Date());
     setTodos(new Todos(...todos, newTodo));
     return newTodo;
   };
 
   const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
+    pushHistory();
     setTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
   };
 
-  const refreshTodos = () => {
-    setTodos(new Todos(...todos));
-  };
-
   const deleteTodo = (todo: Todo) => {
+    pushHistory();
     const newTodos = todos.filter((t: Todo) => t !== todo);
     setTodos(new Todos(...newTodos));
   };
 
   const toggleTodo = (todo: Todo) => {
+    pushHistory();
     const { updated, recurring } = todo.toggleState();
 
     if (recurring) {
@@ -143,16 +181,18 @@ export const TodoProvider = ({
       );
       showToaster("Recurring todo created");
     } else {
-      updateTodo(todo, updated);
+      setTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
     }
   };
 
   const toggleHidden = (todo: Todo) => {
+    // pushHistory is handled in updateTodo
     const updated = todo.toggleHidden();
     updateTodo(todo, updated);
   };
 
   const archiveCompletedTodos = async () => {
+    pushHistory();
     const completedTodos = todos.filter((t: Todo) => t.isDone());
     if (completedTodos.length === 0) return;
 
@@ -184,11 +224,14 @@ export const TodoProvider = ({
         setTodos,
         addTodo,
         updateTodo,
-        refreshTodos,
         deleteTodo,
         toggleTodo,
         toggleHidden,
         archiveCompletedTodos,
+        undo,
+        canUndo: history.length > 0,
+        redo,
+        canRedo: redoStack.length > 0,
       }}
     >
       {children}

@@ -127,62 +127,27 @@ export const TodoList = () => {
   const { openModal } = useModal();
   const { showToaster } = useToaster();
   const { focusRef } = useSearch();
-  const { toggleTodo, deleteTodo, archiveCompletedTodos, updateTodo } =
-    useTodo();
+  const {
+    toggleTodo,
+    deleteTodo,
+    archiveCompletedTodos,
+    updateTodo,
+    undo,
+    redo,
+  } = useTodo();
 
   const todo = useSelectedTodo();
 
   // Handle global shortcuts (only when focused)
   useFocusedInput((input, key: ExtendedKey) => {
-    if (input === "/") {
-      focusRef.current?.();
-      return;
-    }
-
-    if (input === "q") {
-      exit();
-      return;
-    }
-
-    if (key.upArrow) {
-      navigateUp();
-    } else if (key.downArrow) {
-      navigateDown();
-    } else if (key.pageUp) {
-      navigatePageUp();
-    } else if (key.pageDown) {
-      navigatePageDown();
-    } else if (key.home) {
-      navigateHome();
-    } else if (key.end) {
-      navigateEnd();
-    } else if (input === " ") {
-      if (todo) {
-        toggleTodo(todo);
-      }
-    } else if (input === "x") {
-      openModal("todo-menu");
-    } else if (key.return) {
-      openModal("todo-menu");
-    } else if (input === "n") {
-      openModal("create-todo");
-    } else if (input === "e") {
-      if (todo) openModal("edit-todo", todo);
-    } else if (input === "a") {
-      openModal("confirm-modal", {
-        title: "Archive Completed",
-        message: "Archive all completed todos to done.txt?",
-        onConfirm: () => {
-          archiveCompletedTodos();
-        },
-      });
-    } else if (input === "d") {
-      openModal("set-due-date");
-    } else if (input === "t") {
-      openModal("set-threshold-date");
-    } else if (input === "r") {
-      openModal("set-recurrence");
-    } else if (key.delete) {
+    if (key.upArrow) return navigateUp();
+    if (key.downArrow) return navigateDown();
+    if (key.pageUp) return navigatePageUp();
+    if (key.pageDown) return navigatePageDown();
+    if (key.home) return navigateHome();
+    if (key.end) return navigateEnd();
+    if (key.return) return openModal("todo-menu");
+    if (key.delete) {
       if (todo) {
         openModal("confirm-modal", {
           title: "Delete Todo",
@@ -190,19 +155,69 @@ export const TodoList = () => {
           onConfirm: () => deleteTodo(todo),
         });
       }
-    } else if (input === "c") {
-      if (todo) {
-        copyToClipboard(todo.toString());
-        showToaster("Todo copied");
-      }
-    } else if (["A", "B", "C", "D", "E", "F"].includes(input)) {
-      if (todo) {
-        const newPriority = input.toUpperCase() as UpperCaseLetter;
-        const updatedTodo = todo.priority === newPriority
-          ? todo.setPriority(undefined)
-          : todo.setPriority(newPriority);
-        updateTodo(todo, updatedTodo);
-      }
+      return;
+    }
+
+    switch (input) {
+      case "/":
+        focusRef.current?.();
+        break;
+      case "q":
+        exit();
+        break;
+      case " ":
+        if (todo) toggleTodo(todo);
+        break;
+      case "x":
+        openModal("todo-menu");
+        break;
+      case "n":
+        openModal("create-todo");
+        break;
+      case "u":
+        undo();
+        break;
+      case "U":
+        redo();
+        break;
+      case "e":
+        if (todo) openModal("edit-todo", todo);
+        break;
+      case "a":
+        openModal("confirm-modal", {
+          title: "Archive Completed",
+          message: "Archive all completed todos to done.txt?",
+          onConfirm: () => {
+            archiveCompletedTodos();
+          },
+        });
+        break;
+      case "d":
+        openModal("set-due-date");
+        break;
+      case "t":
+        openModal("set-threshold-date");
+        break;
+      case "r":
+        openModal("set-recurrence");
+        break;
+      case "c":
+        if (todo) {
+          copyToClipboard(todo.toString());
+          showToaster("Todo copied");
+        }
+        break;
+      default:
+        if (["A", "B", "C", "D", "E", "F"].includes(input)) {
+          if (todo) {
+            const newPriority = input.toUpperCase() as UpperCaseLetter;
+            const updatedTodo = todo.priority === newPriority
+              ? todo.setPriority(undefined)
+              : todo.setPriority(newPriority);
+            updateTodo(todo, updatedTodo);
+          }
+        }
+        break;
     }
   }, { autoFocus: true });
 
