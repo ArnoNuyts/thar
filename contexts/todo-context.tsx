@@ -125,10 +125,10 @@ export const TodoProvider = ({
     };
   }, [filename]);
 
-  const pushHistory = () => {
-    setHistory((prev) => [...prev, todos]);
+  const pushHistory = useCallback((currentTodos: Todos) => {
+    setHistory((prev) => [...prev, currentTodos]);
     setRedoStack([]);
-  };
+  }, []);
 
   const undo = () => {
     if (history.length === 0) return;
