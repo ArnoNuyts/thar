@@ -15,7 +15,7 @@ import { ExtendedKey } from "../hooks/useFocusedInput.ts";
 
 const renderTodoText = (
   text: string,
-  isSelected: boolean,
+  isHighlighted: boolean,
   isOverdue: boolean,
 ) => {
   const parts = text.split(/(@[^ ]+|\+[^ ]+)/g);
@@ -28,7 +28,7 @@ const renderTodoText = (
     return (
       <Text
         key={i}
-        color={isSelected ? "black" : (isOverdue ? "red" : undefined)}
+        color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}
       >
         {part}
       </Text>
@@ -37,9 +37,10 @@ const renderTodoText = (
 };
 
 const TodoItem = (
-  { todo, isSelected, number, maxDigits }: {
+  { todo, isFocused, isSelectedInRange, number, maxDigits }: {
     todo: Todo;
-    isSelected: boolean;
+    isFocused: boolean;
+    isSelectedInRange: boolean;
     number: number;
     maxDigits: number;
     key?: React.Key;
@@ -55,22 +56,27 @@ const TodoItem = (
   // Pad the number with spaces to align with the maximum number of digits
   const paddedNumber = number.toString().padStart(maxDigits, " ");
 
+  const isHighlighted = isFocused || isSelectedInRange;
+  const backgroundColor = isFocused
+    ? (isOverdue ? "red" : "white")
+    : (isSelectedInRange ? "magenta" : undefined);
+
   return (
     <Box
-      backgroundColor={isSelected ? (isOverdue ? "red" : "white") : undefined}
+      backgroundColor={backgroundColor}
     >
       <Text
         dimColor
-        color={isSelected ? "black" : (isOverdue ? "red" : undefined)}
+        color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}
       >
         {`${paddedNumber} `}
       </Text>
-      <Text color={isSelected ? "black" : (isOverdue ? "red" : undefined)}>
+      <Text color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}>
         {`${checkbox} `}
       </Text>
       {priority && (
         <Text
-          color={isSelected
+          color={isHighlighted
             ? "black"
             : todo.priority === "A"
             ? "cyan"
@@ -89,7 +95,7 @@ const TodoItem = (
           {`${priority} `}
         </Text>
       )}
-      {renderTodoText(todo.text, isSelected, isOverdue)}
+      {renderTodoText(todo.text, isHighlighted, isOverdue)}
       {dueDate && <Text color="red">{` ${dueDate}`}</Text>}
       {threshold && <Text color="yellow">{` ${threshold}`}</Text>}
       {recurrence && <Text color="cyan">{` ${recurrence}`}</Text>}
@@ -125,6 +131,8 @@ export const TodoList = () => {
     useSelectedTodo,
     toggleShowHidden,
     showHidden,
+    selectedTodoIds,
+    clearMultiSelect,
   } = useNavigation();
 
   const { openModal } = useModal();
@@ -134,26 +142,36 @@ export const TodoList = () => {
     toggleTodo,
     toggleHidden,
     deleteTodo,
+    deleteTodos,
     archiveCompletedTodos,
     updateTodo,
     addTodos,
     undo,
     redo,
+    todos,
   } = useTodo();
 
   const todo = useSelectedTodo();
 
   // Handle global shortcuts (only when focused)
   useFocusedInput((input, key: ExtendedKey) => {
-    if (key.upArrow) return navigateUp();
-    if (key.downArrow) return navigateDown();
-    if (key.pageUp) return navigatePageUp();
-    if (key.pageDown) return navigatePageDown();
+    if (key.upArrow) return navigateUp(key.shift);
+    if (key.downArrow) return navigateDown(key.shift);
+    if (key.pageUp) return navigatePageUp(key.shift);
+    if (key.pageDown) return navigatePageDown(key.shift);
     if (key.home) return navigateHome();
     if (key.end) return navigateEnd();
     if (key.return) return openModal("todo-menu");
+    if (key.escape) return clearMultiSelect();
     if (key.delete) {
-      if (todo) {
+      if (selectedTodoIds.size > 0) {
+        const todosToDelete = todos.filter((t) => selectedTodoIds.has(t.id));
+        openModal("confirm-modal", {
+          title: "Delete Todos",
+          message: `Are you sure you want to delete ${todosToDelete.length} todos?`,
+          onConfirm: () => deleteTodos(todosToDelete),
+        });
+      } else if (todo) {
         openModal("confirm-modal", {
           title: "Delete Todo",
           message: "Are you sure you want to delete this todo?",
@@ -320,14 +338,16 @@ export const TodoList = () => {
           const todoNumber = indexes.slice(0, originalIndex + 1).filter(
             (e) => e.type === IndexType.todo,
           ).length;
-          // Check if this specific todo is selected
-          const isSelected = entry.todo === todo;
+          
+          const isFocused = entry.todo === todo;
+          const isSelectedInRange = selectedTodoIds.has(entry.todo.id);
 
           return (
             <TodoItem
               key={originalIndex}
               todo={entry.todo}
-              isSelected={isSelected}
+              isFocused={isFocused}
+              isSelectedInRange={isSelectedInRange}
               number={todoNumber}
               maxDigits={maxDigits}
             />

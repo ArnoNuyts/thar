@@ -21,6 +21,7 @@ interface TodoContextType {
   addTodos: (...texts: string[]) => Todo[];
   updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
   deleteTodo: (todo: Todo) => void;
+  deleteTodos: (todosToDelete: Todo[]) => void;
   toggleTodo: (todo: Todo) => void;
   toggleHidden: (todo: Todo) => void;
   archiveCompletedTodos: () => Promise<void>;
@@ -174,6 +175,13 @@ export const TodoProvider = ({
     setTodos(new Todos(...newTodos));
   };
 
+  const deleteTodos = (todosToDelete: Todo[]) => {
+    pushHistory();
+    const idsToDelete = new Set(todosToDelete.map((t) => t.id));
+    const newTodos = todos.filter((t: Todo) => !idsToDelete.has(t.id));
+    setTodos(new Todos(...newTodos));
+  };
+
   const toggleTodo = (todo: Todo) => {
     pushHistory();
     const { updated, recurring } = todo.toggleState();
@@ -228,6 +236,7 @@ export const TodoProvider = ({
         addTodos,
         updateTodo,
         deleteTodo,
+        deleteTodos,
         toggleTodo,
         toggleHidden,
         archiveCompletedTodos,
