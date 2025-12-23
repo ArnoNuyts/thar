@@ -22,9 +22,13 @@ const renderTodoText = (
   const parts = text.split(/(@[^ ]+|\+[^ ]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith("@")) {
-      return <Text key={i} color={isHighlighted ? "black" : "yellow"}>{part}</Text>;
+      return (
+        <Text key={i} color={isHighlighted ? "black" : "yellow"}>{part}</Text>
+      );
     } else if (part.startsWith("+")) {
-      return <Text key={i} color={isHighlighted ? "black" : "blue"}>{part}</Text>;
+      return (
+        <Text key={i} color={isHighlighted ? "black" : "blue"}>{part}</Text>
+      );
     }
     return (
       <Text
@@ -97,9 +101,15 @@ const TodoItem = (
         </Text>
       )}
       {renderTodoText(todo.text, isHighlighted, isOverdue)}
-      {dueDate && <Text color={isHighlighted ? "black" : "red"}>{` ${dueDate}`}</Text>}
-      {threshold && <Text color={isHighlighted ? "black" : "green"}>{` ${threshold}`}</Text>}
-      {recurrence && <Text color={isHighlighted ? "black" : "cyan"}>{` ${recurrence}`}</Text>}
+      {dueDate && (
+        <Text color={isHighlighted ? "black" : "red"}>{` ${dueDate}`}</Text>
+      )}
+      {threshold && (
+        <Text color={isHighlighted ? "black" : "green"}>{` ${threshold}`}</Text>
+      )}
+      {recurrence && (
+        <Text color={isHighlighted ? "black" : "cyan"}>{` ${recurrence}`}</Text>
+      )}
     </Box>
   );
 };

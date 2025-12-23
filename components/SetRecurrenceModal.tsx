@@ -87,7 +87,9 @@ export const SetRecurrenceModal = () => {
               const isSelected = index === selectedBaseIndex;
               return (
                 <Box key={option.value}>
-                  <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
+                  <Text color={SECONDARY_COLOR}>
+                    {isSelected ? "» " : "  "}
+                  </Text>
                   <Text>{option.label}</Text>
                 </Box>
               );

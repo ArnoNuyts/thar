@@ -134,7 +134,9 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
               const isSelected = index === selectedIndex;
               return (
                 <Box key={option.value}>
-                  <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
+                  <Text color={SECONDARY_COLOR}>
+                    {isSelected ? "» " : "  "}
+                  </Text>
                   <Text>{option.label}</Text>
                 </Box>
               );
