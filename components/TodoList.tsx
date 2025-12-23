@@ -132,6 +132,7 @@ export const TodoList = () => {
   const { focusRef } = useSearch();
   const {
     toggleTodo,
+    toggleHidden,
     deleteTodo,
     archiveCompletedTodos,
     updateTodo,
@@ -249,6 +250,9 @@ export const TodoList = () => {
         }
         break;
       case "h":
+        if (todo) toggleHidden(todo);
+        break;
+      case "H":
         toggleShowHidden();
         showToaster(showHidden ? "Hidden todos hidden" : "Hidden todos shown");
         break;
