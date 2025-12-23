@@ -1,4 +1,3 @@
-2025-11-27 (A) Probably read / write in a loop now. This should be avoided. @v1
-2025-11-27 (B) Loses focus after +Arno
-x 2025-11-27 2025-11-27 Arno due:2025-11-27
-2025-11-27 I don't know! @v1 @v1 +Bugs +Arno
+2025-12-23 Todo 1
+2025-12-23 Todo 2
+2025-12-23 Todo 3

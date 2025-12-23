@@ -30,6 +30,8 @@ interface NavigationContextType {
   selectedTodoId: symbol | undefined;
   setSelectedTodoId: (id: symbol | undefined) => void;
   useSelectedTodo: () => Todo | undefined;
+  showHidden: boolean;
+  toggleShowHidden: () => void;
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(
@@ -49,6 +51,9 @@ export const NavigationProvider = (
   const [selectedTodoId, setSelectedTodoId] = useState<symbol | undefined>(
     undefined,
   );
+  const [showHidden, setShowHidden] = useState(false);
+
+  const toggleShowHidden = () => setShowHidden((prev) => !prev);
 
   // Search bar takes 2 rows (content + border) when visible
   // Search bar is visible when focused OR has query
@@ -57,7 +62,11 @@ export const NavigationProvider = (
     (stdout.rows - 2 - (searchBarVisible ? 2 : 0));
 
   const indexes: IndexEntry[] = useMemo(() => {
-    let filteredTodos = todos.sortByImportance().filterHidden();
+    let filteredTodos = todos.sortByImportance();
+
+    if (!showHidden) {
+      filteredTodos = filteredTodos.filterHidden();
+    }
 
     // Apply search filter if query exists
     if (searchQuery.trim()) {
@@ -81,12 +90,55 @@ export const NavigationProvider = (
       );
     }
     return createIndexes(filteredTodos);
-  }, [todos, searchQuery]);
+  }, [todos, searchQuery, showHidden]);
 
   // Track last selected hash to handle file reloads
   const lastSelectedHash = useRef<string | undefined>(undefined);
   // Track last selected index to handle deletion (select next/prev item)
   const lastSelectedIndex = useRef<number>(0);
+
+  const prevTodos = useRef<Todos>(todos);
+
+  // Guesstimate selection when todos change (e.g. undo/redo, add, toggle)
+  useEffect(() => {
+    if (todos === prevTodos.current) return;
+
+    const oldTodos = prevTodos.current;
+    prevTodos.current = todos;
+
+    const oldIds = new Set(oldTodos.map((t) => t.id));
+    const added = todos.filter((t) => !oldIds.has(t.id));
+
+    if (added.length > 0) {
+      // Find the first added todo that is visible in the current list
+      const firstVisibleAdded = indexes.find((entry) =>
+        entry.type === IndexType.todo &&
+        added.some((a) => a.id === entry.todo.id)
+      );
+      if (firstVisibleAdded && firstVisibleAdded.type === IndexType.todo) {
+        setSelectedTodoId(firstVisibleAdded.todo.id);
+        return;
+      }
+    }
+
+    const modified = todos.filter((t) => {
+      const oldTodo = oldTodos.find((ot) => ot.id === t.id);
+      return oldTodo && oldTodo.getHash() !== t.getHash();
+    });
+
+    if (modified.length > 0) {
+      const firstVisibleModified = indexes.find((entry) =>
+        entry.type === IndexType.todo &&
+        modified.some((m) => m.id === entry.todo.id)
+      );
+      if (
+        firstVisibleModified && firstVisibleModified.type === IndexType.todo
+      ) {
+        setSelectedTodoId(firstVisibleModified.todo.id);
+        return;
+      }
+    }
+  }, [todos, indexes]);
 
   // Update tracking refs whenever selectedTodoId changes and points to a valid todo
   useEffect(() => {
@@ -312,6 +364,8 @@ export const NavigationProvider = (
         selectedTodoId,
         setSelectedTodoId,
         useSelectedTodo,
+        showHidden,
+        toggleShowHidden,
       }}
     >
       {children}

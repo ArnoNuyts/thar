@@ -8,14 +8,23 @@ import { useToaster } from "../contexts/toaster-context.tsx";
 export const MockTodoProvider = ({
   children,
   initialTodos = [],
+  onTodosChange,
 }: {
   children: React.ReactNode;
   initialTodos?: Todo[];
+  onTodosChange?: (todos: Todos) => void;
 }) => {
   const [todos, setTodos] = useState<Todos>(new Todos(...initialTodos));
   const [history, setHistory] = useState<Todos[]>([]);
   const [redoStack, setRedoStack] = useState<Todos[]>([]);
   const { showToaster } = useToaster();
+
+  const updateTodos = (newTodos: Todos) => {
+    setTodos(newTodos);
+    if (onTodosChange) {
+      onTodosChange(newTodos);
+    }
+  };
 
   const pushHistory = () => {
     setHistory((prev) => [...prev, todos]);
@@ -27,7 +36,7 @@ export const MockTodoProvider = ({
     const previousTodos = history[history.length - 1];
     setHistory((prev) => prev.slice(0, -1));
     setRedoStack((prev) => [...prev, todos]);
-    setTodos(previousTodos);
+    updateTodos(previousTodos);
   };
 
   const redo = () => {
@@ -35,38 +44,41 @@ export const MockTodoProvider = ({
     const nextTodos = redoStack[redoStack.length - 1];
     setRedoStack((prev) => prev.slice(0, -1));
     setHistory((prev) => [...prev, todos]);
-    setTodos(nextTodos);
+    updateTodos(nextTodos);
   };
 
-  const addTodo = (text: string): Todo => {
+  const addTodos = (...texts: string[]): Todo[] => {
+    if (texts.length === 0) return [];
     pushHistory();
-    const newTodo = new Todo(text).setCreationDate(new Date());
-    setTodos(new Todos(...todos, newTodo));
-    return newTodo;
+    const newTodos = texts.map((text) =>
+      new Todo(text).setCreationDate(new Date())
+    );
+    updateTodos(new Todos(...todos, ...newTodos));
+    return newTodos;
   };
 
   const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
     pushHistory();
-    setTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
+    updateTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
   };
 
   const deleteTodo = (todo: Todo) => {
     pushHistory();
     const newTodos = todos.filter((t: Todo) => t !== todo);
-    setTodos(new Todos(...newTodos));
+    updateTodos(new Todos(...newTodos));
   };
 
   const toggleTodo = (todo: Todo) => {
     pushHistory();
     const { updated, recurring } = todo.toggleState();
     if (recurring) {
-      setTodos(
+      updateTodos(
         new Todos(...todos.map((t) => (t === todo ? updated : t)), recurring),
       );
       showToaster("Recurring todo created");
     } else {
       // Direct state update to avoid double pushHistory call
-      setTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
+      updateTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
     }
   };
 
@@ -79,7 +91,7 @@ export const MockTodoProvider = ({
   const archiveCompletedTodos = () => {
     pushHistory();
     const remainingTodos = todos.filter((t: Todo) => !t.isDone());
-    setTodos(new Todos(...remainingTodos));
+    updateTodos(new Todos(...remainingTodos));
     // No-op for file writing in mock
     return Promise.resolve();
   };
@@ -88,8 +100,8 @@ export const MockTodoProvider = ({
     <TodoContext.Provider
       value={{
         todos,
-        setTodos,
-        addTodo,
+        setTodos: updateTodos,
+        addTodos,
         updateTodo,
         deleteTodo,
         toggleTodo,

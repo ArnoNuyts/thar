@@ -3,7 +3,7 @@ import { memo, useMemo } from "react";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { Todo } from "../logic/todo.ts";
 import { useModal } from "../contexts/modal-context.tsx";
-import { copyToClipboard } from "../logic/clipboard.ts";
+import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
@@ -121,7 +121,10 @@ export const TodoList = () => {
     navigatePageDown,
     navigateHome,
     navigateEnd,
+    setSelectedTodoId,
     useSelectedTodo,
+    toggleShowHidden,
+    showHidden,
   } = useNavigation();
 
   const { openModal } = useModal();
@@ -129,9 +132,11 @@ export const TodoList = () => {
   const { focusRef } = useSearch();
   const {
     toggleTodo,
+    toggleHidden,
     deleteTodo,
     archiveCompletedTodos,
     updateTodo,
+    addTodos,
     undo,
     redo,
   } = useTodo();
@@ -174,12 +179,49 @@ export const TodoList = () => {
       case "n":
         openModal("create-todo");
         break;
-      case "u":
+      case "z":
         undo();
         break;
-      case "U":
+      case "Z":
         redo();
         break;
+      case "v": {
+        const paste = async () => {
+          try {
+            const text = await readFromClipboard();
+            const lines = text
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0);
+            if (lines.length === 0) return;
+
+            const doPaste = () => {
+              const added = addTodos(...lines);
+              if (added.length > 0) {
+                setSelectedTodoId(added[added.length - 1].id);
+              }
+              showToaster(`Pasted ${lines.length} todo(s)`);
+            };
+
+            if (lines.length > 10) {
+              openModal("confirm-modal", {
+                title: "Paste Multiple Todos",
+                message:
+                  `Are you sure you want to paste ${lines.length} todos?`,
+                onConfirm: doPaste,
+              });
+            } else {
+              doPaste();
+            }
+          } catch (e) {
+            showToaster(
+              `Paste failed: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+        };
+        paste();
+        break;
+      }
       case "e":
         if (todo) openModal("edit-todo", todo);
         break;
@@ -206,6 +248,13 @@ export const TodoList = () => {
           copyToClipboard(todo.toString());
           showToaster("Todo copied");
         }
+        break;
+      case "h":
+        if (todo) toggleHidden(todo);
+        break;
+      case "H":
+        toggleShowHidden();
+        showToaster(showHidden ? "Hidden todos hidden" : "Hidden todos shown");
         break;
       default:
         if (["A", "B", "C", "D", "E", "F"].includes(input)) {

@@ -6,7 +6,7 @@ import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
-import { copyToClipboard } from "../logic/clipboard.ts";
+import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
 
 export type MenuAction =
   | "edit"
@@ -18,7 +18,11 @@ export type MenuAction =
   | "toggle-hidden"
   | "priority"
   | "archive"
-  | "copy";
+  | "copy"
+  | "undo"
+  | "redo"
+  | "paste"
+  | "toggle-view-hidden";
 
 interface MenuItem {
   label: string;
@@ -35,8 +39,12 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Set Recurrence", shortcut: "r", action: "recurrence" },
   { label: "Set Priority", shortcut: "p", action: "priority" },
   { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
+  { label: "Show/Hide Hidden", shortcut: "H", action: "toggle-view-hidden" },
   { label: "Archive Completed", shortcut: "a", action: "archive" },
   { label: "Copy", shortcut: "c", action: "copy" },
+  { label: "Undo", shortcut: "z", action: "undo" },
+  { label: "Redo", shortcut: "Z", action: "redo" },
+  { label: "Paste", shortcut: "v", action: "paste" },
 ];
 
 export const TodoMenu = () => {
@@ -46,30 +54,37 @@ export const TodoMenu = () => {
     toggleTodo,
     toggleHidden,
     archiveCompletedTodos,
+    undo,
+    redo,
+    addTodos,
   } = useTodo();
-  const { useSelectedTodo } = useNavigation();
+  const { useSelectedTodo, setSelectedTodoId, toggleShowHidden } =
+    useNavigation();
   const { showToaster } = useToaster();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const handleAction = (action: MenuAction) => {
-    if (!todo) return;
     switch (action) {
       case "edit":
-        openModal("edit-todo", todo);
+        if (todo) openModal("edit-todo", todo);
         break;
       case "delete":
-        openModal("confirm-modal", {
-          title: "Delete Todo",
-          message: "Are you sure you want to delete this todo?",
-          onConfirm: () => {
-            deleteTodo(todo);
-          },
-        });
+        if (todo) {
+          openModal("confirm-modal", {
+            title: "Delete Todo",
+            message: "Are you sure you want to delete this todo?",
+            onConfirm: () => {
+              deleteTodo(todo);
+            },
+          });
+        }
         break;
       case "toggle":
-        toggleTodo(todo);
-        closeModal();
+        if (todo) {
+          toggleTodo(todo);
+          closeModal();
+        }
         break;
       case "due":
         openModal("set-due-date");
@@ -84,7 +99,13 @@ export const TodoMenu = () => {
         openModal("set-priority");
         break;
       case "toggle-hidden":
-        toggleHidden(todo);
+        if (todo) {
+          toggleHidden(todo);
+          closeModal();
+        }
+        break;
+      case "toggle-view-hidden":
+        toggleShowHidden();
         closeModal();
         break;
       case "archive":
@@ -97,10 +118,62 @@ export const TodoMenu = () => {
         });
         break;
       case "copy":
-        copyToClipboard(todo.toString());
-        showToaster("Todo copied");
+        if (todo) {
+          copyToClipboard(todo.toString());
+          showToaster("Todo copied");
+          closeModal();
+        }
+        break;
+      case "undo":
+        undo();
         closeModal();
         break;
+      case "redo":
+        redo();
+        closeModal();
+        break;
+      case "paste": {
+        const paste = async () => {
+          try {
+            const text = await readFromClipboard();
+            const lines = text
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0);
+            if (lines.length === 0) {
+              closeModal();
+              return;
+            }
+
+            const doPaste = () => {
+              const added = addTodos(...lines);
+              if (added.length > 0) {
+                setSelectedTodoId(added[added.length - 1].id);
+              }
+              showToaster(`Pasted ${lines.length} todo(s)`);
+              closeModal();
+            };
+
+            if (lines.length > 10) {
+              openModal("confirm-modal", {
+                title: "Paste Multiple Todos",
+                message:
+                  `Are you sure you want to paste ${lines.length} todos?`,
+                onConfirm: doPaste,
+              });
+            } else {
+              doPaste();
+            }
+          } catch (e) {
+            showToaster(
+              `Paste failed: ${e instanceof Error ? e.message : String(e)}`,
+            );
+            closeModal();
+          }
+        };
+        paste();
+        break;
+      }
     }
   };
 
@@ -163,12 +236,28 @@ export const TodoMenu = () => {
         handleAction("toggle-hidden");
       }
 
+      if (input === "H") {
+        handleAction("toggle-view-hidden");
+      }
+
       if (input === "a") {
         handleAction("archive");
       }
 
       if (input === "c") {
         handleAction("copy");
+      }
+
+      if (input === "z") {
+        handleAction("undo");
+      }
+
+      if (input === "Z") {
+        handleAction("redo");
+      }
+
+      if (input === "v") {
+        handleAction("paste");
       }
     },
     { autoFocus: true },

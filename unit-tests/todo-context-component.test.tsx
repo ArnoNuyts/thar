@@ -50,12 +50,12 @@ function teardownMocks() {
 }
 
 const App = (
-  { onMount }: { onMount: (add: (text: string) => void) => void },
+  { onMount }: { onMount: (add: (...texts: string[]) => void) => void },
 ) => {
-  const { addTodo } = useTodo();
+  const { addTodos } = useTodo();
   useEffect(() => {
-    onMount(addTodo);
-  }, []);
+    onMount(addTodos);
+  }, [onMount, addTodos]);
   return <Text>App</Text>;
 };
 
@@ -66,11 +66,11 @@ Deno.test({
   async fn() {
     setupMocks();
 
-    let addTodoFn: ((text: string) => void) | undefined;
+    let addTodosFn: ((...texts: string[]) => void) | undefined;
     const { unmount } = render(
       <ToasterProvider>
         <TodoProvider filename="test.txt">
-          <App onMount={(fn) => (addTodoFn = fn)} />
+          <App onMount={(fn) => (addTodosFn = fn)} />
         </TodoProvider>
       </ToasterProvider>,
     );
@@ -84,7 +84,7 @@ Deno.test({
     readCount = 0; // Reset for test
 
     // Trigger add
-    if (addTodoFn) addTodoFn("New Todo");
+    if (addTodosFn) addTodosFn("New Todo");
 
     // Wait for the write to happen
     await waitFor(() => assertEquals(writeCount, 1));

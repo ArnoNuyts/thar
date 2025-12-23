@@ -34,9 +34,9 @@ x 2025-12-05 2025-12-04 Autocomplete has small overlap bug with text "Enter = sa
 x (C) 2025-12-05 2025-12-04 Autocomplete bug with text on secondline @v0.2 +bug
 x 2025-12-05 2025-12-05 Copy todos @v0.2
 x 2025-12-08 2025-12-05 +Toaster: recurrent todo created @v0.3
-2025-12-05 Paste todo(s) @v0.4
-2025-12-05 Undo @v0.4: specially for pasting todo's. Think about archive
-2025-12-05 +Toaster when using undo @v0.4
+x 2025-12-23 2025-12-05 Paste todo(s) @v0.4
+x 2025-12-23 2025-12-05 Undo @v0.4: specially for pasting todo's. Think about archive
+x 2025-12-23 2025-12-05 +Toaster when using undo @v0.4
 x 2025-12-07 2025-12-05 +bug Issue with input going one or two chars too long in edit modal @v0.2
 x 2025-12-07 2025-12-05 +bug suggestions in edit modal stay visible after space is inserted @v0.2
 x 2025-12-08 2025-12-08 Add reset recurring todo in todo menu @v0.3
