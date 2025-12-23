@@ -6,6 +6,7 @@ import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { UpperCaseLetter } from "../types/types.ts";
+import { SECONDARY_COLOR } from "../constants.ts";
 
 const PRIORITIES: (UpperCaseLetter | "Unset")[] = [
   "A",
@@ -69,7 +70,7 @@ export const SetPriorityModal = () => {
           const isSelected = index === selectedIndex;
           return (
             <Box key={option}>
-              <Text color="green">{isSelected ? "» " : "  "}</Text>
+              <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
               <Text>{option}</Text>
             </Box>
           );

@@ -50,3 +50,4 @@ x 2025-12-22 2025-12-16 Implement home / end for navigation @v0.3
 2025-12-23 +Multi-select : set prio @v0.4
 2025-12-23 +Multi-select : toggle state @v0.4
 2025-12-23 +bug after search cancel, should set screen-position to take full advantage of terminal height @v0.4
+2025-12-23 +bug due-color still red even when todo is completed @v0.4

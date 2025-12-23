@@ -7,6 +7,7 @@ import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { Calendar } from "./Calendar.tsx";
 import { format } from "date-fns";
+import { SECONDARY_COLOR } from "../constants.ts";
 
 const BASE_OPTIONS = [
   { label: "Today", value: "today" },
@@ -133,7 +134,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
               const isSelected = index === selectedIndex;
               return (
                 <Box key={option.value}>
-                  <Text color="green">{isSelected ? "» " : "  "}</Text>
+                  <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
                   <Text>{option.label}</Text>
                 </Box>
               );
