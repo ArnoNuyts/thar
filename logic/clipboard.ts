@@ -25,3 +25,29 @@ export async function copyToClipboard(text: string) {
   await writer.close();
   await child.status;
 }
+
+export async function readFromClipboard(): Promise<string> {
+  let command: Deno.Command;
+
+  if (Deno.build.os === "windows") {
+    // Use powershell on Windows
+    command = new Deno.Command("powershell.exe", {
+      args: ["-Command", "Get-Clipboard"],
+      stdout: "piped",
+    });
+  } else if (Deno.build.os === "darwin") {
+    // Use pbpaste on macOS
+    command = new Deno.Command("pbpaste", {
+      stdout: "piped",
+    });
+  } else {
+    // Try xclip on Linux
+    command = new Deno.Command("xclip", {
+      args: ["-selection", "clipboard", "-o"],
+      stdout: "piped",
+    });
+  }
+
+  const { stdout } = await command.output();
+  return new TextDecoder().decode(stdout).trim();
+}
