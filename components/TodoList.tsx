@@ -121,6 +121,7 @@ export const TodoList = () => {
     navigatePageDown,
     navigateHome,
     navigateEnd,
+    setSelectedTodoId,
     useSelectedTodo,
   } = useNavigation();
 
@@ -192,7 +193,10 @@ export const TodoList = () => {
             if (lines.length === 0) return;
 
             const doPaste = () => {
-              addTodos(...lines);
+              const added = addTodos(...lines);
+              if (added.length > 0) {
+                setSelectedTodoId(added[added.length - 1].id);
+              }
               showToaster(`Pasted ${lines.length} todo(s)`);
             };
 
