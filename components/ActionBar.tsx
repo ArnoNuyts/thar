@@ -20,10 +20,7 @@ export const ActionBar = () => {
           { key: "q", text: "Quit" },
           { key: "n", text: "New" },
           { key: "e", text: "Edit" },
-          { key: "u", text: "Undo" },
-          { key: "U", text: "Redo" },
           { key: "/", text: "Search" },
-          { key: "a", text: "Archive" },
         ].map((item) => {
           return (
             <Fragment key={item.key}>
