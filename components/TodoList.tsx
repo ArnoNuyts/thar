@@ -199,14 +199,17 @@ export const TodoList = () => {
             if (lines.length > 10) {
               openModal("confirm-modal", {
                 title: "Paste Multiple Todos",
-                message: `Are you sure you want to paste ${lines.length} todos?`,
+                message:
+                  `Are you sure you want to paste ${lines.length} todos?`,
                 onConfirm: doPaste,
               });
             } else {
               doPaste();
             }
           } catch (e) {
-            showToaster(`Paste failed: ${e instanceof Error ? e.message : String(e)}`);
+            showToaster(
+              `Paste failed: ${e instanceof Error ? e.message : String(e)}`,
+            );
           }
         };
         paste();
