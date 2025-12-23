@@ -40,8 +40,8 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
   { label: "Archive Completed", shortcut: "a", action: "archive" },
   { label: "Copy", shortcut: "c", action: "copy" },
-  { label: "Undo", shortcut: "u", action: "undo" },
-  { label: "Redo", shortcut: "U", action: "redo" },
+  { label: "Undo", shortcut: "z", action: "undo" },
+  { label: "Redo", shortcut: "Z", action: "redo" },
   { label: "Paste", shortcut: "v", action: "paste" },
 ];
 
@@ -237,11 +237,11 @@ export const TodoMenu = () => {
         handleAction("copy");
       }
 
-      if (input === "u") {
+      if (input === "z") {
         handleAction("undo");
       }
 
-      if (input === "U") {
+      if (input === "Z") {
         handleAction("redo");
       }
 

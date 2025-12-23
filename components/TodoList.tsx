@@ -176,10 +176,10 @@ export const TodoList = () => {
       case "n":
         openModal("create-todo");
         break;
-      case "u":
+      case "z":
         undo();
         break;
-      case "U":
+      case "Z":
         redo();
         break;
       case "v": {
