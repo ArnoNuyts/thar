@@ -18,7 +18,7 @@ import { useToaster } from "./toaster-context.tsx";
 interface TodoContextType {
   todos: Todos;
   setTodos: (todos: Todos) => void;
-  addTodo: (text: string) => Todo;
+  addTodos: (...texts: string[]) => Todo[];
   updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
   deleteTodo: (todo: Todo) => void;
   toggleTodo: (todo: Todo) => void;
@@ -153,11 +153,14 @@ export const TodoProvider = ({
     showToaster("Redo successful");
   };
 
-  const addTodo = (text: string): Todo => {
+  const addTodos = (...texts: string[]): Todo[] => {
+    if (texts.length === 0) return [];
     pushHistory();
-    const newTodo = new Todo(text).setCreationDate(new Date());
-    setTodos(new Todos(...todos, newTodo));
-    return newTodo;
+    const newTodos = texts.map((text) =>
+      new Todo(text).setCreationDate(new Date())
+    );
+    setTodos(new Todos(...todos, ...newTodos));
+    return newTodos;
   };
 
   const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
@@ -222,7 +225,7 @@ export const TodoProvider = ({
       value={{
         todos,
         setTodos,
-        addTodo,
+        addTodos,
         updateTodo,
         deleteTodo,
         toggleTodo,
