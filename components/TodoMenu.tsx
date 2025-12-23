@@ -150,7 +150,8 @@ export const TodoMenu = () => {
             if (lines.length > 10) {
               openModal("confirm-modal", {
                 title: "Paste Multiple Todos",
-                message: `Are you sure you want to paste ${lines.length} todos?`,
+                message:
+                  `Are you sure you want to paste ${lines.length} todos?`,
                 onConfirm: doPaste,
               });
             } else {
