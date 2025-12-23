@@ -179,7 +179,11 @@ Deno.test(
   "SearchInput: should auto-select first item when current selection is filtered out",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = [new Todo("Apples"), new Todo("Bananas"), new Todo("Cherries")];
+    const todos = [
+      new Todo("Apples"),
+      new Todo("Bananas"),
+      new Todo("Cherries"),
+    ];
     let selectedText = "";
 
     const { unmount } = render(
