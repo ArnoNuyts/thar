@@ -103,7 +103,8 @@ export const NavigationProvider = (
     if (added.length > 0) {
       // Find the first added todo that is visible in the current list
       const firstVisibleAdded = indexes.find((entry) =>
-        entry.type === IndexType.todo && added.some((a) => a.id === entry.todo.id)
+        entry.type === IndexType.todo &&
+        added.some((a) => a.id === entry.todo.id)
       );
       if (firstVisibleAdded && firstVisibleAdded.type === IndexType.todo) {
         setSelectedTodoId(firstVisibleAdded.todo.id);

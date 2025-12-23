@@ -42,15 +42,18 @@ Deno.test(
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2");
     const todo3 = new Todo("Todo 3");
-    
+
     // Initial state: 1 and 3 (2 was deleted)
     const initialTodos = new Todos(todo1, todo3);
-    
+
     // deno-lint-ignore no-explicit-any
     let navContext: any;
 
     const { rerender, unmount } = render(
-      <TestWrapper todos={initialTodos} onContext={(ctx) => navContext = ctx} />,
+      <TestWrapper
+        todos={initialTodos}
+        onContext={(ctx) => navContext = ctx}
+      />,
     );
 
     // Currently Todo 1 is selected by default
@@ -60,9 +63,12 @@ Deno.test(
 
     // Undo delete: Restore Todo 2
     const restoredTodos = new Todos(todo1, todo2, todo3);
-    
+
     rerender(
-      <TestWrapper todos={restoredTodos} onContext={(ctx) => navContext = ctx} />,
+      <TestWrapper
+        todos={restoredTodos}
+        onContext={(ctx) => navContext = ctx}
+      />,
     );
 
     // Should now select Todo 2 because it was "added" (restored)
@@ -80,15 +86,18 @@ Deno.test(
   async () => {
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2");
-    
+
     // Initial state: Select Todo 1
     const initialTodos = new Todos(todo1, todo2);
-    
+
     // deno-lint-ignore no-explicit-any
     let navContext: any;
 
     const { rerender, unmount } = render(
-      <TestWrapper todos={initialTodos} onContext={(ctx) => navContext = ctx} />,
+      <TestWrapper
+        todos={initialTodos}
+        onContext={(ctx) => navContext = ctx}
+      />,
     );
 
     await waitFor(() =>
@@ -104,7 +113,7 @@ Deno.test(
     // Undo edit on Todo 1 (while Todo 2 is selected)
     const undoEditedTodo1 = todo1.setText("Todo 1 Original");
     const undidTodos = new Todos(undoEditedTodo1, todo2);
-    
+
     rerender(
       <TestWrapper todos={undidTodos} onContext={(ctx) => navContext = ctx} />,
     );
@@ -124,12 +133,15 @@ Deno.test(
   async () => {
     const todo1 = new Todo("Todo 1");
     const initialTodos = new Todos(todo1);
-    
+
     // deno-lint-ignore no-explicit-any
     let navContext: any;
 
     const { rerender, unmount } = render(
-      <TestWrapper todos={initialTodos} onContext={(ctx) => navContext = ctx} />,
+      <TestWrapper
+        todos={initialTodos}
+        onContext={(ctx) => navContext = ctx}
+      />,
     );
 
     await waitFor(() =>
@@ -139,7 +151,7 @@ Deno.test(
     // Add new todo
     const todo2 = new Todo("New Todo");
     const newTodos = new Todos(todo1, todo2);
-    
+
     rerender(
       <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
     );
