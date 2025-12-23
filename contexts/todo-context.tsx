@@ -130,14 +130,13 @@ export const TodoProvider = ({
     };
   }, [filename]);
 
-
   const undo = () => {
     if (history.length === 0) return;
     const previousTodos = history[history.length - 1];
-    
+
     // We need to save current state to redo stack before undoing
     setRedoStack((prev) => [...prev, todos]);
-    
+
     setTodos(previousTodos);
     setHistory((prev) => prev.slice(0, -1));
     showToaster("Undo successful");
@@ -146,10 +145,10 @@ export const TodoProvider = ({
   const redo = () => {
     if (redoStack.length === 0) return;
     const nextTodos = redoStack[redoStack.length - 1];
-    
+
     // We need to save current state to history before redoing
     setHistory((prev) => [...prev, todos]);
-    
+
     setRedoStack((prev) => prev.slice(0, -1));
     setTodos(nextTodos);
     showToaster("Redo successful");

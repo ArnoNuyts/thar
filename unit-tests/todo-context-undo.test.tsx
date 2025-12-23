@@ -246,16 +246,22 @@ Deno.test({
     // 2. Update todo (First Edit)
     const todoV2 = todoV1.setText("Todo 1 Updated");
     currentApi!.updateTodo(todoV1, todoV2);
-    await waitFor(() => assertEquals(currentApi!.todos[0].text, "Todo 1 Updated"));
+    await waitFor(() =>
+      assertEquals(currentApi!.todos[0].text, "Todo 1 Updated")
+    );
 
     // 3. Update todo (Second Edit)
     const todoV3 = todoV2.setText("Todo 1 Updated Again");
     currentApi!.updateTodo(todoV2, todoV3);
-    await waitFor(() => assertEquals(currentApi!.todos[0].text, "Todo 1 Updated Again"));
+    await waitFor(() =>
+      assertEquals(currentApi!.todos[0].text, "Todo 1 Updated Again")
+    );
 
     // 4. Undo Second Edit -> Should be "Todo 1 Updated"
     currentApi!.undo();
-    await waitFor(() => assertEquals(currentApi!.todos[0].text, "Todo 1 Updated"));
+    await waitFor(() =>
+      assertEquals(currentApi!.todos[0].text, "Todo 1 Updated")
+    );
 
     // 5. Undo First Edit -> Should be "Todo 1"
     currentApi!.undo();
