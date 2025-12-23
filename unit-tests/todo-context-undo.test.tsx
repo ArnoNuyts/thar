@@ -3,6 +3,7 @@ import { render } from "ink-testing-library";
 import { Text } from "ink";
 import { TodoProvider, useTodo } from "../contexts/todo-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import { Todo } from "../logic/todo.ts";
 import { assertEquals } from "@std/assert";
 import { delay } from "@std/async";
 
@@ -47,6 +48,7 @@ const UndoTestApp = (
     onUpdate: (
       api: {
         addTodo: (text: string) => void;
+        updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
         undo: () => void;
         redo: () => void;
         // deno-lint-ignore no-explicit-any
@@ -55,15 +57,16 @@ const UndoTestApp = (
     ) => void;
   },
 ) => {
-  const { addTodo, undo, redo, todos } = useTodo();
+  const { addTodo, updateTodo, undo, redo, todos } = useTodo();
   useEffect(() => {
     onUpdate({
       addTodo,
+      updateTodo,
       undo,
       redo,
       todos,
     });
-  }, [addTodo, undo, redo, todos, onUpdate]);
+  }, [addTodo, updateTodo, undo, redo, todos, onUpdate]);
   return <Text>UndoTestApp</Text>;
 };
 
@@ -198,6 +201,65 @@ Deno.test({
     currentApi!.undo();
     await delay(100);
     assertEquals(currentApi!.todos.length, 0);
+
+    unmount();
+    mockWatcher.close();
+    teardownMocks();
+  },
+});
+
+Deno.test({
+  name: "TodoContext: should handle multiple updates correctly",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    setupMocks();
+
+    let currentApi: {
+      addTodo: (text: string) => void;
+      updateTodo: (oldTodo: any, newTodo: any) => void;
+      undo: () => void;
+      // deno-lint-ignore no-explicit-any
+      todos: any[];
+    } | undefined;
+
+    const { unmount } = render(
+      <ToasterProvider>
+        <TodoProvider filename="test.txt">
+          <UndoTestApp onUpdate={(api) => (currentApi = api)} />
+        </TodoProvider>
+      </ToasterProvider>,
+    );
+
+    // Wait for initial load
+    await waitFor(() => {
+      if (!currentApi) throw new Error("API not ready");
+      if (readCount === 0) throw new Error("File not loaded yet");
+    });
+
+    // 1. Add todo
+    currentApi!.addTodo("Todo 1");
+    await waitFor(() => assertEquals(currentApi!.todos.length, 1));
+    const todoV1 = currentApi!.todos[0];
+    assertEquals(todoV1.text, "Todo 1");
+
+    // 2. Update todo (First Edit)
+    const todoV2 = todoV1.setText("Todo 1 Updated");
+    currentApi!.updateTodo(todoV1, todoV2);
+    await waitFor(() => assertEquals(currentApi!.todos[0].text, "Todo 1 Updated"));
+
+    // 3. Update todo (Second Edit)
+    const todoV3 = todoV2.setText("Todo 1 Updated Again");
+    currentApi!.updateTodo(todoV2, todoV3);
+    await waitFor(() => assertEquals(currentApi!.todos[0].text, "Todo 1 Updated Again"));
+
+    // 4. Undo Second Edit -> Should be "Todo 1 Updated"
+    currentApi!.undo();
+    await waitFor(() => assertEquals(currentApi!.todos[0].text, "Todo 1 Updated"));
+
+    // 5. Undo First Edit -> Should be "Todo 1"
+    currentApi!.undo();
+    await waitFor(() => assertEquals(currentApi!.todos[0].text, "Todo 1"));
 
     unmount();
     mockWatcher.close();

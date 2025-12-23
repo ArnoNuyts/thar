@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -20,7 +21,6 @@ interface TodoContextType {
   setTodos: (todos: Todos) => void;
   addTodo: (text: string) => Todo;
   updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
-  refreshTodos: () => void;
   deleteTodo: (todo: Todo) => void;
   toggleTodo: (todo: Todo) => void;
   toggleHidden: (todo: Todo) => void;
@@ -86,6 +86,11 @@ export const TodoProvider = ({
     saveTodos(todos);
   }, [todos, saveTodos]);
 
+  const pushHistory = () => {
+    setHistory((prev) => [...prev, todos]);
+    setRedoStack([]);
+  };
+
   // Watcher effect
   useEffect(() => {
     let watcher: Deno.FsWatcher | undefined;
@@ -125,25 +130,27 @@ export const TodoProvider = ({
     };
   }, [filename]);
 
-  const pushHistory = useCallback((currentTodos: Todos) => {
-    setHistory((prev) => [...prev, currentTodos]);
-    setRedoStack([]);
-  }, []);
 
   const undo = () => {
     if (history.length === 0) return;
     const previousTodos = history[history.length - 1];
-    setHistory((prev) => prev.slice(0, -1));
+    
+    // We need to save current state to redo stack before undoing
     setRedoStack((prev) => [...prev, todos]);
+    
     setTodos(previousTodos);
+    setHistory((prev) => prev.slice(0, -1));
     showToaster("Undo successful");
   };
 
   const redo = () => {
     if (redoStack.length === 0) return;
     const nextTodos = redoStack[redoStack.length - 1];
-    setRedoStack((prev) => prev.slice(0, -1));
+    
+    // We need to save current state to history before redoing
     setHistory((prev) => [...prev, todos]);
+    
+    setRedoStack((prev) => prev.slice(0, -1));
     setTodos(nextTodos);
     showToaster("Redo successful");
   };
@@ -158,10 +165,6 @@ export const TodoProvider = ({
   const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
     pushHistory();
     setTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
-  };
-
-  const refreshTodos = () => {
-    setTodos(new Todos(...todos));
   };
 
   const deleteTodo = (todo: Todo) => {
@@ -185,15 +188,15 @@ export const TodoProvider = ({
   };
 
   const toggleHidden = (todo: Todo) => {
+    // pushHistory is handled in updateTodo
     const updated = todo.toggleHidden();
     updateTodo(todo, updated);
   };
 
   const archiveCompletedTodos = async () => {
+    pushHistory();
     const completedTodos = todos.filter((t: Todo) => t.isDone());
     if (completedTodos.length === 0) return;
-
-    pushHistory();
 
     // Append to done.txt
     // Assuming done.txt is in the same directory as the main file
@@ -223,7 +226,6 @@ export const TodoProvider = ({
         setTodos,
         addTodo,
         updateTodo,
-        refreshTodos,
         deleteTodo,
         toggleTodo,
         toggleHidden,

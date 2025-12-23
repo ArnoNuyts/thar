@@ -182,20 +182,22 @@ export const SharedTodoInput = ({
   useInput((_input, key) => {
     if (!parentIsFocused) return;
 
-    if (suggestions.length > 0) {
-      if (key.upArrow) {
+    const hasSuggestions = suggestions.length > 0;
+
+    switch (true) {
+      case key.upArrow && hasSuggestions:
         setSelectedIndex((
           prev,
         ) => (prev > 0 ? prev - 1 : suggestions.length - 1));
-        return;
-      }
-      if (key.downArrow) {
+        break;
+
+      case key.downArrow && hasSuggestions:
         setSelectedIndex((
           prev,
         ) => (prev < suggestions.length - 1 ? prev + 1 : 0));
-        return;
-      }
-      if (key.return || key.tab) {
+        break;
+
+      case (key.return || key.tab) && hasSuggestions: {
         // Apply suggestion
         const suggestion = suggestions[selectedIndex];
         const prefix = suggestionType === "project" ? "+" : "@";
@@ -219,24 +221,19 @@ export const SharedTodoInput = ({
           setCursorPos(newLeft.length);
           clearSuggestions();
         }
-        return;
+        break;
       }
-      if (key.escape) {
-        clearSuggestions();
-        return;
-      }
-    }
 
-    if (key.return) {
-      if (value.trim().length > 0) {
-        onSubmit(value);
-      }
-      return;
-    }
+      case key.escape:
+        if (hasSuggestions) {
+          clearSuggestions();
+        } else {
+          onCancel();
+        }
+        break;
 
-    if (key.escape) {
-      onCancel();
-      return;
+      default:
+        break;
     }
   });
 
