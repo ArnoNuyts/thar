@@ -69,21 +69,8 @@ export const MockTodoProvider = ({
       );
       showToaster("Recurring todo created");
     } else {
-      // updateTodo already calls pushHistory, but we're calling setTodos manually in updateTodo
-      // Wait, let's copy the logic from the real provider for consistency.
-      // In MockTodoProvider, updateTodo calls pushHistory.
-      // In real provider, I removed pushHistory from toggleTodo start, and let sub-calls handle it or handle it manually.
-      // Here I added pushHistory at the start.
-
-      // If I call updateTodo below:
-      /*
-      updateTodo(todo, updated);
-      */
-      // It calls pushHistory(). So double push.
-
-      // Let's remove pushHistory() from here and match real provider logic roughly.
+      // Direct state update to avoid double pushHistory call
       setTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
-    }
   };
 
   const toggleHidden = (todo: Todo) => {
