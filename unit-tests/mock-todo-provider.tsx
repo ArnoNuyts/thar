@@ -68,6 +68,13 @@ export const MockTodoProvider = ({
     updateTodos(new Todos(...newTodos));
   };
 
+  const deleteTodos = (todosToDelete: Todo[]) => {
+    pushHistory();
+    const idsToDelete = new Set(todosToDelete.map((t) => t.id));
+    const newTodos = todos.filter((t: Todo) => !idsToDelete.has(t.id));
+    updateTodos(new Todos(...newTodos));
+  };
+
   const toggleTodo = (todo: Todo) => {
     pushHistory();
     const { updated, recurring } = todo.toggleState();
@@ -104,6 +111,7 @@ export const MockTodoProvider = ({
         addTodos,
         updateTodo,
         deleteTodo,
+        deleteTodos,
         toggleTodo,
         toggleHidden,
         archiveCompletedTodos,

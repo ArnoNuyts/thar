@@ -1,7 +1,7 @@
 x (B) Todo item action menu @v0.1
 x (A) 2025-12-01 2025-10-02 Repo @v0.1!! due:2026-02-19
 x (A) 2024-12-24 2024-12-19 Action button bar bottom @v0.1
-(D) 2024-12-14 Copy todo @zFuture
+x (D) 2025-12-23 2024-12-14 Copy todo @zFuture
 x Fix UI breaks when no todos present +bugs @v0.1
 Fix tui in cmdr +bugs @zFuture (to be checked if still relevant)
 Double click to complete @zFuture
@@ -12,7 +12,6 @@ x 2025-11-28 2025-11-27 Help with keybindings @v0.1 - same code design as action
 x 2025-12-04 2024-12-17 Solution for chcp 65001 @v0.2
 2024-12-18 Group edit context title @zFuture by editing when Context is selected
 x (B) 2025-12-07 2024-12-19 Make Todo work with readonly getters @v0.2
-2024-12-23 Support for mac shortcuts @zFuture
 2024-12-24 Add button mouseover effect (actionbar, dialogs) @v0.5
 x 2025-01-06 2025-11-28 Fix cancel in confirm in dialog @v0.1 +bug
 x 2025-10-02 2025-10-02 Recurrent todos @v0.1
@@ -26,7 +25,7 @@ x 2025-12-01 2025-12-01 Add priorities + priorities colors + menu way of doing p
 x 2025-12-01 2025-12-01 Move github actions to ink version @v0.1
 2025-12-01 Mouse support @v0.5?
 x 2025-12-02 2025-12-01 Fix follow selected todo issue @v0.1
-(B) 2025-12-01 Hidden todo support + way to show all hidden todos to toggle them @v0.3
+x (B) 2025-12-23 2025-12-01 Hidden todo support + way to show all hidden todos to toggle them @v0.3
 x 2025-12-01 2025-12-01 Delete old implementation in Deno Tui @v0.1
 x (A) 2025-12-02 2025-12-02 Mark todo red when overdue @v0.1
 x (A) 2025-12-05 2025-12-04 Put a message when no TODO's present @v0.2
@@ -43,6 +42,11 @@ x 2025-12-08 2025-12-08 Add reset recurring todo in todo menu @v0.3
 x 2025-12-08 2025-12-08 Trim todo's to avoid spaces at the end (result of tags / projects) @v0.3
 x 2025-12-22 2025-12-10 When deleting todo: select next one instead of jumping to the first todo in the list @v0.3
 x (C) 2025-12-22 2025-12-10 When navigation up and down take one extra line in the screenview. This way we will see the upper context when going back up. @v0.3
-2025-12-10 What to do with multiline todos? @v0.3
+2025-12-10 What to do with multiline todos? @v0.4
 x 2025-12-22 2025-12-12 Make Todo.js immutable -> that way it is easier for react to know it needs to update. @v0.3
 x 2025-12-22 2025-12-16 Implement home / end for navigation @v0.3
+2025-12-23 +Multi-select support @v0.4
+2025-12-23 +Multi-select : seperate menu / menu content @v0.4
+2025-12-23 +Multi-select : set prio @v0.4
+2025-12-23 +Multi-select : toggle state @v0.4
+2025-12-23 +bug after search cancel, should set screen-position to take full advantage of terminal height @v0.4

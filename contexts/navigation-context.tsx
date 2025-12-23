@@ -21,14 +21,16 @@ interface NavigationContextType {
   indexes: IndexEntry[];
   offsetRow: number;
   listHeight: number;
-  navigateUp: () => void;
-  navigateDown: () => void;
-  navigatePageUp: () => void;
-  navigatePageDown: () => void;
+  navigateUp: (shift?: boolean) => void;
+  navigateDown: (shift?: boolean) => void;
+  navigatePageUp: (shift?: boolean) => void;
+  navigatePageDown: (shift?: boolean) => void;
   navigateHome: () => void;
   navigateEnd: () => void;
   selectedTodoId: symbol | undefined;
   setSelectedTodoId: (id: symbol | undefined) => void;
+  selectedTodoIds: Set<symbol>;
+  clearMultiSelect: () => void;
   useSelectedTodo: () => Todo | undefined;
   showHidden: boolean;
   toggleShowHidden: () => void;
@@ -51,9 +53,20 @@ export const NavigationProvider = (
   const [selectedTodoId, setSelectedTodoId] = useState<symbol | undefined>(
     undefined,
   );
+  const [selectedTodoIds, setSelectedTodoIds] = useState<Set<symbol>>(
+    new Set(),
+  );
+  const selectionAnchorId = useRef<symbol | undefined>(undefined);
   const [showHidden, setShowHidden] = useState(false);
+  const [navCounter, setNavCounter] = useState(0);
+  const pendingNavShift = useRef<boolean | undefined>(undefined);
 
   const toggleShowHidden = () => setShowHidden((prev) => !prev);
+
+  const clearMultiSelect = () => {
+    setSelectedTodoIds(new Set());
+    selectionAnchorId.current = undefined;
+  };
 
   // Search bar takes 2 rows (content + border) when visible
   // Search bar is visible when focused OR has query
@@ -276,7 +289,18 @@ export const NavigationProvider = (
     }
   }, [selectedRow, listHeight, offsetRow]);
 
-  const doNavigate = (step: number) => {
+  const doNavigate = (step: number, shift: boolean = false) => {
+    pendingNavShift.current = shift;
+    setNavCounter((c) => c + 1);
+
+    if (shift) {
+      if (!selectionAnchorId.current) {
+        selectionAnchorId.current = selectedTodoId;
+      }
+    } else {
+      selectionAnchorId.current = undefined;
+    }
+
     setSelectedTodoId((prevId) => {
       const todoIndex = indexes.findIndex(
         (entry) =>
@@ -287,6 +311,7 @@ export const NavigationProvider = (
       const direction = step > 0 ? 1 : -1;
       let newSelectedRow = clamp(selectedRow + step, 0, indexes.length - 1);
 
+      // Skip context headers
       while (indexes[newSelectedRow]?.type === IndexType.context) {
         newSelectedRow += direction;
         if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
@@ -316,10 +341,51 @@ export const NavigationProvider = (
     });
   };
 
-  const navigateUp = () => doNavigate(-1);
-  const navigateDown = () => doNavigate(1);
-  const navigatePageUp = () => doNavigate(-5);
-  const navigatePageDown = () => doNavigate(5);
+  // Handle multi-selection side effects after navigation
+  useEffect(() => {
+    if (pendingNavShift.current === undefined) return;
+    const shift = pendingNavShift.current;
+    pendingNavShift.current = undefined;
+
+    if (selectedTodoId) {
+      if (shift) {
+        const anchor = selectionAnchorId.current;
+        if (!anchor) {
+          // This should ideally not happen now as we set it in doNavigate
+          // but if it does, fallback to current item
+          setSelectedTodoIds(new Set([selectedTodoId]));
+          return;
+        }
+
+        const anchorIndex = indexes.findIndex((e) =>
+          e.type === IndexType.todo && e.todo.id === anchor
+        );
+        const newIndex = indexes.findIndex((e) =>
+          e.type === IndexType.todo && e.todo.id === selectedTodoId
+        );
+
+        if (anchorIndex !== -1 && newIndex !== -1) {
+          const start = Math.min(anchorIndex, newIndex);
+          const end = Math.max(anchorIndex, newIndex);
+          const newSelection = new Set<symbol>();
+          for (let i = start; i <= end; i++) {
+            const entry = indexes[i];
+            if (entry.type === IndexType.todo) {
+              newSelection.add(entry.todo.id);
+            }
+          }
+          setSelectedTodoIds(newSelection);
+        }
+      } else {
+        setSelectedTodoIds(new Set());
+      }
+    }
+  }, [navCounter, selectedTodoId, indexes]);
+
+  const navigateUp = (shift?: boolean) => doNavigate(-1, shift);
+  const navigateDown = (shift?: boolean) => doNavigate(1, shift);
+  const navigatePageUp = (shift?: boolean) => doNavigate(-5, shift);
+  const navigatePageDown = (shift?: boolean) => doNavigate(5, shift);
 
   const navigateHome = () => {
     const firstTodoIndex = indexes.findIndex((entry) =>
@@ -329,6 +395,8 @@ export const NavigationProvider = (
       const entry = indexes[firstTodoIndex];
       if (entry.type === IndexType.todo) {
         setSelectedTodoId(entry.todo.id);
+        setSelectedTodoIds(new Set());
+        selectionAnchorId.current = undefined;
       }
     }
   };
@@ -341,6 +409,8 @@ export const NavigationProvider = (
       const entry = indexes[lastTodoIndex];
       if (entry.type === IndexType.todo) {
         setSelectedTodoId(entry.todo.id);
+        setSelectedTodoIds(new Set());
+        selectionAnchorId.current = undefined;
       }
     }
   };
@@ -363,6 +433,8 @@ export const NavigationProvider = (
         navigateEnd,
         selectedTodoId,
         setSelectedTodoId,
+        selectedTodoIds,
+        clearMultiSelect,
         useSelectedTodo,
         showHidden,
         toggleShowHidden,
