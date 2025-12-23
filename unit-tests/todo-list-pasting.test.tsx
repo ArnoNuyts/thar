@@ -8,10 +8,9 @@ import { SearchProvider } from "../contexts/search-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
 import { restoreDenoMocks, waitFor } from "./test-utils.ts";
 import { useEffect } from "react";
-import { Text } from "ink";
+import { Box, Text } from "ink";
 import { useFocusManager } from "../contexts/focus-context.tsx";
 import {
   isConfirmModalData,
@@ -63,17 +62,13 @@ const AppContentMock = () => {
   );
 };
 
-import { Box } from "ink";
-
-// deno-lint-ignore no-explicit-any
 const originalCommand = Deno.Command;
 
 function setupClipboardMock(text: string) {
   // deno-lint-ignore no-explicit-any
   (Deno as any).Command = class {
-    // deno-lint-ignore no-explicit-any
     command: string;
-    constructor(command: string, _options: any) {
+    constructor(command: string, _options: unknown) {
       this.command = command;
     }
     output() {
