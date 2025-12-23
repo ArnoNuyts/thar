@@ -13,28 +13,51 @@ export const MockTodoProvider = ({
   initialTodos?: Todo[];
 }) => {
   const [todos, setTodos] = useState<Todos>(new Todos(...initialTodos));
+  const [history, setHistory] = useState<Todos[]>([]);
+  const [redoStack, setRedoStack] = useState<Todos[]>([]);
   const { showToaster } = useToaster();
 
+  const pushHistory = () => {
+    setHistory((prev) => [...prev, todos]);
+    setRedoStack([]);
+  };
+
+  const undo = () => {
+    if (history.length === 0) return;
+    const previousTodos = history[history.length - 1];
+    setHistory((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [...prev, todos]);
+    setTodos(previousTodos);
+  };
+
+  const redo = () => {
+    if (redoStack.length === 0) return;
+    const nextTodos = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, -1));
+    setHistory((prev) => [...prev, todos]);
+    setTodos(nextTodos);
+  };
+
   const addTodo = (text: string): Todo => {
+    pushHistory();
     const newTodo = new Todo(text).setCreationDate(new Date());
     setTodos(new Todos(...todos, newTodo));
     return newTodo;
   };
 
   const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
+    pushHistory();
     setTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
   };
 
-  const refreshTodos = () => {
-    setTodos(new Todos(...todos));
-  };
-
   const deleteTodo = (todo: Todo) => {
+    pushHistory();
     const newTodos = todos.filter((t: Todo) => t !== todo);
     setTodos(new Todos(...newTodos));
   };
 
   const toggleTodo = (todo: Todo) => {
+    pushHistory();
     const { updated, recurring } = todo.toggleState();
     if (recurring) {
       setTodos(
@@ -42,16 +65,19 @@ export const MockTodoProvider = ({
       );
       showToaster("Recurring todo created");
     } else {
-      updateTodo(todo, updated);
+      // Direct state update to avoid double pushHistory call
+      setTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
     }
   };
 
   const toggleHidden = (todo: Todo) => {
+    // pushHistory via updateTodo
     const updated = todo.toggleHidden();
     updateTodo(todo, updated);
   };
 
   const archiveCompletedTodos = () => {
+    pushHistory();
     const remainingTodos = todos.filter((t: Todo) => !t.isDone());
     setTodos(new Todos(...remainingTodos));
     // No-op for file writing in mock
@@ -65,11 +91,14 @@ export const MockTodoProvider = ({
         setTodos,
         addTodo,
         updateTodo,
-        refreshTodos,
         deleteTodo,
         toggleTodo,
         toggleHidden,
         archiveCompletedTodos,
+        undo,
+        canUndo: history.length > 0,
+        redo,
+        canRedo: redoStack.length > 0,
       }}
     >
       {children}
