@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { useEffect } from "react";
@@ -6,10 +6,11 @@ import {
   NavigationProvider,
   useNavigation,
 } from "../contexts/navigation-context.tsx";
-import { SearchProvider } from "../contexts/search-context.tsx";
+import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
+import { IndexType } from "../types/enums.ts";
 
 const TestWrapper = (
   { todos, onContext }: {
@@ -555,6 +556,153 @@ Deno.test(
 
     await waitFor(() => {
       assertEquals(navContext.useSelectedTodo()?.text, "Todo 3");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "NavigationContext: should filter by context",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("Buy groceries @Home +Shopping"),
+      new Todo("Fix bug @Work +Development"),
+      new Todo("Call mom @Home"),
+    );
+    // deno-lint-ignore no-explicit-any
+    let navContext: any;
+    // deno-lint-ignore no-explicit-any
+    let searchContext: any;
+
+    const SearchTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
+      const ctx = useSearch();
+      useEffect(() => {
+        onContext(ctx);
+      });
+      return null;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <SearchTester onContext={(ctx) => searchContext = ctx} />
+        <NavigationProvider todos={todos}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    await waitFor(() => {
+      if (!searchContext) throw new Error("Search context not ready");
+    });
+
+    searchContext.setSearchQuery("@work");
+
+    await waitFor(() => {
+      const filtered = navContext.indexes.filter((i: any) =>
+        i.type === IndexType.todo
+      );
+      assertEquals(filtered.length, 1);
+      assertStringIncludes(filtered[0].todo.text, "Fix bug");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "NavigationContext: should filter by project",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("Buy groceries @Home +Shopping"),
+      new Todo("Fix bug @Work +Development"),
+      new Todo("Call mom @Home"),
+    );
+    // deno-lint-ignore no-explicit-any
+    let navContext: any;
+    // deno-lint-ignore no-explicit-any
+    let searchContext: any;
+
+    const SearchTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
+      const ctx = useSearch();
+      useEffect(() => {
+        onContext(ctx);
+      });
+      return null;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <SearchTester onContext={(ctx) => searchContext = ctx} />
+        <NavigationProvider todos={todos}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    await waitFor(() => {
+      if (!searchContext) throw new Error("Search context not ready");
+    });
+
+    searchContext.setSearchQuery("+shopping");
+
+    await waitFor(() => {
+      const filtered = navContext.indexes.filter((i: any) =>
+        i.type === IndexType.todo
+      );
+      assertEquals(filtered.length, 1);
+      assertStringIncludes(filtered[0].todo.text, "Buy groceries");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "NavigationContext: should filter by text content (case-insensitive)",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("Buy groceries @Home +Shopping"),
+      new Todo("Fix bug @Work +Development"),
+      new Todo("Call mom @Home"),
+    );
+    // deno-lint-ignore no-explicit-any
+    let navContext: any;
+    // deno-lint-ignore no-explicit-any
+    let searchContext: any;
+
+    const SearchTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
+      const ctx = useSearch();
+      useEffect(() => {
+        onContext(ctx);
+      });
+      return null;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <SearchTester onContext={(ctx) => searchContext = ctx} />
+        <NavigationProvider todos={todos}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    await waitFor(() => {
+      if (!searchContext) throw new Error("Search context not ready");
+    });
+
+    searchContext.setSearchQuery("grocer");
+
+    await waitFor(() => {
+      const filtered = navContext.indexes.filter((i: any) =>
+        i.type === IndexType.todo
+      );
+      assertEquals(filtered.length, 1);
+      assertStringIncludes(filtered[0].todo.text, "Buy groceries");
     });
 
     unmount();
