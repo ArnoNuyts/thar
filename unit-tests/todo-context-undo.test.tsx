@@ -217,7 +217,7 @@ Deno.test({
 
     let currentApi: {
       addTodo: (text: string) => void;
-      updateTodo: (oldTodo: any, newTodo: any) => void;
+      updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
       undo: () => void;
       // deno-lint-ignore no-explicit-any
       todos: any[];
