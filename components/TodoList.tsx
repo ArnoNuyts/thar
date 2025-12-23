@@ -12,6 +12,7 @@ import { IndexType } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
 import { IndexEntry } from "../logic/indexes.ts";
 import { ExtendedKey } from "../hooks/useFocusedInput.ts";
+import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 
 const renderTodoText = (
   text: string,
@@ -21,9 +22,9 @@ const renderTodoText = (
   const parts = text.split(/(@[^ ]+|\+[^ ]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith("@")) {
-      return <Text key={i} color="yellow">{part}</Text>;
+      return <Text key={i} color={isHighlighted ? "black" : "yellow"}>{part}</Text>;
     } else if (part.startsWith("+")) {
-      return <Text key={i} color="blue">{part}</Text>;
+      return <Text key={i} color={isHighlighted ? "black" : "blue"}>{part}</Text>;
     }
     return (
       <Text
@@ -96,9 +97,9 @@ const TodoItem = (
         </Text>
       )}
       {renderTodoText(todo.text, isHighlighted, isOverdue)}
-      {dueDate && <Text color="red">{` ${dueDate}`}</Text>}
-      {threshold && <Text color="yellow">{` ${threshold}`}</Text>}
-      {recurrence && <Text color="cyan">{` ${recurrence}`}</Text>}
+      {dueDate && <Text color={isHighlighted ? "black" : "red"}>{` ${dueDate}`}</Text>}
+      {threshold && <Text color={isHighlighted ? "black" : "green"}>{` ${threshold}`}</Text>}
+      {recurrence && <Text color={isHighlighted ? "black" : "cyan"}>{` ${recurrence}`}</Text>}
     </Box>
   );
 };
@@ -107,7 +108,7 @@ const ContextTitle = memo(
   ({ title, count }: { title: string; count: number; key?: React.Key }) => {
     return (
       <Box>
-        <Text backgroundColor="yellow" color="black">
+        <Text backgroundColor={PRIMARY_COLOR} color="black">
           {` ${title} (${count}) `}
         </Text>
       </Box>

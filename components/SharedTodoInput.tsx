@@ -3,6 +3,7 @@ import { Box, Text, useStdout } from "ink";
 import { useInput } from "../hooks/useInput.ts";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
+import { SECONDARY_COLOR } from "../constants.ts";
 
 import { Todos } from "../logic/Todos.ts";
 
@@ -255,7 +256,7 @@ export const SharedTodoInput = ({
       }
       <Box flexDirection="row">
         <Box width={2}>
-          <Text color="green">{`» `}</Text>
+          <Text color={SECONDARY_COLOR}>{`» `}</Text>
         </Box>
         <Box flexGrow={1}>
           <ControlledTextInput

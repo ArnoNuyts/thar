@@ -6,6 +6,7 @@ import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
+import { SECONDARY_COLOR } from "../constants.ts";
 
 const BASE_OPTIONS = [
   { label: "Daily", value: "d", unit: "day(s)" },
@@ -86,7 +87,7 @@ export const SetRecurrenceModal = () => {
               const isSelected = index === selectedBaseIndex;
               return (
                 <Box key={option.value}>
-                  <Text color="green">{isSelected ? "» " : "  "}</Text>
+                  <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
                   <Text>{option.label}</Text>
                 </Box>
               );

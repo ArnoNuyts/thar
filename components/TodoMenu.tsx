@@ -7,6 +7,7 @@ import { useTodo } from "../contexts/todo-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
+import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 
 export type MenuAction =
   | "edit"
@@ -272,11 +273,11 @@ export const TodoMenu = () => {
           return (
             <Box key={item.action} justifyContent="space-between">
               <Box>
-                <Text color="green">{isSelected ? "» " : "  "}</Text>
+                <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
                 <Text>{item.label}</Text>
               </Box>
               <Box>
-                <Text color="yellow">{item.shortcut}</Text>
+                <Text color={PRIMARY_COLOR}>{item.shortcut}</Text>
               </Box>
             </Box>
           );

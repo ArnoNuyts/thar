@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { Fragment } from "react";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
+import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 
 export const ActionBar = () => {
   const { toasterMessage } = useToaster();
@@ -26,7 +27,7 @@ export const ActionBar = () => {
         ].map((item) => {
           return (
             <Fragment key={item.key}>
-              <Text color="yellow">{` ${item.key}`}</Text>
+              <Text color={PRIMARY_COLOR}>{` ${item.key}`}</Text>
               <Text>{` ${item.text}  `}</Text>
             </Fragment>
           );
@@ -35,7 +36,7 @@ export const ActionBar = () => {
       </Box>
       {toasterMessage && (
         <Box padding={0}>
-          <Text color="green">{toasterMessage}</Text>
+          <Text color={SECONDARY_COLOR}>{toasterMessage}</Text>
         </Box>
       )}
     </Box>
