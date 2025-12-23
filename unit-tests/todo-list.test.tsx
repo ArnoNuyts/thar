@@ -26,7 +26,6 @@ import {
   ModalProvider,
   useModal,
 } from "../contexts/modal-context.tsx";
-import { IndexType } from "../types/enums.ts";
 
 // --- Helpers ---
 
@@ -183,13 +182,11 @@ Deno.test({
     const todoHidden = new Todo("h:1 hidden todo");
     const initialTodos = [todoVisible, todoHidden];
 
-    let capturedTodos: Todo[] = [...initialTodos];
     let isFocused = false;
 
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper
         initialTodos={initialTodos}
-        onTodosChange={(todos) => capturedTodos = todos}
       >
         <AppContentMock />
         <FocusObserver onFocused={() => isFocused = true} />

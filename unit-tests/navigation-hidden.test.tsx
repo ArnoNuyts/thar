@@ -57,9 +57,10 @@ Deno.test(
     });
 
     // Check visible todos
-    const visibleTodos = navContext.indexes.filter((i: any) =>
-      i.type === IndexType.todo
-    );
+    const visibleTodos = navContext.indexes.filter((
+      // deno-lint-ignore no-explicit-any
+      i: any,
+    ) => i.type === IndexType.todo);
     assertEquals(visibleTodos.length, 1);
     assertEquals(visibleTodos[0].todo.text, "visible todo");
 
@@ -89,9 +90,10 @@ Deno.test(
 
     await waitFor(() => {
       assertEquals(navContext.showHidden, true);
-      const allTodos = navContext.indexes.filter((i: any) =>
-        i.type === IndexType.todo
-      );
+      const allTodos = navContext.indexes.filter((
+        // deno-lint-ignore no-explicit-any
+        i: any,
+      ) => i.type === IndexType.todo);
       assertEquals(allTodos.length, 2);
     });
 
@@ -125,9 +127,10 @@ Deno.test(
     navContext.toggleShowHidden();
     await waitFor(() => assertEquals(navContext.showHidden, false));
 
-    const visibleTodos = navContext.indexes.filter((i: any) =>
-      i.type === IndexType.todo
-    );
+    const visibleTodos = navContext.indexes.filter((
+      // deno-lint-ignore no-explicit-any
+      i: any,
+    ) => i.type === IndexType.todo);
     assertEquals(visibleTodos.length, 1);
     assertEquals(visibleTodos[0].todo.text, "visible todo");
 
