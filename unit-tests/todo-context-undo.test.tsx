@@ -47,7 +47,7 @@ const UndoTestApp = (
   { onUpdate }: {
     onUpdate: (
       api: {
-        addTodo: (text: string) => void;
+        addTodos: (...texts: string[]) => void;
         updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
         undo: () => void;
         redo: () => void;
@@ -57,16 +57,16 @@ const UndoTestApp = (
     ) => void;
   },
 ) => {
-  const { addTodo, updateTodo, undo, redo, todos } = useTodo();
+  const { addTodos, updateTodo, undo, redo, todos } = useTodo();
   useEffect(() => {
     onUpdate({
-      addTodo,
+      addTodos,
       updateTodo,
       undo,
       redo,
       todos,
     });
-  }, [addTodo, updateTodo, undo, redo, todos, onUpdate]);
+  }, [addTodos, updateTodo, undo, redo, todos, onUpdate]);
   return <Text>UndoTestApp</Text>;
 };
 
@@ -78,7 +78,7 @@ Deno.test({
     setupMocks();
 
     let currentApi: {
-      addTodo: (text: string) => void;
+      addTodos: (...texts: string[]) => void;
       undo: () => void;
       redo: () => void;
       // deno-lint-ignore no-explicit-any
@@ -100,7 +100,7 @@ Deno.test({
     });
 
     // 1. Add todo
-    currentApi!.addTodo("Todo 1");
+    currentApi!.addTodos("Todo 1");
     await waitFor(() => assertEquals(currentApi!.todos.length, 1));
     assertEquals(currentApi!.todos[0].text, "Todo 1");
 
@@ -114,7 +114,7 @@ Deno.test({
     assertEquals(currentApi!.todos[0].text, "Todo 1");
 
     // 4. Multiple actions
-    currentApi!.addTodo("Todo 2");
+    currentApi!.addTodos("Todo 2");
     await waitFor(() => assertEquals(currentApi!.todos.length, 2));
 
     currentApi!.undo(); // back to [Todo 1]
@@ -135,7 +135,7 @@ Deno.test({
     currentApi!.undo(); // back to [Todo 1]
     await waitFor(() => assertEquals(currentApi!.todos.length, 1));
 
-    currentApi!.addTodo("Todo 3"); // Redo stack (which had Todo 2) should be cleared
+    currentApi!.addTodos("Todo 3"); // Redo stack (which had Todo 2) should be cleared
     await waitFor(() => assertEquals(currentApi!.todos.length, 2));
     assertEquals(currentApi!.todos[1].text, "Todo 3");
 
@@ -158,7 +158,7 @@ Deno.test({
     setupMocks();
 
     let currentApi: {
-      addTodo: (text: string) => void;
+      addTodos: (...texts: string[]) => void;
       undo: () => void;
       // deno-lint-ignore no-explicit-any
       todos: any[];
@@ -179,12 +179,12 @@ Deno.test({
     });
 
     // Add todo
-    currentApi!.addTodo("Todo 1");
+    currentApi!.addTodos("Todo 1");
     await waitFor(() => assertEquals(currentApi!.todos.length, 1));
     assertEquals(currentApi!.todos[0].text, "Todo 1");
 
     // Add another todo
-    currentApi!.addTodo("Todo 2");
+    currentApi!.addTodos("Todo 2");
     await waitFor(() => assertEquals(currentApi!.todos.length, 2));
     assertEquals(currentApi!.todos[1].text, "Todo 2");
 
@@ -216,7 +216,7 @@ Deno.test({
     setupMocks();
 
     let currentApi: {
-      addTodo: (text: string) => void;
+      addTodos: (...texts: string[]) => void;
       updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
       undo: () => void;
       // deno-lint-ignore no-explicit-any
@@ -238,7 +238,7 @@ Deno.test({
     });
 
     // 1. Add todo
-    currentApi!.addTodo("Todo 1");
+    currentApi!.addTodos("Todo 1");
     await waitFor(() => assertEquals(currentApi!.todos.length, 1));
     const todoV1 = currentApi!.todos[0];
     assertEquals(todoV1.text, "Todo 1");
