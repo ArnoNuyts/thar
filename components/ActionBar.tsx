@@ -1,9 +1,11 @@
 import { Box, Text } from "ink";
 import { Fragment } from "react";
 import { useToaster } from "../contexts/toaster-context.tsx";
+import { useNavigation } from "../contexts/navigation-context.tsx";
 
 export const ActionBar = () => {
   const { toasterMessage } = useToaster();
+  const { showHidden } = useNavigation();
 
   return (
     <Box
@@ -29,6 +31,7 @@ export const ActionBar = () => {
             </Fragment>
           );
         })}
+        {showHidden && <Text color="red">[HIDDEN SHOWN] </Text>}
       </Box>
       {toasterMessage && (
         <Box padding={0}>
