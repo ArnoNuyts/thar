@@ -50,10 +50,6 @@ export const MockTodoProvider = ({
     setTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
   };
 
-  const refreshTodos = () => {
-    setTodos(new Todos(...todos));
-  };
-
   const deleteTodo = (todo: Todo) => {
     pushHistory();
     const newTodos = todos.filter((t: Todo) => t !== todo);
@@ -71,6 +67,7 @@ export const MockTodoProvider = ({
     } else {
       // Direct state update to avoid double pushHistory call
       setTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
+    }
   };
 
   const toggleHidden = (todo: Todo) => {
@@ -94,7 +91,6 @@ export const MockTodoProvider = ({
         setTodos,
         addTodo,
         updateTodo,
-        refreshTodos,
         deleteTodo,
         toggleTodo,
         toggleHidden,
