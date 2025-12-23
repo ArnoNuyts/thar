@@ -576,7 +576,12 @@ Deno.test(
     // deno-lint-ignore no-explicit-any
     let searchContext: any;
 
-    const SearchTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
+    const SearchTester = ({ onContext }: {
+      onContext: (
+        // deno-lint-ignore no-explicit-any
+        ctx: any,
+      ) => void;
+    }) => {
       const ctx = useSearch();
       useEffect(() => {
         onContext(ctx);
@@ -600,9 +605,10 @@ Deno.test(
     searchContext.setSearchQuery("@work");
 
     await waitFor(() => {
-      const filtered = navContext.indexes.filter((i: any) =>
-        i.type === IndexType.todo
-      );
+      const filtered = navContext.indexes.filter((
+        // deno-lint-ignore no-explicit-any
+        i: any,
+      ) => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Fix bug");
     });
@@ -625,7 +631,12 @@ Deno.test(
     // deno-lint-ignore no-explicit-any
     let searchContext: any;
 
-    const SearchTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
+    const SearchTester = ({ onContext }: {
+      onContext: (
+        // deno-lint-ignore no-explicit-any
+        ctx: any,
+      ) => void;
+    }) => {
       const ctx = useSearch();
       useEffect(() => {
         onContext(ctx);
@@ -649,9 +660,10 @@ Deno.test(
     searchContext.setSearchQuery("+shopping");
 
     await waitFor(() => {
-      const filtered = navContext.indexes.filter((i: any) =>
-        i.type === IndexType.todo
-      );
+      const filtered = navContext.indexes.filter((
+        // deno-lint-ignore no-explicit-any
+        i: any,
+      ) => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Buy groceries");
     });
@@ -674,7 +686,12 @@ Deno.test(
     // deno-lint-ignore no-explicit-any
     let searchContext: any;
 
-    const SearchTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
+    const SearchTester = ({ onContext }: {
+      onContext: (
+        // deno-lint-ignore no-explicit-any
+        ctx: any,
+      ) => void;
+    }) => {
       const ctx = useSearch();
       useEffect(() => {
         onContext(ctx);
@@ -698,9 +715,10 @@ Deno.test(
     searchContext.setSearchQuery("grocer");
 
     await waitFor(() => {
-      const filtered = navContext.indexes.filter((i: any) =>
-        i.type === IndexType.todo
-      );
+      const filtered = navContext.indexes.filter((
+        // deno-lint-ignore no-explicit-any
+        i: any,
+      ) => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Buy groceries");
     });
