@@ -168,7 +168,8 @@ export const TodoList = () => {
         const todosToDelete = todos.filter((t) => selectedTodoIds.has(t.id));
         openModal("confirm-modal", {
           title: "Delete Todos",
-          message: `Are you sure you want to delete ${todosToDelete.length} todos?`,
+          message:
+            `Are you sure you want to delete ${todosToDelete.length} todos?`,
           onConfirm: () => deleteTodos(todosToDelete),
         });
       } else if (todo) {
@@ -338,7 +339,7 @@ export const TodoList = () => {
           const todoNumber = indexes.slice(0, originalIndex + 1).filter(
             (e) => e.type === IndexType.todo,
           ).length;
-          
+
           const isFocused = entry.todo === todo;
           const isSelectedInRange = selectedTodoIds.has(entry.todo.id);
 
