@@ -31,7 +31,7 @@ export const ActionBar = () => {
             </Fragment>
           );
         })}
-        {showHidden && <Text color="red">[HIDDEN SHOWN] </Text>}
+        {showHidden && <Text color="red">[HIDDEN SHOWN]</Text>}
       </Box>
       {toasterMessage && (
         <Box padding={0}>

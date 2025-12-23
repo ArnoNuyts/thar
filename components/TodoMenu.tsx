@@ -58,7 +58,8 @@ export const TodoMenu = () => {
     redo,
     addTodos,
   } = useTodo();
-  const { useSelectedTodo, setSelectedTodoId, toggleShowHidden } = useNavigation();
+  const { useSelectedTodo, setSelectedTodoId, toggleShowHidden } =
+    useNavigation();
   const { showToaster } = useToaster();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
