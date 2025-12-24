@@ -13,7 +13,12 @@ export const CreateTodoModal = () => {
 
   const { isFocused } = useFocusedInput(() => {}, { autoFocus: true });
   const { stdout } = useStdout();
-  const maxWidth = Math.floor((stdout?.columns || 80) * 0.5) - 6; // 50% width - borders/padding
+  const terminalWidth = stdout?.columns || 80;
+  const terminalHeight = stdout?.rows || 24;
+  const maxWidth = Math.floor(terminalWidth * 0.5) - 6;
+
+  const modalLeft = Math.floor(terminalWidth * 0.25);
+  const modalTop = Math.floor(terminalHeight / 2) - 2;
 
   const handleSubmit = (value: string) => {
     if (value.trim().length > 0) {
@@ -35,6 +40,8 @@ export const CreateTodoModal = () => {
         footer={<Text dimColor>Enter = save, Esc = cancel</Text>}
         maxWidth={maxWidth}
         todos={todos}
+        modalLeft={modalLeft}
+        modalTop={modalTop}
       />
     </Modal>
   );
