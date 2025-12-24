@@ -29,7 +29,7 @@ x (B) 2025-12-23 2025-12-01 Hidden todo support + way to show all hidden todos t
 x 2025-12-01 2025-12-01 Delete old implementation in Deno Tui @v0.1
 x (A) 2025-12-02 2025-12-02 Mark todo red when overdue @v0.1
 x (A) 2025-12-05 2025-12-04 Put a message when no TODO's present @v0.2
-x 2025-12-05 2025-12-04 Autocomplete has small overlap bug with text "Enter = save" text. Fix that +bug @v0.2!
+x 2025-12-23 2025-12-04 Autocomplete has small overlap bug with text "Enter = save" text. Fix that +bug @v0.2!
 x (C) 2025-12-05 2025-12-04 Autocomplete bug with text on secondline @v0.2 +bug
 x 2025-12-05 2025-12-05 Copy todos @v0.2
 x 2025-12-08 2025-12-05 +Toaster: recurrent todo created @v0.3
@@ -42,7 +42,7 @@ x 2025-12-08 2025-12-08 Add reset recurring todo in todo menu @v0.3
 x 2025-12-08 2025-12-08 Trim todo's to avoid spaces at the end (result of tags / projects) @v0.3
 x 2025-12-22 2025-12-10 When deleting todo: select next one instead of jumping to the first todo in the list @v0.3
 x (C) 2025-12-22 2025-12-10 When navigation up and down take one extra line in the screenview. This way we will see the upper context when going back up. @v0.3
-2025-12-10 What to do with multiline todos? @v0.4
+x 2025-12-24 2025-12-10 What to do with longer todos, longer than terminal width -> shortened for now @v0.4
 x 2025-12-22 2025-12-12 Make Todo.js immutable -> that way it is easier for react to know it needs to update. @v0.3
 x 2025-12-22 2025-12-16 Implement home / end for navigation @v0.3
 2025-12-23 +Multi-select support @v0.4
@@ -51,3 +51,8 @@ x 2025-12-22 2025-12-16 Implement home / end for navigation @v0.3
 2025-12-23 +Multi-select : toggle state @v0.4
 2025-12-23 +bug after search cancel, should set screen-position to take full advantage of terminal height @v0.4
 2025-12-23 +bug due-color still red even when todo is completed @v0.4
+2025-12-23 Scrollbar on TodoList @v0.5
+2025-12-23 +bug When searching and no results. Welcome screen is shown instead of some other message. @v0.4
+2025-12-23 +Multi-select : set context, shortcut @ @v0.4
+2025-12-23 +Multi-select : add tag, shortcut + @v0.4
+2025-12-24 +bug Fix hidden status indicator @v0.4

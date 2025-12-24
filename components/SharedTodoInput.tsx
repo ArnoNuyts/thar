@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Box, Text, useStdout } from "ink";
+import { Box, Newline, Text, useStdout } from "ink";
 import { useInput } from "../hooks/useInput.ts";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
@@ -269,7 +269,7 @@ export const SharedTodoInput = ({
           />
         </Box>
       </Box>
-
+      <Newline />
       {footer}
     </Box>
   );

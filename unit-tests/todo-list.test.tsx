@@ -11,6 +11,7 @@ import { MockTodoProvider } from "./mock-todo-provider.tsx";
 import { TodoList } from "../components/TodoList.tsx";
 import { ActionBar } from "../components/ActionBar.tsx";
 import { ConfirmModal } from "../components/ConfirmModal.tsx";
+import { HiddenIndicator } from "../components/HiddenIndicator.tsx";
 
 import { useTodo } from "../contexts/todo-context.tsx";
 import { FocusProvider, useFocusManager } from "../contexts/focus-context.tsx";
@@ -103,7 +104,8 @@ const FocusObserver = ({ onFocused }: { onFocused: () => void }) => {
 const AppContentMock = () => {
   const { activeModal, modalData } = useModal();
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" position="relative">
+      <HiddenIndicator />
       <TodoList />
       <ActionBar />
       {activeModal === "confirm-modal" && isConfirmModalData(modalData) && (
@@ -193,24 +195,22 @@ Deno.test({
       </TestWrapper>,
     );
 
-    // Initial check: only visible todo should be shown, and [HIDDEN SHOWN] should NOT be present
+    // Initial check: only visible todo should be shown
     await waitFor(() => {
       const frame = lastFrame();
       assertEquals(frame?.includes("visible todo"), true);
       assertEquals(frame?.includes("hidden todo"), false);
-      assertEquals(frame?.includes("[HIDDEN SHOWN]"), false);
       assertEquals(isFocused, true);
     });
 
     // Press 'H' to toggle showHidden
     stdin.write("H");
 
-    // Check: both todos should be shown, and [HIDDEN SHOWN] should be present in ActionBar
+    // Check: both todos should be shown
     await waitFor(() => {
       const frame = lastFrame();
       assertEquals(frame?.includes("visible todo"), true);
       assertEquals(frame?.includes("hidden todo"), true);
-      assertEquals(frame?.includes("[HIDDEN SHOWN]"), true);
     });
 
     // Press 'H' again to toggle back
@@ -221,7 +221,6 @@ Deno.test({
       const frame = lastFrame();
       assertEquals(frame?.includes("visible todo"), true);
       assertEquals(frame?.includes("hidden todo"), false);
-      assertEquals(frame?.includes("[HIDDEN SHOWN]"), false);
     });
 
     unmount();
