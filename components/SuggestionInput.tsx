@@ -71,10 +71,9 @@ export const SuggestionInput = ({
     const inputWidth = Math.floor(dimensions.width);
     const line = Math.floor(wordStartIndex / inputWidth);
     const col = wordStartIndex % inputWidth;
-    cursorPos
 
     setPosition({
-      left: modalLeft + 4,
+      left: modalLeft + col + 4,
       top: modalTop + line + 2,
     });
   }, [

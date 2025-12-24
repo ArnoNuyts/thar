@@ -45,10 +45,6 @@ export const Modal = (
           borderRight={false}
           borderBottom={false}
           borderTop={false}
-          /*          borderDimColor
-          borderColor="yellow"
-
-   */
           padding={1}
           flexDirection="column"
           backgroundColor="#000"
