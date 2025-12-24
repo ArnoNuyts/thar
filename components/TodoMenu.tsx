@@ -271,7 +271,11 @@ export const TodoMenu = () => {
         {MENU_ITEMS.map((item, index) => {
           const isSelected = index === selectedIndex;
           return (
-            <Box key={item.action} justifyContent="space-between">
+            <Box
+              key={item.action}
+              justifyContent="space-between"
+              paddingRight={1}
+            >
               <Box>
                 <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
                 <Text>{item.label}</Text>

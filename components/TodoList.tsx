@@ -1,18 +1,17 @@
 import { Box, Newline, Text, useApp } from "ink";
 import { memo, useMemo } from "react";
-import { useFocusedInput } from "../hooks/useFocusedInput.ts";
-import { Todo } from "../logic/todo.ts";
+import { PRIMARY_COLOR } from "../constants.ts";
 import { useModal } from "../contexts/modal-context.tsx";
-import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
-import { useToaster } from "../contexts/toaster-context.tsx";
-import { useSearch } from "../contexts/search-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
+import { useSearch } from "../contexts/search-context.tsx";
+import { useToaster } from "../contexts/toaster-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
+import { ExtendedKey, useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
+import { IndexEntry } from "../logic/indexes.ts";
+import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
-import { IndexEntry } from "../logic/indexes.ts";
-import { ExtendedKey } from "../hooks/useFocusedInput.ts";
-import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 
 const renderTodoText = (
   text: string,
@@ -70,46 +69,52 @@ const TodoItem = (
     <Box
       backgroundColor={backgroundColor}
     >
-      <Text
-        dimColor
-        color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}
-      >
-        {`${paddedNumber} `}
-      </Text>
-      <Text color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}>
-        {`${checkbox} `}
-      </Text>
-      {priority && (
+      <Text wrap="truncate">
         <Text
-          color={isHighlighted
-            ? "black"
-            : todo.priority === "A"
-            ? "cyan"
-            : todo.priority === "B"
-            ? "magenta"
-            : todo.priority === "C"
-            ? "yellow"
-            : todo.priority === "D"
-            ? "blue"
-            : todo.priority === "E"
-            ? "green"
-            : todo.priority === "F"
-            ? "red"
-            : undefined}
+          dimColor
+          color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}
         >
-          {`${priority} `}
+          {` ${paddedNumber} `}
         </Text>
-      )}
-      {renderTodoText(todo.text, isHighlighted, isOverdue)}
-      {dueDate && (
-        <Text color={isHighlighted ? "black" : "red"}>{` ${dueDate}`}</Text>
-      )}
-      {threshold && (
-        <Text color={isHighlighted ? "black" : "green"}>{` ${threshold}`}</Text>
-      )}
-      {recurrence && (
-        <Text color={isHighlighted ? "black" : "cyan"}>{` ${recurrence}`}</Text>
-      )}
+        <Text color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}>
+          {`${checkbox} `}
+        </Text>
+        {priority && (
+          <Text
+            color={isHighlighted
+              ? "black"
+              : todo.priority === "A"
+              ? "cyan"
+              : todo.priority === "B"
+              ? "magenta"
+              : todo.priority === "C"
+              ? "yellow"
+              : todo.priority === "D"
+              ? "blue"
+              : todo.priority === "E"
+              ? "green"
+              : todo.priority === "F"
+              ? "red"
+              : undefined}
+          >
+            {`${priority} `}
+          </Text>
+        )}
+        {renderTodoText(todo.text, isHighlighted, isOverdue)}
+        {dueDate && (
+          <Text color={isHighlighted ? "black" : "red"}>{` ${dueDate}`}</Text>
+        )}
+        {threshold && (
+          <Text color={isHighlighted ? "black" : "green"}>
+            {` ${threshold}`}
+          </Text>
+        )}
+        {recurrence && (
+          <Text color={isHighlighted ? "black" : "cyan"}>
+            {` ${recurrence}`}
+          </Text>
+        )}
+      </Text>
     </Box>
   );
 };
@@ -119,7 +124,7 @@ const ContextTitle = memo(
     return (
       <Box>
         <Text backgroundColor={PRIMARY_COLOR} color="black">
-          {` ${title} (${count}) `}
+          {`  ${title} (${count})  `}
         </Text>
       </Box>
     );
@@ -312,7 +317,12 @@ export const TodoList = () => {
   const maxDigits = totalTodoCount.toString().length;
 
   return (
-    <Box flexDirection="column" flexGrow={1} height={listHeight}>
+    <Box
+      flexDirection="column"
+      flexGrow={1}
+      height={listHeight}
+      backgroundColor="black"
+    >
       {visibleIndexes.length === 0
         ? (
           <Box
@@ -356,7 +366,7 @@ export const TodoList = () => {
 
           return (
             <TodoItem
-              key={originalIndex}
+              key={entry.todo.Id}
               todo={entry.todo}
               isFocused={isFocused}
               isSelectedInRange={isSelectedInRange}

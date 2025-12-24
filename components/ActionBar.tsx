@@ -1,20 +1,22 @@
 import { Box, Text } from "ink";
 import { Fragment } from "react";
-import { useToaster } from "../contexts/toaster-context.tsx";
-import { useNavigation } from "../contexts/navigation-context.tsx";
 import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
+import { useToaster } from "../contexts/toaster-context.tsx";
 
 export const ActionBar = () => {
   const { toasterMessage } = useToaster();
-  const { showHidden } = useNavigation();
 
   return (
     <Box
+      height={2}
       borderStyle="single"
       borderTop
       borderLeft={false}
       borderRight={false}
       borderBottom={false}
+      borderTopDimColor
+      borderColor="white"
+      backgroundColor="black"
       justifyContent="space-between"
     >
       <Box>
@@ -32,7 +34,6 @@ export const ActionBar = () => {
             </Fragment>
           );
         })}
-        {showHidden && <Text color="red">[HIDDEN SHOWN]</Text>}
       </Box>
       {toasterMessage && (
         <Box padding={0}>

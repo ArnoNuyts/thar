@@ -1,4 +1,4 @@
-import { Box, render } from "ink";
+import { Box, Newline, render } from "ink";
 import { ActionBar } from "./components/ActionBar.tsx";
 import { ConfirmModal } from "./components/ConfirmModal.tsx";
 import { CreateTodoModal } from "./components/CreateTodoModal.tsx";
@@ -6,6 +6,7 @@ import { EditTodoModal } from "./components/EditTodoModal.tsx";
 import { SetDateModal } from "./components/SetDateModal.tsx";
 import { SetRecurrenceModal } from "./components/SetRecurrenceModal.tsx";
 import { SetPriorityModal } from "./components/SetPriorityModal.tsx";
+import { HiddenIndicator } from "./components/HiddenIndicator.tsx";
 import { TodoList } from "./components/TodoList.tsx";
 import { TodoMenu } from "./components/TodoMenu.tsx";
 import { FocusProvider } from "./contexts/focus-context.tsx";
@@ -29,16 +30,10 @@ const AppContent = () => {
 
   return (
     <>
-      <Box
-        flexDirection="column"
-        height="100%"
-        width="100%"
-        justifyContent="space-between"
-      >
-        <SearchInput todos={todos} />
-        <TodoList />
-        <ActionBar />
-      </Box>
+      <SearchInput todos={todos} />
+      <TodoList />
+      <ActionBar />
+      <HiddenIndicator />
       {activeModal === "create-todo" && <CreateTodoModal />}
       {activeModal === "edit-todo" && <EditTodoModal />}
       {activeModal === "todo-menu" && <TodoMenu />}

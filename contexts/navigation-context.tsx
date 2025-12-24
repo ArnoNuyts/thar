@@ -1,6 +1,7 @@
 import {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -68,23 +69,26 @@ export const NavigationProvider = (
   const selectedTodoId = selection.cursorId;
   const selectedTodoIds = selection.rangeIds;
 
-  const toggleShowHidden = () => setShowHidden((prev) => !prev);
+  const toggleShowHidden = useCallback(
+    () => setShowHidden((prev) => !prev),
+    [],
+  );
 
-  const setSelectedTodoId = (id: symbol | undefined) => {
+  const setSelectedTodoId = useCallback((id: symbol | undefined) => {
     setSelection({
       cursorId: id,
       anchorId: undefined,
       rangeIds: new Set(),
     });
-  };
+  }, []);
 
-  const clearMultiSelect = () => {
+  const clearMultiSelect = useCallback(() => {
     setSelection((prev) => ({
       ...prev,
       anchorId: undefined,
       rangeIds: new Set(),
     }));
-  };
+  }, []);
 
   // Search bar takes 2 rows (content + border) when visible
   // Search bar is visible when focused OR has query
@@ -307,7 +311,7 @@ export const NavigationProvider = (
     }
   }, [selectedRow, listHeight, offsetRow]);
 
-  const doNavigate = (step: number, shift: boolean = false) => {
+  const doNavigate = useCallback((step: number, shift: boolean = false) => {
     setSelection((prev) => {
       const todoIndex = indexes.findIndex(
         (entry) =>
@@ -382,14 +386,24 @@ export const NavigationProvider = (
         rangeIds: newRange,
       };
     });
-  };
+  }, [indexes]);
 
-  const navigateUp = (shift?: boolean) => doNavigate(-1, shift);
-  const navigateDown = (shift?: boolean) => doNavigate(1, shift);
-  const navigatePageUp = (shift?: boolean) => doNavigate(-5, shift);
-  const navigatePageDown = (shift?: boolean) => doNavigate(5, shift);
+  const navigateUp = useCallback((shift?: boolean) => doNavigate(-1, shift), [
+    doNavigate,
+  ]);
+  const navigateDown = useCallback((shift?: boolean) => doNavigate(1, shift), [
+    doNavigate,
+  ]);
+  const navigatePageUp = useCallback(
+    (shift?: boolean) => doNavigate(-5, shift),
+    [doNavigate],
+  );
+  const navigatePageDown = useCallback(
+    (shift?: boolean) => doNavigate(5, shift),
+    [doNavigate],
+  );
 
-  const navigateHome = () => {
+  const navigateHome = useCallback(() => {
     const firstTodoIndex = indexes.findIndex((entry) =>
       entry.type === IndexType.todo
     );
@@ -399,9 +413,9 @@ export const NavigationProvider = (
         setSelectedTodoId(entry.todo.id);
       }
     }
-  };
+  }, [indexes, setSelectedTodoId]);
 
-  const navigateEnd = () => {
+  const navigateEnd = useCallback(() => {
     const lastTodoIndex = indexes.findLastIndex((entry) =>
       entry.type === IndexType.todo
     );
@@ -411,33 +425,53 @@ export const NavigationProvider = (
         setSelectedTodoId(entry.todo.id);
       }
     }
-  };
+  }, [indexes, setSelectedTodoId]);
 
-  const useSelectedTodo = () => {
+  const useSelectedTodo = useCallback(() => {
     return todos.find((t) => t.id === selectedTodoId);
-  };
+  }, [todos, selectedTodoId]);
+
+  const value = useMemo(
+    () => ({
+      indexes,
+      offsetRow,
+      listHeight,
+      navigateUp,
+      navigateDown,
+      navigatePageUp,
+      navigatePageDown,
+      navigateHome,
+      navigateEnd,
+      selectedTodoId,
+      setSelectedTodoId,
+      selectedTodoIds,
+      clearMultiSelect,
+      useSelectedTodo,
+      showHidden,
+      toggleShowHidden,
+    }),
+    [
+      indexes,
+      offsetRow,
+      listHeight,
+      navigateUp,
+      navigateDown,
+      navigatePageUp,
+      navigatePageDown,
+      navigateHome,
+      navigateEnd,
+      selectedTodoId,
+      setSelectedTodoId,
+      selectedTodoIds,
+      clearMultiSelect,
+      useSelectedTodo,
+      showHidden,
+      toggleShowHidden,
+    ],
+  );
 
   return (
-    <NavigationContext.Provider
-      value={{
-        indexes,
-        offsetRow,
-        listHeight,
-        navigateUp,
-        navigateDown,
-        navigatePageUp,
-        navigatePageDown,
-        navigateHome,
-        navigateEnd,
-        selectedTodoId,
-        setSelectedTodoId,
-        selectedTodoIds,
-        clearMultiSelect,
-        useSelectedTodo,
-        showHidden,
-        toggleShowHidden,
-      }}
-    >
+    <NavigationContext.Provider value={value}>
       {children}
     </NavigationContext.Provider>
   );
