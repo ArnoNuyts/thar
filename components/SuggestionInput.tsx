@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Box, measureElement } from "ink";
+import { Box, measureElement, Text } from "ink";
 import { useInput } from "../hooks/useInput.ts";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
@@ -14,8 +14,8 @@ interface SuggestionInputProps {
   onCancel: () => void;
   isFocused: boolean;
   todos: Todos;
-  modalLeft: number;
-  modalTop: number;
+  left: number;
+  top: number;
 }
 
 export const SuggestionInput = ({
@@ -26,8 +26,8 @@ export const SuggestionInput = ({
   onCancel,
   isFocused,
   todos,
-  modalLeft,
-  modalTop,
+  left,
+  top,
 }: SuggestionInputProps) => {
   const [cursorPos, setCursorPos] = useState(value.length);
   const [wordStartIndex, setWordStartIndex] = useState(0);
@@ -64,31 +64,64 @@ export const SuggestionInput = ({
       setDimensions({ width, height });
     }
   }, [value]);
-
+/*
   useEffect(() => {
-    if (suggestions.length === 0 || !dimensions.width) return;
-
-    const inputWidth = Math.floor(dimensions.width);
-    const line = Math.floor(wordStartIndex / inputWidth);
-    const col = wordStartIndex % inputWidth;
-
-    setPosition({
-      left: modalLeft + col + 4,
-      top: modalTop + line + 2,
-    });
-  }, [
-    wordStartIndex,
-    dimensions.width,
-    suggestions.length,
-    modalLeft,
-    modalTop,
-  ]);
+  if (suggestions.length === 0) return;
+  
+  const textUpToCursor = value.slice(0, wordStartIndex);
+  const charsPerLine = dimensions.width; // terminal columns
+  const cursorCol = wordStartIndex % charsPerLine;
+  const cursorLine = Math.floor(textUpToCursor.length / charsPerLine);
+  
+  setPosition({
+    left: left + cursorCol,
+    top: top + cursorLine + 1,
+  });
+}, [wordStartIndex, value, dimensions.width, suggestions.length, left, top]);
 
   useEffect(() => {
     if (!isFocused) {
       clearSuggestions();
     }
   }, [isFocused]);
+  */
+
+ useEffect(() => {
+  if (suggestions.length === 0) return;
+
+  const textUpToCursor = value.slice(0, wordStartIndex);
+  const words = textUpToCursor.split(/(\s+)/);
+  
+  let cursorLine = 0;
+  let lineLength = 0;
+
+  for (const word of words) {
+    const isWhitespace = /^\s+$/.test(word);
+    
+    if (isWhitespace) {
+      // spaces fill character by character, wrapping as needed
+      for (let i = 0; i < word.length; i++) {
+        if (lineLength >= dimensions.width) {
+          cursorLine++;
+          lineLength = 0;
+        }
+        lineLength++;
+      }
+    } else {
+      // words wrap as a unit (if they fit)
+      if (lineLength + word.length > dimensions.width && lineLength > 0) {
+        cursorLine++;
+        lineLength = 0;
+      }
+      lineLength += word.length;
+    }
+  }
+
+  setPosition({
+    left: left + lineLength -2,
+    top: top + cursorLine + 1,
+  });
+}, [wordStartIndex, value, dimensions.width, suggestions.length, left, top]);
 
   const updateSuggestions = (text: string, cursor: number) => {
     const leftPart = text.slice(0, cursor);
