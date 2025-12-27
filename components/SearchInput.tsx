@@ -6,7 +6,7 @@ import { useSuggestion } from "../contexts/suggestion-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
 import { useFocusable } from "../hooks/useFocusable.ts";
 import { useNavigation } from "../contexts/navigation-context.tsx";
-import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
+import { SECONDARY_COLOR } from "../constants.ts";
 
 import { Todos } from "../logic/Todos.ts";
 

@@ -366,7 +366,7 @@ export const TodoList = () => {
 
           return (
             <TodoItem
-              key={entry.todo.Id}
+              key={entry.todo.id.toString()}
               todo={entry.todo}
               isFocused={isFocused}
               isSelectedInRange={isSelectedInRange}

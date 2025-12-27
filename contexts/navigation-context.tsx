@@ -24,7 +24,7 @@ interface SelectionState {
   rangeIds: Set<symbol>;
 }
 
-interface NavigationContextType {
+export interface NavigationContextType {
   indexes: IndexEntry[];
   offsetRow: number;
   listHeight: number;
