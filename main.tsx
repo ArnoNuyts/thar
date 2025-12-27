@@ -1,4 +1,4 @@
-import { Box, Newline, render } from "ink";
+import { render } from "ink";
 import { ActionBar } from "./components/ActionBar.tsx";
 import { ConfirmModal } from "./components/ConfirmModal.tsx";
 import { CreateTodoModal } from "./components/CreateTodoModal.tsx";

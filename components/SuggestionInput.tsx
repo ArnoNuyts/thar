@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Box, measureElement, Text } from "ink";
+import { Box, measureElement } from "ink";
 import { useInput } from "../hooks/useInput.ts";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
