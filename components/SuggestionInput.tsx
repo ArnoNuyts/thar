@@ -64,15 +64,15 @@ export const SuggestionInput = ({
       setDimensions({ width, height });
     }
   }, [value]);
-/*
+  /*
   useEffect(() => {
   if (suggestions.length === 0) return;
-  
+
   const textUpToCursor = value.slice(0, wordStartIndex);
   const charsPerLine = dimensions.width; // terminal columns
   const cursorCol = wordStartIndex % charsPerLine;
   const cursorLine = Math.floor(textUpToCursor.length / charsPerLine);
-  
+
   setPosition({
     left: left + cursorCol,
     top: top + cursorLine + 1,
@@ -86,42 +86,42 @@ export const SuggestionInput = ({
   }, [isFocused]);
   */
 
- useEffect(() => {
-  if (suggestions.length === 0) return;
+  useEffect(() => {
+    if (suggestions.length === 0) return;
 
-  const textUpToCursor = value.slice(0, wordStartIndex);
-  const words = textUpToCursor.split(/(\s+)/);
-  
-  let cursorLine = 0;
-  let lineLength = 0;
+    const textUpToCursor = value.slice(0, wordStartIndex);
+    const words = textUpToCursor.split(/(\s+)/);
 
-  for (const word of words) {
-    const isWhitespace = /^\s+$/.test(word);
-    
-    if (isWhitespace) {
-      // spaces fill character by character, wrapping as needed
-      for (let i = 0; i < word.length; i++) {
-        if (lineLength >= dimensions.width) {
+    let cursorLine = 0;
+    let lineLength = 0;
+
+    for (const word of words) {
+      const isWhitespace = /^\s+$/.test(word);
+
+      if (isWhitespace) {
+        // spaces fill character by character, wrapping as needed
+        for (let i = 0; i < word.length; i++) {
+          if (lineLength >= dimensions.width) {
+            cursorLine++;
+            lineLength = 0;
+          }
+          lineLength++;
+        }
+      } else {
+        // words wrap as a unit (if they fit)
+        if (lineLength + word.length > dimensions.width && lineLength > 0) {
           cursorLine++;
           lineLength = 0;
         }
-        lineLength++;
+        lineLength += word.length;
       }
-    } else {
-      // words wrap as a unit (if they fit)
-      if (lineLength + word.length > dimensions.width && lineLength > 0) {
-        cursorLine++;
-        lineLength = 0;
-      }
-      lineLength += word.length;
     }
-  }
 
-  setPosition({
-    left: left + lineLength -2,
-    top: top + cursorLine + 1,
-  });
-}, [wordStartIndex, value, dimensions.width, suggestions.length, left, top]);
+    setPosition({
+      left: left + lineLength - 2,
+      top: top + cursorLine + 1,
+    });
+  }, [wordStartIndex, value, dimensions.width, suggestions.length, left, top]);
 
   const updateSuggestions = (text: string, cursor: number) => {
     const leftPart = text.slice(0, cursor);

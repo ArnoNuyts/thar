@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { Box, Newline, Text, measureElement, useStdout } from "ink";
+import { useEffect, useRef, useState } from "react";
+import { Box, measureElement, Newline, Text, useStdout } from "ink";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
@@ -28,7 +28,10 @@ export const ModalTodoInput = ({
   const terminalHeight = stdout?.rows || 24;
 
   const inputRef = useRef(null);
-  const [inputDimensions, setInputDimensions] = useState({ width: 0, height: 0 });
+  const [inputDimensions, setInputDimensions] = useState({
+    width: 0,
+    height: 0,
+  });
   const [value, setValue] = useState(initialValue);
 
   useEffect(() => {
