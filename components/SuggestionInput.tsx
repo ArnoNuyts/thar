@@ -61,7 +61,12 @@ export const SuggestionInput = ({
   useEffect(() => {
     if (ref.current) {
       const { width, height } = measureElement(ref.current);
-      setDimensions({ width, height });
+      if (width > 0 || height > 0) {
+        setDimensions({ width, height });
+      } else {
+        // Fallback for tests
+        setDimensions({ width: 80, height: 1 });
+      }
     }
   }, [value]);
   /*

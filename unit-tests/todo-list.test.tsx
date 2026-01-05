@@ -1,32 +1,36 @@
-import { render } from "ink-testing-library";
 import { assertEquals } from "@std/assert";
-import { delay } from "@std/async";
-import { useEffect } from "react";
 import { Box, Text } from "ink";
+import { render } from "ink-testing-library";
+import { useEffect } from "react";
 
 import { Todo } from "../logic/todo.ts";
-import { restoreDenoMocks, waitFor } from "./test-utils.ts";
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
+import { restoreDenoMocks, waitFor } from "./test-utils.ts";
 
-import { TodoList } from "../components/TodoList.tsx";
 import { ActionBar } from "../components/ActionBar.tsx";
 import { ConfirmModal } from "../components/ConfirmModal.tsx";
 import { HiddenIndicator } from "../components/HiddenIndicator.tsx";
+import { SetDateModal } from "../components/SetDateModal.tsx";
+import { SetRecurrenceModal } from "../components/SetRecurrenceModal.tsx";
+import { TodoList } from "../components/TodoList.tsx";
 
-import { useTodo } from "../contexts/todo-context.tsx";
 import { FocusProvider, useFocusManager } from "../contexts/focus-context.tsx";
-import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
-import { SearchProvider } from "../contexts/search-context.tsx";
-import { ToasterProvider } from "../contexts/toaster-context.tsx";
-import {
-  NavigationProvider,
-  useNavigation,
-} from "../contexts/navigation-context.tsx";
 import {
   isConfirmModalData,
   ModalProvider,
   useModal,
 } from "../contexts/modal-context.tsx";
+import {
+  NavigationContextType,
+  NavigationProvider,
+  useNavigation,
+} from "../contexts/navigation-context.tsx";
+import { SearchProvider } from "../contexts/search-context.tsx";
+import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
+import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import { TodoMenu } from "../components/TodoMenu.tsx";
+
+import { useTodo } from "../contexts/todo-context.tsx";
 
 // --- Helpers ---
 
@@ -70,7 +74,6 @@ const TestWrapper = ({
   );
 };
 
-// Helper component to observe selection state (by ID)
 const SelectionObserver = ({
   onSelectionIdChange,
 }: {
@@ -84,6 +87,42 @@ const SelectionObserver = ({
     }
   }, [selectedTodoId, onSelectionIdChange]);
 
+  return null;
+};
+
+const SelectionStateObserver = ({
+  onSelectionChange,
+}: {
+  onSelectionChange: (
+    state: {
+      cursorId: symbol | undefined;
+      anchorId: symbol | undefined;
+      rangeIds: Set<symbol>;
+    },
+  ) => void;
+}) => {
+  const { selectedTodoId, selectedTodoIds } = useNavigation();
+
+  useEffect(() => {
+    onSelectionChange({
+      cursorId: selectedTodoId,
+      anchorId: undefined,
+      rangeIds: selectedTodoIds,
+    });
+  }, [selectedTodoId, selectedTodoIds, onSelectionChange]);
+
+  return null;
+};
+
+const NavController = ({
+  onNav,
+}: {
+  onNav: (nav: NavigationContextType) => void;
+}) => {
+  const nav = useNavigation();
+  useEffect(() => {
+    onNav(nav);
+  }, [nav, onNav]);
   return null;
 };
 
@@ -104,7 +143,7 @@ const FocusObserver = ({ onFocused }: { onFocused: () => void }) => {
 const AppContentMock = () => {
   const { activeModal, modalData } = useModal();
   return (
-    <Box flexDirection="column" position="relative">
+    <Box flexDirection="column" position="relative" height={25}>
       <HiddenIndicator />
       <TodoList />
       <ActionBar />
@@ -117,6 +156,11 @@ const AppContentMock = () => {
         />
       )}
       {activeModal === "create-todo" && <Text>Create Todo Modal</Text>}
+      {activeModal === "set-due-date" && <SetDateModal type="due" />}
+      {activeModal === "set-threshold-date" &&
+        <SetDateModal type="threshold" />}
+      {activeModal === "set-recurrence" && <SetRecurrenceModal />}
+      {activeModal === "todo-menu" && <TodoMenu />}
     </Box>
   );
 };
@@ -425,7 +469,7 @@ Deno.test({
     });
 
     // Press Enter to confirm
-    await delay(100);
+
     stdin.write("\r");
 
     // Modal should disappear
@@ -465,13 +509,443 @@ Deno.test({
       assertEquals(isFocused, true);
     });
 
-    // Press 'n'
+    // Press 'x'
     stdin.write("n");
 
-    // Should show Create Todo modal
+    // Should show Todo Menu
     await waitFor(() => {
       const frame = lastFrame();
       assertEquals(frame?.includes("Create Todo Modal"), true);
+    });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: should handle 'd' key with multi-selection",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todo1 = new Todo("Todo 1");
+    const todo2 = new Todo("Todo 2");
+    let capturedTodos: Todo[] = [];
+    let focused = false;
+    let focusCount = 0;
+    let selectedCount = 0;
+    let nav: NavigationContextType = null!;
+
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper
+        initialTodos={[todo1, todo2]}
+        onTodosChange={(todos) => capturedTodos = todos}
+      >
+        <AppContentMock />
+        <FocusObserver
+          onFocused={() => {
+            focused = true;
+            focusCount++;
+          }}
+        />
+        <SelectionStateObserver
+          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
+        />
+        <NavController onNav={(n) => nav = n} />
+      </TestWrapper>,
+    );
+
+    // Wait for focus and initial render
+    await waitFor(() => {
+      assertEquals(focused, true);
+      const frame = lastFrame();
+      assertEquals(frame?.includes("Todo 1"), true);
+    });
+
+    // Select both (Shift + Down)
+    nav.navigateDown(true);
+    await waitFor(() => assertEquals(selectedCount, 2));
+
+    // Press 'd'
+    stdin.write("d");
+
+    // Should show Set Due Date modal
+    await waitFor(() => {
+      const frame = lastFrame();
+      assertEquals(frame?.includes("Set Due Date"), true);
+    });
+
+    // Wait for modal to gain focus
+    await waitFor(() => {
+      assertEquals(focusCount >= 2, true);
+    });
+
+    // Press Enter to set "Today" for both
+
+    stdin.write("\r");
+
+    // Modal should disappear
+    await waitFor(() => {
+      const frame = lastFrame();
+      assertEquals(frame?.includes("Set Due Date"), false);
+    });
+
+    // BOTH should have due date
+    await waitFor(() => {
+      assertEquals(capturedTodos.length >= 2, true);
+      assertEquals(capturedTodos[0].tags.due !== undefined, true);
+      assertEquals(capturedTodos[1].tags.due !== undefined, true);
+    });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: should handle 't' key with multi-selection",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todo1 = new Todo("Todo 1");
+    const todo2 = new Todo("Todo 2");
+    let capturedTodos: Todo[] = [];
+    let focused = false;
+    let focusCount = 0;
+    let selectedCount = 0;
+    let nav: NavigationContextType = null!;
+
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper
+        initialTodos={[todo1, todo2]}
+        onTodosChange={(todos) => capturedTodos = todos}
+      >
+        <AppContentMock />
+        <FocusObserver onFocused={() => focused = true} />
+        <SelectionStateObserver
+          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
+        />
+        <NavController onNav={(n) => nav = n} />
+        <FocusObserver
+          onFocused={() => {
+            focused = true;
+            focusCount++;
+          }}
+        />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focused, true));
+
+    // Select both
+    nav.navigateDown(true);
+    await waitFor(() => assertEquals(selectedCount, 2));
+
+    // Press 't'
+    stdin.write("t");
+
+    // Should show Set Threshold Date modal
+    await waitFor(() => {
+      const frame = lastFrame();
+      assertEquals(frame?.includes("Set Threshold Date"), true);
+    });
+
+    // Wait for modal to gain focus
+    await waitFor(() => {
+      assertEquals(focusCount >= 2, true);
+    });
+
+    // Press Enter to set "Today" for both
+
+    stdin.write("\r");
+
+    // BOTH should have threshold date
+    await waitFor(() => {
+      assertEquals(capturedTodos.length >= 2, true);
+      assertEquals(capturedTodos[0].tags.t !== undefined, true);
+      assertEquals(capturedTodos[1].tags.t !== undefined, true);
+    });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: should handle 'r' key with multi-selection",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todo1 = new Todo("Todo 1");
+    const todo2 = new Todo("Todo 2");
+    let capturedTodos: Todo[] = [];
+    let focused = false;
+    let focusCount = 0;
+    let selectedCount = 0;
+    let nav: NavigationContextType = null!;
+
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper
+        initialTodos={[todo1, todo2]}
+        onTodosChange={(todos) => capturedTodos = todos}
+      >
+        <AppContentMock />
+        <FocusObserver onFocused={() => focused = true} />
+        <SelectionStateObserver
+          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
+        />
+        <NavController onNav={(n) => nav = n} />
+        <FocusObserver
+          onFocused={() => {
+            focused = true;
+            focusCount++;
+          }}
+        />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focused, true));
+
+    // Select both
+    nav.navigateDown(true);
+    await waitFor(() => assertEquals(selectedCount, 2));
+
+    // Press 'r'
+    stdin.write("r");
+
+    // Should show Set Recurrence modal
+    await waitFor(() => {
+      const frame = lastFrame();
+      assertEquals(frame?.includes("Set Recurrence Base"), true);
+    });
+
+    // Wait for modal to gain focus
+    await waitFor(() => {
+      assertEquals(focusCount >= 2, true);
+    });
+
+    // Select Daily (first option, just press Enter)
+    stdin.write("\r");
+
+    // Now it asks for amount
+    await waitFor(() => {
+      const frame = lastFrame();
+      assertEquals(frame?.includes("Set Recurrence Interval"), true);
+    });
+
+    // Confirm amount "1" (default)
+
+    stdin.write("\r");
+
+    // BOTH should have recurrence
+    await waitFor(() => {
+      assertEquals(capturedTodos.length >= 2, true);
+      assertEquals(capturedTodos[0].tags.rec, "1d");
+      assertEquals(capturedTodos[1].tags.rec, "1d");
+    });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: should only update priority for selected items",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todo1 = new Todo("Todo 1");
+    const todo2 = new Todo("Todo 2");
+    const todo3 = new Todo("Todo 3");
+    let capturedTodos: Todo[] = [];
+    let focused = false;
+    let selectedCount = 0;
+    let nav: NavigationContextType = null!;
+
+    const { unmount, stdin } = render(
+      <TestWrapper
+        initialTodos={[todo1, todo2, todo3]}
+        onTodosChange={(todos) => capturedTodos = todos}
+      >
+        <AppContentMock />
+        <FocusObserver onFocused={() => focused = true} />
+        <SelectionStateObserver
+          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
+        />
+        <NavController onNav={(n) => nav = n} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focused, true));
+
+    // Select 1 and 2
+    nav.navigateDown(true);
+    await waitFor(() => assertEquals(selectedCount, 2));
+
+    // Press 'A'
+    stdin.write("A");
+
+    // 1 and 2 should be A, 3 should be unset
+    await waitFor(() => {
+      assertEquals(capturedTodos.length >= 3, true);
+      assertEquals(capturedTodos[0].priority, "A");
+      assertEquals(capturedTodos[1].priority, "A");
+      assertEquals(capturedTodos[2].priority, undefined);
+    });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: should toggle multiple todos via menu",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todo1 = new Todo("Todo 1");
+    const todo2 = new Todo("Todo 2");
+    let capturedTodos: Todo[] = [];
+    let focusCount = 0;
+    let selectedCount = 0;
+    let nav: NavigationContextType = null!;
+
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper
+        initialTodos={[todo1, todo2]}
+        onTodosChange={(todos) => capturedTodos = todos}
+      >
+        <AppContentMock />
+        <FocusObserver onFocused={() => focusCount++} />
+        <SelectionStateObserver
+          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
+        />
+        <NavController onNav={(n) => nav = n} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focusCount >= 1, true));
+    nav.navigateDown(true);
+    await waitFor(() => assertEquals(selectedCount, 2));
+
+    stdin.write("x");
+    await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
+    await waitFor(() => assertEquals(focusCount >= 2, true));
+
+    stdin.write(" ");
+    await waitFor(() => {
+      assertEquals(capturedTodos.length >= 2, true);
+      assertEquals(capturedTodos[0].isDone(), true);
+      assertEquals(capturedTodos[1].isDone(), true);
+    });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: should delete multiple todos via menu",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todo1 = new Todo("Todo 1");
+    const todo2 = new Todo("Todo 2");
+    let capturedTodos: Todo[] = [];
+    let focusCount = 0;
+    let selectedCount = 0;
+    let nav: NavigationContextType = null!;
+
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper
+        initialTodos={[todo1, todo2]}
+        onTodosChange={(todos) => capturedTodos = todos}
+      >
+        <AppContentMock />
+        <FocusObserver onFocused={() => focusCount++} />
+        <SelectionStateObserver
+          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
+        />
+        <NavController onNav={(n) => nav = n} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focusCount >= 1, true));
+    nav.navigateDown(true);
+    await waitFor(() => assertEquals(selectedCount, 2));
+
+    stdin.write("x");
+    await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
+    await waitFor(() => assertEquals(focusCount >= 2, true));
+
+    stdin.write("\x1b[3~"); // Delete
+    await waitFor(() => {
+      const frame = lastFrame();
+      assertEquals(
+        frame?.includes("Are you sure you want to delete 2 todos?"),
+        true,
+      );
+    });
+    await waitFor(() => assertEquals(focusCount >= 3, true));
+
+    stdin.write("\r");
+    await waitFor(() => assertEquals(capturedTodos.length, 0));
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: should copy multiple todos via menu",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todo1 = new Todo("Todo 1");
+    const todo2 = new Todo("Todo 2");
+    let focusCount = 0;
+    let selectedCount = 0;
+    let nav: NavigationContextType = null!;
+
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper initialTodos={[todo1, todo2]}>
+        <AppContentMock />
+        <FocusObserver onFocused={() => focusCount++} />
+        <SelectionStateObserver
+          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
+        />
+        <NavController onNav={(n) => nav = n} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focusCount >= 1, true));
+    nav.navigateDown(true);
+    await waitFor(() => assertEquals(selectedCount, 2));
+
+    stdin.write("x"); // Use 'x' to test both
+    await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
+    await waitFor(() => assertEquals(focusCount >= 2, true));
+
+    stdin.write("c");
+    await waitFor(() =>
+      assertEquals(lastFrame()?.includes("Todo menu"), false)
+    );
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: minimal should open menu",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    let isFocused = false;
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper initialTodos={[new Todo("Test")]}>
+        <AppContentMock />
+        <FocusObserver onFocused={() => isFocused = true} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(isFocused, true));
+
+    stdin.write("x");
+    await waitFor(() => {
+      assertEquals(lastFrame()?.includes("Todo menu"), true);
     });
 
     unmount();

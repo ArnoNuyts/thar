@@ -15,7 +15,7 @@ import { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
 import { useToaster } from "./toaster-context.tsx";
 
-interface TodoContextType {
+export interface TodoContextType {
   todos: Todos;
   setTodos: (todos: Todos) => void;
   addTodos: (...texts: string[]) => Todo[];
