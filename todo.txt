@@ -47,8 +47,8 @@ x 2025-12-22 2025-12-12 Make Todo.js immutable -> that way it is easier for reac
 x 2025-12-22 2025-12-16 Implement home / end for navigation @v0.3
 x 2025-12-31 2025-12-23 +Multi-select support @v0.4
 2025-12-23 +Multi-select : seperate menu / menu content @v0.4
-2025-12-23 +Multi-select : set prio @v0.4
-2025-12-23 +Multi-select : toggle state @v0.4
+x 2026-01-05 2025-12-23 +Multi-select : set prio @v0.4
+x 2026-01-05 2025-12-23 +Multi-select : toggle state @v0.4
 (A) 2025-12-23 +bug after search cancel, should set screen-position to take full advantage of terminal height @v0.4
 (A) 2025-12-23 +bug due-color still red even when todo is completed @v0.4
 2025-12-23 Scrollbar on TodoList @v0.5
