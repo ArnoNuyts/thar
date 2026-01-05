@@ -19,7 +19,7 @@ const PRIORITIES: (UpperCaseLetter | "Unset")[] = [
 
 export const SetPriorityModal = () => {
   const { closeModal } = useModal();
-  const { updateTodo } = useTodo();
+  const { updateTodos } = useTodo();
   const { useSelectedTodo } = useNavigation();
   const todo = useSelectedTodo();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -42,8 +42,7 @@ export const SetPriorityModal = () => {
       const newPriority = selected === "Unset"
         ? undefined
         : selected as UpperCaseLetter;
-      const updatedTodo = todo.setPriority(newPriority);
-      updateTodo(todo, updatedTodo);
+      updateTodos([todo], (t) => t.setPriority(newPriority));
       closeModal();
       return;
     }
