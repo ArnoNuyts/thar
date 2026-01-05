@@ -68,7 +68,7 @@ export const SetRecurrenceModal = () => {
         }
         break;
     }
-  }, { autoFocus: true });
+  }, { autoFocus: true, tag: "set-recurrence-modal" });
 
   const getTitle = () => {
     if (step === "base") return "Set Recurrence Base";

@@ -1,67 +1,16 @@
 import { render } from "ink-testing-library";
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertMatch } from "@std/assert";
 import { useEffect } from "react";
 import { Box } from "ink";
 
 import { SetRecurrenceModal } from "../components/SetRecurrenceModal.tsx";
-import { ModalProvider, useModal } from "../contexts/modal-context.tsx";
-import { FocusProvider, useFocusManager } from "../contexts/focus-context.tsx";
-import { TodoContext, TodoContextType } from "../contexts/todo-context.tsx";
-import {
-  NavigationContext,
-  NavigationContextType,
-} from "../contexts/navigation-context.tsx";
+import { useModal } from "../contexts/modal-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
-
-const FocusObserver = ({ onFocused }: { onFocused: () => void }) => {
-  const { activeId } = useFocusManager();
-  useEffect(() => {
-    let timeoutId: number | undefined;
-    if (activeId) {
-      timeoutId = setTimeout(onFocused, 150);
-    }
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [activeId, onFocused]);
-  return null;
-};
-
-const TestWrapper = ({
-  children,
-  todoValue = {},
-  navValue = {},
-}: {
-  children: React.ReactNode;
-  todoValue?: Partial<TodoContextType>;
-  navValue?: Partial<NavigationContextType>;
-}) => {
-  return (
-    <TodoContext.Provider
-      value={{
-        updateTodos: () => {},
-        ...todoValue,
-      } as TodoContextType}
-    >
-      <NavigationContext.Provider
-        value={{
-          useSelectedTodos: () => [],
-          ...navValue,
-        } as NavigationContextType}
-      >
-        <FocusProvider>
-          <ModalProvider>
-            {children}
-          </ModalProvider>
-        </FocusProvider>
-      </NavigationContext.Provider>
-    </TodoContext.Provider>
-  );
-};
+import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
 Deno.test("SetRecurrenceModal: should render and set focus", async () => {
-  let focused = false;
+  let focusedTag: string | undefined;
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Test Todo");
 
@@ -76,7 +25,7 @@ Deno.test("SetRecurrenceModal: should render and set focus", async () => {
     return (
       <Box flexDirection="column" height={20}>
         {activeModal === "set-recurrence" && <SetRecurrenceModal />}
-        <FocusObserver onFocused={() => focused = true} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -94,17 +43,17 @@ Deno.test("SetRecurrenceModal: should render and set focus", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() =>
-    assertEquals(lastFrame()?.includes("Set Recurrence Base"), true)
-  );
-  await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => {
+    assertMatch(lastFrame() || "", /Set Recurrence Base/);
+    assertEquals(focusedTag, "set-recurrence-modal");
+  });
 
   // Options are Daily, Weekly, Monthly, Yearly
   // Select Daily (Initial)
   stdin.write("\r");
 
   await waitFor(() =>
-    assertEquals(lastFrame()?.includes("Set Recurrence Interval (Daily)"), true)
+    assertMatch(lastFrame() || "", /Set Recurrence Interval \(Daily\)/)
   );
 
   // Initial amount is "1"
@@ -118,7 +67,7 @@ Deno.test("SetRecurrenceModal: should render and set focus", async () => {
 });
 
 Deno.test("SetRecurrenceModal: should update multiple todos", async () => {
-  let focused = false;
+  let focusedTag: string | undefined;
   let updatedTodos: Todo[] = [];
   const todo1 = new Todo("Todo 1");
   const todo2 = new Todo("Todo 2");
@@ -132,7 +81,7 @@ Deno.test("SetRecurrenceModal: should update multiple todos", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "set-recurrence" && <SetRecurrenceModal />}
-        <FocusObserver onFocused={() => focused = true} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -153,15 +102,15 @@ Deno.test("SetRecurrenceModal: should update multiple todos", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() =>
-    assertEquals(lastFrame()?.includes("Set Recurrence Base"), true)
-  );
-  await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => {
+    assertMatch(lastFrame() || "", /Set Recurrence Base/);
+    assertEquals(focusedTag, "set-recurrence-modal");
+  });
 
   // Daily
   stdin.write("\r");
   await waitFor(() =>
-    assertEquals(lastFrame()?.includes("Set Recurrence Interval (Daily)"), true)
+    assertMatch(lastFrame() || "", /Set Recurrence Interval \(Daily\)/)
   );
 
   // 1

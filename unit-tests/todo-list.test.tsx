@@ -1,7 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
-import { useEffect } from "react";
 
 import { Todo } from "../logic/todo.ts";
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
@@ -14,7 +13,7 @@ import { SetDateModal } from "../components/SetDateModal.tsx";
 import { SetRecurrenceModal } from "../components/SetRecurrenceModal.tsx";
 import { TodoList } from "../components/TodoList.tsx";
 
-import { FocusProvider, useFocusManager } from "../contexts/focus-context.tsx";
+import { FocusProvider } from "../contexts/focus-context.tsx";
 import {
   isConfirmModalData,
   ModalProvider,
@@ -23,7 +22,6 @@ import {
 import {
   NavigationContextType,
   NavigationProvider,
-  useNavigation,
 } from "../contexts/navigation-context.tsx";
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
@@ -74,70 +72,12 @@ const TestWrapper = ({
   );
 };
 
-const SelectionObserver = ({
-  onSelectionIdChange,
-}: {
-  onSelectionIdChange?: (id: symbol | undefined) => void;
-}) => {
-  const { selectedTodoId } = useNavigation();
-
-  useEffect(() => {
-    if (onSelectionIdChange) {
-      onSelectionIdChange(selectedTodoId);
-    }
-  }, [selectedTodoId, onSelectionIdChange]);
-
-  return null;
-};
-
-const SelectionStateObserver = ({
-  onSelectionChange,
-}: {
-  onSelectionChange: (
-    state: {
-      cursorId: symbol | undefined;
-      anchorId: symbol | undefined;
-      rangeIds: Set<symbol>;
-    },
-  ) => void;
-}) => {
-  const { selectedTodoId, selectedTodoIds } = useNavigation();
-
-  useEffect(() => {
-    onSelectionChange({
-      cursorId: selectedTodoId,
-      anchorId: undefined,
-      rangeIds: selectedTodoIds,
-    });
-  }, [selectedTodoId, selectedTodoIds, onSelectionChange]);
-
-  return null;
-};
-
-const NavController = ({
-  onNav,
-}: {
-  onNav: (nav: NavigationContextType) => void;
-}) => {
-  const nav = useNavigation();
-  useEffect(() => {
-    onNav(nav);
-  }, [nav, onNav]);
-  return null;
-};
-
-// Helper to observe focus
-const FocusObserver = ({ onFocused }: { onFocused: () => void }) => {
-  const { activeId } = useFocusManager();
-  useEffect(() => {
-    if (activeId) {
-      // Give it time for useInput effect to run
-      const timer = setTimeout(onFocused, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [activeId, onFocused]);
-  return null;
-};
+import {
+  FocusObserver,
+  NavController,
+  SelectionObserver,
+  SelectionStateObserver,
+} from "./test-components.tsx";
 
 // Mock App Content for TodoList tests
 const AppContentMock = () => {
@@ -414,7 +354,10 @@ Deno.test({
     await waitFor(() => {
       assertEquals(capturedTodos.length, 3);
       assertEquals(capturedTodos[2].text, "Pasted Todo 2");
-      assertEquals(currentSelectionId, capturedTodos[2].id);
+    });
+
+    await waitFor(() => {
+      assertEquals(String(currentSelectionId), String(capturedTodos[2].id));
     });
 
     unmount();

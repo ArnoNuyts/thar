@@ -1,68 +1,17 @@
 import { render } from "ink-testing-library";
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertMatch } from "@std/assert";
 import { useEffect } from "react";
 import { Box } from "ink";
 import { format } from "date-fns";
 
 import { SetDateModal } from "../components/SetDateModal.tsx";
-import { ModalProvider, useModal } from "../contexts/modal-context.tsx";
-import { FocusProvider, useFocusManager } from "../contexts/focus-context.tsx";
-import { TodoContext, TodoContextType } from "../contexts/todo-context.tsx";
-import {
-  NavigationContext,
-  NavigationContextType,
-} from "../contexts/navigation-context.tsx";
+import { useModal } from "../contexts/modal-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
-
-const FocusObserver = ({ onFocused }: { onFocused: () => void }) => {
-  const { activeId } = useFocusManager();
-  useEffect(() => {
-    let timeoutId: number | undefined;
-    if (activeId) {
-      timeoutId = setTimeout(onFocused, 150);
-    }
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [activeId, onFocused]);
-  return null;
-};
-
-const TestWrapper = ({
-  children,
-  todoValue = {},
-  navValue = {},
-}: {
-  children: React.ReactNode;
-  todoValue?: Partial<TodoContextType>;
-  navValue?: Partial<NavigationContextType>;
-}) => {
-  return (
-    <TodoContext.Provider
-      value={{
-        updateTodos: () => {},
-        ...todoValue,
-      } as TodoContextType}
-    >
-      <NavigationContext.Provider
-        value={{
-          useSelectedTodos: () => [],
-          ...navValue,
-        } as NavigationContextType}
-      >
-        <FocusProvider>
-          <ModalProvider>
-            {children}
-          </ModalProvider>
-        </FocusProvider>
-      </NavigationContext.Provider>
-    </TodoContext.Provider>
-  );
-};
+import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
 Deno.test("SetDateModal: should render due and set focus", async () => {
-  let focused = false;
+  let focusedTag: string | undefined;
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Test Todo");
 
@@ -77,7 +26,7 @@ Deno.test("SetDateModal: should render due and set focus", async () => {
     return (
       <Box flexDirection="column" height={20}>
         {activeModal === "set-due-date" && <SetDateModal type="due" />}
-        <FocusObserver onFocused={() => focused = true} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -95,10 +44,10 @@ Deno.test("SetDateModal: should render due and set focus", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() =>
-    assertEquals(lastFrame()?.includes("Set Due Date"), true)
-  );
-  await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => {
+    assertMatch(lastFrame() || "", /Set Due Date/);
+    assertEquals(focusedTag, "set-date-modal");
+  });
 
   // Initial is Today
   stdin.write("\r");
@@ -111,7 +60,7 @@ Deno.test("SetDateModal: should render due and set focus", async () => {
 });
 
 Deno.test("SetDateModal: should render threshold and set focus", async () => {
-  let focused = false;
+  let focusedTag: string | undefined;
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Test Todo");
 
@@ -128,7 +77,7 @@ Deno.test("SetDateModal: should render threshold and set focus", async () => {
         {activeModal === "set-threshold-date" && (
           <SetDateModal type="threshold" />
         )}
-        <FocusObserver onFocused={() => focused = true} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -146,10 +95,10 @@ Deno.test("SetDateModal: should render threshold and set focus", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() =>
-    assertEquals(lastFrame()?.includes("Set Threshold Date"), true)
-  );
-  await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => {
+    assertMatch(lastFrame() || "", /Set Threshold Date/);
+    assertEquals(focusedTag, "set-date-modal");
+  });
 
   // Initial is Today
   stdin.write("\r");
@@ -162,7 +111,7 @@ Deno.test("SetDateModal: should render threshold and set focus", async () => {
 });
 
 Deno.test("SetDateModal: should update multiple todos", async () => {
-  let focused = false;
+  let focusedTag: string | undefined;
   let updatedTodos: Todo[] = [];
   const todo1 = new Todo("Todo 1");
   const todo2 = new Todo("Todo 2");
@@ -176,7 +125,7 @@ Deno.test("SetDateModal: should update multiple todos", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "set-due-date" && <SetDateModal type="due" />}
-        <FocusObserver onFocused={() => focused = true} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -197,10 +146,10 @@ Deno.test("SetDateModal: should update multiple todos", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() =>
-    assertEquals(lastFrame()?.includes("Set Due Date"), true)
-  );
-  await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => {
+    assertMatch(lastFrame() || "", /Set Due Date/);
+    assertEquals(focusedTag, "set-date-modal");
+  });
 
   // Select Today (default)
   stdin.write("\r");
