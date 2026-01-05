@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertMatch } from "@std/assert";
 import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
 
@@ -155,6 +155,42 @@ function teardownClipboardMock() {
   // deno-lint-ignore no-explicit-any
   (Deno as any).Command = originalCommand;
   restoreDenoMocks();
+}
+
+// Custom clipboard mock for copy tests
+function setupCaptureClipboardMock(onCapture: (text: string) => void) {
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class {
+    command: string;
+    // deno-lint-ignore no-explicit-any
+    constructor(command: string, _options: any) {
+      this.command = command;
+    }
+    // deno-lint-ignore no-explicit-any
+    spawn(): any {
+      return {
+        stdin: {
+          getWriter() {
+            return {
+              write: (data: Uint8Array) => {
+                const text = new TextDecoder().decode(data);
+                onCapture(text);
+                return Promise.resolve();
+              },
+              close: () => Promise.resolve(),
+            };
+          },
+        },
+        status: Promise.resolve({ success: true, code: 0 }),
+      };
+    }
+  };
+  return () => {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+    restoreDenoMocks();
+  };
 }
 
 // --- Tests ---
@@ -892,5 +928,95 @@ Deno.test({
     });
 
     unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: 'c' should copy multiple selected todos",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    let capturedText = "";
+    const restore = setupCaptureClipboardMock((text) => capturedText = text);
+
+    const todo1 = new Todo("Todo 1");
+    const todo2 = new Todo("Todo 2");
+
+    // We expect multiselect behavior.
+
+    let focused = false;
+    let selectedCount = 0;
+
+    let nav: NavigationContextType = null!;
+
+    const { unmount, stdin } = render(
+      <TestWrapper
+        initialTodos={[todo1, todo2]}
+      >
+        <AppContentMock />
+        <FocusObserver onFocused={() => focused = true} />
+        <SelectionStateObserver
+          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
+        />
+        <NavController onNav={(n) => nav = n} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focused, true));
+
+    // Select both (Shift + Down)
+    nav.navigateDown(true);
+    await waitFor(() => assertEquals(selectedCount, 2));
+
+    // Press 'c'
+    stdin.write("c");
+
+    // Check clipboard content
+    await waitFor(() => {
+      // We expect "Todo 1\nTodo 2" or "Todo 2\nTodo 1" depending on order logic.
+      // Assuming implementation preserves list order.
+      assertMatch(capturedText, /Todo 1/);
+      assertMatch(capturedText, /Todo 2/);
+      assertEquals(capturedText.split(/\r?\n/).length, 2);
+    });
+
+    unmount();
+    restore();
+  },
+});
+
+Deno.test({
+  name: "TodoList: 'c' should copy single todo",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    let capturedText = "";
+    const restore = setupCaptureClipboardMock((text) => capturedText = text);
+
+    const todo1 = new Todo("Todo 1");
+
+    let focused = false;
+
+    const { unmount, stdin } = render(
+      <TestWrapper
+        initialTodos={[todo1]}
+      >
+        <AppContentMock />
+        <FocusObserver onFocused={() => focused = true} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focused, true));
+
+    // Press 'c'
+    stdin.write("c");
+
+    // Check clipboard content
+    await waitFor(() => {
+      assertEquals(capturedText.trim(), "Todo 1");
+    });
+
+    unmount();
+    restore();
   },
 });
