@@ -51,8 +51,8 @@ const MENU_ITEMS: MenuItem[] = [
 export const TodoMenu = () => {
   const { closeModal, openModal } = useModal();
   const {
-    deleteTodo,
-    toggleTodo,
+    deleteTodos,
+    toggleTodos,
     toggleHidden,
     archiveCompletedTodos,
     undo,
@@ -76,14 +76,14 @@ export const TodoMenu = () => {
             title: "Delete Todo",
             message: "Are you sure you want to delete this todo?",
             onConfirm: () => {
-              deleteTodo(todo);
+              deleteTodos([todo]);
             },
           });
         }
         break;
       case "toggle":
         if (todo) {
-          toggleTodo(todo);
+          toggleTodos([todo]);
           closeModal();
         }
         break;
@@ -101,7 +101,7 @@ export const TodoMenu = () => {
         break;
       case "toggle-hidden":
         if (todo) {
-          toggleHidden(todo);
+          toggleHidden([todo]);
           closeModal();
         }
         break;

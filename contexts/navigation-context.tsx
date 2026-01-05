@@ -169,11 +169,21 @@ export const NavigationProvider = (
       if (
         firstVisibleModified && firstVisibleModified.type === IndexType.todo
       ) {
-        setSelectedTodoId(firstVisibleModified.todo.id);
+        // If the current cursor is among the modified and still visible, stay there
+        // This preserves multi-selection range!
+        const isCursorValid = selection.cursorId &&
+          modified.some((m) => m.id === selection.cursorId) &&
+          indexes.some((e) =>
+            e.type === IndexType.todo && e.todo.id === selection.cursorId
+          );
+
+        if (!isCursorValid) {
+          setSelectedTodoId(firstVisibleModified.todo.id);
+        }
         return;
       }
     }
-  }, [todos, indexes]);
+  }, [todos, indexes, selection, setSelectedTodoId]);
 
   // Update tracking refs whenever selectedTodoId changes and points to a valid todo
   useEffect(() => {

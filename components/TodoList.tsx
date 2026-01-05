@@ -155,12 +155,11 @@ export const TodoList = () => {
   const { showToaster } = useToaster();
   const { focusRef } = useSearch();
   const {
-    toggleTodo,
+    toggleTodos,
     toggleHidden,
-    deleteTodo,
     deleteTodos,
     archiveCompletedTodos,
-    updateTodo,
+    updateTodos,
     addTodos,
     undo,
     redo,
@@ -168,6 +167,13 @@ export const TodoList = () => {
   } = useTodo();
 
   const todo = useSelectedTodo();
+
+  const selectedTodos = useMemo(() => {
+    if (selectedTodoIds.size > 0) {
+      return todos.filter((t) => selectedTodoIds.has(t.id));
+    }
+    return todo ? [todo] : [];
+  }, [todos, selectedTodoIds, todo]);
 
   // Handle global shortcuts (only when focused)
   useFocusedInput((input, key: ExtendedKey) => {
@@ -180,19 +186,14 @@ export const TodoList = () => {
     if (key.return) return openModal("todo-menu");
     if (key.escape) return clearMultiSelect();
     if (key.delete) {
-      if (selectedTodoIds.size > 0) {
-        const todosToDelete = todos.filter((t) => selectedTodoIds.has(t.id));
+      if (selectedTodos.length > 0) {
+        const isMultiple = selectedTodos.length > 1;
         openModal("confirm-modal", {
-          title: "Delete Todos",
-          message:
-            `Are you sure you want to delete ${todosToDelete.length} todos?`,
-          onConfirm: () => deleteTodos(todosToDelete),
-        });
-      } else if (todo) {
-        openModal("confirm-modal", {
-          title: "Delete Todo",
-          message: "Are you sure you want to delete this todo?",
-          onConfirm: () => deleteTodo(todo),
+          title: isMultiple ? "Delete Todos" : "Delete Todo",
+          message: isMultiple
+            ? `Are you sure you want to delete ${selectedTodos.length} todos?`
+            : "Are you sure you want to delete this todo?",
+          onConfirm: () => deleteTodos(selectedTodos),
         });
       }
       return;
@@ -206,7 +207,9 @@ export const TodoList = () => {
         exit();
         break;
       case " ":
-        if (todo) toggleTodo(todo);
+        if (selectedTodos.length > 0) {
+          toggleTodos(selectedTodos);
+        }
         break;
       case "x":
         openModal("todo-menu");
@@ -285,7 +288,7 @@ export const TodoList = () => {
         }
         break;
       case "h":
-        if (todo) toggleHidden(todo);
+        if (selectedTodos.length > 0) toggleHidden(selectedTodos);
         break;
       case "H":
         toggleShowHidden();
@@ -293,12 +296,17 @@ export const TodoList = () => {
         break;
       default:
         if (["A", "B", "C", "D", "E", "F"].includes(input)) {
-          if (todo) {
-            const newPriority = input.toUpperCase() as UpperCaseLetter;
-            const updatedTodo = todo.priority === newPriority
-              ? todo.setPriority(undefined)
-              : todo.setPriority(newPriority);
-            updateTodo(todo, updatedTodo);
+          const newPriority = input.toUpperCase() as UpperCaseLetter;
+          if (selectedTodos.length > 0) {
+            // Toggle off if all items have the same priority
+            const allHaveSamePriority = selectedTodos.every((t) =>
+              t.priority === newPriority
+            );
+            updateTodos(
+              selectedTodos,
+              (t) =>
+                t.setPriority(allHaveSamePriority ? undefined : newPriority),
+            );
           }
         }
         break;
@@ -366,7 +374,7 @@ export const TodoList = () => {
 
           return (
             <TodoItem
-              key={entry.todo.id.toString()}
+              key={index + entry.todo.getHash()}
               todo={entry.todo}
               isFocused={isFocused}
               isSelectedInRange={isSelectedInRange}
