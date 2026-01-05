@@ -276,9 +276,13 @@ export const TodoList = () => {
         openModal("set-recurrence");
         break;
       case "c":
-        if (todo) {
-          copyToClipboard(todo.toString());
-          showToaster("Todo copied");
+        if (selectedTodos.length > 0) {
+          copyToClipboard(selectedTodos.map((t) => t.toString()).join("\n"));
+          showToaster(
+            selectedTodos.length === 1
+              ? "Todo copied"
+              : `${selectedTodos.length} todos copied`,
+          );
         }
         break;
       case "h":
