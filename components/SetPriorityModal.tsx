@@ -61,7 +61,7 @@ export const SetPriorityModal = () => {
       ) => (prev < options.length - 1 ? prev + 1 : 0));
       return;
     }
-  }, { autoFocus: true });
+  }, { autoFocus: true, tag: "set-priority-modal" });
 
   return (
     <Modal isFocused={isFocused} title="Set Priority" width={30}>

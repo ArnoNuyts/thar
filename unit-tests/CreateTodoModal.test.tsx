@@ -1,72 +1,16 @@
 import { render } from "ink-testing-library";
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertMatch } from "@std/assert";
 import { useEffect } from "react";
 import { Box } from "ink";
 
 import { CreateTodoModal } from "../components/CreateTodoModal.tsx";
-import { ModalProvider, useModal } from "../contexts/modal-context.tsx";
-import { FocusProvider, useFocusManager } from "../contexts/focus-context.tsx";
-import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
-import { TodoContext, TodoContextType } from "../contexts/todo-context.tsx";
-import {
-  NavigationContext,
-  NavigationContextType,
-} from "../contexts/navigation-context.tsx";
+import { useModal } from "../contexts/modal-context.tsx";
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
-
-const FocusObserver = ({ onFocused }: { onFocused: () => void }) => {
-  const { activeId } = useFocusManager();
-  useEffect(() => {
-    let timeoutId: number | undefined;
-    if (activeId) {
-      timeoutId = setTimeout(onFocused, 150);
-    }
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [activeId, onFocused]);
-  return null;
-};
-
-const TestWrapper = ({
-  children,
-  todoValue = {},
-  navValue = {},
-}: {
-  children: React.ReactNode;
-  todoValue?: Partial<TodoContextType>;
-  navValue?: Partial<NavigationContextType>;
-}) => {
-  return (
-    <TodoContext.Provider
-      value={{
-        addTodos: () => [],
-        todos: new Todos(),
-        ...todoValue,
-      } as TodoContextType}
-    >
-      <NavigationContext.Provider
-        value={{
-          setSelectedTodoId: () => {},
-          ...navValue,
-        } as NavigationContextType}
-      >
-        <FocusProvider>
-          <SuggestionProvider>
-            <ModalProvider>
-              {children}
-            </ModalProvider>
-          </SuggestionProvider>
-        </FocusProvider>
-      </NavigationContext.Provider>
-    </TodoContext.Provider>
-  );
-};
+import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
 Deno.test("CreateTodoModal: should render and handle input", async () => {
-  let focused = false;
+  let focusedTag: string | undefined;
   let addedText = "";
 
   const TestComponent = () => {
@@ -78,7 +22,7 @@ Deno.test("CreateTodoModal: should render and handle input", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "create-todo" && <CreateTodoModal />}
-        <FocusObserver onFocused={() => focused = true} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -98,24 +42,19 @@ Deno.test("CreateTodoModal: should render and handle input", async () => {
 
   // Wait for title and focus
   await waitFor(() => {
-    const frame = lastFrame();
-    if (!frame?.includes("Create new todo")) throw new Error("Title not found");
-    if (!focused) throw new Error("Not focused");
+    assertMatch(lastFrame() || "", /Create new todo/);
+    assertEquals(focusedTag, "create-todo-input");
   });
 
   // Type text
   stdin.write("New Todo Item");
 
   await waitFor(() => {
-    if (!lastFrame()?.includes("New Todo Item")) {
-      throw new Error("Typed text not in frame");
-    }
+    assertMatch(lastFrame() || "", /New Todo Item/);
   });
 
-  await new Promise((r) => setTimeout(r, 100));
-  stdin.write("\r");
-
   await waitFor(() => {
+    stdin.write("\r");
     assertEquals(addedText, "New Todo Item");
   });
 

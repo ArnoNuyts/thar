@@ -29,7 +29,7 @@ export const ConfirmModal = (
         return;
       }
     },
-    { autoFocus: true },
+    { autoFocus: true, tag: "confirm-modal" },
   );
 
   return (

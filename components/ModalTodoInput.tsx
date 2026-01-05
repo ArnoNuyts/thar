@@ -13,6 +13,7 @@ interface ModalTodoInputProps {
   initialValue?: string;
   onSubmit: (value: string) => void;
   todos: Todos;
+  tag?: string;
 }
 
 export const ModalTodoInput = ({
@@ -20,9 +21,13 @@ export const ModalTodoInput = ({
   initialValue = "",
   onSubmit,
   todos,
+  tag,
 }: ModalTodoInputProps) => {
   const { closeModal } = useModal();
-  const { isFocused } = useFocusedInput(() => {}, { autoFocus: true });
+  const { isFocused } = useFocusedInput(() => {}, {
+    autoFocus: true,
+    tag: tag || (mode === "create" ? "create-todo-input" : "edit-todo-input"),
+  });
   const { stdout } = useStdout();
   const terminalWidth = stdout?.columns || 80;
   const terminalHeight = stdout?.rows || 24;

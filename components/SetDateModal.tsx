@@ -113,7 +113,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
       ) => (prev < options.length - 1 ? prev + 1 : 0));
       return;
     }
-  }, { autoFocus: true });
+  }, { autoFocus: true, tag: "set-date-modal" });
 
   const handleCustomSubmit = (date: Date) => {
     if (selectedTodos.length > 0) {

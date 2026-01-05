@@ -4,92 +4,14 @@ import { useEffect } from "react";
 import { Box, Text } from "ink";
 
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 
 import { TodoMenu } from "../components/TodoMenu.tsx";
-import { ModalProvider, useModal } from "../contexts/modal-context.tsx";
-import { ToasterProvider, useToaster } from "../contexts/toaster-context.tsx";
-import { FocusProvider, useFocusManager } from "../contexts/focus-context.tsx";
-import { TodoContext, TodoContextType } from "../contexts/todo-context.tsx";
-import {
-  NavigationContext,
-  NavigationContextType,
-} from "../contexts/navigation-context.tsx";
+import { useModal } from "../contexts/modal-context.tsx";
+import { useToaster } from "../contexts/toaster-context.tsx";
 import { ConfirmModal } from "../components/ConfirmModal.tsx";
 import { isConfirmModalData } from "../contexts/modal-context.tsx";
-
-const FocusObserver = ({ onFocused }: { onFocused: () => void }) => {
-  const { activeId } = useFocusManager();
-  useEffect(() => {
-    let timeoutId: number | undefined;
-    if (activeId) {
-      timeoutId = setTimeout(onFocused, 150);
-    }
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [activeId, onFocused]);
-  return null;
-};
-
-const TestWrapper = ({
-  children,
-  todoValue = {},
-  navValue = {},
-}: {
-  children: React.ReactNode;
-  todoValue?: Partial<TodoContextType>;
-  navValue?: Partial<NavigationContextType>;
-}) => {
-  const fullTodoValue = {
-    todos: new Todos(),
-    setTodos: () => {},
-    addTodos: () => [],
-    updateTodos: () => {},
-    deleteTodos: () => {},
-    toggleTodos: () => {},
-    toggleHidden: () => {},
-    archiveCompletedTodos: async () => {},
-    undo: () => {},
-    canUndo: false,
-    redo: () => {},
-    canRedo: false,
-    ...todoValue,
-  } as TodoContextType;
-
-  const fullNavValue = {
-    indexes: [],
-    offsetRow: 0,
-    listHeight: 10,
-    navigateUp: () => {},
-    navigateDown: () => {},
-    navigatePageUp: () => {},
-    navigatePageDown: () => {},
-    navigateTop: () => {},
-    navigateBottom: () => {},
-    setSelectedTodoId: () => {},
-    selectedTodoIds: new Set<symbol>(),
-    clearMultiSelect: () => {},
-    useSelectedTodo: () => undefined,
-    useSelectedTodos: () => [],
-    showHidden: false,
-    toggleShowHidden: () => {},
-    ...navValue,
-  } as NavigationContextType;
-
-  return (
-    <ToasterProvider>
-      <TodoContext.Provider value={fullTodoValue}>
-        <FocusProvider>
-          <NavigationContext.Provider value={fullNavValue}>
-            <ModalProvider>{children}</ModalProvider>
-          </NavigationContext.Provider>
-        </FocusProvider>
-      </TodoContext.Provider>
-    </ToasterProvider>
-  );
-};
+import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
 const AppContentMock = () => {
   const { activeModal, modalData } = useModal();

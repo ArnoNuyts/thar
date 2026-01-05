@@ -1,67 +1,16 @@
 import { render } from "ink-testing-library";
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertMatch } from "@std/assert";
 import { useEffect } from "react";
 import { Box } from "ink";
 
 import { SetPriorityModal } from "../components/SetPriorityModal.tsx";
-import { ModalProvider, useModal } from "../contexts/modal-context.tsx";
-import { FocusProvider, useFocusManager } from "../contexts/focus-context.tsx";
-import { TodoContext, TodoContextType } from "../contexts/todo-context.tsx";
-import {
-  NavigationContext,
-  NavigationContextType,
-} from "../contexts/navigation-context.tsx";
+import { useModal } from "../contexts/modal-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
-
-const FocusObserver = ({ onFocused }: { onFocused: () => void }) => {
-  const { activeId } = useFocusManager();
-  useEffect(() => {
-    let timeoutId: number | undefined;
-    if (activeId) {
-      timeoutId = setTimeout(onFocused, 150);
-    }
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [activeId, onFocused]);
-  return null;
-};
-
-const TestWrapper = ({
-  children,
-  todoValue = {},
-  navValue = {},
-}: {
-  children: React.ReactNode;
-  todoValue?: Partial<TodoContextType>;
-  navValue?: Partial<NavigationContextType>;
-}) => {
-  return (
-    <TodoContext.Provider
-      value={{
-        updateTodos: () => {},
-        ...todoValue,
-      } as TodoContextType}
-    >
-      <NavigationContext.Provider
-        value={{
-          useSelectedTodos: () => [],
-          ...navValue,
-        } as NavigationContextType}
-      >
-        <FocusProvider>
-          <ModalProvider>
-            {children}
-          </ModalProvider>
-        </FocusProvider>
-      </NavigationContext.Provider>
-    </TodoContext.Provider>
-  );
-};
+import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
 Deno.test("SetPriorityModal: should render and set focus", async () => {
-  let focused = false;
+  let focusedTag: string | undefined;
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Test Todo");
 
@@ -76,7 +25,7 @@ Deno.test("SetPriorityModal: should render and set focus", async () => {
     return (
       <Box flexDirection="column" height={20}>
         {activeModal === "set-priority" && <SetPriorityModal />}
-        <FocusObserver onFocused={() => focused = true} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -94,10 +43,10 @@ Deno.test("SetPriorityModal: should render and set focus", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() =>
-    assertEquals(lastFrame()?.includes("Set Priority"), true)
-  );
-  await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => {
+    assertMatch(lastFrame() || "", /Set Priority/);
+    assertEquals(focusedTag, "set-priority-modal");
+  });
 
   // Options are A, B, C, D, E, F
   // Initial selected is A
@@ -111,7 +60,7 @@ Deno.test("SetPriorityModal: should render and set focus", async () => {
 });
 
 Deno.test("SetPriorityModal: should update multiple todos", async () => {
-  let focused = false;
+  let focusedTag: string | undefined;
   let updatedTodos: Todo[] = [];
   const todo1 = new Todo("Todo 1");
   const todo2 = new Todo("Todo 2");
@@ -125,7 +74,7 @@ Deno.test("SetPriorityModal: should update multiple todos", async () => {
     return (
       <Box flexDirection="column" height={20}>
         {activeModal === "set-priority" && <SetPriorityModal />}
-        <FocusObserver onFocused={() => (focused = true)} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -146,10 +95,10 @@ Deno.test("SetPriorityModal: should update multiple todos", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() =>
-    assertEquals(lastFrame()?.includes("Set Priority"), true)
-  );
-  await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => {
+    assertMatch(lastFrame() || "", /Set Priority/);
+    assertEquals(focusedTag, "set-priority-modal");
+  });
 
   // Default is 'A', press Enter
   stdin.write("\r");
