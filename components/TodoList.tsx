@@ -145,6 +145,7 @@ export const TodoList = () => {
     navigateEnd,
     setSelectedTodoId,
     useSelectedTodo,
+    useSelectedTodos,
     toggleShowHidden,
     showHidden,
     selectedTodoIds,
@@ -163,17 +164,10 @@ export const TodoList = () => {
     addTodos,
     undo,
     redo,
-    todos,
   } = useTodo();
 
   const todo = useSelectedTodo();
-
-  const selectedTodos = useMemo(() => {
-    if (selectedTodoIds.size > 0) {
-      return todos.filter((t) => selectedTodoIds.has(t.id));
-    }
-    return todo ? [todo] : [];
-  }, [todos, selectedTodoIds, todo]);
+  const selectedTodos = useSelectedTodos();
 
   // Handle global shortcuts (only when focused)
   useFocusedInput((input, key: ExtendedKey) => {

@@ -20,8 +20,9 @@ const RESET_OPTION = { label: "Reset", value: "reset", unit: "" };
 export const SetRecurrenceModal = () => {
   const { closeModal } = useModal();
   const { updateTodos } = useTodo();
-  const { useSelectedTodo } = useNavigation();
-  const todo = useSelectedTodo();
+  const { useSelectedTodos } = useNavigation();
+  const selectedTodos = useSelectedTodos();
+  const todo = selectedTodos[0]; // Reference todo for initial values
   const hasRecurrence = todo?.tags.rec !== undefined;
   const options = hasRecurrence
     ? [...BASE_OPTIONS, RESET_OPTION]
@@ -40,8 +41,8 @@ export const SetRecurrenceModal = () => {
         break;
       case step === "base" && key.return:
         if (options[selectedBaseIndex].value === "reset") {
-          if (todo) {
-            updateTodos([todo], (t) => t.removeRecurrence());
+          if (selectedTodos.length > 0) {
+            updateTodos(selectedTodos, (t) => t.removeRecurrence());
             closeModal();
           }
         } else {
@@ -59,10 +60,10 @@ export const SetRecurrenceModal = () => {
         ) => (prev < options.length - 1 ? prev + 1 : 0));
         break;
       case step === "amount" && key.return:
-        if (todo && amount.trim().length > 0) {
+        if (selectedTodos.length > 0 && amount.trim().length > 0) {
           const base = options[selectedBaseIndex].value;
           const recurrenceString = `${amount}${base}`;
-          updateTodos([todo], (t) => t.setRecurrence(recurrenceString));
+          updateTodos(selectedTodos, (t) => t.setRecurrence(recurrenceString));
           closeModal();
         }
         break;

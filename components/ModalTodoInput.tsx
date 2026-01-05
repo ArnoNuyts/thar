@@ -37,7 +37,12 @@ export const ModalTodoInput = ({
   useEffect(() => {
     if (inputRef.current) {
       const { width, height } = measureElement(inputRef.current);
-      setInputDimensions({ width, height });
+      if (width > 0 && height > 0) {
+        setInputDimensions({ width, height });
+      } else {
+        // Fallback for tests or initial render
+        setInputDimensions({ width: 80, height: 10 });
+      }
     }
   }, [value]);
 

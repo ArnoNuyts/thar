@@ -39,11 +39,14 @@ export interface NavigationContextType {
   selectedTodoIds: Set<symbol>;
   clearMultiSelect: () => void;
   useSelectedTodo: () => Todo | undefined;
+  useSelectedTodos: () => Todo[];
   showHidden: boolean;
   toggleShowHidden: () => void;
 }
 
-const NavigationContext = createContext<NavigationContextType | undefined>(
+export const NavigationContext = createContext<
+  NavigationContextType | undefined
+>(
   undefined,
 );
 
@@ -441,6 +444,14 @@ export const NavigationProvider = (
     return todos.find((t) => t.id === selectedTodoId);
   }, [todos, selectedTodoId]);
 
+  const useSelectedTodos = useCallback(() => {
+    if (selection.rangeIds.size > 0) {
+      return todos.filter((t) => selection.rangeIds.has(t.id));
+    }
+    const todo = todos.find((t) => t.id === selectedTodoId);
+    return todo ? [todo] : [];
+  }, [todos, selection.rangeIds, selectedTodoId]);
+
   const value = useMemo(
     () => ({
       indexes,
@@ -457,6 +468,7 @@ export const NavigationProvider = (
       selectedTodoIds,
       clearMultiSelect,
       useSelectedTodo,
+      useSelectedTodos,
       showHidden,
       toggleShowHidden,
     }),
@@ -475,6 +487,7 @@ export const NavigationProvider = (
       selectedTodoIds,
       clearMultiSelect,
       useSelectedTodo,
+      useSelectedTodos,
       showHidden,
       toggleShowHidden,
     ],
