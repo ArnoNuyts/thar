@@ -6,6 +6,7 @@ import { EditTodoModal } from "./components/EditTodoModal.tsx";
 import { SetDateModal } from "./components/SetDateModal.tsx";
 import { SetRecurrenceModal } from "./components/SetRecurrenceModal.tsx";
 import { SetPriorityModal } from "./components/SetPriorityModal.tsx";
+import { AddTagContextModal } from "./components/AddTagContextModal.tsx";
 import { HiddenIndicator } from "./components/HiddenIndicator.tsx";
 import { TodoList } from "./components/TodoList.tsx";
 import { TodoMenu } from "./components/TodoMenu.tsx";
@@ -42,6 +43,8 @@ const AppContent = () => {
         <SetDateModal type="threshold" />}
       {activeModal === "set-recurrence" && <SetRecurrenceModal />}
       {activeModal === "set-priority" && <SetPriorityModal />}
+      {activeModal === "add-project" && <AddTagContextModal type="project" />}
+      {activeModal === "add-context" && <AddTagContextModal type="context" />}
       {activeModal === "confirm-modal" &&
         isConfirmModalData(modalData) && (
         <ConfirmModal
