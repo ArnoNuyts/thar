@@ -292,6 +292,12 @@ export const TodoList = () => {
         toggleShowHidden();
         showToaster(showHidden ? "Hidden todos hidden" : "Hidden todos shown");
         break;
+      case "+":
+        openModal("add-project");
+        break;
+      case "@":
+        openModal("add-context");
+        break;
       default:
         if (["A", "B", "C", "D", "E", "F"].includes(input)) {
           const newPriority = input.toUpperCase() as UpperCaseLetter;

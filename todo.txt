@@ -2,8 +2,8 @@ x (B) Todo item action menu @v0.1
 x (A) 2025-12-01 2025-10-02 Repo @v0.1!! due:2026-02-19
 x (A) 2024-12-24 2024-12-19 Action button bar bottom @v0.1
 x (D) 2025-12-23 2024-12-14 Copy todo @zFuture
-x Fix UI breaks when no todos present +bugs @v0.1
-Fix tui in cmdr +bugs @zFuture (to be checked if still relevant)
+x Fix UI breaks when no todos present @v0.1 +Bug
+Fix tui in cmdr @zFuture (to be checked if still relevant) +Bug
 Double click to complete @zFuture
 x (F) Datepicker @v0.1
 x /Search/ @v0.3
@@ -13,7 +13,7 @@ x 2025-12-04 2024-12-17 Solution for chcp 65001 @v0.2
 2024-12-18 Group edit context title @zFuture by editing when Context is selected
 x (B) 2025-12-07 2024-12-19 Make Todo work with readonly getters @v0.2
 2024-12-24 Add button mouseover effect (actionbar, dialogs) @v0.5
-x 2025-01-06 2025-11-28 Fix cancel in confirm in dialog @v0.1 +bug
+x 2025-01-06 2025-11-28 Fix cancel in confirm in dialog @v0.1 +Bug
 x 2025-10-02 2025-10-02 Recurrent todos @v0.1
 x 2025-11-28 2025-10-02 Github action only on release @v0.1
 2025-10-02 Add multiple tasks at once @zFuture
@@ -29,15 +29,15 @@ x (B) 2025-12-23 2025-12-01 Hidden todo support + way to show all hidden todos t
 x 2025-12-01 2025-12-01 Delete old implementation in Deno Tui @v0.1
 x (A) 2025-12-02 2025-12-02 Mark todo red when overdue @v0.1
 x (A) 2025-12-05 2025-12-04 Put a message when no TODO's present @v0.2
-x 2025-12-23 2025-12-04 Autocomplete has small overlap bug with text "Enter = save" text. Fix that +bug @v0.2!
-x (C) 2025-12-05 2025-12-04 Autocomplete bug with text on secondline @v0.2 +bug
+x 2025-12-23 2025-12-04 Autocomplete has small overlap bug with text "Enter = save" text. Fix that @v0.2! +Bug
+x (C) 2025-12-05 2025-12-04 Autocomplete bug with text on secondline @v0.2 +Bug
 x 2025-12-05 2025-12-05 Copy todos @v0.2
 x 2025-12-08 2025-12-05 +Toaster: recurrent todo created @v0.3
 x 2025-12-23 2025-12-05 Paste todo(s) @v0.4
 x 2025-12-23 2025-12-05 Undo @v0.4: specially for pasting todo's. Think about archive
 x 2025-12-23 2025-12-05 +Toaster when using undo @v0.4
-x 2025-12-07 2025-12-05 +bug Issue with input going one or two chars too long in edit modal @v0.2
-x 2025-12-07 2025-12-05 +bug suggestions in edit modal stay visible after space is inserted @v0.2
+x 2025-12-07 2025-12-05 Issue with input going one or two chars too long in edit modal @v0.2 +Bug
+x 2025-12-07 2025-12-05 suggestions in edit modal stay visible after space is inserted @v0.2 +Bug
 x 2025-12-08 2025-12-08 Add reset recurring todo in todo menu @v0.3
 x 2025-12-08 2025-12-08 Trim todo's to avoid spaces at the end (result of tags / projects) @v0.3
 x 2025-12-22 2025-12-10 When deleting todo: select next one instead of jumping to the first todo in the list @v0.3
@@ -49,10 +49,12 @@ x 2025-12-31 2025-12-23 +Multi-select support @v0.4
 2025-12-23 +Multi-select : seperate menu / menu content @v0.4
 x 2026-01-05 2025-12-23 +Multi-select : set prio @v0.4
 x 2026-01-05 2025-12-23 +Multi-select : toggle state @v0.4
-(A) 2025-12-23 +bug after search cancel, should set screen-position to take full advantage of terminal height @v0.4
-(A) 2025-12-23 +bug due-color still red even when todo is completed @v0.4
+(A) 2025-12-23 after search cancel, should set screen-position to take full advantage of terminal height @v0.4 +Bug
+(A) 2025-12-23 due-color still red even when todo is completed @v0.4 +Bug
 2025-12-23 Scrollbar on TodoList @v0.5
-2025-12-23 +bug When searching and no results. Welcome screen is shown instead of some other message. @v0.4
-2025-12-23 +Multi-select : set context, shortcut @ @v0.4
-2025-12-23 +Multi-select : add tag, shortcut + @v0.4
-2025-12-24 +bug Fix hidden status indicator @v0.4
+2025-12-23 When searching and no results. Welcome screen is shown instead of some other message. @v0.4 +Bug
+x 2026-01-20 2025-12-23 +Multi-select : set context, shortcut @ @v0.4
+x 2026-01-20 2025-12-23 +Multi-select : add tag, shortcut + @v0.4
+2025-12-24 Fix hidden status indicator @v0.4 +Bug
+2026-01-07 Show tags in overview @v0.5 Or just hidden?
+2026-01-20 Search: +Multi-select while search @v0.4

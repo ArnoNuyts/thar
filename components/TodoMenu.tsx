@@ -24,7 +24,9 @@ export type MenuAction =
   | "undo"
   | "redo"
   | "paste"
-  | "toggle-view-hidden";
+  | "toggle-view-hidden"
+  | "add-project"
+  | "add-context";
 
 interface MenuItem {
   label: string;
@@ -40,6 +42,8 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Set Threshold Date", shortcut: "t", action: "threshold" },
   { label: "Set Recurrence", shortcut: "r", action: "recurrence" },
   { label: "Set Priority", shortcut: "p", action: "priority" },
+  { label: "Modify Projects", shortcut: "+", action: "add-project" },
+  { label: "Modify Contexts", shortcut: "@", action: "add-context" },
   { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
   { label: "Show/Hide Hidden", shortcut: "H", action: "toggle-view-hidden" },
   { label: "Archive Completed", shortcut: "a", action: "archive" },
@@ -106,6 +110,12 @@ export const TodoMenu = () => {
         break;
       case "priority":
         openModal("set-priority");
+        break;
+      case "add-project":
+        openModal("add-project");
+        break;
+      case "add-context":
+        openModal("add-context");
         break;
       case "toggle-hidden":
         if (selectedTodos.length > 0) {
@@ -275,6 +285,14 @@ export const TodoMenu = () => {
 
       if (input === "v") {
         handleAction("paste");
+      }
+
+      if (input === "+") {
+        handleAction("add-project");
+      }
+
+      if (input === "@") {
+        handleAction("add-context");
       }
     },
     { autoFocus: true },
