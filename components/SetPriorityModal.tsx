@@ -6,6 +6,7 @@ import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { UpperCaseLetter } from "../types/types.ts";
+import { SECONDARY_COLOR } from "../constants.ts";
 
 const PRIORITIES: (UpperCaseLetter | "Unset")[] = [
   "A",
@@ -18,9 +19,10 @@ const PRIORITIES: (UpperCaseLetter | "Unset")[] = [
 
 export const SetPriorityModal = () => {
   const { closeModal } = useModal();
-  const { updateTodo } = useTodo();
-  const { useSelectedTodo } = useNavigation();
-  const todo = useSelectedTodo();
+  const { updateTodos } = useTodo();
+  const { useSelectedTodos } = useNavigation();
+  const selectedTodos = useSelectedTodos();
+  const todo = selectedTodos[0]; // Reference todo for initial values
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const options = [...PRIORITIES];
@@ -35,14 +37,13 @@ export const SetPriorityModal = () => {
     }
 
     if (key.return) {
-      if (!todo) return;
+      if (selectedTodos.length === 0) return;
 
       const selected = options[selectedIndex];
       const newPriority = selected === "Unset"
         ? undefined
         : selected as UpperCaseLetter;
-      const updatedTodo = todo.setPriority(newPriority);
-      updateTodo(todo, updatedTodo);
+      updateTodos(selectedTodos, (t) => t.setPriority(newPriority));
       closeModal();
       return;
     }
@@ -60,7 +61,7 @@ export const SetPriorityModal = () => {
       ) => (prev < options.length - 1 ? prev + 1 : 0));
       return;
     }
-  }, { autoFocus: true });
+  }, { autoFocus: true, tag: "set-priority-modal" });
 
   return (
     <Modal isFocused={isFocused} title="Set Priority" width={30}>
@@ -69,7 +70,7 @@ export const SetPriorityModal = () => {
           const isSelected = index === selectedIndex;
           return (
             <Box key={option}>
-              <Text color="green">{isSelected ? "» " : "  "}</Text>
+              <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
               <Text>{option}</Text>
             </Box>
           );

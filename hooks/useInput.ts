@@ -101,12 +101,16 @@ type Options = {
 const keyName: Record<string, string> = {
   "\x1b[A": "up",
   "\x1bOA": "up",
+  "\x1b[1;2A": "up", // Shift + Up
   "\x1b[B": "down",
   "\x1bOB": "down",
+  "\x1b[1;2B": "down", // Shift + Down
   "\x1b[D": "left",
   "\x1bOD": "left",
+  "\x1b[1;2D": "left", // Shift + Left
   "\x1b[C": "right",
   "\x1bOC": "right",
+  "\x1b[1;2C": "right", // Shift + Right
   "\x1b[5~": "pageup",
   "\x1b[6~": "pagedown",
   "\x1b[H": "home",
@@ -181,6 +185,11 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
         key.home = name === "home";
         key.end = name === "end";
         key.delete = name === "delete";
+
+        // Check for Shift+Arrow keys
+        if (["\x1b[1;2A", "\x1b[1;2B", "\x1b[1;2C", "\x1b[1;2D"].includes(s)) {
+          key.shift = true;
+        }
       } else if (s.length === 1 && s <= "\x1a") {
         // Ctrl + letter (except for handled ones like \r, \n, \t)
         input = String.fromCharCode(s.charCodeAt(0) + "a".charCodeAt(0) - 1);

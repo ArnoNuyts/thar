@@ -6,6 +6,7 @@ import { useSuggestion } from "../contexts/suggestion-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
 import { useFocusable } from "../hooks/useFocusable.ts";
 import { useNavigation } from "../contexts/navigation-context.tsx";
+import { SECONDARY_COLOR } from "../constants.ts";
 
 import { Todos } from "../logic/Todos.ts";
 
@@ -161,19 +162,19 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
 
     // Navigation fallback when no suggestions
     if (key.upArrow) {
-      navigateUp();
+      navigateUp(key.shift);
       return;
     }
     if (key.downArrow) {
-      navigateDown();
+      navigateDown(key.shift);
       return;
     }
     if (key.pageUp) {
-      navigatePageUp();
+      navigatePageUp(key.shift);
       return;
     }
     if (key.pageDown) {
-      navigatePageDown();
+      navigatePageDown(key.shift);
       return;
     }
     if (key.home) {
@@ -216,9 +217,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
       borderRight={false}
       borderBottom
     >
-      <Box width={3}>
-        <Text color={isFocused ? "green" : "gray"}>{`/ `}</Text>
-      </Box>
+      <Text color={isFocused ? SECONDARY_COLOR : "gray"}>{` / `}</Text>
       <Box flexGrow={1}>
         {isFocused
           ? (
@@ -236,6 +235,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
             </Text>
           )}
       </Box>
+      <Text color={isFocused ? SECONDARY_COLOR : "gray"}>{` / `}</Text>
     </Box>
   );
 };

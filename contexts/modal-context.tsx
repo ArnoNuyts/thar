@@ -15,7 +15,9 @@ export type ModalId =
   | "set-threshold-date"
   | "set-recurrence"
   | "set-priority"
-  | "confirm-modal";
+  | "confirm-modal"
+  | "add-project"
+  | "add-context";
 
 export interface ConfirmModalData {
   title: string;

@@ -7,6 +7,7 @@ import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { Calendar } from "./Calendar.tsx";
 import { format } from "date-fns";
+import { SECONDARY_COLOR } from "../constants.ts";
 
 const BASE_OPTIONS = [
   { label: "Today", value: "today" },
@@ -22,9 +23,10 @@ interface SetDateModalProps {
 
 export const SetDateModal = ({ type }: SetDateModalProps) => {
   const { closeModal } = useModal();
-  const { updateTodo } = useTodo();
-  const { useSelectedTodo } = useNavigation();
-  const todo = useSelectedTodo();
+  const { updateTodos } = useTodo();
+  const { useSelectedTodos } = useNavigation();
+  const selectedTodos = useSelectedTodos();
+  const todo = selectedTodos[0]; // Reference todo for initial values
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isCustom, setIsCustom] = useState(false);
   const [customDate, setCustomDate] = useState(() => {
@@ -65,11 +67,11 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
       if (selected.value === "custom") {
         setIsCustom(true);
       } else if (selected.value === "reset") {
-        if (todo) {
-          const updatedTodo = type === "due"
-            ? todo.removeDue()
-            : todo.removeThreshold();
-          updateTodo(todo, updatedTodo);
+        if (selectedTodos.length > 0) {
+          updateTodos(
+            selectedTodos,
+            (t) => (type === "due" ? t.removeDue() : t.removeThreshold()),
+          );
           closeModal();
         }
       } else {
@@ -87,11 +89,11 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
             date.setMonth(date.getMonth() + 1);
             break;
         }
-        if (todo) {
-          const updatedTodo = type === "due"
-            ? todo.setDue(date)
-            : todo.setThreshold(date);
-          updateTodo(todo, updatedTodo);
+        if (selectedTodos.length > 0) {
+          updateTodos(
+            selectedTodos,
+            (t) => (type === "due" ? t.setDue(date) : t.setThreshold(date)),
+          );
         }
         closeModal();
       }
@@ -111,14 +113,14 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
       ) => (prev < options.length - 1 ? prev + 1 : 0));
       return;
     }
-  }, { autoFocus: true });
+  }, { autoFocus: true, tag: "set-date-modal" });
 
   const handleCustomSubmit = (date: Date) => {
-    if (todo) {
-      const updatedTodo = type === "due"
-        ? todo.setDue(date)
-        : todo.setThreshold(date);
-      updateTodo(todo, updatedTodo);
+    if (selectedTodos.length > 0) {
+      updateTodos(
+        selectedTodos,
+        (t) => (type === "due" ? t.setDue(date) : t.setThreshold(date)),
+      );
       closeModal();
     }
   };
@@ -133,7 +135,9 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
               const isSelected = index === selectedIndex;
               return (
                 <Box key={option.value}>
-                  <Text color="green">{isSelected ? "» " : "  "}</Text>
+                  <Text color={SECONDARY_COLOR}>
+                    {isSelected ? "» " : "  "}
+                  </Text>
                   <Text>{option.label}</Text>
                 </Box>
               );

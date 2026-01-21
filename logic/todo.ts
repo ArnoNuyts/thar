@@ -290,6 +290,38 @@ export class Todo {
     return next;
   }
 
+  addContext(context: string): Todo {
+    if (this._contexts.has(context)) {
+      return this;
+    }
+    return this.setText(`${this._text} @${context}`);
+  }
+
+  removeContext(context: string): Todo {
+    if (!this._contexts.has(context)) {
+      return this;
+    }
+    // Remove @context from text (with optional leading space)
+    const regex = new RegExp(`\\s*@${context}(?=\\s|$)`, "g");
+    return this.setText(this._text.replace(regex, "").trim());
+  }
+
+  addProject(project: string): Todo {
+    if (this._projects.has(project)) {
+      return this;
+    }
+    return this.setText(`${this._text} +${project}`);
+  }
+
+  removeProject(project: string): Todo {
+    if (!this._projects.has(project)) {
+      return this;
+    }
+    // Remove +project from text (with optional leading space)
+    const regex = new RegExp(`\\s*\\+${project}(?=\\s|$)`, "g");
+    return this.setText(this._text.replace(regex, "").trim());
+  }
+
   getHash(): string {
     return this.toString();
   }

@@ -19,7 +19,7 @@ export const MockTodoProvider = ({
   const [redoStack, setRedoStack] = useState<Todos[]>([]);
   const { showToaster } = useToaster();
 
-  const updateTodos = (newTodos: Todos) => {
+  const internalSetTodos = (newTodos: Todos) => {
     setTodos(newTodos);
     if (onTodosChange) {
       onTodosChange(newTodos);
@@ -36,7 +36,7 @@ export const MockTodoProvider = ({
     const previousTodos = history[history.length - 1];
     setHistory((prev) => prev.slice(0, -1));
     setRedoStack((prev) => [...prev, todos]);
-    updateTodos(previousTodos);
+    internalSetTodos(previousTodos);
   };
 
   const redo = () => {
@@ -44,7 +44,7 @@ export const MockTodoProvider = ({
     const nextTodos = redoStack[redoStack.length - 1];
     setRedoStack((prev) => prev.slice(0, -1));
     setHistory((prev) => [...prev, todos]);
-    updateTodos(nextTodos);
+    internalSetTodos(nextTodos);
   };
 
   const addTodos = (...texts: string[]): Todo[] => {
@@ -53,58 +53,76 @@ export const MockTodoProvider = ({
     const newTodos = texts.map((text) =>
       new Todo(text).setCreationDate(new Date())
     );
-    updateTodos(new Todos(...todos, ...newTodos));
+    internalSetTodos(new Todos(...todos, ...newTodos));
     return newTodos;
   };
 
-  const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
+  const deleteTodos = (todosToDelete: Todo[]) => {
     pushHistory();
-    updateTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
+    const idsToDelete = new Set(todosToDelete.map((t) => t.id));
+    const newTodos = todos.filter((t: Todo) => !idsToDelete.has(t.id));
+    internalSetTodos(new Todos(...newTodos));
   };
 
-  const deleteTodo = (todo: Todo) => {
+  const toggleTodos = (todosToToggle: Todo[]) => {
     pushHistory();
-    const newTodos = todos.filter((t: Todo) => t !== todo);
-    updateTodos(new Todos(...newTodos));
-  };
+    const idsToToggle = new Set(todosToToggle.map((t) => t.id));
+    const newInstances: Todo[] = [];
 
-  const toggleTodo = (todo: Todo) => {
-    pushHistory();
-    const { updated, recurring } = todo.toggleState();
-    if (recurring) {
-      updateTodos(
-        new Todos(...todos.map((t) => (t === todo ? updated : t)), recurring),
-      );
+    const transformed = todos.map((t) => {
+      if (idsToToggle.has(t.id)) {
+        const { updated, recurring } = t.toggleState();
+        if (recurring) {
+          newInstances.push(recurring);
+        }
+        return updated;
+      }
+      return t;
+    });
+
+    internalSetTodos(new Todos(...transformed, ...newInstances));
+
+    if (newInstances.length === 1) {
       showToaster("Recurring todo created");
-    } else {
-      // Direct state update to avoid double pushHistory call
-      updateTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
+    } else if (newInstances.length > 1) {
+      showToaster(`${newInstances.length} recurring todos created`);
     }
   };
 
-  const toggleHidden = (todo: Todo) => {
-    // pushHistory via updateTodo
-    const updated = todo.toggleHidden();
-    updateTodo(todo, updated);
+  const toggleHidden = (todosToToggle: Todo[]) => {
+    updateTodos(todosToToggle, (t) => t.toggleHidden());
   };
 
   const archiveCompletedTodos = () => {
     pushHistory();
     const remainingTodos = todos.filter((t: Todo) => !t.isDone());
-    updateTodos(new Todos(...remainingTodos));
+    internalSetTodos(new Todos(...remainingTodos));
     // No-op for file writing in mock
     return Promise.resolve();
+  };
+
+  const updateTodos = (
+    todosToUpdate: Todo[],
+    transform: (todo: Todo) => Todo,
+  ) => {
+    pushHistory();
+    const idsToUpdate = new Set(todosToUpdate.map((t) => t.id));
+    internalSetTodos(
+      new Todos(
+        ...todos.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t)),
+      ),
+    );
   };
 
   return (
     <TodoContext.Provider
       value={{
         todos,
-        setTodos: updateTodos,
+        setTodos: internalSetTodos,
         addTodos,
-        updateTodo,
-        deleteTodo,
-        toggleTodo,
+        updateTodos,
+        deleteTodos,
+        toggleTodos,
         toggleHidden,
         archiveCompletedTodos,
         undo,

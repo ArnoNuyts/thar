@@ -48,7 +48,10 @@ const UndoTestApp = (
     onUpdate: (
       api: {
         addTodos: (...texts: string[]) => void;
-        updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
+        updateTodos: (
+          todosToUpdate: Todo[],
+          transform: (todo: Todo) => Todo,
+        ) => void;
         undo: () => void;
         redo: () => void;
         // deno-lint-ignore no-explicit-any
@@ -57,16 +60,16 @@ const UndoTestApp = (
     ) => void;
   },
 ) => {
-  const { addTodos, updateTodo, undo, redo, todos } = useTodo();
+  const { addTodos, updateTodos, undo, redo, todos } = useTodo();
   useEffect(() => {
     onUpdate({
       addTodos,
-      updateTodo,
+      updateTodos,
       undo,
       redo,
       todos,
     });
-  }, [addTodos, updateTodo, undo, redo, todos, onUpdate]);
+  }, [addTodos, updateTodos, undo, redo, todos, onUpdate]);
   return <Text>UndoTestApp</Text>;
 };
 
@@ -217,7 +220,10 @@ Deno.test({
 
     let currentApi: {
       addTodos: (...texts: string[]) => void;
-      updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
+      updateTodos: (
+        todosToUpdate: Todo[],
+        transform: (todo: Todo) => Todo,
+      ) => void;
       undo: () => void;
       // deno-lint-ignore no-explicit-any
       todos: any[];
@@ -244,15 +250,14 @@ Deno.test({
     assertEquals(todoV1.text, "Todo 1");
 
     // 2. Update todo (First Edit)
-    const todoV2 = todoV1.setText("Todo 1 Updated");
-    currentApi!.updateTodo(todoV1, todoV2);
+    currentApi!.updateTodos([todoV1], (t) => t.setText("Todo 1 Updated"));
     await waitFor(() =>
       assertEquals(currentApi!.todos[0].text, "Todo 1 Updated")
     );
+    const todoV2 = currentApi!.todos[0];
 
     // 3. Update todo (Second Edit)
-    const todoV3 = todoV2.setText("Todo 1 Updated Again");
-    currentApi!.updateTodo(todoV2, todoV3);
+    currentApi!.updateTodos([todoV2], (t) => t.setText("Todo 1 Updated Again"));
     await waitFor(() =>
       assertEquals(currentApi!.todos[0].text, "Todo 1 Updated Again")
     );
