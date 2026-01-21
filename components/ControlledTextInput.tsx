@@ -80,54 +80,77 @@ export function ControlledTextInput({
 
   useInput(
     (input, key) => {
-      if (
-        key.upArrow ||
-        key.downArrow ||
-        (key.ctrl && input === "c") ||
-        key.tab ||
-        (key.shift && key.tab)
-      ) {
-        return;
-      }
-
-      if (key.return) {
-        if (onSubmit) {
-          onSubmit(originalValue);
-        }
-        return;
-      }
-
       let nextCursorOffset = cursorOffset;
       let nextValue = originalValue;
 
-      if (key.leftArrow) {
-        if (showCursor) {
-          nextCursorOffset = Math.max(0, cursorOffset - 1);
-        }
-      } else if (key.rightArrow) {
-        if (showCursor) {
-          nextCursorOffset = Math.min(originalValue.length, cursorOffset + 1);
-        }
-      } else if (key.backspace || key.delete) {
-        if (key.backspace && cursorOffset > 0) {
-          // Backspace: delete character before cursor
-          nextValue = originalValue.slice(0, cursorOffset - 1) +
-            originalValue.slice(cursorOffset, originalValue.length);
-          nextCursorOffset = cursorOffset - 1;
-        } else if (key.delete && cursorOffset < originalValue.length) {
-          // Delete: delete character at cursor
-          nextValue = originalValue.slice(0, cursorOffset) +
-            originalValue.slice(cursorOffset + 1, originalValue.length);
-          nextCursorOffset = cursorOffset;
-        }
-      } else if (key.escape) {
-        // Don't handle escape here, let parent handle it
-        return;
-      } else {
-        nextValue = originalValue.slice(0, cursorOffset) +
-          input +
-          originalValue.slice(cursorOffset, originalValue.length);
-        nextCursorOffset = cursorOffset + input.length;
+      switch (true) {
+        case key.upArrow:
+        case key.downArrow:
+        case key.tab:
+        case key.ctrl && input === "c":
+          return;
+
+        case key.return:
+          onSubmit?.(originalValue);
+          return;
+
+        case key.escape:
+          // Don't handle escape here, let parent handle it
+          return;
+
+        case key.leftArrow:
+          if (showCursor) {
+            nextCursorOffset = Math.max(0, cursorOffset - 1);
+          }
+          break;
+
+        case key.rightArrow:
+          if (showCursor) {
+            nextCursorOffset = Math.min(originalValue.length, cursorOffset + 1);
+          }
+          break;
+
+        case key.home:
+          if (showCursor) {
+            nextCursorOffset = 0;
+          }
+          break;
+
+        case key.end:
+          if (showCursor) {
+            nextCursorOffset = originalValue.length;
+          }
+          break;
+
+        case key.backspace:
+          if (cursorOffset > 0) {
+            // Backspace: delete character before cursor
+            nextValue = originalValue.slice(0, cursorOffset - 1) +
+              originalValue.slice(cursorOffset, originalValue.length);
+            nextCursorOffset = cursorOffset - 1;
+          }
+          break;
+
+        case key.delete:
+          if (cursorOffset < originalValue.length) {
+            // Delete: delete character at cursor
+            nextValue = originalValue.slice(0, cursorOffset) +
+              originalValue.slice(cursorOffset + 1, originalValue.length);
+            nextCursorOffset = cursorOffset;
+          }
+          break;
+
+        default:
+          if (input.length > 0) {
+            nextValue = originalValue.slice(0, cursorOffset) +
+              input +
+              originalValue.slice(cursorOffset, originalValue.length);
+            nextCursorOffset = cursorOffset + input.length;
+          } else {
+            // No relevant key or text input, return early
+            return;
+          }
+          break;
       }
 
       // Bounds check

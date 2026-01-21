@@ -56,7 +56,7 @@ export async function waitFor(
   options?: { timeout?: number; interval?: number },
 ) {
   const timeout = options?.timeout ?? 5000;
-  const interval = options?.interval ?? 50;
+  const interval = options?.interval ?? 10;
 
   const start = Date.now();
   let lastError: unknown;

@@ -15,14 +15,17 @@ import { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
 import { useToaster } from "./toaster-context.tsx";
 
-interface TodoContextType {
+export interface TodoContextType {
   todos: Todos;
   setTodos: (todos: Todos) => void;
   addTodos: (...texts: string[]) => Todo[];
-  updateTodo: (oldTodo: Todo, newTodo: Todo) => void;
-  deleteTodo: (todo: Todo) => void;
-  toggleTodo: (todo: Todo) => void;
-  toggleHidden: (todo: Todo) => void;
+  updateTodos: (
+    todosToUpdate: Todo[],
+    transform: (todo: Todo) => Todo,
+  ) => void;
+  deleteTodos: (todosToDelete: Todo[]) => void;
+  toggleTodos: (todosToToggle: Todo[]) => void;
+  toggleHidden: (todosToToggle: Todo[]) => void;
   archiveCompletedTodos: () => Promise<void>;
   undo: () => void;
   canUndo: boolean;
@@ -163,35 +166,54 @@ export const TodoProvider = ({
     return newTodos;
   };
 
-  const updateTodo = (oldTodo: Todo, newTodo: Todo) => {
+  const updateTodos = (
+    todosToUpdate: Todo[],
+    transform: (todo: Todo) => Todo,
+  ) => {
     pushHistory();
-    setTodos(new Todos(...todos.map((t) => (t === oldTodo ? newTodo : t))));
+    const idsToUpdate = new Set(todosToUpdate.map((t) => t.id));
+    setTodos((prev) =>
+      new Todos(
+        ...prev.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t)),
+      )
+    );
   };
 
-  const deleteTodo = (todo: Todo) => {
+  const deleteTodos = (todosToDelete: Todo[]) => {
     pushHistory();
-    const newTodos = todos.filter((t: Todo) => t !== todo);
+    const idsToDelete = new Set(todosToDelete.map((t) => t.id));
+    const newTodos = todos.filter((t: Todo) => !idsToDelete.has(t.id));
     setTodos(new Todos(...newTodos));
   };
 
-  const toggleTodo = (todo: Todo) => {
+  const toggleTodos = (todosToToggle: Todo[]) => {
     pushHistory();
-    const { updated, recurring } = todo.toggleState();
+    const idsToToggle = new Set(todosToToggle.map((t) => t.id));
+    const newInstances: Todo[] = [];
 
-    if (recurring) {
-      setTodos(
-        new Todos(...todos.map((t) => (t === todo ? updated : t)), recurring),
-      );
+    setTodos((prev) => {
+      const transformed = prev.map((t) => {
+        if (idsToToggle.has(t.id)) {
+          const { updated, recurring } = t.toggleState();
+          if (recurring) {
+            newInstances.push(recurring);
+          }
+          return updated;
+        }
+        return t;
+      });
+      return new Todos(...transformed, ...newInstances);
+    });
+
+    if (newInstances.length === 1) {
       showToaster("Recurring todo created");
-    } else {
-      setTodos(new Todos(...todos.map((t) => (t === todo ? updated : t))));
+    } else if (newInstances.length > 1) {
+      showToaster(`${newInstances.length} recurring todos created`);
     }
   };
 
-  const toggleHidden = (todo: Todo) => {
-    // pushHistory is handled in updateTodo
-    const updated = todo.toggleHidden();
-    updateTodo(todo, updated);
+  const toggleHidden = (todosToToggle: Todo[]) => {
+    updateTodos(todosToToggle, (t) => t.toggleHidden());
   };
 
   const archiveCompletedTodos = async () => {
@@ -226,9 +248,9 @@ export const TodoProvider = ({
         todos,
         setTodos,
         addTodos,
-        updateTodo,
-        deleteTodo,
-        toggleTodo,
+        updateTodos,
+        deleteTodos,
+        toggleTodos,
         toggleHidden,
         archiveCompletedTodos,
         undo,

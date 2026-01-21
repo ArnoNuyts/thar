@@ -3,10 +3,11 @@ import { useFocusManager } from "../contexts/focus-context.tsx";
 
 export interface UseFocusableOptions {
   autoFocus?: boolean;
+  tag?: string;
 }
 
 export const useFocusable = (opts: UseFocusableOptions = {}) => {
-  const id = useMemo(() => Symbol("focusable"), []);
+  const id = useMemo(() => Symbol(opts.tag || "focusable"), []);
   const { requestFocus, releaseFocus, activeId } = useFocusManager();
 
   const autoFocus = opts.autoFocus ?? false;

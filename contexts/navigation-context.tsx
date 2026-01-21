@@ -1,6 +1,7 @@
 import {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -17,24 +18,35 @@ import { Todo } from "../logic/todo.ts";
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
-interface NavigationContextType {
+interface SelectionState {
+  cursorId: symbol | undefined;
+  anchorId: symbol | undefined;
+  rangeIds: Set<symbol>;
+}
+
+export interface NavigationContextType {
   indexes: IndexEntry[];
   offsetRow: number;
   listHeight: number;
-  navigateUp: () => void;
-  navigateDown: () => void;
-  navigatePageUp: () => void;
-  navigatePageDown: () => void;
+  navigateUp: (shift?: boolean) => void;
+  navigateDown: (shift?: boolean) => void;
+  navigatePageUp: (shift?: boolean) => void;
+  navigatePageDown: (shift?: boolean) => void;
   navigateHome: () => void;
   navigateEnd: () => void;
   selectedTodoId: symbol | undefined;
   setSelectedTodoId: (id: symbol | undefined) => void;
+  selectedTodoIds: Set<symbol>;
+  clearMultiSelect: () => void;
   useSelectedTodo: () => Todo | undefined;
+  useSelectedTodos: () => Todo[];
   showHidden: boolean;
   toggleShowHidden: () => void;
 }
 
-const NavigationContext = createContext<NavigationContextType | undefined>(
+export const NavigationContext = createContext<
+  NavigationContextType | undefined
+>(
   undefined,
 );
 
@@ -48,12 +60,38 @@ export const NavigationProvider = (
   const { searchQuery, isSearchFocused } = useSearch();
   const { stdout } = useStdout();
   const [offsetRow, setOffsetRow] = useState(0);
-  const [selectedTodoId, setSelectedTodoId] = useState<symbol | undefined>(
-    undefined,
-  );
+
+  const [selection, setSelection] = useState<SelectionState>({
+    cursorId: undefined,
+    anchorId: undefined,
+    rangeIds: new Set(),
+  });
+
   const [showHidden, setShowHidden] = useState(false);
 
-  const toggleShowHidden = () => setShowHidden((prev) => !prev);
+  const selectedTodoId = selection.cursorId;
+  const selectedTodoIds = selection.rangeIds;
+
+  const toggleShowHidden = useCallback(
+    () => setShowHidden((prev) => !prev),
+    [],
+  );
+
+  const setSelectedTodoId = useCallback((id: symbol | undefined) => {
+    setSelection({
+      cursorId: id,
+      anchorId: undefined,
+      rangeIds: new Set(),
+    });
+  }, []);
+
+  const clearMultiSelect = useCallback(() => {
+    setSelection((prev) => ({
+      ...prev,
+      anchorId: undefined,
+      rangeIds: new Set(),
+    }));
+  }, []);
 
   // Search bar takes 2 rows (content + border) when visible
   // Search bar is visible when focused OR has query
@@ -134,11 +172,21 @@ export const NavigationProvider = (
       if (
         firstVisibleModified && firstVisibleModified.type === IndexType.todo
       ) {
-        setSelectedTodoId(firstVisibleModified.todo.id);
+        // If the current cursor is among the modified and still visible, stay there
+        // This preserves multi-selection range!
+        const isCursorValid = selection.cursorId &&
+          modified.some((m) => m.id === selection.cursorId) &&
+          indexes.some((e) =>
+            e.type === IndexType.todo && e.todo.id === selection.cursorId
+          );
+
+        if (!isCursorValid) {
+          setSelectedTodoId(firstVisibleModified.todo.id);
+        }
         return;
       }
     }
-  }, [todos, indexes]);
+  }, [todos, indexes, selection, setSelectedTodoId]);
 
   // Update tracking refs whenever selectedTodoId changes and points to a valid todo
   useEffect(() => {
@@ -276,17 +324,18 @@ export const NavigationProvider = (
     }
   }, [selectedRow, listHeight, offsetRow]);
 
-  const doNavigate = (step: number) => {
-    setSelectedTodoId((prevId) => {
+  const doNavigate = useCallback((step: number, shift: boolean = false) => {
+    setSelection((prev) => {
       const todoIndex = indexes.findIndex(
         (entry) =>
           entry.type === IndexType.todo &&
-          entry.todo.id === prevId,
+          entry.todo.id === prev.cursorId,
       );
-      const selectedRow = todoIndex === -1 ? 0 : todoIndex;
+      const currentRow = todoIndex === -1 ? 0 : todoIndex;
       const direction = step > 0 ? 1 : -1;
-      let newSelectedRow = clamp(selectedRow + step, 0, indexes.length - 1);
+      let newSelectedRow = clamp(currentRow + step, 0, indexes.length - 1);
 
+      // Skip context headers
       while (indexes[newSelectedRow]?.type === IndexType.context) {
         newSelectedRow += direction;
         if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
@@ -296,32 +345,78 @@ export const NavigationProvider = (
             );
             newSelectedRow = firstTodoIndex !== -1
               ? firstTodoIndex
-              : selectedRow;
+              : currentRow;
           } else {
             const lastTodoIndex = indexes.findLastIndex((e) =>
               e.type === IndexType.todo
             );
-            newSelectedRow = lastTodoIndex !== -1 ? lastTodoIndex : selectedRow;
+            newSelectedRow = lastTodoIndex !== -1 ? lastTodoIndex : currentRow;
           }
           break;
         }
       }
 
       const selectedEntry = indexes[newSelectedRow];
+      let newId = prev.cursorId;
       if (selectedEntry?.type === IndexType.todo) {
-        return selectedEntry.todo.id;
-      } else {
-        return prevId;
+        newId = selectedEntry.todo.id;
       }
+
+      if (newId === undefined) return prev;
+
+      let newAnchor = prev.anchorId;
+      const newRange = new Set<symbol>();
+
+      if (shift) {
+        if (!newAnchor) {
+          newAnchor = prev.cursorId ?? newId;
+        }
+
+        const anchorIndex = indexes.findIndex((e) =>
+          e.type === IndexType.todo && e.todo.id === newAnchor
+        );
+        const newIndex = indexes.findIndex((e) =>
+          e.type === IndexType.todo && e.todo.id === newId
+        );
+
+        if (anchorIndex !== -1 && newIndex !== -1) {
+          const start = Math.min(anchorIndex, newIndex);
+          const end = Math.max(anchorIndex, newIndex);
+          for (let i = start; i <= end; i++) {
+            const entry = indexes[i];
+            if (entry.type === IndexType.todo) {
+              newRange.add(entry.todo.id);
+            }
+          }
+        }
+      } else {
+        newAnchor = undefined;
+      }
+
+      return {
+        cursorId: newId,
+        anchorId: newAnchor,
+        rangeIds: newRange,
+      };
     });
-  };
+  }, [indexes]);
 
-  const navigateUp = () => doNavigate(-1);
-  const navigateDown = () => doNavigate(1);
-  const navigatePageUp = () => doNavigate(-5);
-  const navigatePageDown = () => doNavigate(5);
+  const navigateUp = useCallback((shift?: boolean) => doNavigate(-1, shift), [
+    doNavigate,
+  ]);
+  const navigateDown = useCallback((shift?: boolean) => doNavigate(1, shift), [
+    doNavigate,
+  ]);
+  const navigatePageUp = useCallback(
+    (shift?: boolean) => doNavigate(-5, shift),
+    [doNavigate],
+  );
+  const navigatePageDown = useCallback(
+    (shift?: boolean) => doNavigate(5, shift),
+    [doNavigate],
+  );
 
-  const navigateHome = () => {
+  const navigateHome = useCallback(() => {
     const firstTodoIndex = indexes.findIndex((entry) =>
       entry.type === IndexType.todo
     );
@@ -331,9 +426,9 @@ export const NavigationProvider = (
         setSelectedTodoId(entry.todo.id);
       }
     }
-  };
+  }, [indexes, setSelectedTodoId]);
 
-  const navigateEnd = () => {
+  const navigateEnd = useCallback(() => {
     const lastTodoIndex = indexes.findLastIndex((entry) =>
       entry.type === IndexType.todo
     );
@@ -343,31 +438,63 @@ export const NavigationProvider = (
         setSelectedTodoId(entry.todo.id);
       }
     }
-  };
+  }, [indexes, setSelectedTodoId]);
 
-  const useSelectedTodo = () => {
+  const useSelectedTodo = useCallback(() => {
     return todos.find((t) => t.id === selectedTodoId);
-  };
+  }, [todos, selectedTodoId]);
+
+  const useSelectedTodos = useCallback(() => {
+    if (selection.rangeIds.size > 0) {
+      return todos.filter((t) => selection.rangeIds.has(t.id));
+    }
+    const todo = todos.find((t) => t.id === selectedTodoId);
+    return todo ? [todo] : [];
+  }, [todos, selection.rangeIds, selectedTodoId]);
+
+  const value = useMemo(
+    () => ({
+      indexes,
+      offsetRow,
+      listHeight,
+      navigateUp,
+      navigateDown,
+      navigatePageUp,
+      navigatePageDown,
+      navigateHome,
+      navigateEnd,
+      selectedTodoId,
+      setSelectedTodoId,
+      selectedTodoIds,
+      clearMultiSelect,
+      useSelectedTodo,
+      useSelectedTodos,
+      showHidden,
+      toggleShowHidden,
+    }),
+    [
+      indexes,
+      offsetRow,
+      listHeight,
+      navigateUp,
+      navigateDown,
+      navigatePageUp,
+      navigatePageDown,
+      navigateHome,
+      navigateEnd,
+      selectedTodoId,
+      setSelectedTodoId,
+      selectedTodoIds,
+      clearMultiSelect,
+      useSelectedTodo,
+      useSelectedTodos,
+      showHidden,
+      toggleShowHidden,
+    ],
+  );
 
   return (
-    <NavigationContext.Provider
-      value={{
-        indexes,
-        offsetRow,
-        listHeight,
-        navigateUp,
-        navigateDown,
-        navigatePageUp,
-        navigatePageDown,
-        navigateHome,
-        navigateEnd,
-        selectedTodoId,
-        setSelectedTodoId,
-        useSelectedTodo,
-        showHidden,
-        toggleShowHidden,
-      }}
-    >
+    <NavigationContext.Provider value={value}>
       {children}
     </NavigationContext.Provider>
   );

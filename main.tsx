@@ -1,4 +1,4 @@
-import { Box, render } from "ink";
+import { render } from "ink";
 import { ActionBar } from "./components/ActionBar.tsx";
 import { ConfirmModal } from "./components/ConfirmModal.tsx";
 import { CreateTodoModal } from "./components/CreateTodoModal.tsx";
@@ -6,6 +6,8 @@ import { EditTodoModal } from "./components/EditTodoModal.tsx";
 import { SetDateModal } from "./components/SetDateModal.tsx";
 import { SetRecurrenceModal } from "./components/SetRecurrenceModal.tsx";
 import { SetPriorityModal } from "./components/SetPriorityModal.tsx";
+import { AddTagContextModal } from "./components/AddTagContextModal.tsx";
+import { HiddenIndicator } from "./components/HiddenIndicator.tsx";
 import { TodoList } from "./components/TodoList.tsx";
 import { TodoMenu } from "./components/TodoMenu.tsx";
 import { FocusProvider } from "./contexts/focus-context.tsx";
@@ -29,16 +31,10 @@ const AppContent = () => {
 
   return (
     <>
-      <Box
-        flexDirection="column"
-        height="100%"
-        width="100%"
-        justifyContent="space-between"
-      >
-        <SearchInput todos={todos} />
-        <TodoList />
-        <ActionBar />
-      </Box>
+      <SearchInput todos={todos} />
+      <TodoList />
+      <ActionBar />
+      <HiddenIndicator />
       {activeModal === "create-todo" && <CreateTodoModal />}
       {activeModal === "edit-todo" && <EditTodoModal />}
       {activeModal === "todo-menu" && <TodoMenu />}
@@ -47,6 +43,8 @@ const AppContent = () => {
         <SetDateModal type="threshold" />}
       {activeModal === "set-recurrence" && <SetRecurrenceModal />}
       {activeModal === "set-priority" && <SetPriorityModal />}
+      {activeModal === "add-project" && <AddTagContextModal type="project" />}
+      {activeModal === "add-context" && <AddTagContextModal type="context" />}
       {activeModal === "confirm-modal" &&
         isConfirmModalData(modalData) && (
         <ConfirmModal

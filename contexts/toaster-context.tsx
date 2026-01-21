@@ -1,4 +1,11 @@
-import { createContext, useContext, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 interface ToasterContextType {
   toasterMessage: string | undefined;
@@ -23,7 +30,7 @@ export const ToasterProvider = (
   );
   const toasterTimeoutRef = useRef<number | undefined>(undefined);
 
-  const showToaster = (message: string) => {
+  const showToaster = useCallback((message: string) => {
     setToasterMessage(message);
     if (toasterTimeoutRef.current) {
       clearTimeout(toasterTimeoutRef.current);
@@ -31,10 +38,15 @@ export const ToasterProvider = (
     toasterTimeoutRef.current = setTimeout(() => {
       setToasterMessage(undefined);
     }, 2000);
-  };
+  }, []);
+
+  const value = useMemo(
+    () => ({ toasterMessage, showToaster }),
+    [toasterMessage, showToaster],
+  );
 
   return (
-    <ToasterContext.Provider value={{ toasterMessage, showToaster }}>
+    <ToasterContext.Provider value={value}>
       {children}
     </ToasterContext.Provider>
   );

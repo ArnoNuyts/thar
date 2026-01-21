@@ -6,6 +6,7 @@ import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
+import { SECONDARY_COLOR } from "../constants.ts";
 
 const BASE_OPTIONS = [
   { label: "Daily", value: "d", unit: "day(s)" },
@@ -18,9 +19,10 @@ const RESET_OPTION = { label: "Reset", value: "reset", unit: "" };
 
 export const SetRecurrenceModal = () => {
   const { closeModal } = useModal();
-  const { updateTodo } = useTodo();
-  const { useSelectedTodo } = useNavigation();
-  const todo = useSelectedTodo();
+  const { updateTodos } = useTodo();
+  const { useSelectedTodos } = useNavigation();
+  const selectedTodos = useSelectedTodos();
+  const todo = selectedTodos[0]; // Reference todo for initial values
   const hasRecurrence = todo?.tags.rec !== undefined;
   const options = hasRecurrence
     ? [...BASE_OPTIONS, RESET_OPTION]
@@ -39,9 +41,8 @@ export const SetRecurrenceModal = () => {
         break;
       case step === "base" && key.return:
         if (options[selectedBaseIndex].value === "reset") {
-          if (todo) {
-            const updatedTodo = todo.removeRecurrence();
-            updateTodo(todo, updatedTodo);
+          if (selectedTodos.length > 0) {
+            updateTodos(selectedTodos, (t) => t.removeRecurrence());
             closeModal();
           }
         } else {
@@ -59,16 +60,15 @@ export const SetRecurrenceModal = () => {
         ) => (prev < options.length - 1 ? prev + 1 : 0));
         break;
       case step === "amount" && key.return:
-        if (todo && amount.trim().length > 0) {
+        if (selectedTodos.length > 0 && amount.trim().length > 0) {
           const base = options[selectedBaseIndex].value;
           const recurrenceString = `${amount}${base}`;
-          const updatedTodo = todo.setRecurrence(recurrenceString);
-          updateTodo(todo, updatedTodo);
+          updateTodos(selectedTodos, (t) => t.setRecurrence(recurrenceString));
           closeModal();
         }
         break;
     }
-  }, { autoFocus: true });
+  }, { autoFocus: true, tag: "set-recurrence-modal" });
 
   const getTitle = () => {
     if (step === "base") return "Set Recurrence Base";
@@ -86,7 +86,9 @@ export const SetRecurrenceModal = () => {
               const isSelected = index === selectedBaseIndex;
               return (
                 <Box key={option.value}>
-                  <Text color="green">{isSelected ? "» " : "  "}</Text>
+                  <Text color={SECONDARY_COLOR}>
+                    {isSelected ? "» " : "  "}
+                  </Text>
                   <Text>{option.label}</Text>
                 </Box>
               );

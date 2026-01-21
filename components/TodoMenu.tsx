@@ -7,6 +7,8 @@ import { useTodo } from "../contexts/todo-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
+import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
+import { Todo } from "../logic/todo.ts";
 
 export type MenuAction =
   | "edit"
@@ -22,7 +24,9 @@ export type MenuAction =
   | "undo"
   | "redo"
   | "paste"
-  | "toggle-view-hidden";
+  | "toggle-view-hidden"
+  | "add-project"
+  | "add-context";
 
 interface MenuItem {
   label: string;
@@ -38,6 +42,8 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Set Threshold Date", shortcut: "t", action: "threshold" },
   { label: "Set Recurrence", shortcut: "r", action: "recurrence" },
   { label: "Set Priority", shortcut: "p", action: "priority" },
+  { label: "Modify Projects", shortcut: "+", action: "add-project" },
+  { label: "Modify Contexts", shortcut: "@", action: "add-context" },
   { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
   { label: "Show/Hide Hidden", shortcut: "H", action: "toggle-view-hidden" },
   { label: "Archive Completed", shortcut: "a", action: "archive" },
@@ -50,39 +56,46 @@ const MENU_ITEMS: MenuItem[] = [
 export const TodoMenu = () => {
   const { closeModal, openModal } = useModal();
   const {
-    deleteTodo,
-    toggleTodo,
+    deleteTodos,
+    toggleTodos,
     toggleHidden,
     archiveCompletedTodos,
     undo,
     redo,
     addTodos,
   } = useTodo();
-  const { useSelectedTodo, setSelectedTodoId, toggleShowHidden } =
-    useNavigation();
+  const {
+    useSelectedTodo,
+    useSelectedTodos,
+    setSelectedTodoId,
+    toggleShowHidden,
+  } = useNavigation();
   const { showToaster } = useToaster();
   const todo = useSelectedTodo();
+  const selectedTodos = useSelectedTodos();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const handleAction = (action: MenuAction) => {
+  const handleAction = async (action: MenuAction) => {
     switch (action) {
       case "edit":
         if (todo) openModal("edit-todo", todo);
         break;
       case "delete":
-        if (todo) {
+        if (selectedTodos.length > 0) {
           openModal("confirm-modal", {
-            title: "Delete Todo",
-            message: "Are you sure you want to delete this todo?",
+            title: selectedTodos.length > 1 ? "Delete Todos" : "Delete Todo",
+            message: selectedTodos.length > 1
+              ? `Are you sure you want to delete ${selectedTodos.length} todos?`
+              : "Are you sure you want to delete this todo?",
             onConfirm: () => {
-              deleteTodo(todo);
+              deleteTodos(selectedTodos);
             },
           });
         }
         break;
       case "toggle":
-        if (todo) {
-          toggleTodo(todo);
+        if (selectedTodos.length > 0) {
+          toggleTodos(selectedTodos);
           closeModal();
         }
         break;
@@ -98,9 +111,15 @@ export const TodoMenu = () => {
       case "priority":
         openModal("set-priority");
         break;
+      case "add-project":
+        openModal("add-project");
+        break;
+      case "add-context":
+        openModal("add-context");
+        break;
       case "toggle-hidden":
-        if (todo) {
-          toggleHidden(todo);
+        if (selectedTodos.length > 0) {
+          toggleHidden(selectedTodos);
           closeModal();
         }
         break;
@@ -112,15 +131,27 @@ export const TodoMenu = () => {
         openModal("confirm-modal", {
           title: "Archive Completed",
           message: "Archive all completed todos to done.txt?",
-          onConfirm: () => {
-            archiveCompletedTodos();
+          onConfirm: async () => {
+            await archiveCompletedTodos();
           },
         });
         break;
       case "copy":
-        if (todo) {
-          copyToClipboard(todo.toString());
-          showToaster("Todo copied");
+        if (selectedTodos.length > 0) {
+          try {
+            await copyToClipboard(
+              selectedTodos.map((t: Todo) => t.toString()).join("\n"),
+            );
+            showToaster(
+              selectedTodos.length > 1
+                ? `${selectedTodos.length} todos copied`
+                : "Todo copied",
+            );
+          } catch (e) {
+            showToaster(
+              `Copy failed: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
           closeModal();
         }
         break;
@@ -133,45 +164,41 @@ export const TodoMenu = () => {
         closeModal();
         break;
       case "paste": {
-        const paste = async () => {
-          try {
-            const text = await readFromClipboard();
-            const lines = text
-              .split(/\r?\n/)
-              .map((line) => line.trim())
-              .filter((line) => line.length > 0);
-            if (lines.length === 0) {
-              closeModal();
-              return;
-            }
-
-            const doPaste = () => {
-              const added = addTodos(...lines);
-              if (added.length > 0) {
-                setSelectedTodoId(added[added.length - 1].id);
-              }
-              showToaster(`Pasted ${lines.length} todo(s)`);
-              closeModal();
-            };
-
-            if (lines.length > 10) {
-              openModal("confirm-modal", {
-                title: "Paste Multiple Todos",
-                message:
-                  `Are you sure you want to paste ${lines.length} todos?`,
-                onConfirm: doPaste,
-              });
-            } else {
-              doPaste();
-            }
-          } catch (e) {
-            showToaster(
-              `Paste failed: ${e instanceof Error ? e.message : String(e)}`,
-            );
+        try {
+          const text = await readFromClipboard();
+          const lines = text
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0);
+          if (lines.length === 0) {
             closeModal();
+            return;
           }
-        };
-        paste();
+
+          const doPaste = () => {
+            const added = addTodos(...lines);
+            if (added.length > 0) {
+              setSelectedTodoId(added[added.length - 1].id);
+            }
+            showToaster(`Pasted ${lines.length} todo(s)`);
+            closeModal();
+          };
+
+          if (lines.length > 10) {
+            openModal("confirm-modal", {
+              title: "Paste Multiple Todos",
+              message: `Are you sure you want to paste ${lines.length} todos?`,
+              onConfirm: doPaste,
+            });
+          } else {
+            doPaste();
+          }
+        } catch (e) {
+          showToaster(
+            `Paste failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+          closeModal();
+        }
         break;
       }
     }
@@ -259,6 +286,14 @@ export const TodoMenu = () => {
       if (input === "v") {
         handleAction("paste");
       }
+
+      if (input === "+") {
+        handleAction("add-project");
+      }
+
+      if (input === "@") {
+        handleAction("add-context");
+      }
     },
     { autoFocus: true },
   );
@@ -270,13 +305,17 @@ export const TodoMenu = () => {
         {MENU_ITEMS.map((item, index) => {
           const isSelected = index === selectedIndex;
           return (
-            <Box key={item.action} justifyContent="space-between">
+            <Box
+              key={item.action}
+              justifyContent="space-between"
+              paddingRight={1}
+            >
               <Box>
-                <Text color="green">{isSelected ? "» " : "  "}</Text>
+                <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
                 <Text>{item.label}</Text>
               </Box>
               <Box>
-                <Text color="yellow">{item.shortcut}</Text>
+                <Text color={PRIMARY_COLOR}>{item.shortcut}</Text>
               </Box>
             </Box>
           );
