@@ -131,6 +131,47 @@ const ContextTitle = memo(
   },
 );
 
+const WelcomeScreen = () => (
+  <Box
+    width="100%"
+    height="100%"
+    justifyContent="center"
+    alignItems="center"
+    flexDirection="column"
+  >
+    <Text>
+      I love deadlines. I love the whooshing noise they make as they go by.
+    </Text>
+    <Text color="gray">
+      - Douglas Adams
+    </Text>
+    <Newline />
+    <Text color="gray" dimColor>
+      Press &apos;n&apos; to create a new todo.
+    </Text>
+  </Box>
+);
+
+const SearchEmptyState = ({ query }: { query: string }) => (
+  <Box
+    width="100%"
+    height="100%"
+    justifyContent="center"
+    alignItems="center"
+    flexDirection="column"
+  >
+    <Text>
+      No results found for {` '`}
+      <Text color="yellow">{query}</Text>
+      {`' `}
+    </Text>
+    <Newline />
+    <Text color="gray" dimColor>
+      Try a different search or press Esc to clear.
+    </Text>
+  </Box>
+);
+
 export const TodoList = () => {
   const { exit } = useApp();
   const {
@@ -154,7 +195,7 @@ export const TodoList = () => {
 
   const { openModal } = useModal();
   const { showToaster } = useToaster();
-  const { focusRef } = useSearch();
+  const { focusRef, searchQuery } = useSearch();
   const {
     toggleTodos,
     toggleHidden,
@@ -336,27 +377,9 @@ export const TodoList = () => {
       backgroundColor="black"
     >
       {visibleIndexes.length === 0
-        ? (
-          <Box
-            width="100%"
-            height="100%"
-            justifyContent="center"
-            alignItems="center"
-            flexDirection="column"
-          >
-            <Text>
-              I love deadlines. I love the whooshing noise they make as they go
-              by.
-            </Text>
-            <Text color="gray">
-              - Douglas Adams
-            </Text>
-            <Newline />
-            <Text color="gray" dimColor>
-              Press &apos;n&apos; to create a new todo.
-            </Text>
-          </Box>
-        )
+        ? (searchQuery.trim()
+          ? <SearchEmptyState query={searchQuery.trim()} />
+          : <WelcomeScreen />)
         : visibleIndexes.map((entry, index) => {
           const originalIndex = index + offsetRow;
           if (entry.type === IndexType.context) {
