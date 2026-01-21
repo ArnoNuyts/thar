@@ -51,7 +51,7 @@ x 2026-01-05 2025-12-23 +Multi-select : set prio @v0.4
 x 2026-01-05 2025-12-23 +Multi-select : toggle state @v0.4
 (A) 2025-12-23 after search cancel, should set screen-position to take full advantage of terminal height @v0.4 +Bug
 2025-12-23 Scrollbar on TodoList @v0.5
-2025-12-23 When searching and no results. Welcome screen is shown instead of some other message. @v0.4 +Bug
+x 2026-01-21 2025-12-23 When searching and no results. Welcome screen is shown instead of some other message. @v0.4 +Bug
 x 2026-01-20 2025-12-23 +Multi-select : set context, shortcut @ @v0.4
 x 2026-01-20 2025-12-23 +Multi-select : add tag, shortcut + @v0.4
 2025-12-24 Fix hidden status indicator @v0.4 +Bug
