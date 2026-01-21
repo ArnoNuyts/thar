@@ -23,12 +23,13 @@ import {
   NavigationContextType,
   NavigationProvider,
 } from "../contexts/navigation-context.tsx";
-import { SearchProvider } from "../contexts/search-context.tsx";
+import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
 import { TodoMenu } from "../components/TodoMenu.tsx";
 
 import { useTodo } from "../contexts/todo-context.tsx";
+import { useEffect } from "react";
 
 // --- Helpers ---
 
@@ -103,6 +104,18 @@ const AppContentMock = () => {
       {activeModal === "todo-menu" && <TodoMenu />}
     </Box>
   );
+};
+
+const SearchQuerySetter = ({
+  query,
+}: {
+  query: string;
+}) => {
+  const { setSearchQuery } = useSearch();
+  useEffect(() => {
+    setSearchQuery(query);
+  }, [query, setSearchQuery]);
+  return null;
 };
 
 // Clipboard Mocks
@@ -1018,5 +1031,75 @@ Deno.test({
 
     unmount();
     restore();
+  },
+});
+
+Deno.test({
+  name: "TodoList: should show WelcomeScreen when no todos and no search",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { unmount, lastFrame } = render(
+      <TestWrapper initialTodos={[]}>
+        <AppContentMock />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => {
+      const frame = lastFrame();
+      assertEquals(frame?.includes("Douglas Adams"), true);
+      assertEquals(frame?.includes("Press 'n' to create a new todo"), true);
+    });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name:
+    "TodoList: should show SearchEmptyState when search has no results (with todos)",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todos = [new Todo("Task A")];
+    const { unmount, lastFrame } = render(
+      <TestWrapper initialTodos={todos}>
+        <SearchQuerySetter query="xyz123" />
+        <AppContentMock />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => {
+      const frame = lastFrame();
+      assertEquals(frame?.includes("No results found for"), true);
+      assertEquals(frame?.includes("xyz123"), true);
+      assertEquals(frame?.includes("Douglas Adams"), false);
+    });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name:
+    "TodoList: should show SearchEmptyState when search has no results (empty list)",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { unmount, lastFrame } = render(
+      <TestWrapper initialTodos={[]}>
+        <SearchQuerySetter query="abc" />
+        <AppContentMock />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => {
+      const frame = lastFrame();
+      assertEquals(frame?.includes("No results found for"), true);
+      assertEquals(frame?.includes("abc"), true);
+      assertEquals(frame?.includes("Douglas Adams"), false);
+    });
+
+    unmount();
   },
 });
