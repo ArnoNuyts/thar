@@ -88,6 +88,20 @@ const SelectionObserver = ({
   return null;
 };
 
+const MultiSelectionObserver = ({
+  onSelectionChange,
+}: {
+  onSelectionChange: (ids: Set<symbol>) => void;
+}) => {
+  const { selectedTodoIds } = useNavigation();
+
+  useEffect(() => {
+    onSelectionChange(selectedTodoIds);
+  }, [selectedTodoIds, onSelectionChange]);
+
+  return null;
+};
+
 const FocusRequester = () => {
   const { focusRef } = useSearch();
   useEffect(() => {
@@ -232,6 +246,82 @@ Deno.test(
 
     await waitFor(() => {
       assertEquals(selectedText, "Task A");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "SearchInput: should handle multi-selection with Shift+Arrow keys when focused",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
+    let selectedIds = new Set<symbol>();
+
+    const { unmount, stdin } = render(
+      <TestWrapper initialTodos={todos}>
+        <FocusRequester />
+        <ConnectedSearchInput />
+        <MultiSelectionObserver
+          onSelectionChange={(ids) => selectedIds = ids}
+        />
+      </TestWrapper>,
+    );
+
+    // Initial state
+    await waitFor(() => {
+      assertEquals(selectedIds.size, 0);
+    });
+
+    await delay(100);
+
+    // Press Shift+Down
+    stdin.write("\u001B[1;2B");
+
+    await waitFor(() => {
+      assertEquals(selectedIds.size, 2);
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "SearchInput: should handle multi-selection with Shift+Arrow keys when filtered",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = [
+      new Todo("Apple"),
+      new Todo("Banana"),
+      new Todo("Apricot"),
+      new Todo("Cherry"),
+    ];
+    let selectedIds = new Set<symbol>();
+
+    const { unmount, stdin } = render(
+      <TestWrapper initialTodos={todos}>
+        <SearchQuerySetter query="Ap" />
+        <FocusRequester />
+        <ConnectedSearchInput />
+        <MultiSelectionObserver
+          onSelectionChange={(ids) => selectedIds = ids}
+        />
+      </TestWrapper>,
+    );
+
+    // Initial state
+    await waitFor(() => {
+      assertEquals(selectedIds.size, 0);
+    });
+
+    await delay(200);
+
+    // Press Shift+Down
+    stdin.write("\u001B[1;2B");
+
+    await waitFor(() => {
+      assertEquals(selectedIds.size, 2);
     });
 
     unmount();

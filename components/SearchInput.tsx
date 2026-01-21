@@ -162,19 +162,19 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
 
     // Navigation fallback when no suggestions
     if (key.upArrow) {
-      navigateUp();
+      navigateUp(key.shift);
       return;
     }
     if (key.downArrow) {
-      navigateDown();
+      navigateDown(key.shift);
       return;
     }
     if (key.pageUp) {
-      navigatePageUp();
+      navigatePageUp(key.shift);
       return;
     }
     if (key.pageDown) {
-      navigatePageDown();
+      navigatePageDown(key.shift);
       return;
     }
     if (key.home) {
