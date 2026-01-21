@@ -1,6 +1,6 @@
 import { render } from "ink-testing-library";
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { delay } from "@std/async";
+
 import { useEffect } from "react";
 import { IndexType } from "../types/enums.ts";
 import { Todo } from "../logic/todo.ts";
@@ -153,25 +153,37 @@ Deno.test(
   },
 );
 
+import { FocusObserver } from "./test-components.tsx";
+
+// ... existing imports
+
+// ... helpers
+
 Deno.test(
   "SearchInput: should handle navigation keys when search is focused",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
     let selectedText = "";
+    let focusedTag: string | undefined;
 
     const { unmount, stdin } = render(
       <TestWrapper initialTodos={todos}>
         <FocusRequester />
         <ConnectedSearchInput />
         <SelectionObserver onSelectionChange={(text) => selectedText = text} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </TestWrapper>,
     );
+
+    // Wait for search input to be focused
+    await waitFor(() => {
+      assertEquals(focusedTag, "focusable");
+    });
 
     await waitFor(() => {
       assertEquals(selectedText, "Task A");
     });
-    await delay(200);
 
     stdin.write("\u001B[B"); // Down
 
@@ -191,6 +203,7 @@ Deno.test(
 
 Deno.test(
   "SearchInput: should auto-select first item when current selection is filtered out",
+  // ... (this test doesn't use FocusRequester/delay so maybe leave it or update if relevant)
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todos = [
@@ -222,19 +235,24 @@ Deno.test(
   async () => {
     const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
     let selectedText = "";
+    let focusedTag: string | undefined;
 
     const { unmount, stdin } = render(
       <TestWrapper initialTodos={todos}>
         <FocusRequester />
         <ConnectedSearchInput />
         <SelectionObserver onSelectionChange={(text) => selectedText = text} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </TestWrapper>,
     );
 
     await waitFor(() => {
+      assertEquals(focusedTag, "focusable");
+    });
+
+    await waitFor(() => {
       assertEquals(selectedText, "Task A");
     });
-    await delay(100);
 
     stdin.write("\u001B[F"); // End
 
@@ -258,6 +276,7 @@ Deno.test(
   async () => {
     const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
     let selectedIds = new Set<symbol>();
+    let focusedTag: string | undefined;
 
     const { unmount, stdin } = render(
       <TestWrapper initialTodos={todos}>
@@ -266,15 +285,18 @@ Deno.test(
         <MultiSelectionObserver
           onSelectionChange={(ids) => selectedIds = ids}
         />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </TestWrapper>,
     );
 
     // Initial state
     await waitFor(() => {
-      assertEquals(selectedIds.size, 0);
+      assertEquals(focusedTag, "focusable");
     });
 
-    await delay(100);
+    await waitFor(() => {
+      assertEquals(selectedIds.size, 0);
+    });
 
     // Press Shift+Down
     stdin.write("\u001B[1;2B");
@@ -298,6 +320,7 @@ Deno.test(
       new Todo("Cherry"),
     ];
     let selectedIds = new Set<symbol>();
+    let focusedTag: string | undefined;
 
     const { unmount, stdin } = render(
       <TestWrapper initialTodos={todos}>
@@ -307,15 +330,18 @@ Deno.test(
         <MultiSelectionObserver
           onSelectionChange={(ids) => selectedIds = ids}
         />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </TestWrapper>,
     );
 
     // Initial state
     await waitFor(() => {
-      assertEquals(selectedIds.size, 0);
+      assertEquals(focusedTag, "focusable");
     });
 
-    await delay(200);
+    await waitFor(() => {
+      assertEquals(selectedIds.size, 0);
+    });
 
     // Press Shift+Down
     stdin.write("\u001B[1;2B");
