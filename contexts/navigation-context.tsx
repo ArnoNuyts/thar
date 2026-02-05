@@ -164,11 +164,10 @@ function calculateScrollOffset(
 
   // Scrolling down
   if (selectedRow >= currentOffset + listHeight - scrollPadding) {
-    let newOffset = selectedRow - listHeight + 1 + scrollPadding;
-    // Snap to 0 if near top to prevent oscillation
-    if (newOffset <= 1) {
-      newOffset = 0;
-    }
+    const newOffset = selectedRow - listHeight + 1 + scrollPadding;
+    // console.log("DEBUG: Snapping to 0");
+    //   newOffset = 0;
+    // }
     return Math.max(0, Math.min(newOffset, indexesLength - listHeight));
   }
 

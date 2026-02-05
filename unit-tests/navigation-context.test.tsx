@@ -796,3 +796,57 @@ Deno.test(
     unmount();
   },
 );
+
+Deno.test(
+  "should enforce scroll padding for last item of first page (snap-to-zero bug)",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    // 10 items. Height 6 (header + 5 todos).
+    // Visible initially: Index 0 (Header), 1, 2, 3, 4, 5.
+    const todos = new Todos(
+      ...Array.from({ length: 10 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    // deno-lint-ignore no-explicit-any
+    let navContext: any;
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={6}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 0");
+    });
+
+    // Navigate down 4 times to select Todo 4
+    navContext.navigateDown();
+    navContext.navigateDown();
+    navContext.navigateDown();
+    navContext.navigateDown();
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 4");
+    });
+
+    // Todo 4 is at index 5 (0 is header).
+    // ListHeight 6.
+    // Window [offset, offset+6].
+    // If offset 0: [0, 1, 2, 3, 4, 5]. Index 6 NOT visible.
+    // Padding (1) requires 1 item below selected.
+    // Selected Index 5. Need Index 6 (Todo 5).
+    // Expect offset > 0.
+
+    await waitFor(() => {
+      if (navContext.offsetRow === 0) {
+        throw new Error(
+          `Offset should handle padding for last item! Expected > 0, got 0`,
+        );
+      }
+    });
+
+    unmount();
+  },
+);
