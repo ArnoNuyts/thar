@@ -156,36 +156,51 @@ function calculateScrollOffset(
   const scrollPadding = 1;
   const { min: minRow, max: maxRow } = selectionRange;
 
-  // Priority 1: Keep cursor visible
-  // Scrolling up
-  if (selectedRow < currentOffset + scrollPadding) {
-    return Math.max(0, selectedRow - scrollPadding);
-  }
+  // Priority 1 & 2: Calculate bounds that keep at least the cursor visible,
+  // and as much of the range as possible.
+  // For the cursor to be visible: offset <= selectedRow AND offset > selectedRow - listHeight
+  const cursorMin = Math.max(0, selectedRow - listHeight + 1);
+  const cursorMax = Math.min(
+    selectedRow,
+    Math.max(0, indexesLength - listHeight),
+  );
 
-  // Scrolling down
-  if (selectedRow >= currentOffset + listHeight - scrollPadding) {
-    const newOffset = selectedRow - listHeight + 1 + scrollPadding;
-    // console.log("DEBUG: Snapping to 0");
-    //   newOffset = 0;
-    // }
-    return Math.max(0, Math.min(newOffset, indexesLength - listHeight));
-  }
-
-  // Priority 2: Show range if it fits
   const rangeHeight = maxRow - minRow + 1;
   if (rangeHeight <= listHeight) {
-    if (minRow < currentOffset) {
-      return minRow;
-    }
-    if (maxRow >= currentOffset + listHeight) {
-      return Math.max(
-        0,
-        Math.min(maxRow - listHeight + 1, indexesLength - listHeight),
-      );
-    }
-  }
+    // Range fits! Allowed offsets to show ENTIRE range:
+    // offset <= minRow AND offset >= maxRow - listHeight + 1
+    const rangeMinAllowed = Math.max(0, maxRow - listHeight + 1);
+    const rangeMaxAllowed = Math.min(
+      minRow,
+      Math.max(0, indexesLength - listHeight),
+    );
 
-  return currentOffset;
+    // We want to stay as close to currentOffset as possible,
+    // but applying padding for the cursor where it doesn't hide the range.
+    let target = currentOffset;
+
+    // Apply padding logic
+    if (selectedRow < target + scrollPadding) {
+      target = selectedRow - scrollPadding;
+    } else if (selectedRow >= target + listHeight - scrollPadding) {
+      target = selectedRow - listHeight + 1 + scrollPadding;
+    }
+
+    // Clamp to the range-visibility window
+    return clamp(target, rangeMinAllowed, rangeMaxAllowed);
+  } else {
+    // Range DOES NOT fit. Just keep cursor visible with padding.
+    let target = currentOffset;
+    if (selectedRow < target + scrollPadding) {
+      target = selectedRow - scrollPadding;
+    } else if (selectedRow >= target + listHeight - scrollPadding) {
+      target = selectedRow - listHeight + 1 + scrollPadding;
+    }
+
+    // Still must keep cursor visible (ignore padding if it pushes cursor out,
+    // though clamp to cursorMin/Max handles that).
+    return clamp(target, cursorMin, cursorMax);
+  }
 }
 
 // ============================================================================
@@ -223,6 +238,7 @@ interface NavState {
   offsetRow: number;
   // Tracking for prop sync
   prevTodos: Todos;
+  prevIndexes: IndexEntry[];
   lastHash: string | undefined;
   lastIndex: number;
 }
@@ -247,6 +263,7 @@ export const NavigationProvider = (
     },
     offsetRow: 0,
     prevTodos: todos,
+    prevIndexes: [],
     lastHash: undefined,
     lastIndex: 0,
   });
@@ -379,6 +396,7 @@ export const NavigationProvider = (
       selection: newSelection,
       offsetRow: newOffsetRow,
       prevTodos: todos,
+      prevIndexes: indexes,
       lastIndex: selectedRow !== -1 ? selectedRow : state.lastIndex,
       lastHash: newLastHash,
     };
@@ -395,7 +413,9 @@ export const NavigationProvider = (
     activeState.lastIndex,
   );
 
-  if (validatedCursor !== currentCursor) {
+  const indexesChanged = indexes !== activeState.prevIndexes;
+
+  if (validatedCursor !== currentCursor || indexesChanged) {
     const selectedRow = validatedCursor
       ? indexes.findIndex((e) =>
         e.type === IndexType.todo && e.todo.id === validatedCursor
@@ -439,6 +459,7 @@ export const NavigationProvider = (
         cursorId: validatedCursor,
       },
       offsetRow: newOffsetRow,
+      prevIndexes: indexes,
       lastIndex: selectedRow !== -1 ? selectedRow : activeState.lastIndex,
       lastHash: newLastHash,
     };
@@ -513,6 +534,7 @@ export const NavigationProvider = (
         ...prev,
         selection: newSelection,
         offsetRow: newOffset,
+        prevIndexes: indexes,
         lastIndex: newRow !== -1 ? newRow : prev.lastIndex,
         lastHash: newLastHash,
       };
@@ -527,8 +549,9 @@ export const NavigationProvider = (
         anchorId: undefined,
         rangeIds: new Set<symbol>(),
       },
+      prevIndexes: indexes,
     }));
-  }, []);
+  }, [indexes]);
 
   const doNavigate = useCallback((step: number, shift: boolean = false) => {
     setState((prev) => {
@@ -641,6 +664,7 @@ export const NavigationProvider = (
         },
         offsetRow: newOffsetRow,
         prevTodos: prev.prevTodos,
+        prevIndexes: indexes,
         lastIndex: newSelectedRow,
         lastHash: newLastHash,
       };
