@@ -726,3 +726,73 @@ Deno.test(
     unmount();
   },
 );
+
+Deno.test(
+  "should update offset when navigating home/end",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      ...Array.from({ length: 15 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    // deno-lint-ignore no-explicit-any
+    let navContext: any;
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={5}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state: Todo 0, offset 0
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 0");
+      assertEquals(navContext.offsetRow, 0);
+    });
+
+    // Navigate End
+    navContext.navigateEnd();
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 14");
+    });
+
+    // Todo 14 is the last item.
+    // List height is 5.
+    // Offset should be such that index 14 is visible.
+    // Visible range: [offset, offset + 5 - 1]
+    // 14 >= offset && 14 < offset + 5
+    // 14 >= offset --> offset <= 14
+    // 14 < offset + 5 --> 14 - 5 < offset --> 9 < offset
+    // So offset should be between 10 and 14 (inclusive).
+    // Specifically, `calculateScrollOffset` tries to keep context, but here no context.
+    // Usually it scrolls to put item at bottom: offset = 14 - 5 + 1 + padding?
+    // Let's just assert offset > 5 to prove it moved SIGNIFICANTLY from 0.
+
+    await waitFor(() => {
+      if (navContext.offsetRow <= 5) {
+        throw new Error(
+          `Offset Row did not update correctly! Expected > 5, got ${navContext.offsetRow}`,
+        );
+      }
+    });
+
+    // Navigate Home
+    navContext.navigateHome();
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 0");
+    });
+
+    await waitFor(() => {
+      if (navContext.offsetRow !== 0) {
+        throw new Error(
+          `Offset Row did not reset to 0! Got ${navContext.offsetRow}`,
+        );
+      }
+    });
+
+    unmount();
+  },
+);
