@@ -289,40 +289,77 @@ export const NavigationProvider = (
     return index !== -1 ? index : 0;
   }, [indexes, selectedTodoId]);
 
+  // Calculate range bounds for scrolling
+  const selectionRangeRows = useMemo(() => {
+    if (selectedTodoIds.size === 0) {
+      return { min: selectedRow, max: selectedRow };
+    }
+
+    let min = Infinity;
+    let max = -Infinity;
+
+    indexes.forEach((entry, index) => {
+      if (entry.type === IndexType.todo && selectedTodoIds.has(entry.todo.id)) {
+        min = Math.min(min, index);
+        max = Math.max(max, index);
+      }
+    });
+
+    // Safety fallback
+    if (min === Infinity) return { min: selectedRow, max: selectedRow };
+
+    return { min, max };
+  }, [indexes, selectedTodoIds, selectedRow]);
+
   // Ensure selection is visible (scroll into view)
   useEffect(() => {
     const scrollPadding = 1;
+    const { min: minRow, max: maxRow } = selectionRangeRows;
 
-    // Avoid scroll thrashing when listHeight is too small for padding
-    if (listHeight <= 2 * scrollPadding) {
-      if (selectedRow < offsetRow) {
-        setOffsetRow(selectedRow);
-      } else if (selectedRow >= offsetRow + listHeight) {
-        setOffsetRow(selectedRow - listHeight + 1);
+    // Priority 1: Ensure the cursor (focused item) is visible
+    // If the cursor is moving up, ensure it's visible at the top (with padding)
+    // If the cursor is moving down, ensure it's visible at the bottom (with padding)
+
+    // Scrolling up (cursor is above viewport or in padding)
+    if (selectedRow < offsetRow + scrollPadding) {
+      setOffsetRow(Math.max(0, selectedRow - scrollPadding));
+      return; // If we scroll for the cursor, we stop here for this frame
+    }
+
+    // Scrolling down (cursor is below viewport or in padding)
+    if (selectedRow >= offsetRow + listHeight - scrollPadding) {
+      let newOffset = selectedRow - listHeight + 1 + scrollPadding;
+      // Snap to 0 if we'd be at offset 0 or 1 to prevent oscillation at top of list
+      if (newOffset <= 1) {
+        newOffset = 0;
       }
+      setOffsetRow(Math.max(
+        0,
+        Math.min(newOffset, indexes.length - listHeight),
+      ));
       return;
     }
 
-    // Scrolling up with padding
-    if (selectedRow < offsetRow + scrollPadding) {
-      setOffsetRow(Math.max(0, selectedRow - scrollPadding));
-    } // Scrolling down with padding
-    else if (
-      selectedRow >=
-        offsetRow + listHeight - scrollPadding
-    ) {
-      setOffsetRow(
-        // This Math.max is for safety, should not be needed with the listHeight check
-        Math.max(
+    // Priority 2: Try to show as much of the range as possible around the cursor
+    // If the whole range Fits, ensure both ends are visible
+    const rangeHeight = maxRow - minRow + 1;
+
+    if (rangeHeight <= listHeight) {
+      if (minRow < offsetRow) {
+        setOffsetRow(minRow);
+      } else if (maxRow >= offsetRow + listHeight) {
+        setOffsetRow(Math.max(
           0,
           Math.min(
-            selectedRow - listHeight + 1 + scrollPadding,
+            maxRow - listHeight + 1,
             indexes.length - listHeight,
           ),
-        ),
-      );
+        ));
+      }
     }
-  }, [selectedRow, listHeight, offsetRow]);
+    // If range doesn't fit, Priority 1 already ensured cursor is visible.
+    // We stop here to avoid oscillation.
+  }, [selectedRow, selectionRangeRows, listHeight, offsetRow, indexes.length]);
 
   const doNavigate = useCallback((step: number, shift: boolean = false) => {
     setSelection((prev) => {
