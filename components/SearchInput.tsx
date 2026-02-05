@@ -24,7 +24,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
     clearSuggestions,
   } = useSuggestion();
 
-  const { isFocused, focus, blur } = useFocusable();
+  const { isFocused, focus, blur } = useFocusable({ tag: "search-input" });
   // Get navigation functions
   const {
     navigateUp,

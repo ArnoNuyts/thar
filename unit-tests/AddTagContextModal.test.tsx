@@ -7,7 +7,7 @@ import { AddTagContextModal } from "../components/AddTagContextModal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
-import { TestWrapper } from "./test-components.tsx";
+import { FocusObserver, TestWrapper } from "./test-components.tsx";
 import { Todos } from "../logic/Todos.ts";
 
 Deno.test("AddTagContextModal: should render projects correctly", async () => {
@@ -60,6 +60,8 @@ Deno.test("AddTagContextModal: should toggle existing project", async () => {
   let updatedTodos: Todo[] = [];
   let transformFn: ((t: Todo) => Todo) | undefined;
 
+  let focusedTag: string | undefined;
+
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();
     useEffect(() => {
@@ -69,6 +71,7 @@ Deno.test("AddTagContextModal: should toggle existing project", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "add-project" && <AddTagContextModal type="project" />}
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -90,9 +93,10 @@ Deno.test("AddTagContextModal: should toggle existing project", async () => {
     </TestWrapper>,
   );
 
+  // Wait for title and focus
   await waitFor(() => {
-    const frame = lastFrame() || "";
-    assertMatch(frame, /\[x\].*work/);
+    assertMatch(lastFrame() || "", /Modify Projects/);
+    assertEquals(focusedTag, "add-project-modal");
   });
 
   // Navigate to 'work' (Custom is 0, 'work' is 1)
@@ -100,7 +104,7 @@ Deno.test("AddTagContextModal: should toggle existing project", async () => {
 
   // Wait for selection to move
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /».*work/);
+    assertMatch(lastFrame() || "", /\u00BB.*work/);
   });
 
   // Toggle 'work'
@@ -131,6 +135,8 @@ Deno.test("AddTagContextModal: should add custom project", async () => {
   let updatedTodos: Todo[] = [];
   let transformFn: ((t: Todo) => Todo) | undefined;
 
+  let focusedTag: string | undefined;
+
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();
     useEffect(() => {
@@ -140,6 +146,7 @@ Deno.test("AddTagContextModal: should add custom project", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "add-project" && <AddTagContextModal type="project" />}
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -163,6 +170,7 @@ Deno.test("AddTagContextModal: should add custom project", async () => {
 
   await waitFor(() => {
     assertMatch(lastFrame() || "", /New:/);
+    assertEquals(focusedTag, "add-project-modal");
   });
 
   // Type custom project name
@@ -193,6 +201,8 @@ Deno.test("AddTagContextModal: should cycle through 3 states for 'some' state", 
   const t2 = new Todo("Todo 2");
   const todos = new Todos(t1, t2);
 
+  let focusedTag: string | undefined;
+
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();
     useEffect(() => {
@@ -202,6 +212,7 @@ Deno.test("AddTagContextModal: should cycle through 3 states for 'some' state", 
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "add-project" && <AddTagContextModal type="project" />}
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </Box>
     );
   };
@@ -219,6 +230,7 @@ Deno.test("AddTagContextModal: should cycle through 3 states for 'some' state", 
 
   await waitFor(() => {
     assertMatch(lastFrame() || "", /\[\?\].*work/);
+    assertEquals(focusedTag, "add-project-modal");
   });
 
   // Navigate to 'work' (Custom is 0, 'work' is 1)
@@ -226,7 +238,7 @@ Deno.test("AddTagContextModal: should cycle through 3 states for 'some' state", 
 
   // Wait for selection to move
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /».*work/);
+    assertMatch(lastFrame() || "", /\u00BB.*work/);
   });
 
   // Toggle 1: some (?) -> all (x)
