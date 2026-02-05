@@ -984,3 +984,271 @@ Deno.test(
     unmount();
   },
 );
+
+Deno.test(
+  "should scroll to keep selection visible when search is cleared",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    // 20 items. Height 5.
+    const todos = new Todos(
+      ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    // deno-lint-ignore no-explicit-any
+    let context: any;
+
+    // deno-lint-ignore no-explicit-any
+    const CombinedTester = (
+      { onContext }: { onContext: (ctx: any) => void },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      }, [nav, search]);
+      return <Text>Tester</Text>;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={5}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state
+    await waitFor(() => {
+      assertEquals(!!context?.nav?.indexes, true);
+    });
+
+    // Search for "Todo 15". Only 1 match.
+    context.search.setSearchQuery("Todo 15");
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 15");
+      // Offset should be 0 because list is short (1 match + 1 date header maybe?)
+      assertEquals(context.nav.offsetRow, 0);
+    });
+
+    // Clear Search.
+    // List becomes 20 items + 1 header = 21. Todo 15 is at Index 16.
+    // Index 16 must be visible.
+    context.search.setSearchQuery("");
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 15");
+      const offset = context.nav.offsetRow;
+      const visible = 16 >= offset && 16 < offset + 5;
+      if (!visible) {
+        throw new Error(`Item 16 should be visible. Current offset: ${offset}`);
+      }
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should scroll to keep multi-select visible when search is cleared",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    // deno-lint-ignore no-explicit-any
+    let context: any;
+
+    // deno-lint-ignore no-explicit-any
+    const CombinedTester = (
+      { onContext }: { onContext: (ctx: any) => void },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      }, [nav, search]);
+      return <Text>Tester</Text>;
+    };
+
+    // Height 10 to fit both if possible
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={10}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial
+    await waitFor(() => assertEquals(!!context, true));
+
+    // Search matches "Todo 1" -> 1, 10, 11...
+    context.search.setSearchQuery("Todo 1");
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 1");
+    });
+
+    // Select down once. "Todo 1" is item 1. next matches...
+    context.nav.navigateDown(true); // select Todo 10
+
+    await waitFor(() => {
+      assertEquals(context.nav.selectedTodoIds.size, 2);
+    });
+
+    // Clear search.
+    // Todo 1: Index 2. Todo 10: Index 11.
+    // Range [2, 11] fits in Height 10.
+    context.search.setSearchQuery("");
+
+    await waitFor(() => {
+      // Both ends should be visible. Offset should be 2.
+      assertEquals(context.nav.offsetRow, 2);
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should prioritize cursor visibility over multi-select range when search is cleared",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    // deno-lint-ignore no-explicit-any
+    let context: any;
+
+    // deno-lint-ignore no-explicit-any
+    const CombinedTester = (
+      { onContext }: { onContext: (ctx: any) => void },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      }, [nav, search]);
+      return <Text>Tester</Text>;
+    };
+
+    // Small height 5. Range cannot fit.
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={5}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    await waitFor(() => assertEquals(!!context, true));
+
+    context.search.setSearchQuery("Todo 1");
+    await waitFor(() =>
+      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 1")
+    );
+
+    // Select down twice.
+    context.nav.navigateDown(true);
+    context.nav.navigateDown(true);
+
+    await waitFor(() => {
+      assertEquals(context.nav.selectedTodoIds.size, 3);
+    });
+
+    const cursorId = context.nav.selectedTodoId;
+
+    // Clear search.
+    context.search.setSearchQuery("");
+
+    await waitFor(() => {
+      // Cursor MUST be visible.
+      const cursorRow = context.nav.indexes.findIndex((e: any) =>
+        e.todo?.id === cursorId
+      );
+      const offset = context.nav.offsetRow;
+      const visible = cursorRow >= offset && cursorRow < offset + 5;
+      if (!visible) {
+        throw new Error(
+          `Cursor at row ${cursorRow} should be visible. Offset: ${offset}`,
+        );
+      }
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should fit exact 10-item multi-selection in 10-row window after clearing search",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    // 30 items: 10 'Match' items in the middle, surrounded by 'Other' items.
+    const todos = new Todos(
+      ...Array.from({ length: 10 }, (_, i) => new Todo(`OtherA ${i}`)),
+      ...Array.from({ length: 10 }, (_, i) => new Todo(`Match ${i}`)),
+      ...Array.from({ length: 10 }, (_, i) => new Todo(`OtherB ${i}`)),
+    );
+    // deno-lint-ignore no-explicit-any
+    let context: any;
+
+    // deno-lint-ignore no-explicit-any
+    const CombinedTester = (
+      { onContext }: { onContext: (ctx: any) => void },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      }, [nav, search]);
+      return <Text>Tester</Text>;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={10}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state
+    await waitFor(() => {
+      assertEquals(!!context?.nav?.indexes, true);
+    });
+
+    // 1. Search for "Match". Filters list to exactly 10 items (+ 1 date header = 11 rows total)
+    context.search.setSearchQuery("Match");
+
+    await waitFor(() => {
+      // Should show Match 0
+      assertEquals(context.nav.useSelectedTodo()?.text, "Match 0");
+    });
+
+    // 2. Select all 10 "Match" items.
+    for (let i = 0; i < 9; i++) {
+      context.nav.navigateDown(true);
+    }
+
+    await waitFor(() => {
+      assertEquals(context.nav.selectedTodoIds.size, 10);
+      assertEquals(context.nav.useSelectedTodo()?.text, "Match 9");
+    });
+
+    // 3. Clear search.
+    // In the full list (31 rows total: 1 header + 30 todos):
+    // OtherA 0..9 are indices 1..10.
+    // Match 0..9 are indices 11..20.
+    // Range [11, 20] size 10. Height 10.
+    context.search.setSearchQuery("");
+
+    await waitFor(() => {
+      assertEquals(context.nav.selectedTodoIds.size, 10);
+      // Row 11 to Row 20 should be visible.
+      // With Height 10, offset MUST be Row 11.
+      assertEquals(context.nav.offsetRow, 11);
+    });
+
+    unmount();
+  },
+);
