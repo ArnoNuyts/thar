@@ -3,20 +3,25 @@ import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { useEffect } from "react";
 import {
+  NavigationContextType,
   NavigationProvider,
   useNavigation,
 } from "../contexts/navigation-context.tsx";
-import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
+import {
+  SearchContextType,
+  SearchProvider,
+  useSearch,
+} from "../contexts/search-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 import { IndexType } from "../types/enums.ts";
+import { IndexEntry, TodoIndexEntry } from "../logic/indexes.ts";
 
 const TestWrapper = (
   { todos, onContext }: {
     todos: Todos;
-    // deno-lint-ignore no-explicit-any
-    onContext: (ctx: any) => void;
+    onContext: (ctx: NavigationContextType) => void;
   },
 ) => (
   <SearchProvider>
@@ -27,8 +32,9 @@ const TestWrapper = (
 );
 
 // Helper component to interact with NavigationContext
-// deno-lint-ignore no-explicit-any
-const NavigationTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
+const NavigationTester = (
+  { onContext }: { onContext: (ctx: NavigationContextType) => void },
+) => {
   const nav = useNavigation();
   useEffect(() => {
     onContext(nav);
@@ -44,8 +50,7 @@ Deno.test("should initialize with first todo selected", {
     new Todo("Todo 2"),
     new Todo("Todo 3"),
   );
-  // deno-lint-ignore no-explicit-any
-  let navContext: any;
+  let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -75,8 +80,7 @@ Deno.test("should navigate down", {
     new Todo("Todo 2"),
     new Todo("Todo 3"),
   );
-  // deno-lint-ignore no-explicit-any
-  let navContext: any;
+  let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -103,8 +107,7 @@ Deno.test("should navigate up", {
     new Todo("Todo 1"),
     new Todo("Todo 2"),
   );
-  // deno-lint-ignore no-explicit-any
-  let navContext: any;
+  let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -118,13 +121,13 @@ Deno.test("should navigate up", {
   navContext.navigateDown();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo().text, "Todo 2")
+    assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
   );
 
   navContext.navigateUp();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo().text, "Todo 1")
+    assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
   );
 
   unmount();
@@ -138,8 +141,7 @@ Deno.test(
       new Todo("Todo 1"),
       new Todo("Todo 2"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -152,19 +154,19 @@ Deno.test(
     // Up from top
     navContext.navigateUp();
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo().text, "Todo 1")
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
     );
 
     // Down to bottom
     navContext.navigateDown();
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo().text, "Todo 2")
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
     );
 
     // Down past bottom
     navContext.navigateDown(); // Should stay at 2
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo().text, "Todo 2")
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
     );
 
     unmount();
@@ -179,8 +181,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2"); // Target for selection
     const todo3 = new Todo("Todo 3");
     const todos = new Todos(todo1, todo2, todo3);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -228,8 +229,7 @@ Deno.test(
     // Initial set of todos
     const initialTodos = new Todos(todo1, todo2, todo3);
 
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper
@@ -282,8 +282,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2");
     const todo3 = new Todo("Todo 3");
     const todos = new Todos(todo1, todo2, todo3);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -317,8 +316,7 @@ Deno.test(
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2");
     const todos = new Todos(todo1, todo2);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -352,8 +350,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2"); // Target
     const todo3 = new Todo("Todo 3");
     const todos = new Todos(todo1, todo2, todo3);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -393,8 +390,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2"); // Target
     const todo3 = new Todo("Todo 3");
     const todos = new Todos(todo1, todo2, todo3);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -435,8 +431,7 @@ Deno.test(
       new Todo("Todo 2"),
       new Todo("Todo 3"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -472,8 +467,7 @@ Deno.test(
       new Todo("Todo 2"),
       new Todo("Todo 3"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -502,8 +496,7 @@ Deno.test(
       new Todo("Todo 2"),
       new Todo("Todo 3"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -540,8 +533,7 @@ Deno.test(
       new Todo("Todo 2"),
       new Todo("Todo 3"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -571,15 +563,12 @@ Deno.test(
       new Todo("Fix bug @Work +Development"),
       new Todo("Call mom @Home"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
-    // deno-lint-ignore no-explicit-any
-    let searchContext: any;
+    let navContext: NavigationContextType = null!;
+    let searchContext: SearchContextType = null!;
 
     const SearchTester = ({ onContext }: {
       onContext: (
-        // deno-lint-ignore no-explicit-any
-        ctx: any,
+        ctx: SearchContextType,
       ) => void;
     }) => {
       const ctx = useSearch();
@@ -606,9 +595,8 @@ Deno.test(
 
     await waitFor(() => {
       const filtered = navContext.indexes.filter((
-        // deno-lint-ignore no-explicit-any
-        i: any,
-      ) => i.type === IndexType.todo);
+        i: IndexEntry,
+      ): i is TodoIndexEntry => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Fix bug");
     });
@@ -626,15 +614,12 @@ Deno.test(
       new Todo("Fix bug @Work +Development"),
       new Todo("Call mom @Home"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
-    // deno-lint-ignore no-explicit-any
-    let searchContext: any;
+    let navContext: NavigationContextType = null!;
+    let searchContext: SearchContextType = null!;
 
     const SearchTester = ({ onContext }: {
       onContext: (
-        // deno-lint-ignore no-explicit-any
-        ctx: any,
+        ctx: SearchContextType,
       ) => void;
     }) => {
       const ctx = useSearch();
@@ -661,9 +646,8 @@ Deno.test(
 
     await waitFor(() => {
       const filtered = navContext.indexes.filter((
-        // deno-lint-ignore no-explicit-any
-        i: any,
-      ) => i.type === IndexType.todo);
+        i: IndexEntry,
+      ): i is TodoIndexEntry => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Buy groceries");
     });
@@ -681,15 +665,12 @@ Deno.test(
       new Todo("Fix bug @Work +Development"),
       new Todo("Call mom @Home"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
-    // deno-lint-ignore no-explicit-any
-    let searchContext: any;
+    let navContext: NavigationContextType = null!;
+    let searchContext: SearchContextType = null!;
 
     const SearchTester = ({ onContext }: {
       onContext: (
-        // deno-lint-ignore no-explicit-any
-        ctx: any,
+        ctx: SearchContextType,
       ) => void;
     }) => {
       const ctx = useSearch();
@@ -716,9 +697,8 @@ Deno.test(
 
     await waitFor(() => {
       const filtered = navContext.indexes.filter((
-        // deno-lint-ignore no-explicit-any
-        i: any,
-      ) => i.type === IndexType.todo);
+        i: IndexEntry,
+      ): i is TodoIndexEntry => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Buy groceries");
     });
@@ -734,8 +714,7 @@ Deno.test(
     const todos = new Todos(
       ...Array.from({ length: 15 }, (_, i) => new Todo(`Todo ${i}`)),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <SearchProvider>
@@ -806,8 +785,7 @@ Deno.test(
     const todos = new Todos(
       ...Array.from({ length: 10 }, (_, i) => new Todo(`Todo ${i}`)),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <SearchProvider>
@@ -860,12 +838,15 @@ Deno.test(
       new Todo("Banana"),
       new Todo("Cherry"),
     );
-    // deno-lint-ignore no-explicit-any
-    let context: any;
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
 
-    // deno-lint-ignore no-explicit-any
     const CombinedTester = (
-      { onContext }: { onContext: (ctx: any) => void },
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
     ) => {
       const nav = useNavigation();
       const search = useSearch();
@@ -929,12 +910,15 @@ Deno.test(
       new Todo("Apricot"),
       new Todo("Banana"),
     );
-    // deno-lint-ignore no-explicit-any
-    let context: any;
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
 
-    // deno-lint-ignore no-explicit-any
     const CombinedTester = (
-      { onContext }: { onContext: (ctx: any) => void },
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
     ) => {
       const nav = useNavigation();
       const search = useSearch();
@@ -993,12 +977,15 @@ Deno.test(
     const todos = new Todos(
       ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
     );
-    // deno-lint-ignore no-explicit-any
-    let context: any;
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
 
-    // deno-lint-ignore no-explicit-any
     const CombinedTester = (
-      { onContext }: { onContext: (ctx: any) => void },
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
     ) => {
       const nav = useNavigation();
       const search = useSearch();
@@ -1055,12 +1042,15 @@ Deno.test(
     const todos = new Todos(
       ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
     );
-    // deno-lint-ignore no-explicit-any
-    let context: any;
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
 
-    // deno-lint-ignore no-explicit-any
     const CombinedTester = (
-      { onContext }: { onContext: (ctx: any) => void },
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
     ) => {
       const nav = useNavigation();
       const search = useSearch();
@@ -1117,12 +1107,15 @@ Deno.test(
     const todos = new Todos(
       ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
     );
-    // deno-lint-ignore no-explicit-any
-    let context: any;
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
 
-    // deno-lint-ignore no-explicit-any
     const CombinedTester = (
-      { onContext }: { onContext: (ctx: any) => void },
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
     ) => {
       const nav = useNavigation();
       const search = useSearch();
@@ -1163,8 +1156,8 @@ Deno.test(
 
     await waitFor(() => {
       // Cursor MUST be visible.
-      const cursorRow = context.nav.indexes.findIndex((e: any) =>
-        e.todo?.id === cursorId
+      const cursorRow = context.nav.indexes.findIndex((e: IndexEntry) =>
+        e.type === IndexType.todo && e.todo.id === cursorId
       );
       const offset = context.nav.offsetRow;
       const visible = cursorRow >= offset && cursorRow < offset + 5;
@@ -1189,12 +1182,15 @@ Deno.test(
       ...Array.from({ length: 10 }, (_, i) => new Todo(`Match ${i}`)),
       ...Array.from({ length: 10 }, (_, i) => new Todo(`OtherB ${i}`)),
     );
-    // deno-lint-ignore no-explicit-any
-    let context: any;
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
 
-    // deno-lint-ignore no-explicit-any
     const CombinedTester = (
-      { onContext }: { onContext: (ctx: any) => void },
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
     ) => {
       const nav = useNavigation();
       const search = useSearch();
