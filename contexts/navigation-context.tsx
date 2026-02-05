@@ -445,6 +445,40 @@ export const NavigationProvider = (
     setState(activeState);
   }
 
+  // Derived state: Clear multi-select if filtered out
+  const visibleIds = useMemo(() => {
+    const ids = new Set<symbol>();
+    for (const entry of indexes) {
+      if (entry.type === IndexType.todo) {
+        ids.add(entry.todo.id);
+      }
+    }
+    return ids;
+  }, [indexes]);
+
+  if (activeState.selection.rangeIds.size > 0) {
+    let hasInvisible = false;
+    for (const id of activeState.selection.rangeIds) {
+      if (!visibleIds.has(id)) {
+        hasInvisible = true;
+        break;
+      }
+    }
+
+    if (hasInvisible) {
+      const newState: NavState = {
+        ...activeState,
+        selection: {
+          ...activeState.selection,
+          rangeIds: new Set<symbol>(),
+          anchorId: undefined,
+        },
+      };
+      setState(newState);
+      activeState = newState;
+    }
+  }
+
   const setSelectedTodoId = useCallback((id: symbol | undefined) => {
     setState((prev) => {
       const newSelection = {

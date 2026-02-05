@@ -850,3 +850,137 @@ Deno.test(
     unmount();
   },
 );
+
+Deno.test(
+  "should clear multi-selection when search hides selected items",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("Apple"),
+      new Todo("Banana"),
+      new Todo("Cherry"),
+    );
+    // deno-lint-ignore no-explicit-any
+    let context: any;
+
+    // deno-lint-ignore no-explicit-any
+    const CombinedTester = (
+      { onContext }: { onContext: (ctx: any) => void },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      });
+      return <Text>Tester</Text>;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state: Apple selected (Index 1, 0 is header)
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apple");
+    });
+
+    // Select Banana (Shift+Down)
+    // Apple is currently selected. Down -> Banana.
+    context.nav.navigateDown(true); // shift=true
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Banana");
+      // Verify multi-select (Range should have 2 items: Apple and Banana)
+      assertEquals(context.nav.selectedTodoIds.size, 2);
+    });
+
+    // Apply search "Apple". This should hide Banana.
+    context.search.setSearchQuery("Apple");
+
+    // Expectation: because Banana is hidden, multi-select is invalid/confusing.
+    // It should be cleared.
+    // Cursor should probably move to Apple (only visible match)? Or stay on valid item.
+
+    await waitFor(() => {
+      // Assert rangeIds is empty or size 0
+      if (context.nav.selectedTodoIds.size !== 0) {
+        throw new Error(
+          `Multi-select should be cleared! Got size ${context.nav.selectedTodoIds.size}`,
+        );
+      }
+      // Assert selected item is Apple (only one left)
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apple");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should PRESERVE multi-selection when search keeps all selected items visible",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("Apple"),
+      new Todo("Apricot"),
+      new Todo("Banana"),
+    );
+    // deno-lint-ignore no-explicit-any
+    let context: any;
+
+    // deno-lint-ignore no-explicit-any
+    const CombinedTester = (
+      { onContext }: { onContext: (ctx: any) => void },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      });
+      return <Text>Tester</Text>;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state: Apple selected
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apple");
+    });
+
+    // Select Apricot (Shift+Down)
+    context.nav.navigateDown(true);
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apricot");
+      assertEquals(context.nav.selectedTodoIds.size, 2); // Apple + Apricot
+    });
+
+    // Apply search "Ap". Both Apple and Apricot match. Banana hidden.
+    // Selection should remain.
+    context.search.setSearchQuery("Ap");
+
+    await waitFor(() => {
+      // Assert rangeIds is preserved
+      if (context.nav.selectedTodoIds.size !== 2) {
+        throw new Error(
+          `Multi-select should be preserved (size 2)! Got size ${context.nav.selectedTodoIds.size}`,
+        );
+      }
+      // Assert selection is still Apricot (or Apple, but cursor usually stays)
+      // Since Apricot is visible, cursor should stay on it.
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apricot");
+    });
+
+    unmount();
+  },
+);
