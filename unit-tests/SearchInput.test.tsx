@@ -178,7 +178,7 @@ Deno.test(
 
     // Wait for search input to be focused
     await waitFor(() => {
-      assertEquals(focusedTag, "focusable");
+      assertEquals(focusedTag, "search-input");
     });
 
     await waitFor(() => {
@@ -247,7 +247,7 @@ Deno.test(
     );
 
     await waitFor(() => {
-      assertEquals(focusedTag, "focusable");
+      assertEquals(focusedTag, "search-input");
     });
 
     await waitFor(() => {
@@ -291,7 +291,7 @@ Deno.test(
 
     // Initial state
     await waitFor(() => {
-      assertEquals(focusedTag, "focusable");
+      assertEquals(focusedTag, "search-input");
     });
 
     await waitFor(() => {
@@ -336,7 +336,7 @@ Deno.test(
 
     // Initial state
     await waitFor(() => {
-      assertEquals(focusedTag, "focusable");
+      assertEquals(focusedTag, "search-input");
     });
 
     await waitFor(() => {

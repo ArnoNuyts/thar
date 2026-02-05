@@ -53,8 +53,10 @@ Deno.test("CreateTodoModal: should render and handle input", async () => {
     assertMatch(lastFrame() || "", /New Todo Item/);
   });
 
+  // Press Enter to submit
+  stdin.write("\r");
+
   await waitFor(() => {
-    stdin.write("\r");
     assertEquals(addedText, "New Todo Item");
   });
 

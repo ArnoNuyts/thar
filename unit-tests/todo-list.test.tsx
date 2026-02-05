@@ -1160,21 +1160,37 @@ Deno.test({
     );
     let nav: NavigationContextType = null!;
 
+    let focusedTag: string | undefined;
     const { unmount, lastFrame, stdin } = render(
       <TestWrapper initialTodos={todos}>
         <AppContentMock todos={new Todos(...todos)} />
         <NavController onNav={(n) => nav = n} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </TestWrapper>,
     );
 
+    // Wait for initial focus
+    await waitFor(() => {
+      assertEquals(focusedTag, "todo-list");
+    });
+
     // 1. Focus search and type "Task 09"
     stdin.write("/");
+
+    // Wait for search to be focused
+    await waitFor(() => {
+      assertEquals(focusedTag, "search-input");
+    });
+
     stdin.write("Task 09");
 
     // Filtered list will have Task 090, 091... 099
     // Wait for filter to apply
     await waitFor(() => {
       const frame = lastFrame();
+      if (!frame?.includes("Task 090") || !frame?.includes("Task 099")) {
+        console.log("INITIAL FILTER FRAME:\n" + frame);
+      }
       assertEquals(frame?.includes("Task 090"), true);
       assertEquals(frame?.includes("Task 099"), true);
     });
@@ -1206,6 +1222,9 @@ Deno.test({
 
     await waitFor(() => {
       const frame = lastFrame();
+      if (!frame?.includes("Task 095") || !frame?.includes("Task 090")) {
+        console.log("FRAME AT FAILURE:\n" + frame);
+      }
       // At least the cursor (095) should be in view
       assertEquals(frame?.includes("Task 095"), true);
       // And ideally some other parts of the range
