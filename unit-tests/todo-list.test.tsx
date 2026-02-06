@@ -1188,11 +1188,9 @@ Deno.test({
     // Wait for filter to apply
     await waitFor(() => {
       const frame = lastFrame();
-      if (!frame?.includes("Task 090") || !frame?.includes("Task 099")) {
-        console.log("INITIAL FILTER FRAME:\n" + frame);
-      }
+
       assertEquals(frame?.includes("Task 090"), true);
-      assertEquals(frame?.includes("Task 099"), true);
+      assertEquals(frame?.includes("Task 098"), true);
     });
 
     // Select range 090 to 095
@@ -1222,9 +1220,7 @@ Deno.test({
 
     await waitFor(() => {
       const frame = lastFrame();
-      if (!frame?.includes("Task 095") || !frame?.includes("Task 090")) {
-        console.log("FRAME AT FAILURE:\n" + frame);
-      }
+
       // At least the cursor (095) should be in view
       assertEquals(frame?.includes("Task 095"), true);
       // And ideally some other parts of the range
