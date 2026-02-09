@@ -3,20 +3,25 @@ import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { useEffect } from "react";
 import {
+  NavigationContextType,
   NavigationProvider,
   useNavigation,
 } from "../contexts/navigation-context.tsx";
-import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
+import {
+  SearchContextType,
+  SearchProvider,
+  useSearch,
+} from "../contexts/search-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 import { IndexType } from "../types/enums.ts";
+import { IndexEntry, TodoIndexEntry } from "../logic/indexes.ts";
 
 const TestWrapper = (
   { todos, onContext }: {
     todos: Todos;
-    // deno-lint-ignore no-explicit-any
-    onContext: (ctx: any) => void;
+    onContext: (ctx: NavigationContextType) => void;
   },
 ) => (
   <SearchProvider>
@@ -27,8 +32,9 @@ const TestWrapper = (
 );
 
 // Helper component to interact with NavigationContext
-// deno-lint-ignore no-explicit-any
-const NavigationTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
+const NavigationTester = (
+  { onContext }: { onContext: (ctx: NavigationContextType) => void },
+) => {
   const nav = useNavigation();
   useEffect(() => {
     onContext(nav);
@@ -44,8 +50,7 @@ Deno.test("should initialize with first todo selected", {
     new Todo("Todo 2"),
     new Todo("Todo 3"),
   );
-  // deno-lint-ignore no-explicit-any
-  let navContext: any;
+  let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -75,8 +80,7 @@ Deno.test("should navigate down", {
     new Todo("Todo 2"),
     new Todo("Todo 3"),
   );
-  // deno-lint-ignore no-explicit-any
-  let navContext: any;
+  let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -103,8 +107,7 @@ Deno.test("should navigate up", {
     new Todo("Todo 1"),
     new Todo("Todo 2"),
   );
-  // deno-lint-ignore no-explicit-any
-  let navContext: any;
+  let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -118,13 +121,13 @@ Deno.test("should navigate up", {
   navContext.navigateDown();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo().text, "Todo 2")
+    assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
   );
 
   navContext.navigateUp();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo().text, "Todo 1")
+    assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
   );
 
   unmount();
@@ -138,8 +141,7 @@ Deno.test(
       new Todo("Todo 1"),
       new Todo("Todo 2"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -152,19 +154,19 @@ Deno.test(
     // Up from top
     navContext.navigateUp();
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo().text, "Todo 1")
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
     );
 
     // Down to bottom
     navContext.navigateDown();
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo().text, "Todo 2")
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
     );
 
     // Down past bottom
     navContext.navigateDown(); // Should stay at 2
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo().text, "Todo 2")
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
     );
 
     unmount();
@@ -179,8 +181,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2"); // Target for selection
     const todo3 = new Todo("Todo 3");
     const todos = new Todos(todo1, todo2, todo3);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -228,8 +229,7 @@ Deno.test(
     // Initial set of todos
     const initialTodos = new Todos(todo1, todo2, todo3);
 
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper
@@ -282,8 +282,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2");
     const todo3 = new Todo("Todo 3");
     const todos = new Todos(todo1, todo2, todo3);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -317,8 +316,7 @@ Deno.test(
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2");
     const todos = new Todos(todo1, todo2);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -352,8 +350,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2"); // Target
     const todo3 = new Todo("Todo 3");
     const todos = new Todos(todo1, todo2, todo3);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -393,8 +390,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2"); // Target
     const todo3 = new Todo("Todo 3");
     const todos = new Todos(todo1, todo2, todo3);
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -435,8 +431,7 @@ Deno.test(
       new Todo("Todo 2"),
       new Todo("Todo 3"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -472,8 +467,7 @@ Deno.test(
       new Todo("Todo 2"),
       new Todo("Todo 3"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -502,8 +496,7 @@ Deno.test(
       new Todo("Todo 2"),
       new Todo("Todo 3"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -540,8 +533,7 @@ Deno.test(
       new Todo("Todo 2"),
       new Todo("Todo 3"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+    let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
@@ -571,15 +563,12 @@ Deno.test(
       new Todo("Fix bug @Work +Development"),
       new Todo("Call mom @Home"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
-    // deno-lint-ignore no-explicit-any
-    let searchContext: any;
+    let navContext: NavigationContextType = null!;
+    let searchContext: SearchContextType = null!;
 
     const SearchTester = ({ onContext }: {
       onContext: (
-        // deno-lint-ignore no-explicit-any
-        ctx: any,
+        ctx: SearchContextType,
       ) => void;
     }) => {
       const ctx = useSearch();
@@ -606,9 +595,8 @@ Deno.test(
 
     await waitFor(() => {
       const filtered = navContext.indexes.filter((
-        // deno-lint-ignore no-explicit-any
-        i: any,
-      ) => i.type === IndexType.todo);
+        i: IndexEntry,
+      ): i is TodoIndexEntry => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Fix bug");
     });
@@ -626,15 +614,12 @@ Deno.test(
       new Todo("Fix bug @Work +Development"),
       new Todo("Call mom @Home"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
-    // deno-lint-ignore no-explicit-any
-    let searchContext: any;
+    let navContext: NavigationContextType = null!;
+    let searchContext: SearchContextType = null!;
 
     const SearchTester = ({ onContext }: {
       onContext: (
-        // deno-lint-ignore no-explicit-any
-        ctx: any,
+        ctx: SearchContextType,
       ) => void;
     }) => {
       const ctx = useSearch();
@@ -661,9 +646,8 @@ Deno.test(
 
     await waitFor(() => {
       const filtered = navContext.indexes.filter((
-        // deno-lint-ignore no-explicit-any
-        i: any,
-      ) => i.type === IndexType.todo);
+        i: IndexEntry,
+      ): i is TodoIndexEntry => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Buy groceries");
     });
@@ -681,15 +665,12 @@ Deno.test(
       new Todo("Fix bug @Work +Development"),
       new Todo("Call mom @Home"),
     );
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
-    // deno-lint-ignore no-explicit-any
-    let searchContext: any;
+    let navContext: NavigationContextType = null!;
+    let searchContext: SearchContextType = null!;
 
     const SearchTester = ({ onContext }: {
       onContext: (
-        // deno-lint-ignore no-explicit-any
-        ctx: any,
+        ctx: SearchContextType,
       ) => void;
     }) => {
       const ctx = useSearch();
@@ -716,11 +697,552 @@ Deno.test(
 
     await waitFor(() => {
       const filtered = navContext.indexes.filter((
-        // deno-lint-ignore no-explicit-any
-        i: any,
-      ) => i.type === IndexType.todo);
+        i: IndexEntry,
+      ): i is TodoIndexEntry => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Buy groceries");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should update offset when navigating home/end",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      ...Array.from({ length: 15 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    let navContext: NavigationContextType = null!;
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={5}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state: Todo 0, offset 0
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 0");
+      assertEquals(navContext.offsetRow, 0);
+    });
+
+    // Navigate End
+    navContext.navigateEnd();
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 14");
+    });
+
+    // Todo 14 is the last item.
+    // List height is 5.
+    // Offset should be such that index 14 is visible.
+    // Visible range: [offset, offset + 5 - 1]
+    // 14 >= offset && 14 < offset + 5
+    // 14 >= offset --> offset <= 14
+    // 14 < offset + 5 --> 14 - 5 < offset --> 9 < offset
+    // So offset should be between 10 and 14 (inclusive).
+    // Specifically, `calculateScrollOffset` tries to keep context, but here no context.
+    // Usually it scrolls to put item at bottom: offset = 14 - 5 + 1 + padding?
+    // Let's just assert offset > 5 to prove it moved SIGNIFICANTLY from 0.
+
+    await waitFor(() => {
+      if (navContext.offsetRow <= 5) {
+        throw new Error(
+          `Offset Row did not update correctly! Expected > 5, got ${navContext.offsetRow}`,
+        );
+      }
+    });
+
+    // Navigate Home
+    navContext.navigateHome();
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 0");
+    });
+
+    await waitFor(() => {
+      if (navContext.offsetRow !== 0) {
+        throw new Error(
+          `Offset Row did not reset to 0! Got ${navContext.offsetRow}`,
+        );
+      }
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should enforce scroll padding for last item of first page (snap-to-zero bug)",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    // 10 items. Height 6 (header + 5 todos).
+    // Visible initially: Index 0 (Header), 1, 2, 3, 4, 5.
+    const todos = new Todos(
+      ...Array.from({ length: 10 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    let navContext: NavigationContextType = null!;
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={6}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 0");
+    });
+
+    // Navigate down 4 times to select Todo 4
+    navContext.navigateDown();
+    navContext.navigateDown();
+    navContext.navigateDown();
+    navContext.navigateDown();
+
+    await waitFor(() => {
+      assertEquals(navContext.useSelectedTodo()?.text, "Todo 4");
+    });
+
+    // Todo 4 is at index 5 (0 is header).
+    // ListHeight 6.
+    // Window [offset, offset+6].
+    // If offset 0: [0, 1, 2, 3, 4, 5]. Index 6 NOT visible.
+    // Padding (1) requires 1 item below selected.
+    // Selected Index 5. Need Index 6 (Todo 5).
+    // Expect offset > 0.
+
+    await waitFor(() => {
+      if (navContext.offsetRow === 0) {
+        throw new Error(
+          `Offset should handle padding for last item! Expected > 0, got 0`,
+        );
+      }
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should clear multi-selection when search hides selected items",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("Apple"),
+      new Todo("Banana"),
+      new Todo("Cherry"),
+    );
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
+
+    const CombinedTester = (
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      });
+      return <Text>Tester</Text>;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state: Apple selected (Index 1, 0 is header)
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apple");
+    });
+
+    // Select Banana (Shift+Down)
+    // Apple is currently selected. Down -> Banana.
+    context.nav.navigateDown(true); // shift=true
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Banana");
+      // Verify multi-select (Range should have 2 items: Apple and Banana)
+      assertEquals(context.nav.selectedTodoIds.size, 2);
+    });
+
+    // Apply search "Apple". This should hide Banana.
+    context.search.setSearchQuery("Apple");
+
+    // Expectation: because Banana is hidden, multi-select is invalid/confusing.
+    // It should be cleared.
+    // Cursor should probably move to Apple (only visible match)? Or stay on valid item.
+
+    await waitFor(() => {
+      // Assert rangeIds is empty or size 0
+      if (context.nav.selectedTodoIds.size !== 0) {
+        throw new Error(
+          `Multi-select should be cleared! Got size ${context.nav.selectedTodoIds.size}`,
+        );
+      }
+      // Assert selected item is Apple (only one left)
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apple");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should PRESERVE multi-selection when search keeps all selected items visible",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("Apple"),
+      new Todo("Apricot"),
+      new Todo("Banana"),
+    );
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
+
+    const CombinedTester = (
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      });
+      return <Text>Tester</Text>;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state: Apple selected
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apple");
+    });
+
+    // Select Apricot (Shift+Down)
+    context.nav.navigateDown(true);
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apricot");
+      assertEquals(context.nav.selectedTodoIds.size, 2); // Apple + Apricot
+    });
+
+    // Apply search "Ap". Both Apple and Apricot match. Banana hidden.
+    // Selection should remain.
+    context.search.setSearchQuery("Ap");
+
+    await waitFor(() => {
+      // Assert rangeIds is preserved
+      if (context.nav.selectedTodoIds.size !== 2) {
+        throw new Error(
+          `Multi-select should be preserved (size 2)! Got size ${context.nav.selectedTodoIds.size}`,
+        );
+      }
+      // Assert selection is still Apricot (or Apple, but cursor usually stays)
+      // Since Apricot is visible, cursor should stay on it.
+      assertEquals(context.nav.useSelectedTodo()?.text, "Apricot");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should scroll to keep selection visible when search is cleared",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    // 20 items. Height 5.
+    const todos = new Todos(
+      ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
+
+    const CombinedTester = (
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      }, [nav, search]);
+      return <Text>Tester</Text>;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={5}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state
+    await waitFor(() => {
+      assertEquals(!!context?.nav?.indexes, true);
+    });
+
+    // Search for "Todo 15". Only 1 match.
+    context.search.setSearchQuery("Todo 15");
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 15");
+      // Offset should be 0 because list is short (1 match + 1 date header maybe?)
+      assertEquals(context.nav.offsetRow, 0);
+    });
+
+    // Clear Search.
+    // List becomes 20 items + 1 header = 21. Todo 15 is at Index 16.
+    // Index 16 must be visible.
+    context.search.setSearchQuery("");
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 15");
+      const offset = context.nav.offsetRow;
+      const visible = 16 >= offset && 16 < offset + 5;
+      if (!visible) {
+        throw new Error(`Item 16 should be visible. Current offset: ${offset}`);
+      }
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should scroll to keep multi-select visible when search is cleared",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
+
+    const CombinedTester = (
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      }, [nav, search]);
+      return <Text>Tester</Text>;
+    };
+
+    // Height 10 to fit both if possible
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={10}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial
+    await waitFor(() => assertEquals(!!context, true));
+
+    // Search matches "Todo 1" -> 1, 10, 11...
+    context.search.setSearchQuery("Todo 1");
+
+    await waitFor(() => {
+      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 1");
+    });
+
+    // Select down once. "Todo 1" is item 1. next matches...
+    context.nav.navigateDown(true); // select Todo 10
+
+    await waitFor(() => {
+      assertEquals(context.nav.selectedTodoIds.size, 2);
+    });
+
+    // Clear search.
+    // Todo 1: Index 2. Todo 10: Index 11.
+    // Range [2, 11] fits in Height 10.
+    context.search.setSearchQuery("");
+
+    await waitFor(() => {
+      // Both ends should be visible. Offset should be 2.
+      assertEquals(context.nav.offsetRow, 2);
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should prioritize cursor visibility over multi-select range when search is cleared",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
+    );
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
+
+    const CombinedTester = (
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      }, [nav, search]);
+      return <Text>Tester</Text>;
+    };
+
+    // Small height 5. Range cannot fit.
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={5}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    await waitFor(() => assertEquals(!!context, true));
+
+    context.search.setSearchQuery("Todo 1");
+    await waitFor(() =>
+      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 1")
+    );
+
+    // Select down twice.
+    context.nav.navigateDown(true);
+    context.nav.navigateDown(true);
+
+    await waitFor(() => {
+      assertEquals(context.nav.selectedTodoIds.size, 3);
+    });
+
+    const cursorId = context.nav.selectedTodoId;
+
+    // Clear search.
+    context.search.setSearchQuery("");
+
+    await waitFor(() => {
+      // Cursor MUST be visible.
+      const cursorRow = context.nav.indexes.findIndex((e: IndexEntry) =>
+        e.type === IndexType.todo && e.todo.id === cursorId
+      );
+      const offset = context.nav.offsetRow;
+      const visible = cursorRow >= offset && cursorRow < offset + 5;
+      if (!visible) {
+        throw new Error(
+          `Cursor at row ${cursorRow} should be visible. Offset: ${offset}`,
+        );
+      }
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should fit exact 10-item multi-selection in 10-row window after clearing search",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    // 30 items: 10 'Match' items in the middle, surrounded by 'Other' items.
+    const todos = new Todos(
+      ...Array.from({ length: 10 }, (_, i) => new Todo(`OtherA ${i}`)),
+      ...Array.from({ length: 10 }, (_, i) => new Todo(`Match ${i}`)),
+      ...Array.from({ length: 10 }, (_, i) => new Todo(`OtherB ${i}`)),
+    );
+    let context: { nav: NavigationContextType; search: SearchContextType } =
+      null!;
+
+    const CombinedTester = (
+      { onContext }: {
+        onContext: (
+          ctx: { nav: NavigationContextType; search: SearchContextType },
+        ) => void;
+      },
+    ) => {
+      const nav = useNavigation();
+      const search = useSearch();
+      useEffect(() => {
+        onContext({ nav, search });
+      }, [nav, search]);
+      return <Text>Tester</Text>;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <NavigationProvider todos={todos} listHeightForTest={10}>
+          <CombinedTester onContext={(ctx) => context = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    // Initial state
+    await waitFor(() => {
+      assertEquals(!!context?.nav?.indexes, true);
+    });
+
+    // 1. Search for "Match". Filters list to exactly 10 items (+ 1 date header = 11 rows total)
+    context.search.setSearchQuery("Match");
+
+    await waitFor(() => {
+      // Should show Match 0
+      assertEquals(context.nav.useSelectedTodo()?.text, "Match 0");
+    });
+
+    // 2. Select all 10 "Match" items.
+    for (let i = 0; i < 9; i++) {
+      context.nav.navigateDown(true);
+    }
+
+    await waitFor(() => {
+      assertEquals(context.nav.selectedTodoIds.size, 10);
+      assertEquals(context.nav.useSelectedTodo()?.text, "Match 9");
+    });
+
+    // 3. Clear search.
+    // In the full list (31 rows total: 1 header + 30 todos):
+    // OtherA 0..9 are indices 1..10.
+    // Match 0..9 are indices 11..20.
+    // Range [11, 20] size 10. Height 10.
+    context.search.setSearchQuery("");
+
+    await waitFor(() => {
+      assertEquals(context.nav.selectedTodoIds.size, 10);
+      // Row 11 to Row 20 should be visible.
+      // With Height 10, offset MUST be Row 11.
+      assertEquals(context.nav.offsetRow, 11);
     });
 
     unmount();

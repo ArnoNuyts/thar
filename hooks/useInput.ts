@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useStdin } from "ink";
 import { Buffer } from "node:buffer";
 
@@ -129,6 +129,8 @@ and fixes Backspace/Delete issues on Windows.
 */
 export const useInput = (inputHandler: Handler, options: Options = {}) => {
   const { stdin, setRawMode } = useStdin();
+  const handlerRef = useRef(inputHandler);
+  handlerRef.current = inputHandler;
 
   useEffect(() => {
     if (options.isActive === false || !stdin) {
@@ -205,7 +207,7 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
       // Special case for Ctrl+C if you want to handle it manually or let it pass
       // if (input === 'c' && key.ctrl) process.exit(0);
 
-      inputHandler(input, key);
+      handlerRef.current(input, key);
     };
 
     stdin.on("data", handleData);
@@ -214,5 +216,5 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
       stdin.off("data", handleData);
       setRawMode(false);
     };
-  }, [options.isActive, stdin, setRawMode, inputHandler]);
+  }, [options.isActive, stdin, setRawMode]);
 };

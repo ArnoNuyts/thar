@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 
-interface SearchContextType {
+export interface SearchContextType {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   focusRef: MutableRefObject<(() => void) | null>;
