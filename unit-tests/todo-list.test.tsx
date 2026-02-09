@@ -3,6 +3,8 @@ import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
 
 import { Todo } from "../logic/todo.ts";
+import { Todos } from "../logic/Todos.ts";
+import { SearchInput } from "../components/SearchInput.tsx";
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
 import { restoreDenoMocks, waitFor } from "./test-utils.ts";
 
@@ -81,11 +83,12 @@ import {
 } from "./test-components.tsx";
 
 // Mock App Content for TodoList tests
-const AppContentMock = () => {
+const AppContentMock = ({ todos = new Todos() }: { todos?: Todos }) => {
   const { activeModal, modalData } = useModal();
   return (
     <Box flexDirection="column" position="relative" height={25}>
       <HiddenIndicator />
+      <SearchInput todos={todos} />
       <TodoList />
       <ActionBar />
       {activeModal === "confirm-modal" && isConfirmModalData(modalData) && (
@@ -223,7 +226,7 @@ Deno.test({
       <TestWrapper
         initialTodos={initialTodos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(...initialTodos)} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -276,7 +279,7 @@ Deno.test({
         initialTodos={initialTodos}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(...initialTodos)} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -337,7 +340,7 @@ Deno.test({
         initialTodos={initialTodos}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(...initialTodos)} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -385,7 +388,7 @@ Deno.test({
         <SelectionObserver
           onSelectionIdChange={(id) => (currentSelectionId = id)}
         />
-        <AppContentMock />
+        <AppContentMock todos={new Todos(...initialTodos)} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -432,7 +435,7 @@ Deno.test({
         initialTodos={initialTodos}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(...initialTodos)} />
         <FocusObserver onFocused={() => focusCount++} />
       </TestWrapper>,
     );
@@ -490,7 +493,7 @@ Deno.test({
 
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper initialTodos={initialTodos}>
-        <AppContentMock />
+        <AppContentMock todos={new Todos(...initialTodos)} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -532,7 +535,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(todo1, todo2)} />
         <FocusObserver
           onFocused={() => {
             focused = true;
@@ -610,7 +613,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(todo1, todo2)} />
         <FocusObserver onFocused={() => focused = true} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -678,7 +681,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(todo1, todo2)} />
         <FocusObserver onFocused={() => focused = true} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -755,7 +758,7 @@ Deno.test({
         initialTodos={[todo1, todo2, todo3]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(todo1, todo2, todo3)} />
         <FocusObserver onFocused={() => focused = true} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -802,7 +805,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(todo1, todo2)} />
         <FocusObserver onFocused={() => focusCount++} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -847,7 +850,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(todo1, todo2)} />
         <FocusObserver onFocused={() => focusCount++} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -894,7 +897,7 @@ Deno.test({
 
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper initialTodos={[todo1, todo2]}>
-        <AppContentMock />
+        <AppContentMock todos={new Todos(todo1, todo2)} />
         <FocusObserver onFocused={() => focusCount++} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -928,7 +931,7 @@ Deno.test({
     let isFocused = false;
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper initialTodos={[new Todo("Test")]}>
-        <AppContentMock />
+        <AppContentMock todos={new Todos(new Todo("Test"))} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -966,7 +969,7 @@ Deno.test({
       <TestWrapper
         initialTodos={[todo1, todo2]}
       >
-        <AppContentMock />
+        <AppContentMock todos={new Todos(todo1, todo2)} />
         <FocusObserver onFocused={() => focused = true} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -1099,6 +1102,130 @@ Deno.test({
       assertEquals(frame?.includes("abc"), true);
       assertEquals(frame?.includes("Douglas Adams"), false);
     });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: should scroll selected todo into view after search cancel",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todos = Array.from(
+      { length: 100 },
+      (_, i) => new Todo(`Task ${String(i + 1).padStart(3, "0")}`),
+    );
+    let nav: NavigationContextType = null!;
+
+    const { unmount, lastFrame, rerender } = render(
+      <TestWrapper initialTodos={todos}>
+        <SearchQuerySetter query="Task 099" />
+        <AppContentMock />
+        <NavController onNav={(n) => nav = n} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => {
+      const selectedTodo = todos.find((t) => t.id === nav.selectedTodoId);
+      assertEquals(selectedTodo?.text, "Task 099");
+      assertEquals(lastFrame()?.includes("Task 099"), true);
+    });
+
+    rerender(
+      <TestWrapper initialTodos={todos}>
+        <SearchQuerySetter query="" />
+        <AppContentMock />
+        <NavController onNav={(n) => nav = n} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => {
+      assertEquals(lastFrame()?.includes("Task 099"), true);
+    }, { timeout: 2000 });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name:
+    "TodoList: should scroll multi-selection range into view after search cancel",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todos = Array.from(
+      { length: 100 },
+      (_, i) => new Todo(`Task ${String(i + 1).padStart(3, "0")}`),
+    );
+    let nav: NavigationContextType = null!;
+
+    let focusedTag: string | undefined;
+    const { unmount, lastFrame, stdin } = render(
+      <TestWrapper initialTodos={todos}>
+        <AppContentMock todos={new Todos(...todos)} />
+        <NavController onNav={(n) => nav = n} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+      </TestWrapper>,
+    );
+
+    // Wait for initial focus
+    await waitFor(() => {
+      assertEquals(focusedTag, "todo-list");
+    });
+
+    // 1. Focus search and type "Task 09"
+    stdin.write("/");
+
+    // Wait for search to be focused
+    await waitFor(() => {
+      assertEquals(focusedTag, "search-input");
+    });
+
+    stdin.write("Task 09");
+
+    // Filtered list will have Task 090, 091... 099
+    // Wait for filter to apply
+    await waitFor(() => {
+      const frame = lastFrame();
+
+      assertEquals(frame?.includes("Task 090"), true);
+      assertEquals(frame?.includes("Task 098"), true);
+    });
+
+    // Select range 090 to 095
+    const t090 = todos.find((t) => t.text === "Task 090")!;
+    const t095 = todos.find((t) => t.text === "Task 095")!;
+
+    // Select 090 via nav (since we can't easily click, and arrow keys might be tricky if selection reset)
+    // Actually, let's use arrow keys to be safe OR just set it if we trust nav.
+    // Ideally we use keys. Task 090 should be near top.
+    // Let's force set it for stability of this specific test part.
+    nav.setSelectedTodoId(t090.id);
+
+    // Press Shift+Down 5 times to select up to 095
+    stdin.write("\u001B[1;2B");
+    stdin.write("\u001B[1;2B");
+    stdin.write("\u001B[1;2B");
+    stdin.write("\u001B[1;2B");
+    stdin.write("\u001B[1;2B");
+
+    await waitFor(() => {
+      assertEquals(nav.selectedTodoIds.has(t090.id), true);
+      assertEquals(nav.selectedTodoIds.has(t095.id), true);
+    });
+
+    // 3. Clear search via Escape (should clear search and focus list)
+    stdin.write("\u001B");
+
+    await waitFor(() => {
+      const frame = lastFrame();
+
+      // At least the cursor (095) should be in view
+      assertEquals(frame?.includes("Task 095"), true);
+      // And ideally some other parts of the range
+      assertEquals(frame?.includes("Task 090"), true);
+    }, { timeout: 10000 });
 
     unmount();
   },

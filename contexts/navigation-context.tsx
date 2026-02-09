@@ -3,9 +3,7 @@ import {
   ReactNode,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { useSearch } from "./search-context.tsx";
@@ -23,6 +21,191 @@ interface SelectionState {
   anchorId: symbol | undefined;
   rangeIds: Set<symbol>;
 }
+
+// ============================================================================
+// Pure Reconciliation Functions
+// ============================================================================
+
+/**
+ * Guesstimate the best selection when todos change (add/modify).
+ * Returns the ID of the todo that should be selected, or undefined to keep current.
+ */
+function guesstimateSelection(
+  todos: Todos,
+  prevTodos: Todos,
+  indexes: IndexEntry[],
+  currentCursorId: symbol | undefined,
+): symbol | undefined {
+  if (todos === prevTodos) return undefined;
+
+  const oldIds = new Set(prevTodos.map((t) => t.id));
+  const added = todos.filter((t) => !oldIds.has(t.id));
+
+  // Priority 1: Select first visible added todo
+  // If ALL todos are "added", it's likely a reload or reset - don't guesstimate,
+  // let validation handle it (supports hash-matching).
+  if (added.length > 0 && added.length < todos.length) {
+    const firstVisibleAdded = indexes.find((entry) =>
+      entry.type === IndexType.todo &&
+      added.some((a) => a.id === entry.todo.id)
+    );
+    if (firstVisibleAdded?.type === IndexType.todo) {
+      return firstVisibleAdded.todo.id;
+    }
+  }
+
+  // Priority 2: Select first visible modified todo (if cursor is no longer valid)
+  const modified = todos.filter((t) => {
+    const oldTodo = prevTodos.find((ot) => ot.id === t.id);
+    return oldTodo && oldTodo.getHash() !== t.getHash();
+  });
+
+  if (modified.length > 0) {
+    // If cursor is among modified and still visible, keep it
+    const isCursorValid = currentCursorId &&
+      modified.some((m) => m.id === currentCursorId) &&
+      indexes.some((e) =>
+        e.type === IndexType.todo && e.todo.id === currentCursorId
+      );
+
+    if (isCursorValid) return undefined; // Keep current
+
+    const firstVisibleModified = indexes.find((entry) =>
+      entry.type === IndexType.todo &&
+      modified.some((m) => m.id === entry.todo.id)
+    );
+    if (firstVisibleModified?.type === IndexType.todo) {
+      return firstVisibleModified.todo.id;
+    }
+  }
+
+  return undefined; // No change needed
+}
+
+/**
+ * Validate the current selection. If invalid, find a fallback.
+ * Returns the validated/fallback cursor ID.
+ */
+function validateSelection(
+  cursorId: symbol | undefined,
+  indexes: IndexEntry[],
+  lastHash: string | undefined,
+  lastIndex: number,
+): symbol | undefined {
+  if (indexes.length === 0) return undefined;
+
+  const firstTodoIndex = indexes.findIndex((entry) =>
+    entry.type === IndexType.todo
+  );
+  if (firstTodoIndex === -1) return undefined;
+
+  // Check if current selection is valid
+  const isValid = cursorId !== undefined &&
+    indexes.some((entry) =>
+      entry.type === IndexType.todo && entry.todo.id === cursorId
+    );
+
+  if (isValid) return cursorId;
+
+  // Fallback 1: Match by hash (handle file reload)
+  if (lastHash) {
+    const hashMatch = indexes.find((entry) =>
+      entry.type === IndexType.todo && entry.todo.getHash() === lastHash
+    );
+    if (hashMatch?.type === IndexType.todo) {
+      return hashMatch.todo.id;
+    }
+  }
+
+  // Fallback 2: Match by index (handle deletion)
+  const targetIndex = clamp(lastIndex, 0, indexes.length - 1);
+
+  // Forward search
+  for (let i = targetIndex; i < indexes.length; i++) {
+    if (indexes[i].type === IndexType.todo) {
+      return (indexes[i] as { type: IndexType.todo; todo: Todo }).todo.id;
+    }
+  }
+
+  // Backward search
+  for (let i = targetIndex - 1; i >= 0; i--) {
+    if (indexes[i].type === IndexType.todo) {
+      return (indexes[i] as { type: IndexType.todo; todo: Todo }).todo.id;
+    }
+  }
+
+  // Fallback 3: First todo
+  const firstEntry = indexes[firstTodoIndex];
+  if (firstEntry.type === IndexType.todo) {
+    return firstEntry.todo.id;
+  }
+
+  return undefined;
+}
+
+/**
+ * Calculate the scroll offset to keep selection visible.
+ */
+function calculateScrollOffset(
+  selectedRow: number,
+  selectionRange: { min: number; max: number },
+  currentOffset: number,
+  listHeight: number,
+  indexesLength: number,
+): number {
+  const scrollPadding = 1;
+  const { min: minRow, max: maxRow } = selectionRange;
+
+  // Priority 1 & 2: Calculate bounds that keep at least the cursor visible,
+  // and as much of the range as possible.
+  // For the cursor to be visible: offset <= selectedRow AND offset > selectedRow - listHeight
+  const cursorMin = Math.max(0, selectedRow - listHeight + 1);
+  const cursorMax = Math.min(
+    selectedRow,
+    Math.max(0, indexesLength - listHeight),
+  );
+
+  const rangeHeight = maxRow - minRow + 1;
+  if (rangeHeight <= listHeight) {
+    // Range fits! Allowed offsets to show ENTIRE range:
+    // offset <= minRow AND offset >= maxRow - listHeight + 1
+    const rangeMinAllowed = Math.max(0, maxRow - listHeight + 1);
+    const rangeMaxAllowed = Math.min(
+      minRow,
+      Math.max(0, indexesLength - listHeight),
+    );
+
+    // We want to stay as close to currentOffset as possible,
+    // but applying padding for the cursor where it doesn't hide the range.
+    let target = currentOffset;
+
+    // Apply padding logic
+    if (selectedRow < target + scrollPadding) {
+      target = selectedRow - scrollPadding;
+    } else if (selectedRow >= target + listHeight - scrollPadding) {
+      target = selectedRow - listHeight + 1 + scrollPadding;
+    }
+
+    // Clamp to the range-visibility window
+    return clamp(target, rangeMinAllowed, rangeMaxAllowed);
+  } else {
+    // Range DOES NOT fit. Just keep cursor visible with padding.
+    let target = currentOffset;
+    if (selectedRow < target + scrollPadding) {
+      target = selectedRow - scrollPadding;
+    } else if (selectedRow >= target + listHeight - scrollPadding) {
+      target = selectedRow - listHeight + 1 + scrollPadding;
+    }
+
+    // Still must keep cursor visible (ignore padding if it pushes cursor out,
+    // though clamp to cursorMin/Max handles that).
+    return clamp(target, cursorMin, cursorMax);
+  }
+}
+
+// ============================================================================
+// Context Definition
+// ============================================================================
 
 export interface NavigationContextType {
   indexes: IndexEntry[];
@@ -50,6 +233,16 @@ export const NavigationContext = createContext<
   undefined,
 );
 
+interface NavState {
+  selection: SelectionState;
+  offsetRow: number;
+  // Tracking for prop sync
+  prevTodos: Todos;
+  prevIndexes: IndexEntry[];
+  lastHash: string | undefined;
+  lastIndex: number;
+}
+
 export const NavigationProvider = (
   { children, todos, listHeightForTest }: {
     children: ReactNode;
@@ -59,42 +252,28 @@ export const NavigationProvider = (
 ) => {
   const { searchQuery, isSearchFocused } = useSearch();
   const { stdout } = useStdout();
-  const [offsetRow, setOffsetRow] = useState(0);
-
-  const [selection, setSelection] = useState<SelectionState>({
-    cursorId: undefined,
-    anchorId: undefined,
-    rangeIds: new Set(),
-  });
 
   const [showHidden, setShowHidden] = useState(false);
 
-  const selectedTodoId = selection.cursorId;
-  const selectedTodoIds = selection.rangeIds;
+  const [state, setState] = useState<NavState>({
+    selection: {
+      cursorId: undefined,
+      anchorId: undefined,
+      rangeIds: new Set(),
+    },
+    offsetRow: 0,
+    prevTodos: todos,
+    prevIndexes: [],
+    lastHash: undefined,
+    lastIndex: 0,
+  });
 
   const toggleShowHidden = useCallback(
     () => setShowHidden((prev) => !prev),
     [],
   );
 
-  const setSelectedTodoId = useCallback((id: symbol | undefined) => {
-    setSelection({
-      cursorId: id,
-      anchorId: undefined,
-      rangeIds: new Set(),
-    });
-  }, []);
-
-  const clearMultiSelect = useCallback(() => {
-    setSelection((prev) => ({
-      ...prev,
-      anchorId: undefined,
-      rangeIds: new Set(),
-    }));
-  }, []);
-
   // Search bar takes 2 rows (content + border) when visible
-  // Search bar is visible when focused OR has query
   const searchBarVisible = isSearchFocused || searchQuery.length > 0;
   const listHeight = listHeightForTest ??
     (stdout.rows - 2 - (searchBarVisible ? 2 : 0));
@@ -130,206 +309,257 @@ export const NavigationProvider = (
     return createIndexes(filteredTodos);
   }, [todos, searchQuery, showHidden]);
 
-  // Track last selected hash to handle file reloads
-  const lastSelectedHash = useRef<string | undefined>(undefined);
-  // Track last selected index to handle deletion (select next/prev item)
-  const lastSelectedIndex = useRef<number>(0);
+  // Derived State: Handle prop changes synchronously during render
+  // We use a local variable `activeState` to ensure the current render sees the *new* state immediately.
+  let activeState = state;
 
-  const prevTodos = useRef<Todos>(todos);
+  // 1. Prop Sync (Guesstimate on content change)
+  if (todos !== state.prevTodos) {
+    const prevTodos = state.prevTodos;
 
-  // Guesstimate selection when todos change (e.g. undo/redo, add, toggle)
-  useEffect(() => {
-    if (todos === prevTodos.current) return;
-
-    const oldTodos = prevTodos.current;
-    prevTodos.current = todos;
-
-    const oldIds = new Set(oldTodos.map((t) => t.id));
-    const added = todos.filter((t) => !oldIds.has(t.id));
-
-    if (added.length > 0) {
-      // Find the first added todo that is visible in the current list
-      const firstVisibleAdded = indexes.find((entry) =>
-        entry.type === IndexType.todo &&
-        added.some((a) => a.id === entry.todo.id)
-      );
-      if (firstVisibleAdded && firstVisibleAdded.type === IndexType.todo) {
-        setSelectedTodoId(firstVisibleAdded.todo.id);
-        return;
-      }
-    }
-
-    const modified = todos.filter((t) => {
-      const oldTodo = oldTodos.find((ot) => ot.id === t.id);
-      return oldTodo && oldTodo.getHash() !== t.getHash();
-    });
-
-    if (modified.length > 0) {
-      const firstVisibleModified = indexes.find((entry) =>
-        entry.type === IndexType.todo &&
-        modified.some((m) => m.id === entry.todo.id)
-      );
-      if (
-        firstVisibleModified && firstVisibleModified.type === IndexType.todo
-      ) {
-        // If the current cursor is among the modified and still visible, stay there
-        // This preserves multi-selection range!
-        const isCursorValid = selection.cursorId &&
-          modified.some((m) => m.id === selection.cursorId) &&
-          indexes.some((e) =>
-            e.type === IndexType.todo && e.todo.id === selection.cursorId
-          );
-
-        if (!isCursorValid) {
-          setSelectedTodoId(firstVisibleModified.todo.id);
-        }
-        return;
-      }
-    }
-  }, [todos, indexes, selection, setSelectedTodoId]);
-
-  // Update tracking refs whenever selectedTodoId changes and points to a valid todo
-  useEffect(() => {
-    if (selectedTodoId) {
-      const index = indexes.findIndex((entry) =>
-        entry.type === IndexType.todo && entry.todo.id === selectedTodoId
-      );
-
-      if (index !== -1) {
-        lastSelectedIndex.current = index;
-        const entry = indexes[index];
-        if (entry.type === IndexType.todo) {
-          lastSelectedHash.current = entry.todo.getHash();
-        }
-      }
-    }
-  }, [selectedTodoId, indexes, todos]);
-
-  // Ensure valid selection (select first if undefined or filtered out)
-  useEffect(() => {
-    if (indexes.length === 0) return;
-
-    const firstTodoIndex = indexes.findIndex((entry) =>
-      entry.type === IndexType.todo
+    // Step 1: Guesstimate
+    const guesstimatedId = guesstimateSelection(
+      todos,
+      prevTodos,
+      indexes,
+      state.selection.cursorId,
     );
 
-    if (firstTodoIndex === -1) return;
+    // Step 2: Validate
+    const cursorToValidate = guesstimatedId ?? state.selection.cursorId;
+    const validatedCursorId = validateSelection(
+      cursorToValidate,
+      indexes,
+      state.lastHash,
+      state.lastIndex,
+    );
 
-    // Check if current selection is valid (exists and is in the current list)
-    const isSelectionValid = selectedTodoId !== undefined &&
-      indexes.some((entry) =>
-        entry.type === IndexType.todo &&
-        entry.todo.id === selectedTodoId
-      );
+    // Step 3: Scroll & Metadata
+    const selectedRow = validatedCursorId
+      ? indexes.findIndex((e) =>
+        e.type === IndexType.todo && e.todo.id === validatedCursorId
+      )
+      : 0;
 
-    if (!isSelectionValid) {
-      // Fallback 1: Try to match by hash (handle file reload)
-      if (lastSelectedHash.current) {
-        const hashMatch = indexes.find((entry) =>
+    // Calculate range logic (simplified for immediate update)
+    let rangeMin = selectedRow;
+    let rangeMax = selectedRow;
+    if (state.selection.rangeIds.size > 0) {
+      indexes.forEach((entry, index) => {
+        if (
           entry.type === IndexType.todo &&
-          entry.todo.getHash() === lastSelectedHash.current
-        );
-        if (hashMatch && hashMatch.type === IndexType.todo) {
-          setSelectedTodoId(hashMatch.todo.id);
-          return;
+          state.selection.rangeIds.has(entry.todo.id)
+        ) {
+          rangeMin = Math.min(rangeMin, index);
+          rangeMax = Math.max(rangeMax, index);
         }
-      }
-
-      // Fallback 2: Try to match by index (handle deletion - select next/prev)
-      const targetIndex = clamp(
-        lastSelectedIndex.current,
-        0,
-        indexes.length - 1,
-      );
-
-      // If target hits a non-todo (e.g. header), search forward then backward
-      let foundTodoIndex = -1;
-
-      // Forward search
-      for (let i = targetIndex; i < indexes.length; i++) {
-        if (indexes[i].type === IndexType.todo) {
-          foundTodoIndex = i;
-          break;
-        }
-      }
-
-      // Backward search if not found forward
-      if (foundTodoIndex === -1) {
-        for (let i = targetIndex - 1; i >= 0; i--) {
-          if (indexes[i].type === IndexType.todo) {
-            foundTodoIndex = i;
-            break;
-          }
-        }
-      }
-
-      if (foundTodoIndex !== -1) {
-        const entry = indexes[foundTodoIndex];
-        if (entry.type === IndexType.todo) {
-          setSelectedTodoId(entry.todo.id);
-          return;
-        }
-      }
-
-      // Fallback 3: Default to first item (safety net)
-      if (indexes[firstTodoIndex].type === IndexType.todo) {
-        setSelectedTodoId(indexes[firstTodoIndex].todo.id);
-      }
+      });
     }
-  }, [indexes, selectedTodoId]); // Removed setSelectedTodoId from deps as it's stable
 
-  // Calculate selectedRow derived from selectedTodoId
-  const selectedRow = useMemo(() => {
-    if (!selectedTodoId) return 0;
-    const index = indexes.findIndex(
-      (entry) =>
-        entry.type === IndexType.todo &&
-        entry.todo.id === selectedTodoId,
+    const newOffsetRow = calculateScrollOffset(
+      selectedRow,
+      { min: rangeMin, max: rangeMax },
+      state.offsetRow,
+      listHeight,
+      indexes.length,
     );
-    return index !== -1 ? index : 0;
-  }, [indexes, selectedTodoId]);
 
-  // Ensure selection is visible (scroll into view)
-  useEffect(() => {
-    const scrollPadding = 1;
-
-    // Avoid scroll thrashing when listHeight is too small for padding
-    if (listHeight <= 2 * scrollPadding) {
-      if (selectedRow < offsetRow) {
-        setOffsetRow(selectedRow);
-      } else if (selectedRow >= offsetRow + listHeight) {
-        setOffsetRow(selectedRow - listHeight + 1);
+    let newLastHash = state.lastHash;
+    if (selectedRow !== -1 && validatedCursorId) {
+      const entry = indexes[selectedRow];
+      if (entry?.type === IndexType.todo) {
+        newLastHash = entry.todo.getHash();
       }
-      return;
     }
 
-    // Scrolling up with padding
-    if (selectedRow < offsetRow + scrollPadding) {
-      setOffsetRow(Math.max(0, selectedRow - scrollPadding));
-    } // Scrolling down with padding
-    else if (
-      selectedRow >=
-        offsetRow + listHeight - scrollPadding
+    // Prepare new selection state
+    let newSelection = state.selection;
+    if (
+      validatedCursorId !== state.selection.cursorId ||
+      guesstimatedId !== undefined
     ) {
-      setOffsetRow(
-        // This Math.max is for safety, should not be needed with the listHeight check
-        Math.max(
-          0,
-          Math.min(
-            selectedRow - listHeight + 1 + scrollPadding,
-            indexes.length - listHeight,
-          ),
-        ),
-      );
+      if (guesstimatedId !== undefined) {
+        newSelection = {
+          cursorId: validatedCursorId,
+          anchorId: undefined,
+          rangeIds: new Set(),
+        };
+      } else {
+        newSelection = {
+          ...state.selection,
+          cursorId: validatedCursorId,
+        };
+      }
     }
-  }, [selectedRow, listHeight, offsetRow]);
+
+    activeState = {
+      selection: newSelection,
+      offsetRow: newOffsetRow,
+      prevTodos: todos,
+      prevIndexes: indexes,
+      lastIndex: selectedRow !== -1 ? selectedRow : state.lastIndex,
+      lastHash: newLastHash,
+    };
+    setState(activeState);
+  }
+
+  // 2. Validation / Auto-Correction (Runs on every render)
+  // Ensures selection is valid (exists in indexes) after Init, Filter change, or Guesstimate.
+  const currentCursor = activeState.selection.cursorId;
+  const validatedCursor = validateSelection(
+    currentCursor,
+    indexes,
+    activeState.lastHash,
+    activeState.lastIndex,
+  );
+
+  const indexesChanged = indexes !== activeState.prevIndexes;
+
+  if (validatedCursor !== currentCursor || indexesChanged) {
+    const selectedRow = validatedCursor
+      ? indexes.findIndex((e) =>
+        e.type === IndexType.todo && e.todo.id === validatedCursor
+      )
+      : 0;
+
+    let rangeMin = selectedRow;
+    let rangeMax = selectedRow;
+    if (activeState.selection.rangeIds.size > 0) {
+      indexes.forEach((entry, index) => {
+        if (
+          entry.type === IndexType.todo &&
+          activeState.selection.rangeIds.has(entry.todo.id)
+        ) {
+          rangeMin = Math.min(rangeMin, index);
+          rangeMax = Math.max(rangeMax, index);
+        }
+      });
+    }
+
+    const newOffsetRow = calculateScrollOffset(
+      selectedRow,
+      { min: rangeMin, max: rangeMax },
+      activeState.offsetRow,
+      listHeight,
+      indexes.length,
+    );
+
+    let newLastHash = activeState.lastHash;
+    if (selectedRow !== -1 && validatedCursor) {
+      const entry = indexes[selectedRow];
+      if (entry?.type === IndexType.todo) {
+        newLastHash = entry.todo.getHash();
+      }
+    }
+
+    activeState = {
+      ...activeState,
+      selection: {
+        ...activeState.selection,
+        cursorId: validatedCursor,
+      },
+      offsetRow: newOffsetRow,
+      prevIndexes: indexes,
+      lastIndex: selectedRow !== -1 ? selectedRow : activeState.lastIndex,
+      lastHash: newLastHash,
+    };
+    setState(activeState);
+  }
+
+  // Derived state: Clear multi-select if filtered out
+  const visibleIds = useMemo(() => {
+    const ids = new Set<symbol>();
+    for (const entry of indexes) {
+      if (entry.type === IndexType.todo) {
+        ids.add(entry.todo.id);
+      }
+    }
+    return ids;
+  }, [indexes]);
+
+  if (activeState.selection.rangeIds.size > 0) {
+    let hasInvisible = false;
+    for (const id of activeState.selection.rangeIds) {
+      if (!visibleIds.has(id)) {
+        hasInvisible = true;
+        break;
+      }
+    }
+
+    if (hasInvisible) {
+      const newState: NavState = {
+        ...activeState,
+        selection: {
+          ...activeState.selection,
+          rangeIds: new Set<symbol>(),
+          anchorId: undefined,
+        },
+      };
+      setState(newState);
+      activeState = newState;
+    }
+  }
+
+  const setSelectedTodoId = useCallback((id: symbol | undefined) => {
+    setState((prev) => {
+      const newSelection = {
+        cursorId: id,
+        anchorId: undefined,
+        rangeIds: new Set<symbol>(),
+      };
+
+      const newRow = id
+        ? indexes.findIndex((e) =>
+          e.type === IndexType.todo && e.todo.id === id
+        )
+        : 0;
+
+      const newOffset = calculateScrollOffset(
+        newRow !== -1 ? newRow : 0,
+        { min: newRow, max: newRow },
+        prev.offsetRow,
+        listHeight,
+        indexes.length,
+      );
+
+      let newLastHash = prev.lastHash;
+      if (newRow !== -1 && id) {
+        const entry = indexes[newRow];
+        if (entry?.type === IndexType.todo) {
+          newLastHash = entry.todo.getHash();
+        }
+      }
+
+      return {
+        ...prev,
+        selection: newSelection,
+        offsetRow: newOffset,
+        prevIndexes: indexes,
+        lastIndex: newRow !== -1 ? newRow : prev.lastIndex,
+        lastHash: newLastHash,
+      };
+    });
+  }, [indexes, listHeight]);
+
+  const clearMultiSelect = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      selection: {
+        ...prev.selection,
+        anchorId: undefined,
+        rangeIds: new Set<symbol>(),
+      },
+      prevIndexes: indexes,
+    }));
+  }, [indexes]);
 
   const doNavigate = useCallback((step: number, shift: boolean = false) => {
-    setSelection((prev) => {
+    setState((prev) => {
+      // 1. Calculate new selection
       const todoIndex = indexes.findIndex(
         (entry) =>
           entry.type === IndexType.todo &&
-          entry.todo.id === prev.cursorId,
+          entry.todo.id === prev.selection.cursorId,
       );
       const currentRow = todoIndex === -1 ? 0 : todoIndex;
       const direction = step > 0 ? 1 : -1;
@@ -357,19 +587,19 @@ export const NavigationProvider = (
       }
 
       const selectedEntry = indexes[newSelectedRow];
-      let newId = prev.cursorId;
+      let newId = prev.selection.cursorId;
       if (selectedEntry?.type === IndexType.todo) {
         newId = selectedEntry.todo.id;
       }
 
       if (newId === undefined) return prev;
 
-      let newAnchor = prev.anchorId;
+      let newAnchor = prev.selection.anchorId;
       const newRange = new Set<symbol>();
 
       if (shift) {
         if (!newAnchor) {
-          newAnchor = prev.cursorId ?? newId;
+          newAnchor = prev.selection.cursorId ?? newId;
         }
 
         const anchorIndex = indexes.findIndex((e) =>
@@ -393,13 +623,53 @@ export const NavigationProvider = (
         newAnchor = undefined;
       }
 
+      // 2. Calculate New Scroll Offset directly
+      const selectionRangeRows = (() => {
+        if (newRange.size === 0) {
+          return { min: newSelectedRow, max: newSelectedRow };
+        }
+        let min = newSelectedRow;
+        let max = newSelectedRow;
+        // Optimization: we know the range is contiguous between anchor and newIndex
+        // but relying on indexes iteration is safer for now
+        // For now, let's use the explicit range calculation again to be safe
+        indexes.forEach((entry, index) => {
+          if (entry.type === IndexType.todo && newRange.has(entry.todo.id)) {
+            min = Math.min(min, index);
+            max = Math.max(max, index);
+          }
+        });
+        return { min, max };
+      })();
+
+      const newOffsetRow = calculateScrollOffset(
+        newSelectedRow,
+        selectionRangeRows,
+        prev.offsetRow,
+        listHeight,
+        indexes.length,
+      );
+
+      // 3. Update tracking metadata
+      let newLastHash = prev.lastHash;
+      if (selectedEntry?.type === IndexType.todo) {
+        newLastHash = selectedEntry.todo.getHash();
+      }
+
       return {
-        cursorId: newId,
-        anchorId: newAnchor,
-        rangeIds: newRange,
+        selection: {
+          cursorId: newId,
+          anchorId: newAnchor,
+          rangeIds: newRange,
+        },
+        offsetRow: newOffsetRow,
+        prevTodos: prev.prevTodos,
+        prevIndexes: indexes,
+        lastIndex: newSelectedRow,
+        lastHash: newLastHash,
       };
     });
-  }, [indexes]);
+  }, [indexes, listHeight]);
 
   const navigateUp = useCallback((shift?: boolean) => doNavigate(-1, shift), [
     doNavigate,
@@ -441,21 +711,21 @@ export const NavigationProvider = (
   }, [indexes, setSelectedTodoId]);
 
   const useSelectedTodo = useCallback(() => {
-    return todos.find((t) => t.id === selectedTodoId);
-  }, [todos, selectedTodoId]);
+    return todos.find((t) => t.id === activeState.selection.cursorId);
+  }, [todos, activeState.selection.cursorId]);
 
   const useSelectedTodos = useCallback(() => {
-    if (selection.rangeIds.size > 0) {
-      return todos.filter((t) => selection.rangeIds.has(t.id));
+    if (activeState.selection.rangeIds.size > 0) {
+      return todos.filter((t) => activeState.selection.rangeIds.has(t.id));
     }
-    const todo = todos.find((t) => t.id === selectedTodoId);
+    const todo = todos.find((t) => t.id === activeState.selection.cursorId);
     return todo ? [todo] : [];
-  }, [todos, selection.rangeIds, selectedTodoId]);
+  }, [todos, activeState.selection.rangeIds, activeState.selection.cursorId]);
 
   const value = useMemo(
     () => ({
       indexes,
-      offsetRow,
+      offsetRow: activeState.offsetRow,
       listHeight,
       navigateUp,
       navigateDown,
@@ -463,9 +733,9 @@ export const NavigationProvider = (
       navigatePageDown,
       navigateHome,
       navigateEnd,
-      selectedTodoId,
+      selectedTodoId: activeState.selection.cursorId,
       setSelectedTodoId,
-      selectedTodoIds,
+      selectedTodoIds: activeState.selection.rangeIds,
       clearMultiSelect,
       useSelectedTodo,
       useSelectedTodos,
@@ -474,7 +744,7 @@ export const NavigationProvider = (
     }),
     [
       indexes,
-      offsetRow,
+      activeState.offsetRow,
       listHeight,
       navigateUp,
       navigateDown,
@@ -482,9 +752,9 @@ export const NavigationProvider = (
       navigatePageDown,
       navigateHome,
       navigateEnd,
-      selectedTodoId,
+      activeState.selection.cursorId,
       setSelectedTodoId,
-      selectedTodoIds,
+      activeState.selection.rangeIds,
       clearMultiSelect,
       useSelectedTodo,
       useSelectedTodos,

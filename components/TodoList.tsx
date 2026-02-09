@@ -356,7 +356,7 @@ export const TodoList = () => {
         }
         break;
     }
-  }, { autoFocus: true });
+  }, { autoFocus: true, tag: "todo-list" });
 
   // Derived state for rendering
   const visibleIndexes: IndexEntry[] = useMemo(
