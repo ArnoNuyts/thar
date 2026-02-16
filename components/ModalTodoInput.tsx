@@ -11,6 +11,7 @@ import { Todos } from "../logic/Todos.ts";
 interface ModalTodoInputProps {
   mode: "create" | "edit";
   initialValue?: string;
+  initialCursorPos?: number;
   onSubmit: (value: string) => void;
   todos: Todos;
   tag?: string;
@@ -19,6 +20,7 @@ interface ModalTodoInputProps {
 export const ModalTodoInput = ({
   mode,
   initialValue = "",
+  initialCursorPos,
   onSubmit,
   todos,
   tag,
@@ -92,6 +94,7 @@ export const ModalTodoInput = ({
             todos={todos}
             left={modalLeft + 3}
             top={modalTop + 1}
+            initialCursorPos={initialCursorPos}
           />
         </Box>
         <Newline />
