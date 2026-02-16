@@ -11,11 +11,11 @@ export const HiddenIndicator = () => {
       position="absolute"
       width="100%"
       height="100%"
-      justifyContent="flex-start"
-      alignItems="flex-end"
-      padding={1}
+      justifyContent="flex-end"
+      alignItems="flex-start"
+      padding={0}
     >
-      <Text color="red">[HIDDEN SHOWN]</Text>
+      <Text color="red">[HIDDEN TODOS VISIBLE]</Text>
     </Box>
   );
 };
