@@ -47,6 +47,8 @@ Deno.test("extractTagsAndContextsFromSearch: extracts mixed tags and contexts", 
 });
 
 Deno.test("extractTagsAndContextsFromSearch: handles tags with underscores and dots", () => {
-  const result = extractTagsAndContextsFromSearch("+work.project_1 @home_office");
+  const result = extractTagsAndContextsFromSearch(
+    "+work.project_1 @home_office",
+  );
   assertEquals(result, " +work.project_1 @home_office ");
 });
