@@ -1,0 +1,26 @@
+/**
+ * Extracts tags and contexts from a search query.
+ * Returns them formatted as they should appear in a todo.
+ */
+export function extractTagsAndContextsFromSearch(
+  searchQuery: string,
+): string {
+  const trimmed = searchQuery.trim();
+  if (!trimmed) return "";
+
+  const tags: string[] = [];
+
+  // Extract projects (+tag)
+  const projectMatches = trimmed.matchAll(/(\+[\w\.\\_\-]+)/g);
+  for (const match of projectMatches) {
+    tags.push(match[1]);
+  }
+
+  // Extract contexts (@context)
+  const contextMatches = trimmed.matchAll(/(@[\w\.\\_\-]+)/g);
+  for (const match of contextMatches) {
+    tags.push(match[1]);
+  }
+
+  return tags.length > 0 ? " " + tags.join(" ") + " " : "";
+}
