@@ -153,24 +153,24 @@ const keyName: Record<string, string> = {
   "\x1b[3;8~": "delete", // Ctrl + Shift + Alt + Delete
 
   // Ink/Standard Delete
-  "\x1b[3~": "delete", 
+  "\x1b[3~": "delete",
 
   // Alternative codes sometimes seen
   "\x1b[3^": "delete", // Ctrl + Delete (urxvt)
   "\x1b[3$": "delete", // Shift + Delete (urxvt)
   "\x1b[3@": "delete", // Ctrl + Shift + Delete (urxvt)
-  
+
   // Backspace modifiers
   // \x7f is standard backspace on many systems (DEL char but acts as BS)
   // \x08 is Ctrl+H, often BS
   "\x1b\x7f": "backspace", // Alt + Backspace or Meta + Backspace
   "\x1b\x08": "backspace", // Alt + Ctrl + H
   "\x17": "backspace", // Ctrl + W (often used as Ctrl+Backspace)
-  
+
   // Ctrl+D is often Delete
   "\x04": "delete",
   "\x1b\x04": "delete", // Meta+Ctrl+D
-  "\x1bd": "delete",    // Often sent by Ctrl+Delete or Alt+D
+  "\x1bd": "delete", // Often sent by Ctrl+Delete or Alt+D
 
   "\x1b[5~": "pageup",
   "\x1b[6~": "pagedown",
@@ -236,9 +236,9 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
         key.escape = true;
         key.meta = s.length === 2;
       } else if (s === " " || s === "\x1b ") {
-          // Space
-          // input is " " or "\x1b "
-          key.meta = s.length === 2;
+        // Space
+        // input is " " or "\x1b "
+        key.meta = s.length === 2;
       } else if (keyName[s]) {
         // Known escape sequence
         const name = keyName[s];
@@ -252,11 +252,11 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
         key.end = name === "end";
         key.delete = name === "delete";
         key.backspace = name === "backspace";
-        
+
         // If it starts with ESC but NOT with ESC[, it's likely a Alt/Meta + key combination
         // Standard CSI sequences like \x1b[3~ should NOT set key.meta by default
         if (s.startsWith("\x1b") && !s.startsWith("\x1b[")) {
-            key.meta = true;
+          key.meta = true;
         }
       } else if (s.length === 1 && s <= "\x1a") {
         // Ctrl + letter (A-Z)
@@ -268,123 +268,123 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
         if (input === "i") key.tab = true; // Ctrl+I
         if (input === "m") key.return = true; // Ctrl+M
       } else if (s.startsWith("\x1b")) {
-         // Meta + character?
-         // e.g. \x1b\x7f (Alt+Backspace), \x1ba (Alt+a)
-         if (s.length === 2) {
-             key.meta = true;
-             // The second character is the key
-             const char = s[1];
-             if (char === "\x7f" || char === "\x08") {
-                 key.backspace = true;
-             } else {
-                 input = char;
-                 if (/[A-Z]/.test(char)) key.shift = true;
-             }
-         }
+        // Meta + character?
+        // e.g. \x1b\x7f (Alt+Backspace), \x1ba (Alt+a)
+        if (s.length === 2) {
+          key.meta = true;
+          // The second character is the key
+          const char = s[1];
+          if (char === "\x7f" || char === "\x08") {
+            key.backspace = true;
+          } else {
+            input = char;
+            if (/[A-Z]/.test(char)) key.shift = true;
+          }
+        }
       }
 
       // Modifier detection from escape sequences (redundant for named keys but useful for flags)
       // Check for Shift+Arrow keys
-        if (
-          [
-            "\x1b[1;2A",
-            "\x1b[1;2B",
-            "\x1b[1;2C",
-            "\x1b[1;2D",
-            "\x1b[1;4A",
-            "\x1b[1;4B",
-            "\x1b[1;4C",
-            "\x1b[1;4D",
-            "\x1b[1;6A",
-            "\x1b[1;6B",
-            "\x1b[1;6C",
-            "\x1b[1;6D",
-            "\x1b[1;8A",
-            "\x1b[1;8B",
-            "\x1b[1;8C",
-            "\x1b[1;8D",
-            "\x1b[3;2~",
-            "\x1b[3;4~",
-            "\x1b[3;6~",
-            "\x1b[3;8~",
-            "\x1b[3$]",
-            "\x1b[3@]",
-            "\x1b[Z", // Shift+Tab
-          ].includes(s)
-        ) {
-          key.shift = true;
-        }
+      if (
+        [
+          "\x1b[1;2A",
+          "\x1b[1;2B",
+          "\x1b[1;2C",
+          "\x1b[1;2D",
+          "\x1b[1;4A",
+          "\x1b[1;4B",
+          "\x1b[1;4C",
+          "\x1b[1;4D",
+          "\x1b[1;6A",
+          "\x1b[1;6B",
+          "\x1b[1;6C",
+          "\x1b[1;6D",
+          "\x1b[1;8A",
+          "\x1b[1;8B",
+          "\x1b[1;8C",
+          "\x1b[1;8D",
+          "\x1b[3;2~",
+          "\x1b[3;4~",
+          "\x1b[3;6~",
+          "\x1b[3;8~",
+          "\x1b[3$]",
+          "\x1b[3@]",
+          "\x1b[Z", // Shift+Tab
+        ].includes(s)
+      ) {
+        key.shift = true;
+      }
 
-        // Check for Ctrl keys (Arrow, Delete, Backspace via Ctrl+H handled above)
-        if (
-          [
-            "\x1b[1;5A",
-            "\x1b[1;5B",
-            "\x1b[1;5C",
-            "\x1b[1;5D",
-            "\x1b[1;6A",
-            "\x1b[1;6B",
-            "\x1b[1;6C",
-            "\x1b[1;6D",
-            "\x1b[1;7A",
-            "\x1b[1;7B",
-            "\x1b[1;7C",
-            "\x1b[1;7D",
-            "\x1b[1;8A",
-            "\x1b[1;8B",
-            "\x1b[1;8C",
-            "\x1b[1;8D",
-            "\x1b[3;5~",
-            "\x1b[3;6~",
-            "\x1b[3;7~",
-            "\x1b[3;8~",
-            "\x1b[3^]",
-            "\x1b[3@]",
-            "\x17", // Ctrl+W
-            "\x1b\x08", // Alt+Ctrl+H
-            "\x04", // Ctrl+D
-            "\x1b\x04",
-            "\x1bd",
-          ].includes(s)
-        ) {
-          key.ctrl = true;
-        }
+      // Check for Ctrl keys (Arrow, Delete, Backspace via Ctrl+H handled above)
+      if (
+        [
+          "\x1b[1;5A",
+          "\x1b[1;5B",
+          "\x1b[1;5C",
+          "\x1b[1;5D",
+          "\x1b[1;6A",
+          "\x1b[1;6B",
+          "\x1b[1;6C",
+          "\x1b[1;6D",
+          "\x1b[1;7A",
+          "\x1b[1;7B",
+          "\x1b[1;7C",
+          "\x1b[1;7D",
+          "\x1b[1;8A",
+          "\x1b[1;8B",
+          "\x1b[1;8C",
+          "\x1b[1;8D",
+          "\x1b[3;5~",
+          "\x1b[3;6~",
+          "\x1b[3;7~",
+          "\x1b[3;8~",
+          "\x1b[3^]",
+          "\x1b[3@]",
+          "\x17", // Ctrl+W
+          "\x1b\x08", // Alt+Ctrl+H
+          "\x04", // Ctrl+D
+          "\x1b\x04",
+          "\x1bd",
+        ].includes(s)
+      ) {
+        key.ctrl = true;
+      }
 
-        // Check for Meta/Alt keys
-        if (
-          key.meta || // already detected
-          [
-            "\x1b[1;3A",
-            "\x1b[1;3B",
-            "\x1b[1;3C",
-            "\x1b[1;3D",
-            "\x1b[1;9A",
-            "\x1b[1;9B",
-            "\x1b[1;9C",
-            "\x1b[1;9D",
-            "\x1b[1;4A",
-            "\x1b[1;4B",
-            "\x1b[1;4C",
-            "\x1b[1;4D",
-            "\x1b[1;7A",
-            "\x1b[1;7B",
-            "\x1b[1;7C",
-            "\x1b[1;7D",
-            "\x1b[1;8A",
-            "\x1b[1;8B",
-            "\x1b[1;8C",
-            "\x1b[1;8D",
-            "\x1b[3;3~",
-            "\x1b[3;4~",
-            "\x1b[3;7~",
-            "\x1b[3;8~",
-            "\x1b\x7f",
-            "\x1b\x08",
-            "\x1bd",
-          ].includes(s)
-        ) {
-          key.meta = true;
-        }
+      // Check for Meta/Alt keys
+      if (
+        key.meta || // already detected
+        [
+          "\x1b[1;3A",
+          "\x1b[1;3B",
+          "\x1b[1;3C",
+          "\x1b[1;3D",
+          "\x1b[1;9A",
+          "\x1b[1;9B",
+          "\x1b[1;9C",
+          "\x1b[1;9D",
+          "\x1b[1;4A",
+          "\x1b[1;4B",
+          "\x1b[1;4C",
+          "\x1b[1;4D",
+          "\x1b[1;7A",
+          "\x1b[1;7B",
+          "\x1b[1;7C",
+          "\x1b[1;7D",
+          "\x1b[1;8A",
+          "\x1b[1;8B",
+          "\x1b[1;8C",
+          "\x1b[1;8D",
+          "\x1b[3;3~",
+          "\x1b[3;4~",
+          "\x1b[3;7~",
+          "\x1b[3;8~",
+          "\x1b\x7f",
+          "\x1b\x08",
+          "\x1bd",
+        ].includes(s)
+      ) {
+        key.meta = true;
+      }
 
       if (input.length === 1 && /[A-Z]/.test(input)) {
         key.shift = true;
