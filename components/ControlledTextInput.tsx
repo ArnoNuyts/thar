@@ -100,13 +100,46 @@ export function ControlledTextInput({
 
         case key.leftArrow:
           if (showCursor) {
-            nextCursorOffset = Math.max(0, cursorOffset - 1);
+            if (key.ctrl) {
+              let newPos = cursorOffset;
+              // Skip preceding whitespace
+              while (newPos > 0 && originalValue[newPos - 1] === " ") {
+                newPos--;
+              }
+              // Skip preceding non-whitespace
+              while (newPos > 0 && originalValue[newPos - 1] !== " ") {
+                newPos--;
+              }
+              nextCursorOffset = newPos;
+            } else {
+              nextCursorOffset = Math.max(0, cursorOffset - 1);
+            }
           }
           break;
 
         case key.rightArrow:
           if (showCursor) {
-            nextCursorOffset = Math.min(originalValue.length, cursorOffset + 1);
+            if (key.ctrl) {
+              let newPos = cursorOffset;
+              // Skip current non-whitespace
+              while (
+                newPos < originalValue.length && originalValue[newPos] !== " "
+              ) {
+                newPos++;
+              }
+              // Skip following whitespace
+              while (
+                newPos < originalValue.length && originalValue[newPos] === " "
+              ) {
+                newPos++;
+              }
+              nextCursorOffset = newPos;
+            } else {
+              nextCursorOffset = Math.min(
+                originalValue.length,
+                cursorOffset + 1,
+              );
+            }
           }
           break;
 
@@ -124,28 +157,93 @@ export function ControlledTextInput({
 
         case key.backspace:
           if (cursorOffset > 0) {
-            // Backspace: delete character before cursor
-            nextValue = originalValue.slice(0, cursorOffset - 1) +
-              originalValue.slice(cursorOffset, originalValue.length);
-            nextCursorOffset = cursorOffset - 1;
+            if (key.ctrl || key.meta) {
+              // Ctrl+Backspace: delete word before cursor
+              let newPos = cursorOffset;
+              // Skip preceding whitespace
+              while (newPos > 0 && originalValue[newPos - 1] === " ") {
+                newPos--;
+              }
+              // Skip preceding non-whitespace
+              while (newPos > 0 && originalValue[newPos - 1] !== " ") {
+                newPos--;
+              }
+
+              nextValue = originalValue.slice(0, newPos) +
+                originalValue.slice(cursorOffset, originalValue.length);
+              nextCursorOffset = newPos;
+            } else {
+              // Backspace: delete character before cursor
+              nextValue = originalValue.slice(0, cursorOffset - 1) +
+                originalValue.slice(cursorOffset, originalValue.length);
+              nextCursorOffset = cursorOffset - 1;
+            }
           }
           break;
 
         case key.delete:
           if (cursorOffset < originalValue.length) {
-            // Delete: delete character at cursor
-            nextValue = originalValue.slice(0, cursorOffset) +
-              originalValue.slice(cursorOffset + 1, originalValue.length);
-            nextCursorOffset = cursorOffset;
+            if (key.ctrl || key.meta) {
+              // Ctrl+Delete: delete word after cursor
+              let newPos = cursorOffset;
+
+              const startOnSpace = originalValue[cursorOffset] === " ";
+
+              if (startOnSpace) {
+                // Skip current whitespace
+                while (
+                  newPos < originalValue.length && originalValue[newPos] === " "
+                ) {
+                  newPos++;
+                }
+                // Skip following word
+                while (
+                  newPos < originalValue.length && originalValue[newPos] !== " "
+                ) {
+                  newPos++;
+                }
+              } else {
+                // Skip current word
+                while (
+                  newPos < originalValue.length && originalValue[newPos] !== " "
+                ) {
+                  newPos++;
+                }
+                // Skip following whitespace
+                while (
+                  newPos < originalValue.length && originalValue[newPos] === " "
+                ) {
+                  newPos++;
+                }
+              }
+
+              nextValue = originalValue.slice(0, cursorOffset) +
+                originalValue.slice(newPos, originalValue.length);
+              nextCursorOffset = cursorOffset;
+            } else {
+              // Delete: delete character at cursor
+              nextValue = originalValue.slice(0, cursorOffset) +
+                originalValue.slice(cursorOffset + 1, originalValue.length);
+              nextCursorOffset = cursorOffset;
+            }
           }
           break;
 
         default:
-          if (input.length > 0) {
+          if (input.length > 0 && !key.ctrl && !key.meta) {
+            // Filter out newlines (e.g. from pasted text)
+            let cleanInput = input.replace(/[\r\n]+/g, "");
+            if (cleanInput.length === 0) return;
+
+            // If input is longer than 1 character, assume it's a paste and trim surrounding spaces
+            if (cleanInput.length > 1) {
+              cleanInput = cleanInput.trim();
+            }
+
             nextValue = originalValue.slice(0, cursorOffset) +
-              input +
+              cleanInput +
               originalValue.slice(cursorOffset, originalValue.length);
-            nextCursorOffset = cursorOffset + input.length;
+            nextCursorOffset = cursorOffset + cleanInput.length;
           } else {
             // No relevant key or text input, return early
             return;
