@@ -212,6 +212,8 @@ export interface NavigationContextType {
   indexes: IndexEntry[];
   offsetRow: number;
   listHeight: number;
+  scrollViewportUp: () => void;
+  scrollViewportDown: () => void;
   navigateUp: (shift?: boolean) => void;
   navigateDown: (shift?: boolean) => void;
   navigateContextUp: (shift?: boolean) => void;
@@ -221,7 +223,7 @@ export interface NavigationContextType {
   navigateHome: () => void;
   navigateEnd: () => void;
   selectedTodoId: symbol | undefined;
-  setSelectedTodoId: (id: symbol | undefined) => void;
+  setSelectedTodoId: (id: symbol | undefined, shift?: boolean) => void;
   selectedTodoIds: Set<symbol>;
   clearMultiSelect: () => void;
   useSelectedTodo: () => Todo | undefined;
@@ -509,46 +511,118 @@ export const NavigationProvider = (
     }
   }
 
-  const setSelectedTodoId = useCallback((id: symbol | undefined) => {
-    setState((prev) => {
-      const newSelection = {
-        cursorId: id,
-        anchorId: undefined,
-        rangeIds: new Set<symbol>(),
-      };
+  const setSelectedTodoId = useCallback(
+    (id: symbol | undefined, shift = false) => {
+      setState((prev) => {
+        if (id !== undefined && shift) {
+          const targetRow = indexes.findIndex((e) =>
+            e.type === IndexType.todo && e.todo.id === id
+          );
+          if (targetRow === -1) return prev;
 
-      const newRow = id
-        ? indexes.findIndex((e) =>
-          e.type === IndexType.todo && e.todo.id === id
-        )
-        : 0;
+          let newAnchor = prev.selection.anchorId;
+          const newRange = new Set<symbol>();
+          if (!newAnchor) {
+            newAnchor = prev.selection.cursorId ?? id;
+          }
 
-      const newOffset = calculateScrollOffset(
-        newRow !== -1 ? newRow : 0,
-        { min: newRow, max: newRow },
-        prev.offsetRow,
-        listHeight,
-        indexes.length,
-      );
+          const anchorIndex = indexes.findIndex((e) =>
+            e.type === IndexType.todo && e.todo.id === newAnchor
+          );
+          if (anchorIndex !== -1) {
+            const start = Math.min(anchorIndex, targetRow);
+            const end = Math.max(anchorIndex, targetRow);
+            for (let i = start; i <= end; i++) {
+              const entry = indexes[i];
+              if (entry.type === IndexType.todo) {
+                newRange.add(entry.todo.id);
+              }
+            }
+          }
 
-      let newLastHash = prev.lastHash;
-      if (newRow !== -1 && id) {
-        const entry = indexes[newRow];
-        if (entry?.type === IndexType.todo) {
-          newLastHash = entry.todo.getHash();
+          const selectionRangeRows = (() => {
+            if (newRange.size === 0) {
+              return { min: targetRow, max: targetRow };
+            }
+            let min = targetRow;
+            let max = targetRow;
+            indexes.forEach((entry, index) => {
+              if (
+                entry.type === IndexType.todo && newRange.has(entry.todo.id)
+              ) {
+                min = Math.min(min, index);
+                max = Math.max(max, index);
+              }
+            });
+            return { min, max };
+          })();
+
+          const newOffset = calculateScrollOffset(
+            targetRow,
+            selectionRangeRows,
+            prev.offsetRow,
+            listHeight,
+            indexes.length,
+          );
+          const targetEntry = indexes[targetRow];
+          const newLastHash = targetEntry?.type === IndexType.todo
+            ? targetEntry.todo.getHash()
+            : prev.lastHash;
+
+          return {
+            ...prev,
+            selection: {
+              cursorId: id,
+              anchorId: newAnchor,
+              rangeIds: newRange,
+            },
+            offsetRow: newOffset,
+            prevIndexes: indexes,
+            lastIndex: targetRow,
+            lastHash: newLastHash,
+          };
         }
-      }
 
-      return {
-        ...prev,
-        selection: newSelection,
-        offsetRow: newOffset,
-        prevIndexes: indexes,
-        lastIndex: newRow !== -1 ? newRow : prev.lastIndex,
-        lastHash: newLastHash,
-      };
-    });
-  }, [indexes, listHeight]);
+        const newSelection = {
+          cursorId: id,
+          anchorId: undefined,
+          rangeIds: new Set<symbol>(),
+        };
+
+        const newRow = id
+          ? indexes.findIndex((e) =>
+            e.type === IndexType.todo && e.todo.id === id
+          )
+          : 0;
+
+        const newOffset = calculateScrollOffset(
+          newRow !== -1 ? newRow : 0,
+          { min: newRow, max: newRow },
+          prev.offsetRow,
+          listHeight,
+          indexes.length,
+        );
+
+        let newLastHash = prev.lastHash;
+        if (newRow !== -1 && id) {
+          const entry = indexes[newRow];
+          if (entry?.type === IndexType.todo) {
+            newLastHash = entry.todo.getHash();
+          }
+        }
+
+        return {
+          ...prev,
+          selection: newSelection,
+          offsetRow: newOffset,
+          prevIndexes: indexes,
+          lastIndex: newRow !== -1 ? newRow : prev.lastIndex,
+          lastHash: newLastHash,
+        };
+      });
+    },
+    [indexes, listHeight],
+  );
 
   const clearMultiSelect = useCallback(() => {
     setState((prev) => ({
@@ -755,6 +829,28 @@ export const NavigationProvider = (
   const navigateDown = useCallback((shift?: boolean) => doNavigate(1, shift), [
     doNavigate,
   ]);
+  const scrollViewportUp = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      offsetRow: clamp(
+        prev.offsetRow - 1,
+        0,
+        Math.max(0, indexes.length - listHeight),
+      ),
+      prevIndexes: indexes,
+    }));
+  }, [indexes, listHeight]);
+  const scrollViewportDown = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      offsetRow: clamp(
+        prev.offsetRow + 1,
+        0,
+        Math.max(0, indexes.length - listHeight),
+      ),
+      prevIndexes: indexes,
+    }));
+  }, [indexes, listHeight]);
   const navigateContextUp = useCallback(
     (shift?: boolean) => doNavigateContext(-1, shift),
     [doNavigateContext],
@@ -813,6 +909,8 @@ export const NavigationProvider = (
       indexes,
       offsetRow: activeState.offsetRow,
       listHeight,
+      scrollViewportUp,
+      scrollViewportDown,
       navigateUp,
       navigateDown,
       navigateContextUp,
@@ -834,6 +932,8 @@ export const NavigationProvider = (
       indexes,
       activeState.offsetRow,
       listHeight,
+      scrollViewportUp,
+      scrollViewportDown,
       navigateUp,
       navigateDown,
       navigateContextUp,

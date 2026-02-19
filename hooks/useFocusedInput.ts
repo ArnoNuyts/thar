@@ -8,7 +8,7 @@ export const useFocusedInput = (
   handler: (input: string, key: Key) => void,
   options: UseFocusableOptions = {},
 ) => {
-  const { isFocused } = useFocusable(options);
+  const { isFocused, focus, blur } = useFocusable(options);
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 
@@ -17,5 +17,5 @@ export const useFocusedInput = (
     handlerRef.current(input, key);
   }, { isActive: isFocused });
 
-  return { isFocused };
+  return { isFocused, focus, blur };
 };

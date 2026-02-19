@@ -1,11 +1,66 @@
-import { Box, Text } from "ink";
+import { Box, Text, useApp, useStdout } from "ink";
 import { Fragment } from "react";
 import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
+import { useModal } from "../contexts/modal-context.tsx";
+import { useSearch } from "../contexts/search-context.tsx";
+import { useNavigation } from "../contexts/navigation-context.tsx";
+import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { COLORS } from "../theme/colors.ts";
 
+const ACTION_ITEMS = [
+  { key: "x", text: "Menu" },
+  { key: "q", text: "Quit" },
+  { key: "n", text: "New" },
+  { key: "e", text: "Edit" },
+  { key: "/", text: "Search" },
+] as const;
+
 export const ActionBar = () => {
+  const { exit } = useApp();
+  const { stdout } = useStdout();
   const { toasterMessage } = useToaster();
+  const { openModal, activeModal } = useModal();
+  const { focusRef } = useSearch();
+  const { useSelectedTodo } = useNavigation();
+  const selectedTodo = useSelectedTodo();
+
+  useMouseInput((event) => {
+    if (!event.leftClick || event.x === undefined || event.y === undefined) {
+      return;
+    }
+    if (activeModal) return;
+
+    const contentRow = stdout.rows;
+    if (event.y !== contentRow) return;
+
+    let x = 1;
+    for (const item of ACTION_ITEMS) {
+      const segment = ` ${item.key} ${item.text}  `;
+      const start = x;
+      const end = x + segment.length - 1;
+      if (event.x >= start && event.x <= end) {
+        switch (item.key) {
+          case "x":
+            openModal("todo-menu");
+            return;
+          case "q":
+            exit();
+            return;
+          case "n":
+            openModal("create-todo");
+            return;
+          case "e":
+            if (selectedTodo) openModal("edit-todo", selectedTodo);
+            return;
+          case "/":
+            focusRef.current?.();
+            return;
+        }
+      }
+      x += segment.length;
+    }
+  });
 
   return (
     <Box
@@ -21,13 +76,7 @@ export const ActionBar = () => {
       justifyContent="space-between"
     >
       <Box>
-        {[
-          { key: "x", text: "Menu" },
-          { key: "q", text: "Quit" },
-          { key: "n", text: "New" },
-          { key: "e", text: "Edit" },
-          { key: "/", text: "Search" },
-        ].map((item) => {
+        {ACTION_ITEMS.map((item) => {
           return (
             <Fragment key={item.key}>
               <Text color={PRIMARY_COLOR}>{` ${item.key}`}</Text>

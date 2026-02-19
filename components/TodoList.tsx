@@ -1,5 +1,5 @@
 import { Box, Newline, Text, useApp } from "ink";
-import { memo, useMemo } from "react";
+import { memo, useMemo, useRef } from "react";
 import { PRIMARY_COLOR } from "../constants.ts";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
@@ -7,6 +7,7 @@ import { useSearch } from "../contexts/search-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { ExtendedKey, useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
 import { IndexEntry } from "../logic/indexes.ts";
 import { Todo } from "../logic/todo.ts";
@@ -200,6 +201,8 @@ export const TodoList = () => {
     indexes,
     offsetRow,
     listHeight,
+    scrollViewportUp,
+    scrollViewportDown,
     navigateUp,
     navigateDown,
     navigateContextUp,
@@ -217,9 +220,9 @@ export const TodoList = () => {
     clearMultiSelect,
   } = useNavigation();
 
-  const { openModal } = useModal();
+  const { openModal, activeModal } = useModal();
   const { showToaster } = useToaster();
-  const { focusRef, searchQuery } = useSearch();
+  const { focusRef, searchQuery, isSearchFocused } = useSearch();
   const {
     toggleTodos,
     toggleHidden,
@@ -233,9 +236,15 @@ export const TodoList = () => {
 
   const todo = useSelectedTodo();
   const selectedTodos = useSelectedTodos();
+  const lastClickRef = useRef<{ id: symbol; time: number } | null>(null);
 
-  // Handle global shortcuts (only when focused)
-  useFocusedInput((input, key: ExtendedKey) => {
+  // Derived state for rendering and mouse hit-testing
+  const visibleIndexes: IndexEntry[] = useMemo(
+    () => indexes.slice(offsetRow, offsetRow + listHeight),
+    [listHeight, offsetRow, indexes],
+  );
+
+  const { isFocused, focus } = useFocusedInput((input, key: ExtendedKey) => {
     if (key.upArrow && key.ctrl) return navigateContextUp(key.shift);
     if (key.downArrow && key.ctrl) return navigateContextDown(key.shift);
     if (key.upArrow) return navigateUp(key.shift);
@@ -384,11 +393,32 @@ export const TodoList = () => {
     }
   }, { autoFocus: true, tag: "todo-list" });
 
-  // Derived state for rendering
-  const visibleIndexes: IndexEntry[] = useMemo(
-    () => indexes.slice(offsetRow, offsetRow + listHeight),
-    [listHeight, offsetRow, indexes],
-  );
+  useMouseInput((event) => {
+    if (!isFocused) return;
+    if (activeModal) return;
+    if (event.wheelUp) return scrollViewportUp();
+    if (event.wheelDown) return scrollViewportDown();
+    if (!event.leftClick || event.y === undefined) return;
+
+    const searchRows = (isSearchFocused || searchQuery.length > 0) ? 2 : 0;
+    const rowInList = event.y - 1 - searchRows;
+    if (rowInList < 0 || rowInList >= visibleIndexes.length) return;
+
+    const entry = visibleIndexes[rowInList];
+    if (!entry || entry.type !== IndexType.todo) return;
+
+    const now = Date.now();
+    const isDoubleClick = lastClickRef.current?.id === entry.todo.id &&
+      now - lastClickRef.current.time <= 350;
+
+    focus();
+    setSelectedTodoId(entry.todo.id, event.raw.shift);
+    if (isDoubleClick && !event.raw.shift) {
+      toggleTodos([entry.todo]);
+    }
+
+    lastClickRef.current = { id: entry.todo.id, time: now };
+  }, { isActive: true });
 
   // Calculate the maximum number of digits needed for numbering
   const totalTodoCount =

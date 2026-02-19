@@ -293,3 +293,27 @@ Deno.test("ControlledTextInput - Normal Delete should only remove one character"
 
   unmount();
 });
+
+Deno.test("ControlledTextInput - Mouse wheel escape does not insert characters", async (t) => {
+  let currentValue = "hello";
+
+  const { stdin, unmount } = render(
+    <ControlledTextInput
+      value="hello"
+      onChange={(v) => {
+        currentValue = v;
+      }}
+      cursorOffset={5}
+    />,
+  );
+
+  // SGR mouse wheel up event
+  await stdin.write("\x1b[<64;10;5M");
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  await t.step("Mouse wheel packet should not modify input value", () => {
+    assertEquals(currentValue, "hello");
+  });
+
+  unmount();
+});
