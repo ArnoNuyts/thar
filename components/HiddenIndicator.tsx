@@ -1,5 +1,6 @@
 import { Box, Text } from "ink";
 import { useNavigation } from "../contexts/navigation-context.tsx";
+import { COLORS } from "../theme/colors.ts";
 
 export const HiddenIndicator = () => {
   const { showHidden } = useNavigation();
@@ -15,7 +16,7 @@ export const HiddenIndicator = () => {
       alignItems="flex-start"
       padding={0}
     >
-      <Text color="red">[HIDDEN TODOS VISIBLE]</Text>
+      <Text color={COLORS.danger}>[HIDDEN TODOS VISIBLE]</Text>
     </Box>
   );
 };

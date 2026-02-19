@@ -1,5 +1,6 @@
 import { Box, Text } from "ink";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
+import { COLORS } from "../theme/colors.ts";
 
 export const SuggestionOverlay = () => {
   const { suggestions, selectedIndex, type, position } = useSuggestion();
@@ -16,18 +17,22 @@ export const SuggestionOverlay = () => {
     <Box
       flexDirection="column"
       borderStyle="single"
-      borderColor="yellow"
+      borderColor={COLORS.primary}
       position="absolute"
       marginTop={position.top}
       marginLeft={position.left}
-      backgroundColor="black"
+      backgroundColor={COLORS.background}
       minWidth={suggestionMaxLenth + 4} // +4 for padding/border/prefix
     >
       {suggestions.map((suggestion, index) => (
         <Text
           key={suggestion}
-          color={index === selectedIndex ? "blue" : "white"}
-          backgroundColor={index === selectedIndex ? "white" : undefined}
+          color={index === selectedIndex
+            ? COLORS.accentBlue
+            : COLORS.foreground}
+          backgroundColor={index === selectedIndex
+            ? COLORS.inverseBackground
+            : undefined}
           wrap="truncate-end"
         >
           {" "}

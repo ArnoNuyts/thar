@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { ReactNode } from "react";
 import { PRIMARY_COLOR } from "../constants.ts";
+import { COLORS } from "../theme/colors.ts";
 
 interface ModalProps {
   children?: ReactNode;
@@ -24,7 +25,7 @@ export const Modal = (
         flexDirection="column"
         width={width}
         padding={1}
-        backgroundColor="black"
+        backgroundColor={COLORS.background}
       >
         {title && (
           <Box
@@ -35,7 +36,12 @@ export const Modal = (
             borderBottom={false}
             borderTop={false}
           >
-            <Text color="black" backgroundColor="yellow">{` ${title} `}</Text>
+            <Text
+              color={COLORS.inverseForeground}
+              backgroundColor={PRIMARY_COLOR}
+            >
+              {` ${title} `}
+            </Text>
           </Box>
         )}
         <Box
@@ -47,7 +53,7 @@ export const Modal = (
           borderTop={false}
           padding={1}
           flexDirection="column"
-          backgroundColor="#000"
+          backgroundColor={COLORS.background}
         >
           {children}
         </Box>

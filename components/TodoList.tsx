@@ -12,6 +12,8 @@ import { IndexEntry } from "../logic/indexes.ts";
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
+import { TodoListScrollbar } from "./TodoListScrollbar.tsx";
+import { COLORS } from "../theme/colors.ts";
 
 const renderTodoText = (
   text: string,
@@ -22,17 +24,23 @@ const renderTodoText = (
   return parts.map((part, i) => {
     if (part.startsWith("@")) {
       return (
-        <Text key={i} color={isHighlighted ? "black" : "yellow"}>{part}</Text>
+        <Text key={i} color={isHighlighted ? COLORS.textOnHighlight : COLORS.tagContext}>
+          {part}
+        </Text>
       );
     } else if (part.startsWith("+")) {
       return (
-        <Text key={i} color={isHighlighted ? "black" : "blue"}>{part}</Text>
+        <Text key={i} color={isHighlighted ? COLORS.textOnHighlight : COLORS.tagProject}>
+          {part}
+        </Text>
       );
     }
     return (
       <Text
         key={i}
-        color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}
+        color={isHighlighted
+          ? COLORS.textOnHighlight
+          : (isOverdue ? COLORS.danger : undefined)}
       >
         {part}
       </Text>
@@ -62,8 +70,8 @@ const TodoItem = (
 
   const isHighlighted = isFocused || isSelectedInRange;
   const backgroundColor = isFocused
-    ? (isOverdue ? "red" : "white")
-    : (isSelectedInRange ? "magenta" : undefined);
+    ? (isOverdue ? COLORS.focusBackgroundOverdue : COLORS.focusBackground)
+    : (isSelectedInRange ? COLORS.selectionBackground : undefined);
 
   return (
     <Box
@@ -72,29 +80,35 @@ const TodoItem = (
       <Text wrap="truncate">
         <Text
           dimColor
-          color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}
+          color={isHighlighted
+            ? COLORS.textOnHighlight
+            : (isOverdue ? COLORS.danger : undefined)}
         >
           {` ${paddedNumber} `}
         </Text>
-        <Text color={isHighlighted ? "black" : (isOverdue ? "red" : undefined)}>
+        <Text
+          color={isHighlighted
+            ? COLORS.textOnHighlight
+            : (isOverdue ? COLORS.danger : undefined)}
+        >
           {`${checkbox} `}
         </Text>
         {priority && (
           <Text
             color={isHighlighted
-              ? "black"
+              ? COLORS.textOnHighlight
               : todo.priority === "A"
-              ? "cyan"
+              ? COLORS.priorityA
               : todo.priority === "B"
-              ? "magenta"
+              ? COLORS.priorityB
               : todo.priority === "C"
-              ? "yellow"
+              ? COLORS.priorityC
               : todo.priority === "D"
-              ? "blue"
+              ? COLORS.priorityD
               : todo.priority === "E"
-              ? "green"
+              ? COLORS.priorityE
               : todo.priority === "F"
-              ? "red"
+              ? COLORS.priorityF
               : undefined}
           >
             {`${priority} `}
@@ -102,15 +116,17 @@ const TodoItem = (
         )}
         {renderTodoText(todo.text, isHighlighted, isOverdue)}
         {dueDate && (
-          <Text color={isHighlighted ? "black" : "red"}>{` ${dueDate}`}</Text>
+          <Text color={isHighlighted ? COLORS.textOnHighlight : COLORS.danger}>
+            {` ${dueDate}`}
+          </Text>
         )}
         {threshold && (
-          <Text color={isHighlighted ? "black" : "green"}>
+          <Text color={isHighlighted ? COLORS.textOnHighlight : COLORS.success}>
             {` ${threshold}`}
           </Text>
         )}
         {recurrence && (
-          <Text color={isHighlighted ? "black" : "cyan"}>
+          <Text color={isHighlighted ? COLORS.textOnHighlight : COLORS.info}>
             {` ${recurrence}`}
           </Text>
         )}
@@ -123,7 +139,7 @@ const ContextTitle = memo(
   ({ title, count }: { title: string; count: number; key?: React.Key }) => {
     return (
       <Box>
-        <Text backgroundColor={PRIMARY_COLOR} color="black">
+        <Text backgroundColor={PRIMARY_COLOR} color={COLORS.inverseForeground}>
           {`  ${title} (${count})  `}
         </Text>
       </Box>
@@ -142,11 +158,11 @@ const WelcomeScreen = () => (
     <Text>
       I love deadlines. I love the whooshing noise they make as they go by.
     </Text>
-    <Text color="gray">
+    <Text color={COLORS.muted}>
       - Douglas Adams
     </Text>
     <Newline />
-    <Text color="gray" dimColor>
+    <Text color={COLORS.muted} dimColor>
       Press &apos;n&apos; to create a new todo.
     </Text>
   </Box>
@@ -162,11 +178,11 @@ const SearchEmptyState = ({ query }: { query: string }) => (
   >
     <Text>
       No results found for {` '`}
-      <Text color="yellow">{query}</Text>
+      <Text color={COLORS.warning}>{query}</Text>
       {`' `}
     </Text>
     <Newline />
-    <Text color="gray" dimColor>
+    <Text color={COLORS.muted} dimColor>
       Try a different search or press Esc to clear.
     </Text>
   </Box>
@@ -375,45 +391,51 @@ export const TodoList = () => {
 
   return (
     <Box
-      flexDirection="column"
       flexGrow={1}
       height={listHeight}
-      backgroundColor="black"
+      backgroundColor={COLORS.background}
     >
-      {visibleIndexes.length === 0
-        ? (searchQuery.trim()
-          ? <SearchEmptyState query={searchQuery.trim()} />
-          : <WelcomeScreen />)
-        : visibleIndexes.map((entry, index) => {
-          const originalIndex = index + offsetRow;
-          if (entry.type === IndexType.context) {
+      <Box flexDirection="column" flexGrow={1}>
+        {visibleIndexes.length === 0
+          ? (searchQuery.trim()
+            ? <SearchEmptyState query={searchQuery.trim()} />
+            : <WelcomeScreen />)
+          : visibleIndexes.map((entry, index) => {
+            const originalIndex = index + offsetRow;
+            if (entry.type === IndexType.context) {
+              return (
+                <ContextTitle
+                  key={originalIndex}
+                  title={entry.contextName}
+                  count={entry.todoCount}
+                />
+              );
+            }
+            // Calculate the todo number by counting all todo entries before this one
+            const todoNumber = indexes.slice(0, originalIndex + 1).filter(
+              (e) => e.type === IndexType.todo,
+            ).length;
+
+            const isFocused = entry.todo === todo;
+            const isSelectedInRange = selectedTodoIds.has(entry.todo.id);
+
             return (
-              <ContextTitle
-                key={originalIndex}
-                title={entry.contextName}
-                count={entry.todoCount}
+              <TodoItem
+                key={index + entry.todo.getHash()}
+                todo={entry.todo}
+                isFocused={isFocused}
+                isSelectedInRange={isSelectedInRange}
+                number={todoNumber}
+                maxDigits={maxDigits}
               />
             );
-          }
-          // Calculate the todo number by counting all todo entries before this one
-          const todoNumber = indexes.slice(0, originalIndex + 1).filter(
-            (e) => e.type === IndexType.todo,
-          ).length;
-
-          const isFocused = entry.todo === todo;
-          const isSelectedInRange = selectedTodoIds.has(entry.todo.id);
-
-          return (
-            <TodoItem
-              key={index + entry.todo.getHash()}
-              todo={entry.todo}
-              isFocused={isFocused}
-              isSelectedInRange={isSelectedInRange}
-              number={todoNumber}
-              maxDigits={maxDigits}
-            />
-          );
-        })}
+          })}
+      </Box>
+      <TodoListScrollbar
+        totalRows={indexes.length}
+        listHeight={listHeight}
+        offsetRow={offsetRow}
+      />
     </Box>
   );
 };
