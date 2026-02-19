@@ -29,7 +29,7 @@ export const TodoListScrollbar = (
         const inHandle = row >= handleTop && row < handleTop + handleHeight;
         return (
           <Text key={row} color={COLORS.muted}>
-            {inHandle ? "│" : " "}
+            {inHandle ? "|" : " "}
           </Text>
         );
       })}
