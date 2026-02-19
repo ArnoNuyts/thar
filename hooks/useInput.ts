@@ -326,6 +326,7 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
           }
         } else if (s.startsWith("\x1b[<")) {
           // SGR mouse mode: \x1b[<Cb;Cx;CyM
+          // deno-lint-ignore no-control-regex -- ESC (\x1b) is required for ANSI SGR mouse sequence parsing.
           const match = /^\x1b\[<(\d+);(\d+);(\d+)([mM])$/.exec(s);
           if (match) {
             const buttonCode = Number(match[1]);
