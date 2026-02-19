@@ -314,8 +314,8 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
             "\x1b[3;4~",
             "\x1b[3;6~",
             "\x1b[3;8~",
-            "\x1b[3$]",
-            "\x1b[3@]",
+            "\\x1b[3$",
+            "\\x1b[3@",
             "\x1b[Z", // Shift+Tab
           ].includes(s)
         ) {
@@ -345,8 +345,8 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
             "\x1b[3;6~",
             "\x1b[3;7~",
             "\x1b[3;8~",
-            "\x1b[3^]",
-            "\x1b[3@]",
+            "\\x1b[3^",
+            "\\x1b[3@",
             "\x17", // Ctrl+W
             "\x1b\x08", // Alt+Ctrl+H
             "\x04", // Ctrl+D
