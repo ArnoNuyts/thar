@@ -773,6 +773,58 @@ Deno.test(
 );
 
 Deno.test(
+  "NavigationContext: should match whitespace-separated terms in any order",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("bla @Work doing +Bug"),
+      new Todo("bla @Work doing +Feature"),
+      new Todo("random @Home +Bug"),
+    );
+    let navContext: NavigationContextType = null!;
+    let searchContext: SearchContextType = null!;
+
+    const SearchTester = ({ onContext }: {
+      onContext: (
+        ctx: SearchContextType,
+      ) => void;
+    }) => {
+      const ctx = useSearch();
+      useEffect(() => {
+        onContext(ctx);
+      });
+      return null;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <SearchTester onContext={(ctx) => searchContext = ctx} />
+        <NavigationProvider todos={todos}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    await waitFor(() => {
+      if (!searchContext) throw new Error("Search context not ready");
+    });
+
+    searchContext.setSearchQuery("/@work +bug/");
+
+    await waitFor(() => {
+      const filtered = navContext.indexes.filter((
+        i: IndexEntry,
+      ): i is TodoIndexEntry => i.type === IndexType.todo);
+      assertEquals(filtered.length, 1);
+      assertStringIncludes(filtered[0].todo.text, "@Work");
+      assertStringIncludes(filtered[0].todo.text, "+Bug");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
   "should update offset when navigating home/end",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {

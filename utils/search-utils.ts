@@ -24,3 +24,13 @@ export function extractTagsAndContextsFromSearch(
 
   return tags.length > 0 ? " " + tags.join(" ") + " " : "";
 }
+
+export function extractSearchTerms(searchQuery: string): string[] {
+  return searchQuery
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((term) => term.replace(/^[^\w@+]+|[^\w.\-_]+$/g, ""))
+    .filter(Boolean);
+}
