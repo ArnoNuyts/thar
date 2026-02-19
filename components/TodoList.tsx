@@ -24,13 +24,19 @@ const renderTodoText = (
   return parts.map((part, i) => {
     if (part.startsWith("@")) {
       return (
-        <Text key={i} color={isHighlighted ? COLORS.textOnHighlight : COLORS.tagContext}>
+        <Text
+          key={i}
+          color={isHighlighted ? COLORS.textOnHighlight : COLORS.tagContext}
+        >
           {part}
         </Text>
       );
     } else if (part.startsWith("+")) {
       return (
-        <Text key={i} color={isHighlighted ? COLORS.textOnHighlight : COLORS.tagProject}>
+        <Text
+          key={i}
+          color={isHighlighted ? COLORS.textOnHighlight : COLORS.tagProject}
+        >
           {part}
         </Text>
       );
