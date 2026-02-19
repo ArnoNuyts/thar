@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { Fragment } from "react";
 import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
+import { COLORS } from "../theme/colors.ts";
 
 export const ActionBar = () => {
   const { toasterMessage } = useToaster();
@@ -15,8 +16,8 @@ export const ActionBar = () => {
       borderRight={false}
       borderBottom={false}
       borderTopDimColor
-      borderColor="white"
-      backgroundColor="black"
+      borderColor={COLORS.foreground}
+      backgroundColor={COLORS.background}
       justifyContent="space-between"
     >
       <Box>
