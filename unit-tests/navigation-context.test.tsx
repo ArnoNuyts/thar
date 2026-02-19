@@ -133,6 +133,71 @@ Deno.test("should navigate up", {
   unmount();
 });
 
+Deno.test("should jump between contexts", {
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, async () => {
+  const todos = new Todos(
+    new Todo("Alpha @A"),
+    new Todo("Beta @A"),
+    new Todo("Charlie @B"),
+    new Todo("Delta @B"),
+    new Todo("Echo @C"),
+  );
+  let navContext: NavigationContextType = null!;
+
+  const { unmount } = render(
+    <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
+  );
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Alpha @A")
+  );
+
+  navContext.navigateContextDown();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Charlie @B")
+  );
+
+  navContext.navigateContextDown();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Echo @C")
+  );
+
+  navContext.navigateContextDown();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Echo @C")
+  );
+
+  navContext.navigateContextUp();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Charlie @B")
+  );
+
+  navContext.navigateDown();
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Delta @B")
+  );
+
+  navContext.navigateContextUp();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Alpha @A")
+  );
+
+  navContext.navigateContextUp();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Alpha @A")
+  );
+
+  unmount();
+});
+
 Deno.test(
   "should clamp navigation at bounds",
   { sanitizeResources: false, sanitizeOps: false },
@@ -701,6 +766,58 @@ Deno.test(
       ): i is TodoIndexEntry => i.type === IndexType.todo);
       assertEquals(filtered.length, 1);
       assertStringIncludes(filtered[0].todo.text, "Buy groceries");
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "NavigationContext: should match whitespace-separated terms in any order",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = new Todos(
+      new Todo("bla @Work doing +Bug"),
+      new Todo("bla @Work doing +Feature"),
+      new Todo("random @Home +Bug"),
+    );
+    let navContext: NavigationContextType = null!;
+    let searchContext: SearchContextType = null!;
+
+    const SearchTester = ({ onContext }: {
+      onContext: (
+        ctx: SearchContextType,
+      ) => void;
+    }) => {
+      const ctx = useSearch();
+      useEffect(() => {
+        onContext(ctx);
+      });
+      return null;
+    };
+
+    const { unmount } = render(
+      <SearchProvider>
+        <SearchTester onContext={(ctx) => searchContext = ctx} />
+        <NavigationProvider todos={todos}>
+          <NavigationTester onContext={(ctx) => navContext = ctx} />
+        </NavigationProvider>
+      </SearchProvider>,
+    );
+
+    await waitFor(() => {
+      if (!searchContext) throw new Error("Search context not ready");
+    });
+
+    searchContext.setSearchQuery("/@work +bug/");
+
+    await waitFor(() => {
+      const filtered = navContext.indexes.filter((
+        i: IndexEntry,
+      ): i is TodoIndexEntry => i.type === IndexType.todo);
+      assertEquals(filtered.length, 1);
+      assertStringIncludes(filtered[0].todo.text, "@Work");
+      assertStringIncludes(filtered[0].todo.text, "+Bug");
     });
 
     unmount();

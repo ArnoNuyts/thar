@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text } from "ink";
 import chalk from "chalk";
 import { useInput } from "../hooks/useInput.ts";
@@ -30,6 +30,18 @@ export function ControlledTextInput({
 
   // Use controlled cursor offset if provided, otherwise use internal state
   const cursorOffset = controlledCursorOffset ?? internalCursorOffset;
+
+  // Track latest values in REFs to avoid stale closures in useInput
+  const valueRef = useRef(originalValue);
+  const cursorOffsetRef = useRef(cursorOffset);
+
+  useEffect(() => {
+    valueRef.current = originalValue;
+  }, [originalValue]);
+
+  useEffect(() => {
+    cursorOffsetRef.current = cursorOffset;
+  }, [cursorOffset]);
 
   // Listen to raw stdin to capture actual key sequences
   // DELETED: Raw data listener is now handled in custom useInput
@@ -80,8 +92,12 @@ export function ControlledTextInput({
 
   useInput(
     (input, key) => {
-      let nextCursorOffset = cursorOffset;
-      let nextValue = originalValue;
+      // Use REFs for latest state
+      const currentOriginalValue = valueRef.current;
+      const currentCursorOffset = cursorOffsetRef.current;
+
+      let nextCursorOffset = currentCursorOffset;
+      let nextValue = currentOriginalValue;
 
       switch (true) {
         case key.upArrow:
@@ -91,7 +107,7 @@ export function ControlledTextInput({
           return;
 
         case key.return:
-          onSubmit?.(originalValue);
+          onSubmit?.(currentOriginalValue);
           return;
 
         case key.escape:
@@ -100,13 +116,48 @@ export function ControlledTextInput({
 
         case key.leftArrow:
           if (showCursor) {
-            nextCursorOffset = Math.max(0, cursorOffset - 1);
+            if (key.ctrl) {
+              let newPos = currentCursorOffset;
+              // Skip preceding whitespace
+              while (newPos > 0 && currentOriginalValue[newPos - 1] === " ") {
+                newPos--;
+              }
+              // Skip preceding non-whitespace
+              while (newPos > 0 && currentOriginalValue[newPos - 1] !== " ") {
+                newPos--;
+              }
+              nextCursorOffset = newPos;
+            } else {
+              nextCursorOffset = Math.max(0, currentCursorOffset - 1);
+            }
           }
           break;
 
         case key.rightArrow:
           if (showCursor) {
-            nextCursorOffset = Math.min(originalValue.length, cursorOffset + 1);
+            if (key.ctrl) {
+              let newPos = currentCursorOffset;
+              // Skip current non-whitespace
+              while (
+                newPos < currentOriginalValue.length &&
+                currentOriginalValue[newPos] !== " "
+              ) {
+                newPos++;
+              }
+              // Skip following whitespace
+              while (
+                newPos < currentOriginalValue.length &&
+                currentOriginalValue[newPos] === " "
+              ) {
+                newPos++;
+              }
+              nextCursorOffset = newPos;
+            } else {
+              nextCursorOffset = Math.min(
+                currentOriginalValue.length,
+                currentCursorOffset + 1,
+              );
+            }
           }
           break;
 
@@ -118,34 +169,117 @@ export function ControlledTextInput({
 
         case key.end:
           if (showCursor) {
-            nextCursorOffset = originalValue.length;
+            nextCursorOffset = currentOriginalValue.length;
           }
           break;
 
         case key.backspace:
-          if (cursorOffset > 0) {
-            // Backspace: delete character before cursor
-            nextValue = originalValue.slice(0, cursorOffset - 1) +
-              originalValue.slice(cursorOffset, originalValue.length);
-            nextCursorOffset = cursorOffset - 1;
+          if (currentCursorOffset > 0) {
+            if (key.ctrl || key.meta) {
+              // Ctrl+Backspace: delete word before cursor
+              let newPos = currentCursorOffset;
+              // Skip preceding whitespace
+              while (newPos > 0 && currentOriginalValue[newPos - 1] === " ") {
+                newPos--;
+              }
+              // Skip preceding non-whitespace
+              while (newPos > 0 && currentOriginalValue[newPos - 1] !== " ") {
+                newPos--;
+              }
+
+              nextValue = currentOriginalValue.slice(0, newPos) +
+                currentOriginalValue.slice(
+                  currentCursorOffset,
+                  currentOriginalValue.length,
+                );
+              nextCursorOffset = newPos;
+            } else {
+              // Backspace: delete character before cursor
+              nextValue =
+                currentOriginalValue.slice(0, currentCursorOffset - 1) +
+                currentOriginalValue.slice(
+                  currentCursorOffset,
+                  currentOriginalValue.length,
+                );
+              nextCursorOffset = currentCursorOffset - 1;
+            }
           }
           break;
 
         case key.delete:
-          if (cursorOffset < originalValue.length) {
-            // Delete: delete character at cursor
-            nextValue = originalValue.slice(0, cursorOffset) +
-              originalValue.slice(cursorOffset + 1, originalValue.length);
-            nextCursorOffset = cursorOffset;
+          if (currentCursorOffset < currentOriginalValue.length) {
+            if (key.ctrl || key.meta) {
+              // Ctrl+Delete: delete word after cursor
+              let newPos = currentCursorOffset;
+
+              const startOnSpace =
+                currentOriginalValue[currentCursorOffset] === " ";
+
+              if (startOnSpace) {
+                // Skip current whitespace
+                while (
+                  newPos < currentOriginalValue.length &&
+                  currentOriginalValue[newPos] === " "
+                ) {
+                  newPos++;
+                }
+                // Skip following word
+                while (
+                  newPos < currentOriginalValue.length &&
+                  currentOriginalValue[newPos] !== " "
+                ) {
+                  newPos++;
+                }
+              } else {
+                // Skip current word
+                while (
+                  newPos < currentOriginalValue.length &&
+                  currentOriginalValue[newPos] !== " "
+                ) {
+                  newPos++;
+                }
+                // Skip following whitespace
+                while (
+                  newPos < currentOriginalValue.length &&
+                  currentOriginalValue[newPos] === " "
+                ) {
+                  newPos++;
+                }
+              }
+
+              nextValue = currentOriginalValue.slice(0, currentCursorOffset) +
+                currentOriginalValue.slice(newPos, currentOriginalValue.length);
+              nextCursorOffset = currentCursorOffset;
+            } else {
+              // Delete: delete character at cursor
+              nextValue = currentOriginalValue.slice(0, currentCursorOffset) +
+                currentOriginalValue.slice(
+                  currentCursorOffset + 1,
+                  currentOriginalValue.length,
+                );
+              nextCursorOffset = currentCursorOffset;
+            }
           }
           break;
 
         default:
-          if (input.length > 0) {
-            nextValue = originalValue.slice(0, cursorOffset) +
-              input +
-              originalValue.slice(cursorOffset, originalValue.length);
-            nextCursorOffset = cursorOffset + input.length;
+          if (input.length > 0 && !key.ctrl && !key.meta) {
+            // Filter out newlines (e.g. from pasted text)
+            let cleanInput = input.replace(/[\r\n]+/g, "");
+            if (cleanInput.length === 0) return;
+
+            // If input is longer than 1 character, assume it's a paste and trim surrounding spaces
+            if (cleanInput.length > 1) {
+              cleanInput = cleanInput.trim();
+            }
+
+            nextValue = currentOriginalValue.slice(0, currentCursorOffset) +
+              cleanInput +
+              currentOriginalValue.slice(
+                currentCursorOffset,
+                currentOriginalValue.length,
+              );
+            nextCursorOffset = currentCursorOffset + cleanInput.length;
           } else {
             // No relevant key or text input, return early
             return;
@@ -162,9 +296,12 @@ export function ControlledTextInput({
       }
 
       setInternalCursorOffset(nextCursorOffset);
+      cursorOffsetRef.current = nextCursorOffset; // Update REF immediately for next potential sync event
+
       onCursorChange?.(nextCursorOffset, nextValue);
 
-      if (nextValue !== originalValue) {
+      if (nextValue !== currentOriginalValue) {
+        valueRef.current = nextValue; // Update REF immediately!
         onChange(nextValue);
       }
     },
