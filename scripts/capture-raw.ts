@@ -1,5 +1,3 @@
-
-
 /**
  * Debugging Script: Capture and display raw terminal input.
  * Helps identify ANSI escape sequences sent by different terminals.
@@ -16,14 +14,18 @@ try {
   for await (const chunk of Deno.stdin.readable) {
     const bytes = Array.from(chunk);
     const s = new TextDecoder().decode(chunk);
-    
+
     // Replace escape character with a visible marker for debugging
     // deno-lint-ignore no-control-regex
     const printable = s.replace(/\u001b/g, "\\u001b");
 
     console.log("\nRaw Data:");
-    console.log(`  Bytes:  [${bytes.map(b => b.toString()).join(", ")}]`);
-    console.log(`  Hex:    [${bytes.map(b => b.toString(16).padStart(2, "0")).join(" ")}]`);
+    console.log(`  Bytes:  [${bytes.map((b) => b.toString()).join(", ")}]`);
+    console.log(
+      `  Hex:    [${
+        bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ")
+      }]`,
+    );
     console.log(`  String: ${JSON.stringify(s)}`);
     console.log(`  Visual: ${printable}`);
 
