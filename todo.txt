@@ -59,6 +59,6 @@ x 2026-02-16 2025-12-24 Fix hidden status indicator @v0.4 +Bug
 x 2026-01-21 2026-01-20 Search: +Multi-select while search @v0.4
 x 2026-02-18 2026-02-16 ctrl-arrow should move words. Other options (alt, shift) should just move one charater (and not insert some random stuff) @v0.4
 x 2026-02-16 2026-02-16 When search has a tag and/or context. It should add that to new items. Put it directly in the input box, but move the cursor in front of it. Add a space aswell @v0.4
-2026-02-16 Improve search @v0.4  -> search words seperatly -> /@work + bug/ should match "bla @Work doing +Bug"
+x 2026-02-19 2026-02-16 Improve search @v0.4  -> search words seperatly -> /@work + bug/ should match "bla @Work doing +Bug"
 x 2026-02-19 2026-02-18 When using ctrl + up/down in todolist, should jump between contexts @v0.4
 x (E) 2026-02-19 2026-02-19 When holding arrow key on input field (create new). UI goes weird + start to input weird chars +Bug @v0.4

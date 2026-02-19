@@ -1,5 +1,8 @@
 import { assertEquals } from "@std/assert";
-import { extractTagsAndContextsFromSearch } from "../utils/search-utils.ts";
+import {
+  extractSearchTerms,
+  extractTagsAndContextsFromSearch,
+} from "../utils/search-utils.ts";
 
 Deno.test("extractTagsAndContextsFromSearch: empty string returns empty", () => {
   assertEquals(extractTagsAndContextsFromSearch(""), "");
@@ -51,4 +54,16 @@ Deno.test("extractTagsAndContextsFromSearch: handles tags with underscores and d
     "+work.project_1 @home_office",
   );
   assertEquals(result, " +work.project_1 @home_office ");
+});
+
+Deno.test("extractSearchTerms: splits by whitespace", () => {
+  assertEquals(extractSearchTerms("buy milk"), ["buy", "milk"]);
+});
+
+Deno.test("extractSearchTerms: preserves context and project prefixes", () => {
+  assertEquals(extractSearchTerms("@work +bug"), ["@work", "+bug"]);
+});
+
+Deno.test("extractSearchTerms: strips wrapper punctuation", () => {
+  assertEquals(extractSearchTerms("/@work +bug/"), ["@work", "+bug"]);
 });

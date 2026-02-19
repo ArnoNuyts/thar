@@ -12,6 +12,7 @@ import { Todos } from "../logic/Todos.ts";
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
 import { IndexType } from "../types/enums.ts";
 import { Todo } from "../logic/todo.ts";
+import { extractSearchTerms } from "../utils/search-utils.ts";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
@@ -289,7 +290,7 @@ export const NavigationProvider = (
 
     // Apply search filter if query exists
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
+      const terms = extractSearchTerms(searchQuery);
       filteredTodos = new Todos(
         ...filteredTodos.filter((todo) => {
           const text = todo.text.toLowerCase();
@@ -300,11 +301,17 @@ export const NavigationProvider = (
             p.toLowerCase()
           );
 
-          return (
-            text.includes(query) ||
-            contexts.some((c) => c.includes(query.replace("@", ""))) ||
-            projects.some((p) => p.includes(query.replace("+", "")))
-          );
+          return terms.every((term) => {
+            const normalized = term.startsWith("@") || term.startsWith("+")
+              ? term.slice(1)
+              : term;
+
+            return (
+              text.includes(term) ||
+              contexts.some((c) => c.includes(normalized)) ||
+              projects.some((p) => p.includes(normalized))
+            );
+          });
         }),
       );
     }
