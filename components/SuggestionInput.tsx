@@ -16,6 +16,7 @@ interface SuggestionInputProps {
   todos: Todos;
   left: number;
   top: number;
+  initialCursorPos?: number;
 }
 
 export const SuggestionInput = ({
@@ -28,8 +29,11 @@ export const SuggestionInput = ({
   todos,
   left,
   top,
+  initialCursorPos,
 }: SuggestionInputProps) => {
-  const [cursorPos, setCursorPos] = useState(value.length);
+  const [cursorPos, setCursorPos] = useState(
+    initialCursorPos !== undefined ? initialCursorPos : value.length,
+  );
   const [wordStartIndex, setWordStartIndex] = useState(0);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const ref = useRef(null);

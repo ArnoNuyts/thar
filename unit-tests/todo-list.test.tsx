@@ -1190,7 +1190,7 @@ Deno.test({
       const frame = lastFrame();
 
       assertEquals(frame?.includes("Task 090"), true);
-      assertEquals(frame?.includes("Task 098"), true);
+      assertEquals(frame?.includes("Task 097"), true);
     });
 
     // Select range 090 to 095

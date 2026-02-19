@@ -7,6 +7,7 @@ import { useSearch } from "../contexts/search-context.tsx";
 import { useFocusable } from "../hooks/useFocusable.ts";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { SECONDARY_COLOR } from "../constants.ts";
+import { COLORS } from "../theme/colors.ts";
 
 import { Todos } from "../logic/Todos.ts";
 
@@ -217,7 +218,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
       borderRight={false}
       borderBottom
     >
-      <Text color={isFocused ? SECONDARY_COLOR : "gray"}>{` / `}</Text>
+      <Text color={isFocused ? SECONDARY_COLOR : COLORS.muted}>{` / `}</Text>
       <Box flexGrow={1}>
         {isFocused
           ? (
@@ -230,12 +231,12 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
             />
           )
           : (
-            <Text color="white">
+            <Text color={COLORS.foreground}>
               {searchQuery}
             </Text>
           )}
       </Box>
-      <Text color={isFocused ? SECONDARY_COLOR : "gray"}>{` / `}</Text>
+      <Text color={isFocused ? SECONDARY_COLOR : COLORS.muted}>{` / `}</Text>
     </Box>
   );
 };

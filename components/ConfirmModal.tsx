@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { COLORS } from "../theme/colors.ts";
 import { Modal } from "./Modal.tsx";
 
 export interface ConfirmModalProps {
@@ -37,7 +38,7 @@ export const ConfirmModal = (
       <Box flexDirection="column" padding={1}>
         <Text>{message}</Text>
         <Box marginTop={1}>
-          <Text color="gray">Enter to continue, Esc to cancel</Text>
+          <Text color={COLORS.muted}>Enter to continue, Esc to cancel</Text>
         </Box>
       </Box>
     </Modal>

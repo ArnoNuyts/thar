@@ -17,6 +17,7 @@ import {
 import { Box, Text } from "ink";
 import { useInput } from "../hooks/useInput.ts";
 import { useEffect, useState } from "react";
+import { COLORS } from "../theme/colors.ts";
 
 interface CalendarProps {
   value: Date;
@@ -114,10 +115,10 @@ export const Calendar: React.FC<CalendarProps> = (
             return (
               <Box key={day.toISOString()} width={3} justifyContent="center">
                 <Text
-                  backgroundColor={isSelected ? "green" : undefined}
+                  backgroundColor={isSelected ? COLORS.success : undefined}
                   color={isSelected
-                    ? "black"
-                    : (isCurrentMonth ? "white" : "gray")}
+                    ? COLORS.inverseForeground
+                    : (isCurrentMonth ? COLORS.foreground : COLORS.muted)}
                   dimColor={!isCurrentMonth}
                 >
                   {format(day, "d").padStart(2, " ")}

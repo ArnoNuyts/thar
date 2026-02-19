@@ -1,2 +1,4 @@
-export const PRIMARY_COLOR = "yellow";
-export const SECONDARY_COLOR = "magenta";
+import { COLORS } from "./theme/colors.ts";
+
+export const PRIMARY_COLOR = COLORS.primary;
+export const SECONDARY_COLOR = COLORS.secondary;

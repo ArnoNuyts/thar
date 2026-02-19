@@ -47,14 +47,15 @@ Deno.test("EditTodoModal: should render and set focus", async () => {
     assertMatch(lastFrame() || "", /Initial Text/);
   });
 
-  stdin.write(" Updated");
+  stdin.write(" ");
+  stdin.write("Updated");
 
   await waitFor(() => {
     assertMatch(lastFrame() || "", /Initial Text Updated/);
   });
 
+  stdin.write("\r");
   await waitFor(() => {
-    stdin.write("\r");
     assertEquals(updatedText, "Initial Text Updated");
   });
 
