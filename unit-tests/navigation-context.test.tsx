@@ -133,6 +133,71 @@ Deno.test("should navigate up", {
   unmount();
 });
 
+Deno.test("should jump between contexts", {
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, async () => {
+  const todos = new Todos(
+    new Todo("Alpha @A"),
+    new Todo("Beta @A"),
+    new Todo("Charlie @B"),
+    new Todo("Delta @B"),
+    new Todo("Echo @C"),
+  );
+  let navContext: NavigationContextType = null!;
+
+  const { unmount } = render(
+    <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
+  );
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Alpha @A")
+  );
+
+  navContext.navigateContextDown();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Charlie @B")
+  );
+
+  navContext.navigateContextDown();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Echo @C")
+  );
+
+  navContext.navigateContextDown();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Echo @C")
+  );
+
+  navContext.navigateContextUp();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Charlie @B")
+  );
+
+  navContext.navigateDown();
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Delta @B")
+  );
+
+  navContext.navigateContextUp();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Alpha @A")
+  );
+
+  navContext.navigateContextUp();
+
+  await waitFor(() =>
+    assertEquals(navContext.useSelectedTodo()?.text, "Alpha @A")
+  );
+
+  unmount();
+});
+
 Deno.test(
   "should clamp navigation at bounds",
   { sanitizeResources: false, sanitizeOps: false },

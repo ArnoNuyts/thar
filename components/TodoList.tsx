@@ -180,6 +180,8 @@ export const TodoList = () => {
     listHeight,
     navigateUp,
     navigateDown,
+    navigateContextUp,
+    navigateContextDown,
     navigatePageUp,
     navigatePageDown,
     navigateHome,
@@ -212,6 +214,8 @@ export const TodoList = () => {
 
   // Handle global shortcuts (only when focused)
   useFocusedInput((input, key: ExtendedKey) => {
+    if (key.upArrow && key.ctrl) return navigateContextUp(key.shift);
+    if (key.downArrow && key.ctrl) return navigateContextDown(key.shift);
     if (key.upArrow) return navigateUp(key.shift);
     if (key.downArrow) return navigateDown(key.shift);
     if (key.pageUp) return navigatePageUp(key.shift);

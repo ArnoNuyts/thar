@@ -213,6 +213,8 @@ export interface NavigationContextType {
   listHeight: number;
   navigateUp: (shift?: boolean) => void;
   navigateDown: (shift?: boolean) => void;
+  navigateContextUp: (shift?: boolean) => void;
+  navigateContextDown: (shift?: boolean) => void;
   navigatePageUp: (shift?: boolean) => void;
   navigatePageDown: (shift?: boolean) => void;
   navigateHome: () => void;
@@ -553,45 +555,20 @@ export const NavigationProvider = (
     }));
   }, [indexes]);
 
-  const doNavigate = useCallback((step: number, shift: boolean = false) => {
-    setState((prev) => {
-      // 1. Calculate new selection
-      const todoIndex = indexes.findIndex(
-        (entry) =>
-          entry.type === IndexType.todo &&
-          entry.todo.id === prev.selection.cursorId,
-      );
-      const currentRow = todoIndex === -1 ? 0 : todoIndex;
-      const direction = step > 0 ? 1 : -1;
-      let newSelectedRow = clamp(currentRow + step, 0, indexes.length - 1);
-
-      // Skip context headers
-      while (indexes[newSelectedRow]?.type === IndexType.context) {
-        newSelectedRow += direction;
-        if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
-          if (direction === -1) {
-            const firstTodoIndex = indexes.findIndex((e) =>
-              e.type === IndexType.todo
-            );
-            newSelectedRow = firstTodoIndex !== -1
-              ? firstTodoIndex
-              : currentRow;
-          } else {
-            const lastTodoIndex = indexes.findLastIndex((e) =>
-              e.type === IndexType.todo
-            );
-            newSelectedRow = lastTodoIndex !== -1 ? lastTodoIndex : currentRow;
-          }
-          break;
-        }
+  const applySelectionChange = useCallback(
+    (
+      prev: NavState,
+      newSelectedRow: number,
+      shift: boolean,
+    ): NavState => {
+      if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
+        return prev;
       }
 
       const selectedEntry = indexes[newSelectedRow];
-      let newId = prev.selection.cursorId;
-      if (selectedEntry?.type === IndexType.todo) {
-        newId = selectedEntry.todo.id;
-      }
+      if (selectedEntry?.type !== IndexType.todo) return prev;
 
+      const newId = selectedEntry.todo.id;
       if (newId === undefined) return prev;
 
       let newAnchor = prev.selection.anchorId;
@@ -623,16 +600,12 @@ export const NavigationProvider = (
         newAnchor = undefined;
       }
 
-      // 2. Calculate New Scroll Offset directly
       const selectionRangeRows = (() => {
         if (newRange.size === 0) {
           return { min: newSelectedRow, max: newSelectedRow };
         }
         let min = newSelectedRow;
         let max = newSelectedRow;
-        // Optimization: we know the range is contiguous between anchor and newIndex
-        // but relying on indexes iteration is safer for now
-        // For now, let's use the explicit range calculation again to be safe
         indexes.forEach((entry, index) => {
           if (entry.type === IndexType.todo && newRange.has(entry.todo.id)) {
             min = Math.min(min, index);
@@ -650,11 +623,7 @@ export const NavigationProvider = (
         indexes.length,
       );
 
-      // 3. Update tracking metadata
-      let newLastHash = prev.lastHash;
-      if (selectedEntry?.type === IndexType.todo) {
-        newLastHash = selectedEntry.todo.getHash();
-      }
+      const newLastHash = selectedEntry.todo.getHash();
 
       return {
         selection: {
@@ -668,8 +637,110 @@ export const NavigationProvider = (
         lastIndex: newSelectedRow,
         lastHash: newLastHash,
       };
+    },
+    [indexes, listHeight],
+  );
+
+  const doNavigate = useCallback((step: number, shift: boolean = false) => {
+    setState((prev) => {
+      const todoIndex = indexes.findIndex(
+        (entry) =>
+          entry.type === IndexType.todo &&
+          entry.todo.id === prev.selection.cursorId,
+      );
+      const currentRow = todoIndex === -1 ? 0 : todoIndex;
+      const direction = step > 0 ? 1 : -1;
+      let newSelectedRow = clamp(currentRow + step, 0, indexes.length - 1);
+
+      // Skip context headers
+      while (indexes[newSelectedRow]?.type === IndexType.context) {
+        newSelectedRow += direction;
+        if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
+          if (direction === -1) {
+            const firstTodoIndex = indexes.findIndex((e) =>
+              e.type === IndexType.todo
+            );
+            newSelectedRow = firstTodoIndex !== -1
+              ? firstTodoIndex
+              : currentRow;
+          } else {
+            const lastTodoIndex = indexes.findLastIndex((e) =>
+              e.type === IndexType.todo
+            );
+            newSelectedRow = lastTodoIndex !== -1 ? lastTodoIndex : currentRow;
+          }
+          break;
+        }
+      }
+
+      return applySelectionChange(prev, newSelectedRow, shift);
     });
-  }, [indexes, listHeight]);
+  }, [applySelectionChange, indexes]);
+
+  const doNavigateContext = useCallback(
+    (direction: -1 | 1, shift: boolean = false) => {
+      setState((prev) => {
+        if (indexes.length === 0) return prev;
+
+        const todoIndex = indexes.findIndex(
+          (entry) =>
+            entry.type === IndexType.todo &&
+            entry.todo.id === prev.selection.cursorId,
+        );
+        const currentRow = todoIndex === -1 ? 0 : todoIndex;
+
+        let currentHeaderIndex = -1;
+        for (let i = currentRow; i >= 0; i--) {
+          if (indexes[i]?.type === IndexType.context) {
+            currentHeaderIndex = i;
+            break;
+          }
+        }
+
+        if (currentHeaderIndex === -1) return prev;
+
+        let targetHeaderIndex = -1;
+        if (direction === 1) {
+          for (let i = currentHeaderIndex + 1; i < indexes.length; i++) {
+            if (indexes[i]?.type === IndexType.context) {
+              targetHeaderIndex = i;
+              break;
+            }
+          }
+        } else {
+          for (let i = currentHeaderIndex - 1; i >= 0; i--) {
+            if (indexes[i]?.type === IndexType.context) {
+              targetHeaderIndex = i;
+              break;
+            }
+          }
+        }
+
+        if (targetHeaderIndex === -1) return prev;
+
+        let targetRow = -1;
+        for (
+          let i = targetHeaderIndex + 1;
+          i < indexes.length;
+          i++
+        ) {
+          const entry = indexes[i];
+          if (entry.type === IndexType.todo) {
+            targetRow = i;
+            break;
+          }
+          if (entry.type === IndexType.context) {
+            break;
+          }
+        }
+
+        if (targetRow === -1) return prev;
+
+        return applySelectionChange(prev, targetRow, shift);
+      });
+    },
+    [applySelectionChange, indexes],
+  );
 
   const navigateUp = useCallback((shift?: boolean) => doNavigate(-1, shift), [
     doNavigate,
@@ -677,6 +748,14 @@ export const NavigationProvider = (
   const navigateDown = useCallback((shift?: boolean) => doNavigate(1, shift), [
     doNavigate,
   ]);
+  const navigateContextUp = useCallback(
+    (shift?: boolean) => doNavigateContext(-1, shift),
+    [doNavigateContext],
+  );
+  const navigateContextDown = useCallback(
+    (shift?: boolean) => doNavigateContext(1, shift),
+    [doNavigateContext],
+  );
   const navigatePageUp = useCallback(
     (shift?: boolean) => doNavigate(-5, shift),
     [doNavigate],
@@ -729,6 +808,8 @@ export const NavigationProvider = (
       listHeight,
       navigateUp,
       navigateDown,
+      navigateContextUp,
+      navigateContextDown,
       navigatePageUp,
       navigatePageDown,
       navigateHome,
@@ -748,6 +829,8 @@ export const NavigationProvider = (
       listHeight,
       navigateUp,
       navigateDown,
+      navigateContextUp,
+      navigateContextDown,
       navigatePageUp,
       navigatePageDown,
       navigateHome,
