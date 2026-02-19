@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useStdin } from "ink";
+import { useStdout } from "ink";
 import { Buffer } from "node:buffer";
 
 /**
@@ -85,6 +86,31 @@ export type Key = {
   End key was pressed.
   */
   end: boolean;
+
+  /**
+  Mouse wheel was scrolled up.
+  */
+  mouseWheelUp: boolean;
+
+  /**
+  Mouse wheel was scrolled down.
+  */
+  mouseWheelDown: boolean;
+
+  /**
+  Left mouse button press event.
+  */
+  mouseLeft: boolean;
+
+  /**
+  1-based terminal column for mouse events.
+  */
+  mouseX?: number;
+
+  /**
+  1-based terminal row for mouse events.
+  */
+  mouseY?: number;
 };
 
 type Handler = (input: string, key: Key) => void;
@@ -96,6 +122,30 @@ type Options = {
   @default true
   */
   isActive?: boolean;
+  /**
+  Enable terminal mouse reporting while this hook is active.
+
+  @default false
+  */
+  enableMouse?: boolean;
+};
+
+type WritableTerminal = { write: (chunk: string) => unknown } | undefined;
+
+let mouseModeRefCount = 0;
+const enableMouseMode = (stdout: WritableTerminal) => {
+  if (!stdout) return;
+  if (mouseModeRefCount === 0) {
+    stdout.write("\x1b[?1000h\x1b[?1006h");
+  }
+  mouseModeRefCount++;
+};
+const disableMouseMode = (stdout: WritableTerminal) => {
+  if (!stdout || mouseModeRefCount === 0) return;
+  mouseModeRefCount--;
+  if (mouseModeRefCount === 0) {
+    stdout.write("\x1b[?1000l\x1b[?1006l");
+  }
 };
 
 const keyName: Record<string, string> = {
@@ -190,6 +240,7 @@ and fixes Backspace/Delete issues on Windows.
 */
 export const useInput = (inputHandler: Handler, options: Options = {}) => {
   const { stdin, setRawMode } = useStdin();
+  const { stdout } = useStdout();
   const handlerRef = useRef(inputHandler);
   handlerRef.current = inputHandler;
 
@@ -199,6 +250,9 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
     }
 
     setRawMode(true);
+    if (options.enableMouse) {
+      enableMouseMode(stdout);
+    }
 
     const handleData = (data: Buffer) => {
       const fullStr = data.toString();
@@ -227,6 +281,11 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
           meta: false,
           home: false,
           end: false,
+          mouseWheelUp: false,
+          mouseWheelDown: false,
+          mouseLeft: false,
+          mouseX: undefined,
+          mouseY: undefined,
         };
 
         let input = s;
@@ -265,6 +324,43 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
           if (s.startsWith("\x1b") && !s.startsWith("\x1b[")) {
             key.meta = true;
           }
+        } else if (s.startsWith("\x1b[<")) {
+          // SGR mouse mode: \x1b[<Cb;Cx;CyM
+          const match = /^\x1b\[<(\d+);(\d+);(\d+)([mM])$/.exec(s);
+          if (match) {
+            const buttonCode = Number(match[1]);
+            const baseCode = buttonCode & ~0b11100;
+            const x = Number(match[2]);
+            const y = Number(match[3]);
+            const eventType = match[4];
+            key.mouseX = x;
+            key.mouseY = y;
+            key.shift = (buttonCode & 0b00100) !== 0;
+            key.meta = (buttonCode & 0b01000) !== 0;
+            key.ctrl = (buttonCode & 0b10000) !== 0;
+            key.mouseWheelUp = baseCode === 64;
+            key.mouseWheelDown = baseCode === 65;
+            key.mouseLeft = eventType === "M" &&
+              (baseCode & 0b11) === 0 &&
+              (baseCode & 0b100000) === 0 &&
+              baseCode < 64;
+            // Mouse packets are control sequences, never text input.
+            input = "";
+          }
+        } else if (s.startsWith("\x1b[M") && s.length >= 6) {
+          // X10 mouse mode: \x1b[M Cb Cx Cy (3 bytes encoded with +32)
+          const buttonCode = s.charCodeAt(3) - 32;
+          const baseCode = buttonCode & ~0b11100;
+          key.mouseX = s.charCodeAt(4) - 32;
+          key.mouseY = s.charCodeAt(5) - 32;
+          key.shift = (buttonCode & 0b00100) !== 0;
+          key.meta = (buttonCode & 0b01000) !== 0;
+          key.ctrl = (buttonCode & 0b10000) !== 0;
+          key.mouseWheelUp = baseCode === 64;
+          key.mouseWheelDown = baseCode === 65;
+          key.mouseLeft = baseCode === 0;
+          // Mouse packets are control sequences, never text input.
+          input = "";
         } else if (s.length === 1 && s <= "\x1a") {
           // Ctrl + letter (A-Z)
           // s.charCodeAt(0) between 1 and 26
@@ -314,8 +410,8 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
             "\x1b[3;4~",
             "\x1b[3;6~",
             "\x1b[3;8~",
-            "\\x1b[3$",
-            "\\x1b[3@",
+            "\x1b[3$",
+            "\x1b[3@",
             "\x1b[Z", // Shift+Tab
           ].includes(s)
         ) {
@@ -345,8 +441,8 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
             "\x1b[3;6~",
             "\x1b[3;7~",
             "\x1b[3;8~",
-            "\\x1b[3^",
-            "\\x1b[3@",
+            "\x1b[3^",
+            "\x1b[3@",
             "\x17", // Ctrl+W
             "\x1b\x08", // Alt+Ctrl+H
             "\x04", // Ctrl+D
@@ -405,7 +501,10 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
 
     return () => {
       stdin.off("data", handleData);
+      if (options.enableMouse) {
+        disableMouseMode(stdout);
+      }
       setRawMode(false);
     };
-  }, [options.isActive, stdin, setRawMode]);
+  }, [options.isActive, options.enableMouse, stdin, setRawMode, stdout]);
 };
