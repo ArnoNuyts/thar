@@ -3,7 +3,7 @@ import { MouseEvent } from "../hooks/useMouseInput.ts";
 const MODAL_TOP_CHROME_ROWS = 3;
 const MODAL_BOTTOM_CHROME_ROWS = 2;
 
-const resolveModalWidth = (
+export const resolveModalWidth = (
   columns: number,
   width: number | string | undefined,
 ): number => {
@@ -19,11 +19,17 @@ const resolveModalWidth = (
   return Math.max(1, Math.floor(columns * 0.5));
 };
 
-export const getModalBodyRowFromClick = (
+export interface ModalBodyCell {
+  row: number;
+  column: number;
+  modalWidth: number;
+}
+
+export const getModalBodyCellFromClick = (
   event: MouseEvent,
   stdout: { rows?: number; columns?: number },
   options: { modalWidth?: number | string; bodyRows: number },
-): number | undefined => {
+): ModalBodyCell | undefined => {
   if (!event.leftClick || event.x === undefined || event.y === undefined) {
     return undefined;
   }
@@ -45,5 +51,17 @@ export const getModalBodyRowFromClick = (
   const rowInBody = event.y - firstBodyRow;
   if (rowInBody < 0 || rowInBody >= options.bodyRows) return undefined;
 
-  return rowInBody;
+  return {
+    row: rowInBody,
+    column: event.x - modalLeft,
+    modalWidth,
+  };
+};
+
+export const getModalBodyRowFromClick = (
+  event: MouseEvent,
+  stdout: { rows?: number; columns?: number },
+  options: { modalWidth?: number | string; bodyRows: number },
+): number | undefined => {
+  return getModalBodyCellFromClick(event, stdout, options)?.row;
 };
