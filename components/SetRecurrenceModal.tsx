@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Box, Text } from "ink";
-import TextInput from "ink-text-input";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { SECONDARY_COLOR } from "../constants.ts";
+import { ControlledTextInput } from "./ControlledTextInput.tsx";
 
 const BASE_OPTIONS = [
   { label: "Daily", value: "d", unit: "day(s)" },
@@ -30,6 +31,24 @@ export const SetRecurrenceModal = () => {
   const [step, setStep] = useState<"base" | "amount">("base");
   const [selectedBaseIndex, setSelectedBaseIndex] = useState(0);
   const [amount, setAmount] = useState("1");
+  const handleAmountChange = (value: string) => {
+    setAmount(value.replace(/\D+/g, ""));
+  };
+
+  const selectBaseOption = (index: number) => {
+    const selected = options[index];
+    if (!selected) return;
+
+    if (selected.value === "reset") {
+      if (selectedTodos.length > 0) {
+        updateTodos(selectedTodos, (t) => t.removeRecurrence());
+        closeModal();
+      }
+      return;
+    }
+
+    setStep("amount");
+  };
 
   const { isFocused } = useFocusedInput((_input, key) => {
     switch (true) {
@@ -40,14 +59,7 @@ export const SetRecurrenceModal = () => {
         closeModal();
         break;
       case step === "base" && key.return:
-        if (options[selectedBaseIndex].value === "reset") {
-          if (selectedTodos.length > 0) {
-            updateTodos(selectedTodos, (t) => t.removeRecurrence());
-            closeModal();
-          }
-        } else {
-          setStep("amount");
-        }
+        selectBaseOption(selectedBaseIndex);
         break;
       case step === "base" && key.upArrow:
         setSelectedBaseIndex((
@@ -70,6 +82,16 @@ export const SetRecurrenceModal = () => {
     }
   }, { autoFocus: true, tag: "set-recurrence-modal" });
 
+  useModalMouseList({
+    isActive: isFocused && step === "base",
+    modalWidth: "50%",
+    bodyRows: options.length,
+    onRowClick: (rowInItems) => {
+      setSelectedBaseIndex(rowInItems);
+      selectBaseOption(rowInItems);
+    },
+  });
+
   const getTitle = () => {
     if (step === "base") return "Set Recurrence Base";
     const baseLabel = BASE_OPTIONS[selectedBaseIndex].label;
@@ -89,7 +111,7 @@ export const SetRecurrenceModal = () => {
                   <Text color={SECONDARY_COLOR}>
                     {isSelected ? "» " : "  "}
                   </Text>
-                  <Text>{option.label}</Text>
+                  <Text wrap="truncate">{option.label}</Text>
                 </Box>
               );
             })}
@@ -98,11 +120,12 @@ export const SetRecurrenceModal = () => {
         : (
           <Box flexDirection="column" paddingX={1}>
             <Box>
-              <Text>Every</Text>
-              <TextInput
+              <Text>Every </Text>
+              <ControlledTextInput
                 focus={isFocused}
                 value={amount}
-                onChange={setAmount}
+                onChange={handleAmountChange}
+                showCursor
               />
               <Text>{BASE_OPTIONS[selectedBaseIndex].unit}</Text>
             </Box>

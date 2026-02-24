@@ -494,6 +494,12 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
           key.shift = true;
         }
 
+        const isMouseEvent = key.mouseWheelUp || key.mouseWheelDown ||
+          key.mouseLeft;
+        if (isMouseEvent && !options.enableMouse) {
+          continue;
+        }
+
         handlerRef.current(input, key);
       }
     };

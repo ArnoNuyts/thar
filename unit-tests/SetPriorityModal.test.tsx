@@ -111,3 +111,219 @@ Deno.test("SetPriorityModal: should update multiple todos", async () => {
 
   unmount();
 });
+
+Deno.test("SetPriorityModal: mouse click should select priority", async () => {
+  let updatedTodo: Todo | undefined;
+  const todo = new Todo("Mouse Todo");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("set-priority");
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "set-priority" && <SetPriorityModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ useSelectedTodos: () => [todo] }}
+      todoValue={{
+        updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todos[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+
+  let clicked = false;
+  for (let x = 1; x <= 120 && !clicked; x++) {
+    for (let y = 1; y <= 40; y++) {
+      stdin.write(`\x1b[<0;${x};${y}M`);
+      await new Promise((resolve) => setTimeout(resolve, 4));
+      if (updatedTodo?.priority) {
+        clicked = true;
+        break;
+      }
+    }
+  }
+
+  assertEquals(clicked, true);
+  unmount();
+});
+
+Deno.test("SetPriorityModal: integration click maps first row on odd height", async () => {
+  let updatedTodo: Todo | undefined;
+  const todo = new Todo("Odd Rows Todo A");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("set-priority");
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={25} width={101}>
+        {activeModal === "set-priority" && <SetPriorityModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ useSelectedTodos: () => [todo] }}
+      todoValue={{
+        updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todos[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+
+  // rows=25, columns=101, width=30, bodyRows=6 => first body row at y=11, x in [36..65]
+  stdin.write("\x1b[<0;36;11M");
+
+  await waitFor(() => {
+    assertEquals(updatedTodo?.priority, "A");
+  });
+
+  unmount();
+});
+
+Deno.test("SetPriorityModal: integration click maps last row on odd height", async () => {
+  let updatedTodo: Todo | undefined;
+  const todo = new Todo("Odd Rows Todo F");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("set-priority");
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={25} width={101}>
+        {activeModal === "set-priority" && <SetPriorityModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ useSelectedTodos: () => [todo] }}
+      todoValue={{
+        updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todos[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+
+  // rows=25, columns=101, width=30, bodyRows=6 => last body row at y=16 (index 5 => F)
+  stdin.write("\x1b[<0;36;16M");
+
+  await waitFor(() => {
+    assertEquals(updatedTodo?.priority, "F");
+  });
+
+  unmount();
+});
+
+Deno.test("SetPriorityModal: integration click maps first row on even height", async () => {
+  let updatedTodo: Todo | undefined;
+  const todo = new Todo("Even Rows Todo A");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("set-priority");
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={24} width={101}>
+        {activeModal === "set-priority" && <SetPriorityModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ useSelectedTodos: () => [todo] }}
+      todoValue={{
+        updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todos[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+
+  // rows=24, columns=101, width=30, bodyRows=6 => first body row at y=11
+  stdin.write("\x1b[<0;36;11M");
+
+  await waitFor(() => {
+    assertEquals(updatedTodo?.priority, "A");
+  });
+
+  unmount();
+});
+
+Deno.test("SetPriorityModal: integration click maps last row on even height", async () => {
+  let updatedTodo: Todo | undefined;
+  const todo = new Todo("Even Rows Todo F");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("set-priority");
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={24} width={101}>
+        {activeModal === "set-priority" && <SetPriorityModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ useSelectedTodos: () => [todo] }}
+      todoValue={{
+        updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todos[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+
+  // rows=24, columns=101, width=30, bodyRows=6 => last body row at y=16
+  stdin.write("\x1b[<0;36;16M");
+
+  await waitFor(() => {
+    assertEquals(updatedTodo?.priority, "F");
+  });
+
+  unmount();
+});
