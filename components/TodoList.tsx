@@ -414,7 +414,17 @@ export const TodoList = () => {
     focus();
     setSelectedTodoId(entry.todo.id, event.raw.shift);
     if (isDoubleClick && !event.raw.shift) {
-      toggleTodos([entry.todo]);
+      const checkboxStartColumn = 1 + (maxDigits + 2);
+      const checkboxEndColumn = checkboxStartColumn + 2;
+      const clickX = event.x ?? -1;
+      const clickedCheckbox = clickX >= checkboxStartColumn &&
+        clickX <= checkboxEndColumn;
+
+      if (clickedCheckbox) {
+        toggleTodos([entry.todo]);
+      } else {
+        openModal("edit-todo", entry.todo);
+      }
     }
 
     lastClickRef.current = { id: entry.todo.id, time: now };
