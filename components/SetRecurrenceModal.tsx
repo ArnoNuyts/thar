@@ -120,7 +120,7 @@ export const SetRecurrenceModal = () => {
         : (
           <Box flexDirection="column" paddingX={1}>
             <Box>
-              <Text>Every </Text>
+              <Text>Every</Text>
               <ControlledTextInput
                 focus={isFocused}
                 value={amount}
