@@ -216,10 +216,46 @@ Deno.test("TodoMenu: should open edit-todo modal", async () => {
   );
 
   await waitFor(() => assertEquals(focusCount >= 1, true));
+  await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
   stdin.write("e");
   await waitFor(() =>
     assertEquals(lastFrame()?.includes("Edit Todo Modal"), true)
   );
+  unmount();
+});
+
+Deno.test("TodoMenu: single mouse click should trigger menu item action", async () => {
+  const todo1 = new Todo("Todo 1");
+  let focusCount = 0;
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      navValue={{
+        useSelectedTodos: () => [todo1],
+        useSelectedTodo: () => todo1,
+      }}
+    >
+      <AppContentMock />
+      <ModalTrigger />
+      <FocusObserver onFocused={() => focusCount++} />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertEquals(focusCount >= 1, true));
+  await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
+
+  let openedEditModal = false;
+  for (let x = 1; x <= 120 && !openedEditModal; x++) {
+    for (let y = 1; y <= 40; y++) {
+      stdin.write(`\x1b[<0;${x};${y}M`);
+      await new Promise((resolve) => setTimeout(resolve, 4));
+      if (lastFrame()?.includes("Edit Todo Modal")) {
+        openedEditModal = true;
+        break;
+      }
+    }
+  }
+
+  assertEquals(openedEditModal, true);
   unmount();
 });
 

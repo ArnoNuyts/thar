@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useStdout } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
@@ -53,7 +54,11 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Paste", shortcut: "v", action: "paste" },
 ];
 
+const MENU_TOP_CHROME_ROWS = 3; // modal top padding + title row + body top padding
+const MENU_BOTTOM_CHROME_ROWS = 2; // body bottom padding + modal bottom padding
+
 export const TodoMenu = () => {
+  const { stdout } = useStdout();
   const { closeModal, openModal } = useModal();
   const {
     deleteTodos,
@@ -298,6 +303,32 @@ export const TodoMenu = () => {
     { autoFocus: true },
   );
 
+  useMouseInput((event) => {
+    if (!isFocused) return;
+    if (!event.leftClick || event.x === undefined || event.y === undefined) {
+      return;
+    }
+
+    const rows = stdout.rows;
+    const columns = stdout.columns;
+    if (!rows || !columns) return;
+
+    const modalWidth = Math.max(1, Math.floor(columns * 0.5));
+    const modalLeft = Math.floor((columns - modalWidth) / 2) + 1;
+    const modalRight = modalLeft + modalWidth - 1;
+    if (event.x < modalLeft || event.x > modalRight) return;
+
+    const modalHeight = MENU_TOP_CHROME_ROWS + MENU_ITEMS.length +
+      MENU_BOTTOM_CHROME_ROWS;
+    const modalTop = Math.floor((rows - modalHeight) / 2) + 1;
+    const firstItemRow = modalTop + MENU_TOP_CHROME_ROWS;
+    const rowInItems = event.y - firstItemRow;
+    if (rowInItems < 0 || rowInItems >= MENU_ITEMS.length) return;
+
+    setSelectedIndex(rowInItems);
+    handleAction(MENU_ITEMS[rowInItems].action);
+  }, { isActive: true });
+
   return (
     // @ts-ignore: children prop issue
     <Modal isFocused={isFocused} title="Todo menu">
@@ -312,7 +343,7 @@ export const TodoMenu = () => {
             >
               <Box>
                 <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
-                <Text>{item.label}</Text>
+                <Text wrap="truncate">{item.label}</Text>
               </Box>
               <Box>
                 <Text color={PRIMARY_COLOR}>{item.shortcut}</Text>
