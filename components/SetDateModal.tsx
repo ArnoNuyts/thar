@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
@@ -50,6 +51,50 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
 
   const title = type === "due" ? "Set Due Date" : "Set Threshold Date";
 
+  const applyOption = (index: number) => {
+    const selected = options[index];
+    if (!selected) return;
+
+    if (selected.value === "custom") {
+      setIsCustom(true);
+      return;
+    }
+
+    if (selected.value === "reset") {
+      if (selectedTodos.length > 0) {
+        updateTodos(
+          selectedTodos,
+          (t) => (type === "due" ? t.removeDue() : t.removeThreshold()),
+        );
+        closeModal();
+      }
+      return;
+    }
+
+    const date = new Date();
+    switch (selected.value) {
+      case "today":
+        break;
+      case "tomorrow":
+        date.setDate(date.getDate() + 1);
+        break;
+      case "next-week":
+        date.setDate(date.getDate() + 7);
+        break;
+      case "next-month":
+        date.setMonth(date.getMonth() + 1);
+        break;
+    }
+
+    if (selectedTodos.length > 0) {
+      updateTodos(
+        selectedTodos,
+        (t) => (type === "due" ? t.setDue(date) : t.setThreshold(date)),
+      );
+    }
+    closeModal();
+  };
+
   const { isFocused } = useFocusedInput((_input, key) => {
     if (key.escape) {
       if (isCustom) {
@@ -63,40 +108,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     if (isCustom) return; // Let Calendar handle input when custom is active
 
     if (key.return) {
-      const selected = options[selectedIndex];
-      if (selected.value === "custom") {
-        setIsCustom(true);
-      } else if (selected.value === "reset") {
-        if (selectedTodos.length > 0) {
-          updateTodos(
-            selectedTodos,
-            (t) => (type === "due" ? t.removeDue() : t.removeThreshold()),
-          );
-          closeModal();
-        }
-      } else {
-        const date = new Date();
-        switch (selected.value) {
-          case "today":
-            break;
-          case "tomorrow":
-            date.setDate(date.getDate() + 1);
-            break;
-          case "next-week":
-            date.setDate(date.getDate() + 7);
-            break;
-          case "next-month":
-            date.setMonth(date.getMonth() + 1);
-            break;
-        }
-        if (selectedTodos.length > 0) {
-          updateTodos(
-            selectedTodos,
-            (t) => (type === "due" ? t.setDue(date) : t.setThreshold(date)),
-          );
-        }
-        closeModal();
-      }
+      applyOption(selectedIndex);
       return;
     }
 
@@ -114,6 +126,16 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
       return;
     }
   }, { autoFocus: true, tag: "set-date-modal" });
+
+  useModalMouseList({
+    isActive: isFocused && !isCustom,
+    modalWidth: "50%",
+    bodyRows: options.length,
+    onRowClick: (rowInItems) => {
+      setSelectedIndex(rowInItems);
+      applyOption(rowInItems);
+    },
+  });
 
   const handleCustomSubmit = (date: Date) => {
     if (selectedTodos.length > 0) {
@@ -138,7 +160,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
                   <Text color={SECONDARY_COLOR}>
                     {isSelected ? "» " : "  "}
                   </Text>
-                  <Text>{option.label}</Text>
+                  <Text wrap="truncate">{option.label}</Text>
                 </Box>
               );
             })}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
@@ -63,6 +64,22 @@ export const SetPriorityModal = () => {
     }
   }, { autoFocus: true, tag: "set-priority-modal" });
 
+  useModalMouseList({
+    isActive: isFocused,
+    modalWidth: 30,
+    bodyRows: options.length,
+    onRowClick: (rowInItems) => {
+      setSelectedIndex(rowInItems);
+      if (selectedTodos.length === 0) return;
+      const selected = options[rowInItems];
+      const newPriority = selected === "Unset"
+        ? undefined
+        : selected as UpperCaseLetter;
+      updateTodos(selectedTodos, (t) => t.setPriority(newPriority));
+      closeModal();
+    },
+  });
+
   return (
     <Modal isFocused={isFocused} title="Set Priority" width={30}>
       <Box flexDirection="column" paddingX={1}>
@@ -71,7 +88,7 @@ export const SetPriorityModal = () => {
           return (
             <Box key={option}>
               <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
-              <Text>{option}</Text>
+              <Text wrap="truncate">{option}</Text>
             </Box>
           );
         })}

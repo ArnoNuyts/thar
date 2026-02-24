@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { COLORS } from "../theme/colors.ts";
 import { Modal } from "./Modal.tsx";
 
@@ -32,6 +33,16 @@ export const ConfirmModal = (
     },
     { autoFocus: true, tag: "confirm-modal" },
   );
+
+  useModalMouseList({
+    isActive: isFocused,
+    modalWidth: "50%",
+    bodyRows: 4,
+    onRowClick: () => {
+      onConfirm();
+      closeModal();
+    },
+  });
 
   return (
     <Modal isFocused={isFocused} title={title}>

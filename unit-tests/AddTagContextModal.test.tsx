@@ -261,3 +261,48 @@ Deno.test("AddTagContextModal: should cycle through 3 states for 'some' state", 
 
   unmount();
 });
+
+Deno.test("AddTagContextModal: mouse click should toggle existing project", async () => {
+  const t1 = new Todo("Todo 1 +work");
+  const t2 = new Todo("Todo 2 +work");
+  const todos = new Todos(t1, t2);
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("add-project");
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "add-project" && <AddTagContextModal type="project" />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      todoValue={{ todos }}
+      navValue={{ useSelectedTodos: () => [t1, t2] }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertMatch(lastFrame() || "", /\[x\].*work/));
+
+  let toggled = false;
+  for (let x = 1; x <= 120 && !toggled; x++) {
+    for (let y = 1; y <= 40; y++) {
+      stdin.write(`\x1b[<0;${x};${y}M`);
+      await new Promise((resolve) => setTimeout(resolve, 4));
+      if (/\[ \].*work/.test(lastFrame() || "")) {
+        toggled = true;
+        break;
+      }
+    }
+  }
+
+  assertEquals(toggled, true);
+  unmount();
+});
