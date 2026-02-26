@@ -721,12 +721,10 @@ export const NavigationProvider = (
 
       const newLastHash = selectedEntry.todo.getHash();
 
-      const selectionUnchanged =
-        prev.selection.cursorId === newId &&
+      const selectionUnchanged = prev.selection.cursorId === newId &&
         prev.selection.anchorId === newAnchor &&
         areSetsEqual(prev.selection.rangeIds, newRange);
-      const metadataUnchanged =
-        prev.offsetRow === newOffsetRow &&
+      const metadataUnchanged = prev.offsetRow === newOffsetRow &&
         prev.lastIndex === newSelectedRow &&
         prev.lastHash === newLastHash &&
         prev.prevIndexes === indexes;
