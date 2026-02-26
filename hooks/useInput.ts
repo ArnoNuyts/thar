@@ -103,6 +103,11 @@ export type Key = {
   mouseLeft: boolean;
 
   /**
+  Mouse moved event (no click/wheel).
+  */
+  mouseMove: boolean;
+
+  /**
   1-based terminal column for mouse events.
   */
   mouseX?: number;
@@ -136,7 +141,8 @@ let mouseModeRefCount = 0;
 const enableMouseMode = (stdout: WritableTerminal) => {
   if (!stdout) return;
   if (mouseModeRefCount === 0) {
-    stdout.write("\x1b[?1000h\x1b[?1006h");
+    // 1000: click tracking, 1003: all motion tracking, 1006: SGR coordinates.
+    stdout.write("\x1b[?1000h\x1b[?1003h\x1b[?1006h");
   }
   mouseModeRefCount++;
 };
@@ -144,7 +150,7 @@ const disableMouseMode = (stdout: WritableTerminal) => {
   if (!stdout || mouseModeRefCount === 0) return;
   mouseModeRefCount--;
   if (mouseModeRefCount === 0) {
-    stdout.write("\x1b[?1000l\x1b[?1006l");
+    stdout.write("\x1b[?1000l\x1b[?1003l\x1b[?1006l");
   }
 };
 
@@ -284,6 +290,7 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
           mouseWheelUp: false,
           mouseWheelDown: false,
           mouseLeft: false,
+          mouseMove: false,
           mouseX: undefined,
           mouseY: undefined,
         };
@@ -345,6 +352,8 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
               (baseCode & 0b11) === 0 &&
               (baseCode & 0b100000) === 0 &&
               baseCode < 64;
+            key.mouseMove = eventType === "M" && !key.mouseLeft &&
+              !key.mouseWheelUp && !key.mouseWheelDown;
             // Mouse packets are control sequences, never text input.
             input = "";
           }
@@ -360,6 +369,7 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
           key.mouseWheelUp = baseCode === 64;
           key.mouseWheelDown = baseCode === 65;
           key.mouseLeft = baseCode === 0;
+          key.mouseMove = baseCode === 3;
           // Mouse packets are control sequences, never text input.
           input = "";
         } else if (s.length === 1 && s <= "\x1a") {
@@ -495,7 +505,7 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
         }
 
         const isMouseEvent = key.mouseWheelUp || key.mouseWheelDown ||
-          key.mouseLeft;
+          key.mouseLeft || key.mouseMove;
         if (isMouseEvent && !options.enableMouse) {
           continue;
         }

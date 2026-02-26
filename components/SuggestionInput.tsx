@@ -12,6 +12,7 @@ interface SuggestionInputProps {
   onCursorChange: (cursor: number, value: string) => void;
   onSubmit?: (value: string) => void;
   onCancel: () => void;
+  onSuggestionsStateChange?: (hasSuggestions: boolean) => void;
   isFocused: boolean;
   todos: Todos;
   left: number;
@@ -25,6 +26,7 @@ export const SuggestionInput = ({
   onCursorChange,
   onSubmit,
   onCancel,
+  onSuggestionsStateChange,
   isFocused,
   todos,
   left,
@@ -61,6 +63,10 @@ export const SuggestionInput = ({
       allContexts: Array.from(contexts).sort(),
     };
   })();
+
+  useEffect(() => {
+    onSuggestionsStateChange?.(suggestions.length > 0);
+  }, [onSuggestionsStateChange, suggestions.length]);
 
   useEffect(() => {
     if (ref.current) {

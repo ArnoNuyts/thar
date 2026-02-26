@@ -144,8 +144,8 @@ Deno.test("ConfirmModal: Space should activate selected button", async () => {
   unmount();
 });
 
-Deno.test("ConfirmModal: mouse click left half should cancel", async () => {
-  let cancelled = false;
+Deno.test("ConfirmModal: mouse click left half should confirm", async () => {
+  let confirmed = false;
 
   const TestComponent = () => {
     const { openModal, activeModal, modalData } = useModal();
@@ -153,9 +153,8 @@ Deno.test("ConfirmModal: mouse click left half should cancel", async () => {
       openModal("confirm-modal", {
         title: "Mouse Cancel",
         message: "Click cancel",
-        onConfirm: () => {},
-        onCancel: () => {
-          cancelled = true;
+        onConfirm: () => {
+          confirmed = true;
         },
       });
     }, [openModal]);
@@ -183,15 +182,15 @@ Deno.test("ConfirmModal: mouse click left half should cancel", async () => {
   await waitFor(() => assertMatch(lastFrame() || "", /Mouse Cancel/));
 
   // rows=25, columns=101, width=50%, message lines=1 => button row y=15.
-  // Left half of modal body activates Cancel.
+  // Left half of modal body activates Confirm.
   stdin.write("\x1b[<0;40;15M");
 
-  await waitFor(() => assertEquals(cancelled, true));
+  await waitFor(() => assertEquals(confirmed, true));
   unmount();
 });
 
-Deno.test("ConfirmModal: mouse click right half should confirm", async () => {
-  let confirmed = false;
+Deno.test("ConfirmModal: mouse click right half should cancel", async () => {
+  let cancelled = false;
 
   const TestComponent = () => {
     const { openModal, activeModal, modalData } = useModal();
@@ -199,8 +198,9 @@ Deno.test("ConfirmModal: mouse click right half should confirm", async () => {
       openModal("confirm-modal", {
         title: "Mouse Confirm",
         message: "Click confirm",
-        onConfirm: () => {
-          confirmed = true;
+        onConfirm: () => {},
+        onCancel: () => {
+          cancelled = true;
         },
       });
     }, [openModal]);
@@ -212,6 +212,7 @@ Deno.test("ConfirmModal: mouse click right half should confirm", async () => {
             title={(modalData as { title: string }).title}
             message={(modalData as { message: string }).message}
             onConfirm={(modalData as { onConfirm: () => void }).onConfirm}
+            onCancel={(modalData as { onCancel: () => void }).onCancel}
           />
         )}
       </Box>
@@ -227,9 +228,9 @@ Deno.test("ConfirmModal: mouse click right half should confirm", async () => {
   await waitFor(() => assertMatch(lastFrame() || "", /Mouse Confirm/));
 
   // rows=25, columns=101, width=50%, message lines=1 => button row y=15.
-  // Right half of modal body activates Confirm.
+  // Right half of modal body activates Cancel.
   stdin.write("\x1b[<0;60;15M");
 
-  await waitFor(() => assertEquals(confirmed, true));
+  await waitFor(() => assertEquals(cancelled, true));
   unmount();
 });
