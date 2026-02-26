@@ -85,9 +85,8 @@ export const ConfirmModal = (
       return;
     }
 
-    const hoveredByColumn = bodyCell.column < Math.floor(bodyCell.modalWidth / 2)
-      ? 0
-      : 1;
+    const hoveredByColumn =
+      bodyCell.column < Math.floor(bodyCell.modalWidth / 2) ? 0 : 1;
 
     if (bodyCell.row !== buttonRowIndex) {
       return;
@@ -158,12 +157,14 @@ const getHoveredButtonIndex = (
   const confirmWidth = Array.from(confirmText).length;
   const cancelWidth = Array.from(cancelText).length;
 
-  const confirmStart = modalLeft + Math.floor((leftHalfWidth - confirmWidth) / 2);
+  const confirmStart = modalLeft +
+    Math.floor((leftHalfWidth - confirmWidth) / 2);
   const confirmEnd = confirmStart + confirmWidth - 1;
   if (x >= confirmStart && x <= confirmEnd) return 0;
 
   const cancelHalfLeft = modalLeft + leftHalfWidth;
-  const cancelStart = cancelHalfLeft + Math.floor((rightHalfWidth - cancelWidth) / 2);
+  const cancelStart = cancelHalfLeft +
+    Math.floor((rightHalfWidth - cancelWidth) / 2);
   const cancelEnd = cancelStart + cancelWidth - 1;
   if (x >= cancelStart && x <= cancelEnd) return 1;
 
