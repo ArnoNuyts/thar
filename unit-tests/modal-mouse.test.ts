@@ -6,6 +6,7 @@ const clickEvent = (x: number, y: number): MouseEvent => ({
   wheelUp: false,
   wheelDown: false,
   leftClick: true,
+  move: false,
   x,
   y,
   raw: {
@@ -28,6 +29,7 @@ const clickEvent = (x: number, y: number): MouseEvent => ({
     mouseWheelUp: false,
     mouseWheelDown: false,
     mouseLeft: true,
+    mouseMove: false,
     mouseX: x,
     mouseY: y,
   },

@@ -5,6 +5,7 @@ export type MouseEvent = {
   wheelUp: boolean;
   wheelDown: boolean;
   leftClick: boolean;
+  move: boolean;
   x?: number;
   y?: number;
   raw: Key;
@@ -23,13 +24,14 @@ export const useMouseInput = (
 
   useInput((_input, key) => {
     const hasMouseEvent = key.mouseWheelUp || key.mouseWheelDown ||
-      key.mouseLeft;
+      key.mouseLeft || key.mouseMove;
     if (!hasMouseEvent) return;
 
     handlerRef.current({
       wheelUp: key.mouseWheelUp,
       wheelDown: key.mouseWheelDown,
       leftClick: key.mouseLeft,
+      move: key.mouseMove,
       x: key.mouseX,
       y: key.mouseY,
       raw: key,

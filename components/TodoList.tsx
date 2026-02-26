@@ -437,7 +437,7 @@ export const TodoList = () => {
 
   return (
     <Box
-      flexGrow={1}
+      flexGrow={0}
       height={listHeight}
       backgroundColor={COLORS.background}
     >

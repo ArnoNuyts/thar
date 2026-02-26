@@ -16,6 +16,7 @@ export interface ButtonProps {
   label: string;
   onPress?: () => void;
   isSelected?: boolean;
+  isHovered?: boolean;
 }
 
 interface ButtonGroupProps {
@@ -24,6 +25,7 @@ interface ButtonGroupProps {
   selectedIndex?: number;
   defaultSelectedIndex?: number;
   onSelectedIndexChange?: (index: number) => void;
+  hoveredIndex?: number | null;
   spacing?: number;
   equalWidth?: boolean;
 }
@@ -32,13 +34,15 @@ type ButtonComponent = ((props: ButtonProps) => ReactElement) & {
   Group: (props: ButtonGroupProps) => ReactElement;
 };
 
-const ButtonBase = ({ label, isSelected = false }: ButtonProps) => (
+const ButtonBase = (
+  { label, isSelected = false, isHovered = false }: ButtonProps,
+) => (
   <Text
-    bold={isSelected}
-    backgroundColor={isSelected ? COLORS.focusBackground : undefined}
-    color={isSelected ? COLORS.textOnHighlight : COLORS.foreground}
+    bold={isSelected || isHovered}
+    color={isHovered ? COLORS.warning : isSelected ? "#FFFFFF" : COLORS.muted}
+    dimColor={!isSelected && !isHovered}
   >
-    {`[ ${label} ]`}
+    {(isSelected || isHovered) ? `« ${label} »` : `‹ ${label} ›`}
   </Text>
 );
 
@@ -48,6 +52,7 @@ const ButtonGroup = ({
   selectedIndex,
   defaultSelectedIndex = 0,
   onSelectedIndexChange,
+  hoveredIndex,
   spacing = 2,
   equalWidth = false,
 }: ButtonGroupProps) => {
@@ -117,7 +122,8 @@ const ButtonGroup = ({
     }
 
     if (key.return || input === " ") {
-      activateIndex(activeIndex);
+      const candidate = hoveredIndex ?? activeIndex;
+      activateIndex(candidate);
     }
   }, { isActive: isFocused });
 
@@ -130,7 +136,10 @@ const ButtonGroup = ({
           flexGrow={equalWidth ? 1 : 0}
           justifyContent={equalWidth ? "center" : undefined}
         >
-          {cloneElement(button, { isSelected: index === activeIndex })}
+          {cloneElement(button, {
+            isSelected: index === activeIndex,
+            isHovered: hoveredIndex === index,
+          })}
         </Box>
       ))}
     </Box>
