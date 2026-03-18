@@ -7,6 +7,7 @@ import {
   getModalBodyCellFromClick,
   resolveModalWidth,
 } from "../utils/modal-mouse.ts";
+import { getTerminalSize } from "../utils/terminal-size.ts";
 import { Modal } from "./Modal.tsx";
 import { Button } from "./Button.tsx";
 
@@ -26,6 +27,9 @@ export const ConfirmModal = (
   const { stdout } = useStdout();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [layoutSize, setLayoutSize] = useState<
+    { rows?: number; columns?: number }
+  >({});
 
   const handleCancel = () => {
     onCancel?.();
@@ -38,12 +42,12 @@ export const ConfirmModal = (
   };
 
   const messageLineCount = useMemo(() => {
-    const columns = stdout?.columns ?? 80;
+    const columns = getTerminalSize(stdout).columns;
     const modalWidth = resolveModalWidth(columns, "50%");
     // Modal body has a single left border plus horizontal padding on both sides.
     const contentWidth = Math.max(1, modalWidth - 3);
     return countWrappedLines(message, contentWidth);
-  }, [message, stdout?.columns]);
+  }, [message, stdout]);
 
   const buttonRowIndex = messageLineCount + 1;
   const bodyRows = messageLineCount + 2;
@@ -60,12 +64,13 @@ export const ConfirmModal = (
 
   useMouseInput((event) => {
     if (!isFocused) return;
+    const terminalSize = getTerminalSize(stdout, layoutSize);
 
     if (event.move) {
       const hovered = getHoveredButtonIndex(event.x, event.y, {
-        rows: stdout?.rows ?? 24,
-        columns: stdout?.columns ?? 80,
-        modalWidth: resolveModalWidth(stdout?.columns ?? 80, "50%"),
+        rows: terminalSize.rows,
+        columns: terminalSize.columns,
+        modalWidth: resolveModalWidth(terminalSize.columns, "50%"),
         bodyRows,
         buttonRowIndex,
         labels: ["Confirm", "Cancel"],
@@ -76,7 +81,7 @@ export const ConfirmModal = (
       return;
     }
 
-    const bodyCell = getModalBodyCellFromClick(event, stdout, {
+    const bodyCell = getModalBodyCellFromClick(event, terminalSize, {
       modalWidth: "50%",
       bodyRows,
     });
@@ -105,7 +110,11 @@ export const ConfirmModal = (
   }, { isActive: isFocused });
 
   return (
-    <Modal isFocused={isFocused} title={title}>
+    <Modal
+      isFocused={isFocused}
+      title={title}
+      onLayoutSizeChange={setLayoutSize}
+    >
       <Box flexDirection="column">
         <Text>{message}</Text>
         <Box marginTop={1}>

@@ -25,6 +25,9 @@ export const SetPriorityModal = () => {
   const selectedTodos = useSelectedTodos();
   const todo = selectedTodos[0]; // Reference todo for initial values
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [layoutSize, setLayoutSize] = useState<
+    { rows?: number; columns?: number }
+  >({});
 
   const options = [...PRIORITIES];
   if (todo?.priority) {
@@ -68,6 +71,7 @@ export const SetPriorityModal = () => {
     isActive: isFocused,
     modalWidth: 30,
     bodyRows: options.length,
+    terminalSize: layoutSize,
     onRowClick: (rowInItems) => {
       setSelectedIndex(rowInItems);
       if (selectedTodos.length === 0) return;
@@ -81,7 +85,12 @@ export const SetPriorityModal = () => {
   });
 
   return (
-    <Modal isFocused={isFocused} title="Set Priority" width={30}>
+    <Modal
+      isFocused={isFocused}
+      title="Set Priority"
+      width={30}
+      onLayoutSizeChange={setLayoutSize}
+    >
       <Box flexDirection="column" paddingX={1}>
         {options.map((option, index) => {
           const isSelected = index === selectedIndex;

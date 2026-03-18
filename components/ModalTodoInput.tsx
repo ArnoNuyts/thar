@@ -8,6 +8,7 @@ import { SuggestionInput } from "./SuggestionInput.tsx";
 import { SECONDARY_COLOR } from "../constants.ts";
 import { Button } from "./Button.tsx";
 import { resolveModalWidth } from "../utils/modal-mouse.ts";
+import { getTerminalSize } from "../utils/terminal-size.ts";
 
 import { Todos } from "../logic/Todos.ts";
 
@@ -62,8 +63,9 @@ export const ModalTodoInput = ({
     tag: tag || (mode === "create" ? "create-todo-input" : "edit-todo-input"),
   });
   const { stdout } = useStdout();
-  const terminalWidth = stdout?.columns || 80;
-  const terminalHeight = stdout?.rows || 24;
+  const { columns: terminalWidth, rows: terminalHeight } = getTerminalSize(
+    stdout,
+  );
 
   const inputRef = useRef(null);
   const [inputDimensions, setInputDimensions] = useState({

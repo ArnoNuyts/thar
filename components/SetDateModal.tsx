@@ -30,6 +30,9 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
   const todo = selectedTodos[0]; // Reference todo for initial values
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isCustom, setIsCustom] = useState(false);
+  const [layoutSize, setLayoutSize] = useState<
+    { rows?: number; columns?: number }
+  >({});
   const [customDate, setCustomDate] = useState(() => {
     if (!todo) return new Date();
     const dateStr = type === "due" ? todo.tags.due : todo.tags.t;
@@ -131,6 +134,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     isActive: isFocused && !isCustom,
     modalWidth: "50%",
     bodyRows: options.length,
+    terminalSize: layoutSize,
     onRowClick: (rowInItems) => {
       setSelectedIndex(rowInItems);
       applyOption(rowInItems);
@@ -149,7 +153,12 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
 
   return (
     // @ts-ignore: children prop issue
-    <Modal isFocused={isFocused} title={title} width={isCustom ? 30 : "50%"}>
+    <Modal
+      isFocused={isFocused}
+      title={title}
+      width={isCustom ? 30 : "50%"}
+      onLayoutSizeChange={setLayoutSize}
+    >
       {!isCustom
         ? (
           <Box flexDirection="column" paddingX={1}>
