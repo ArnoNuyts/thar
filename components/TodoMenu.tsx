@@ -75,6 +75,9 @@ export const TodoMenu = () => {
   const todo = useSelectedTodo();
   const selectedTodos = useSelectedTodos();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [layoutSize, setLayoutSize] = useState<
+    { rows?: number; columns?: number }
+  >({});
 
   const handleAction = async (action: MenuAction) => {
     switch (action) {
@@ -303,6 +306,7 @@ export const TodoMenu = () => {
     isActive: isFocused,
     modalWidth: "50%",
     bodyRows: MENU_ITEMS.length,
+    terminalSize: layoutSize,
     onRowClick: (rowInItems) => {
       setSelectedIndex(rowInItems);
       handleAction(MENU_ITEMS[rowInItems].action);
@@ -311,7 +315,11 @@ export const TodoMenu = () => {
 
   return (
     // @ts-ignore: children prop issue
-    <Modal isFocused={isFocused} title="Todo menu">
+    <Modal
+      isFocused={isFocused}
+      title="Todo menu"
+      onLayoutSizeChange={setLayoutSize}
+    >
       <Box flexDirection="column">
         {MENU_ITEMS.map((item, index) => {
           const isSelected = index === selectedIndex;

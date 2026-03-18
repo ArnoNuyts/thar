@@ -7,6 +7,7 @@ import {
   ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { COLORS } from "../theme/colors.ts";
@@ -69,6 +70,8 @@ const ButtonGroup = ({
   const [internalIndex, setInternalIndex] = useState(defaultSelectedIndex);
   const isControlled = selectedIndex !== undefined;
   const activeIndex = isControlled ? selectedIndex : internalIndex;
+  const activeIndexRef = useRef(activeIndex);
+  activeIndexRef.current = activeIndex;
 
   useEffect(() => {
     if (buttonChildren.length === 0) return;
@@ -87,6 +90,7 @@ const ButtonGroup = ({
     if (buttonChildren.length === 0) return;
     const max = buttonChildren.length - 1;
     const bounded = Math.max(0, Math.min(max, next));
+    activeIndexRef.current = bounded;
     if (!isControlled) setInternalIndex(bounded);
     onSelectedIndexChange?.(bounded);
   };
@@ -122,7 +126,7 @@ const ButtonGroup = ({
     }
 
     if (key.return || input === " ") {
-      const candidate = hoveredIndex ?? activeIndex;
+      const candidate = hoveredIndex ?? activeIndexRef.current;
       activateIndex(candidate);
     }
   }, { isActive: isFocused });

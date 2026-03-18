@@ -1,4 +1,4 @@
-import { Box, Text, useApp } from "ink";
+import { Box, Text, useApp, useStdout } from "ink";
 import { Fragment, memo } from "react";
 import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
@@ -7,6 +7,7 @@ import { useSearch } from "../contexts/search-context.tsx";
 import { navigationSelectedTodoRef } from "../contexts/navigation-context.tsx";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { COLORS } from "../theme/colors.ts";
+import { getTerminalRows } from "../utils/terminal-size.ts";
 
 const ACTION_ITEMS = [
   { key: "x", text: "Menu" },
@@ -18,6 +19,7 @@ const ACTION_ITEMS = [
 
 export const ActionBar = memo(() => {
   const { exit } = useApp();
+  const { stdout } = useStdout();
   const { toasterMessage } = useToaster();
   const { openModal, activeModal } = useModal();
   const { focusRef } = useSearch();
@@ -28,7 +30,7 @@ export const ActionBar = memo(() => {
     }
     if (activeModal) return;
 
-    const contentRow = Deno.consoleSize().rows;
+    const contentRow = getTerminalRows(stdout);
     if (event.y !== contentRow) return;
 
     let x = 1;

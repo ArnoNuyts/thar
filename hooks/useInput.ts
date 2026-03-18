@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useStdin } from "ink";
 import { useStdout } from "ink";
 import { Buffer } from "node:buffer";
@@ -135,11 +135,17 @@ type Options = {
   enableMouse?: boolean;
 };
 
-type WritableTerminal = { write: (chunk: string) => unknown } | undefined;
+type WritableTerminal = {
+  write: (chunk: string) => unknown;
+  isTTY?: boolean;
+} | undefined;
 
 let mouseModeRefCount = 0;
+const canToggleMouseMode = (stdout: WritableTerminal) => stdout?.isTTY === true;
+
 const enableMouseMode = (stdout: WritableTerminal) => {
   if (!stdout) return;
+  if (!canToggleMouseMode(stdout)) return;
   if (mouseModeRefCount === 0) {
     // 1000: click tracking, 1003: all motion tracking, 1006: SGR coordinates.
     stdout.write("\x1b[?1000h\x1b[?1003h\x1b[?1006h");
@@ -148,6 +154,7 @@ const enableMouseMode = (stdout: WritableTerminal) => {
 };
 const disableMouseMode = (stdout: WritableTerminal) => {
   if (!stdout || mouseModeRefCount === 0) return;
+  if (!canToggleMouseMode(stdout)) return;
   mouseModeRefCount--;
   if (mouseModeRefCount === 0) {
     stdout.write("\x1b[?1000l\x1b[?1003l\x1b[?1006l");
@@ -250,7 +257,7 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
   const handlerRef = useRef(inputHandler);
   handlerRef.current = inputHandler;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (options.isActive === false || !stdin) {
       return;
     }
@@ -262,10 +269,7 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
 
     const handleData = (data: Buffer) => {
       const fullStr = data.toString();
-
-      // Split into parts to handle multiple escape sequences or merged inputs
-      // deno-lint-ignore no-control-regex
-      const parts = fullStr.split(/(?=\x1b)/);
+      const parts = splitInputSequences(fullStr);
 
       for (const s of parts) {
         if (s.length === 0) continue;
@@ -525,3 +529,70 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
     };
   }, [options.isActive, options.enableMouse, stdin, setRawMode, stdout]);
 };
+
+const splitInputSequences = (input: string): string[] => {
+  const parts: string[] = [];
+  let index = 0;
+
+  while (index < input.length) {
+    if (input[index] === "\x1b") {
+      if (input.startsWith("\x1b[<", index)) {
+        const suffixIndex = input.slice(index).search(/[mM]/);
+        if (suffixIndex >= 0) {
+          const end = index + suffixIndex + 1;
+          parts.push(input.slice(index, end));
+          index = end;
+          continue;
+        }
+      }
+
+      if (input.startsWith("\x1b[M", index) && index + 6 <= input.length) {
+        parts.push(input.slice(index, index + 6));
+        index += 6;
+        continue;
+      }
+
+      const knownEscapeSequence = ESCAPE_SEQUENCES.find((sequence) =>
+        input.startsWith(sequence, index)
+      );
+      if (knownEscapeSequence) {
+        parts.push(knownEscapeSequence);
+        index += knownEscapeSequence.length;
+        continue;
+      }
+
+      if (index + 1 < input.length && input[index + 1] !== "[") {
+        parts.push(input.slice(index, index + 2));
+        index += 2;
+        continue;
+      }
+
+      parts.push("\x1b");
+      index += 1;
+      continue;
+    }
+
+    let end = index;
+    while (end < input.length && input[end] !== "\x1b") {
+      end++;
+    }
+
+    const chunk = input.slice(index, end);
+    const hasPrintableContent = Array.from(chunk).some((char) =>
+      !SIMPLE_CONTROL_INPUTS.has(char)
+    );
+    if (hasPrintableContent) {
+      parts.push(chunk);
+    } else {
+      parts.push(...Array.from(chunk));
+    }
+    index = end;
+  }
+
+  return parts;
+};
+
+const SIMPLE_CONTROL_INPUTS = new Set(["\r", "\n", "\t", "\x08", "\x7f"]);
+const ESCAPE_SEQUENCES = Object.keys(keyName).sort((a, b) =>
+  b.length - a.length
+);

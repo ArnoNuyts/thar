@@ -31,6 +31,9 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
   const [pendingChanges, setPendingChanges] = useState<
     Map<string, "add" | "remove">
   >(new Map());
+  const [layoutSize, setLayoutSize] = useState<
+    { rows?: number; columns?: number }
+  >({});
 
   const prefix = type === "project" ? "+" : "@";
   const title = type === "project" ? "Modify Projects" : "Modify Contexts";
@@ -227,6 +230,7 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
     isActive: isFocused,
     modalWidth: 40,
     bodyRows,
+    terminalSize: layoutSize,
     onRowClick: (rowInBody) => {
       if (rowInBody === 0) {
         setSelectedIndex(0);
@@ -246,7 +250,12 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
   });
 
   return (
-    <Modal isFocused={isFocused} title={title} width={40}>
+    <Modal
+      isFocused={isFocused}
+      title={title}
+      width={40}
+      onLayoutSizeChange={setLayoutSize}
+    >
       <Box flexDirection="column" paddingX={1}>
         {/* Custom input option */}
         <Box>
