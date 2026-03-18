@@ -149,19 +149,11 @@ Deno.test("SetRecurrenceModal: mouse click should select recurrence base", async
 
   await waitFor(() => assertMatch(lastFrame() || "", /Set Recurrence Base/));
 
-  let openedAmountStep = false;
-  for (let x = 1; x <= 120 && !openedAmountStep; x++) {
-    for (let y = 1; y <= 40; y++) {
-      stdin.write(`\x1b[<0;${x};${y}M`);
-      await new Promise((resolve) => setTimeout(resolve, 4));
-      if ((lastFrame() || "").includes("Set Recurrence Interval")) {
-        openedAmountStep = true;
-        break;
-      }
-    }
-  }
-
-  assertEquals(openedAmountStep, true);
+  // rows=20, columns=80, width=40, bodyRows=4 => first body row at y=10, x in [21..60]
+  stdin.write("\x1b[<0;40;10M");
+  await waitFor(() =>
+    assertEquals((lastFrame() || "").includes("Set Recurrence Interval"), true)
+  );
   unmount();
 });
 

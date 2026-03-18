@@ -144,19 +144,9 @@ Deno.test("SetPriorityModal: mouse click should select priority", async () => {
 
   await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
 
-  let clicked = false;
-  for (let x = 1; x <= 120 && !clicked; x++) {
-    for (let y = 1; y <= 40; y++) {
-      stdin.write(`\x1b[<0;${x};${y}M`);
-      await new Promise((resolve) => setTimeout(resolve, 4));
-      if (updatedTodo?.priority) {
-        clicked = true;
-        break;
-      }
-    }
-  }
-
-  assertEquals(clicked, true);
+  // rows=20, columns=80, width=30, bodyRows=6 => first body row at y=9, x in [26..55]
+  stdin.write("\x1b[<0;40;9M");
+  await waitFor(() => assertEquals(updatedTodo?.priority, "A"));
   unmount();
 });
 
