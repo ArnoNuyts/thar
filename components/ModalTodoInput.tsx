@@ -12,7 +12,8 @@ import { getTerminalSize } from "../utils/terminal-size.ts";
 
 import { Todos } from "../logic/Todos.ts";
 
-const HELP_TEXT = "Tab/Shift+Tab = toggle action, Enter = selected action, Esc = cancel";
+const HELP_TEXT =
+  "Tab/Shift+Tab = toggle action, Enter = selected action, Esc = cancel";
 
 interface ModalTodoInputProps {
   mode: "create" | "edit";
