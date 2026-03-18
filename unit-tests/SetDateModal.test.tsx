@@ -196,18 +196,8 @@ Deno.test("SetDateModal: mouse click should select an option", async () => {
 
   await waitFor(() => assertMatch(lastFrame() || "", /Set Due Date/));
 
-  let clicked = false;
-  for (let x = 1; x <= 120 && !clicked; x++) {
-    for (let y = 1; y <= 40; y++) {
-      stdin.write(`\x1b[<0;${x};${y}M`);
-      await new Promise((resolve) => setTimeout(resolve, 4));
-      if (updatedTodo?.tags.due) {
-        clicked = true;
-        break;
-      }
-    }
-  }
-
-  assertEquals(clicked, true);
+  // rows=20, columns=80, width=40, bodyRows=5 => first body row at y=9, x in [21..60]
+  stdin.write("\x1b[<0;40;9M");
+  await waitFor(() => assertEquals(typeof updatedTodo?.tags.due, "string"));
   unmount();
 });

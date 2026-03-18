@@ -291,18 +291,9 @@ Deno.test("AddTagContextModal: mouse click should toggle existing project", asyn
 
   await waitFor(() => assertMatch(lastFrame() || "", /\[x\].*work/));
 
-  let toggled = false;
-  for (let x = 1; x <= 120 && !toggled; x++) {
-    for (let y = 1; y <= 40; y++) {
-      stdin.write(`\x1b[<0;${x};${y}M`);
-      await new Promise((resolve) => setTimeout(resolve, 4));
-      if (/\[ \].*work/.test(lastFrame() || "")) {
-        toggled = true;
-        break;
-      }
-    }
-  }
+  // rows=20, columns=80, width=40, bodyRows=3 => first tag row is y=12, x in [21..60]
+  stdin.write("\x1b[<0;40;12M");
+  await waitFor(() => assertMatch(lastFrame() || "", /\[ \].*work/));
 
-  assertEquals(toggled, true);
   unmount();
 });
