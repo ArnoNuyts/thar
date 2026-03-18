@@ -245,7 +245,9 @@ Deno.test("TodoMenu: single mouse click should trigger menu item action", async 
 
   // Frame snapshot shows the "Edit" row sitting at y=6 when the menu is open (x=40 is within the modal body).
   stdin.write("\x1b[<0;40;6M");
-  await waitFor(() => assertEquals(lastFrame()?.includes("Edit Todo Modal"), true));
+  await waitFor(() =>
+    assertEquals(lastFrame()?.includes("Edit Todo Modal"), true)
+  );
   unmount();
 });
 
