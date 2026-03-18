@@ -1166,9 +1166,10 @@ Deno.test({
       </TestWrapper>,
     );
 
-    // One todo => maxDigits=1 => checkbox columns are x=4..6, first row y=1.
-    stdin.write("\x1b[<0;4;1M");
-    stdin.write("\x1b[<0;4;1M");
+    // One uncategorized todo renders under the "None" header.
+    // maxDigits=1 => checkbox columns are x=4..6, todo row y=2.
+    stdin.write("\x1b[<0;4;2M");
+    stdin.write("\x1b[<0;4;2M");
 
     await waitFor(() => {
       assertEquals(capturedTodos[0].isDone(), true);
@@ -1195,9 +1196,9 @@ Deno.test({
       </TestWrapper>,
     );
 
-    // Click outside checkbox zone on same row.
-    stdin.write("\x1b[<0;10;1M");
-    stdin.write("\x1b[<0;10;1M");
+    // Click outside checkbox zone on the todo row below the "None" header.
+    stdin.write("\x1b[<0;10;2M");
+    stdin.write("\x1b[<0;10;2M");
 
     await waitFor(() => {
       assertEquals(lastFrame()?.includes("Edit Todo Modal"), true);

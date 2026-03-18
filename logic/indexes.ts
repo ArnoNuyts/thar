@@ -28,7 +28,6 @@ export const createIndexes = (todos: Todos): IndexEntry[] => {
 
     const currentContext = todo?.contexts?.values().next().value;
     const prevContext = prevTodo?.contexts?.values().next().value;
-
     if (prevTodo === null || currentContext != prevContext) {
       if (currHeader) {
         currHeader.todoCount = currHeaderTodoCounter;
