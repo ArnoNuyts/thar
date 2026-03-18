@@ -100,6 +100,7 @@ const AppContentMock = ({ todos = new Todos() }: { todos?: Todos }) => {
         />
       )}
       {activeModal === "create-todo" && <Text>Create Todo Modal</Text>}
+      {activeModal === "edit-todo" && <Text>Edit Todo Modal</Text>}
       {activeModal === "set-due-date" && <SetDateModal type="due" />}
       {activeModal === "set-threshold-date" &&
         <SetDateModal type="threshold" />}
@@ -1143,6 +1144,66 @@ Deno.test({
     await waitFor(() => {
       assertEquals(lastFrame()?.includes("Task 099"), true);
     }, { timeout: 2000 });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: double click on checkbox toggles todo",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todo = new Todo("Toggle by bracket");
+    let capturedTodos: Todo[] = [todo];
+
+    const { unmount, stdin } = render(
+      <TestWrapper
+        initialTodos={[todo]}
+        onTodosChange={(todos) => capturedTodos = todos}
+      >
+        <AppContentMock todos={new Todos(todo)} />
+      </TestWrapper>,
+    );
+
+    // One uncategorized todo renders under the "None" header.
+    // maxDigits=1 => checkbox columns are x=4..6, todo row y=2.
+    stdin.write("\x1b[<0;4;2M");
+    stdin.write("\x1b[<0;4;2M");
+
+    await waitFor(() => {
+      assertEquals(capturedTodos[0].isDone(), true);
+    });
+
+    unmount();
+  },
+});
+
+Deno.test({
+  name: "TodoList: double click on text opens edit modal",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const todo = new Todo("Edit by text");
+    let capturedTodos: Todo[] = [todo];
+
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper
+        initialTodos={[todo]}
+        onTodosChange={(todos) => capturedTodos = todos}
+      >
+        <AppContentMock todos={new Todos(todo)} />
+      </TestWrapper>,
+    );
+
+    // Click outside checkbox zone on the todo row below the "None" header.
+    stdin.write("\x1b[<0;10;2M");
+    stdin.write("\x1b[<0;10;2M");
+
+    await waitFor(() => {
+      assertEquals(lastFrame()?.includes("Edit Todo Modal"), true);
+      assertEquals(capturedTodos[0].isDone(), false);
+    });
 
     unmount();
   },

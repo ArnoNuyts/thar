@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useLayoutEffect, useMemo } from "react";
 import { useFocusManager } from "../contexts/focus-context.tsx";
 
 export interface UseFocusableOptions {
@@ -12,7 +12,7 @@ export const useFocusable = (opts: UseFocusableOptions = {}) => {
 
   const autoFocus = opts.autoFocus ?? false;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (autoFocus) requestFocus(id);
     return () => releaseFocus(id);
   }, [id, autoFocus, requestFocus, releaseFocus]);

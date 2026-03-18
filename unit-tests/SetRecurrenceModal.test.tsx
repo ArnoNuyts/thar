@@ -124,3 +124,83 @@ Deno.test("SetRecurrenceModal: should update multiple todos", async () => {
 
   unmount();
 });
+
+Deno.test("SetRecurrenceModal: mouse click should select recurrence base", async () => {
+  const todo = new Todo("Mouse Todo");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("set-recurrence");
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "set-recurrence" && <SetRecurrenceModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper navValue={{ useSelectedTodos: () => [todo] }}>
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Recurrence Base/));
+
+  // rows=20, columns=80, width=40, bodyRows=4 => first body row at y=10, x in [21..60]
+  stdin.write("\x1b[<0;40;10M");
+  await waitFor(() =>
+    assertEquals((lastFrame() || "").includes("Set Recurrence Interval"), true)
+  );
+  unmount();
+});
+
+Deno.test("SetRecurrenceModal: amount should only keep digits", async () => {
+  let updatedTodo: Todo | undefined;
+  const todo = new Todo("Digits only todo");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("set-recurrence");
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "set-recurrence" && <SetRecurrenceModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ useSelectedTodos: () => [todo] }}
+      todoValue={{
+        updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todos[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Recurrence Base/));
+  stdin.write("\r"); // enter amount step with Daily base
+  await waitFor(() =>
+    assertMatch(lastFrame() || "", /Set Recurrence Interval \(Daily\)/)
+  );
+
+  // Mix text and a mouse packet; only digits should remain.
+  stdin.write("a1b2");
+  stdin.write("\x1b[<64;10;5M");
+  stdin.write("\r");
+
+  await waitFor(() => {
+    assertEquals(updatedTodo?.tags.rec, "12d");
+  });
+
+  unmount();
+});

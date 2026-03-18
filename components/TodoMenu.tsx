@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
@@ -74,6 +75,9 @@ export const TodoMenu = () => {
   const todo = useSelectedTodo();
   const selectedTodos = useSelectedTodos();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [layoutSize, setLayoutSize] = useState<
+    { rows?: number; columns?: number }
+  >({});
 
   const handleAction = async (action: MenuAction) => {
     switch (action) {
@@ -298,9 +302,24 @@ export const TodoMenu = () => {
     { autoFocus: true },
   );
 
+  useModalMouseList({
+    isActive: isFocused,
+    modalWidth: "50%",
+    bodyRows: MENU_ITEMS.length,
+    terminalSize: layoutSize,
+    onRowClick: (rowInItems) => {
+      setSelectedIndex(rowInItems);
+      handleAction(MENU_ITEMS[rowInItems].action);
+    },
+  });
+
   return (
     // @ts-ignore: children prop issue
-    <Modal isFocused={isFocused} title="Todo menu">
+    <Modal
+      isFocused={isFocused}
+      title="Todo menu"
+      onLayoutSizeChange={setLayoutSize}
+    >
       <Box flexDirection="column">
         {MENU_ITEMS.map((item, index) => {
           const isSelected = index === selectedIndex;
@@ -312,7 +331,7 @@ export const TodoMenu = () => {
             >
               <Box>
                 <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
-                <Text>{item.label}</Text>
+                <Text wrap="truncate">{item.label}</Text>
               </Box>
               <Box>
                 <Text color={PRIMARY_COLOR}>{item.shortcut}</Text>

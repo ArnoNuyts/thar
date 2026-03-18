@@ -23,7 +23,7 @@ x 2025-12-01 2025-12-01 Numbering for todo's @v0.1
 x 2025-12-02 2025-12-01 Fix reloading issue @v0.1
 x 2025-12-01 2025-12-01 Add priorities + priorities colors + menu way of doing priorities @v0.1
 x 2025-12-01 2025-12-01 Move github actions to ink version @v0.1
-2025-12-01 Mouse support @v0.5?
+x 2026-02-27 2025-12-01 Mouse support @v0.5!
 x 2025-12-02 2025-12-01 Fix follow selected todo issue @v0.1
 x (B) 2025-12-23 2025-12-01 Hidden todo support + way to show all hidden todos to toggle them @v0.3
 x 2025-12-01 2025-12-01 Delete old implementation in Deno Tui @v0.1

@@ -1,5 +1,5 @@
-import { Box, Text } from "ink";
-import { ReactNode } from "react";
+import { Box, measureElement, Text } from "ink";
+import { ReactNode, useLayoutEffect, useRef } from "react";
 import { PRIMARY_COLOR } from "../constants.ts";
 import { COLORS } from "../theme/colors.ts";
 
@@ -8,11 +8,30 @@ interface ModalProps {
   isFocused?: boolean;
   title?: string;
   width?: number | string;
+  onLayoutSizeChange?: (size: { columns: number; rows: number }) => void;
 }
 
 export const Modal = (
-  { children, title, width = "50%" }: ModalProps,
+  { children, title, width = "50%", onLayoutSizeChange }: ModalProps,
 ) => {
+  const containerRef = useRef(null);
+  const lastLayoutRef = useRef<{ width: number; height: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!containerRef.current) return;
+    const { width, height } = measureElement(containerRef.current);
+    if (width > 0 && height > 0) {
+      if (
+        lastLayoutRef.current?.width === width &&
+        lastLayoutRef.current?.height === height
+      ) {
+        return;
+      }
+      lastLayoutRef.current = { width, height };
+      onLayoutSizeChange?.({ columns: width, rows: height });
+    }
+  });
+
   return (
     <Box
       position="absolute"
@@ -20,6 +39,7 @@ export const Modal = (
       height="100%"
       alignItems="center"
       justifyContent="center"
+      ref={containerRef}
     >
       <Box
         flexDirection="column"
