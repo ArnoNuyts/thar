@@ -1,12 +1,13 @@
 import { Box, Text, useApp, useStdout } from "ink";
-import { Fragment } from "react";
+import { Fragment, memo } from "react";
 import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
-import { useNavigation } from "../contexts/navigation-context.tsx";
+import { navigationSelectedTodoRef } from "../contexts/navigation-context.tsx";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { COLORS } from "../theme/colors.ts";
+import { getTerminalRows } from "../utils/terminal-size.ts";
 
 const ACTION_ITEMS = [
   { key: "x", text: "Menu" },
@@ -16,14 +17,12 @@ const ACTION_ITEMS = [
   { key: "/", text: "Search" },
 ] as const;
 
-export const ActionBar = () => {
+export const ActionBar = memo(() => {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const { toasterMessage } = useToaster();
   const { openModal, activeModal } = useModal();
   const { focusRef } = useSearch();
-  const { useSelectedTodo } = useNavigation();
-  const selectedTodo = useSelectedTodo();
 
   useMouseInput((event) => {
     if (!event.leftClick || event.x === undefined || event.y === undefined) {
@@ -31,7 +30,7 @@ export const ActionBar = () => {
     }
     if (activeModal) return;
 
-    const contentRow = stdout.rows;
+    const contentRow = getTerminalRows(stdout);
     if (event.y !== contentRow) return;
 
     let x = 1;
@@ -51,7 +50,9 @@ export const ActionBar = () => {
             openModal("create-todo");
             return;
           case "e":
-            if (selectedTodo) openModal("edit-todo", selectedTodo);
+            if (navigationSelectedTodoRef.current) {
+              openModal("edit-todo", navigationSelectedTodoRef.current);
+            }
             return;
           case "/":
             focusRef.current?.();
@@ -92,4 +93,6 @@ export const ActionBar = () => {
       )}
     </Box>
   );
-};
+});
+
+ActionBar.displayName = "ActionBar";

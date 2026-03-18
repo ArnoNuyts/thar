@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
@@ -29,6 +30,9 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
   const todo = selectedTodos[0]; // Reference todo for initial values
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isCustom, setIsCustom] = useState(false);
+  const [layoutSize, setLayoutSize] = useState<
+    { rows?: number; columns?: number }
+  >({});
   const [customDate, setCustomDate] = useState(() => {
     if (!todo) return new Date();
     const dateStr = type === "due" ? todo.tags.due : todo.tags.t;
@@ -50,6 +54,50 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
 
   const title = type === "due" ? "Set Due Date" : "Set Threshold Date";
 
+  const applyOption = (index: number) => {
+    const selected = options[index];
+    if (!selected) return;
+
+    if (selected.value === "custom") {
+      setIsCustom(true);
+      return;
+    }
+
+    if (selected.value === "reset") {
+      if (selectedTodos.length > 0) {
+        updateTodos(
+          selectedTodos,
+          (t) => (type === "due" ? t.removeDue() : t.removeThreshold()),
+        );
+        closeModal();
+      }
+      return;
+    }
+
+    const date = new Date();
+    switch (selected.value) {
+      case "today":
+        break;
+      case "tomorrow":
+        date.setDate(date.getDate() + 1);
+        break;
+      case "next-week":
+        date.setDate(date.getDate() + 7);
+        break;
+      case "next-month":
+        date.setMonth(date.getMonth() + 1);
+        break;
+    }
+
+    if (selectedTodos.length > 0) {
+      updateTodos(
+        selectedTodos,
+        (t) => (type === "due" ? t.setDue(date) : t.setThreshold(date)),
+      );
+    }
+    closeModal();
+  };
+
   const { isFocused } = useFocusedInput((_input, key) => {
     if (key.escape) {
       if (isCustom) {
@@ -63,40 +111,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     if (isCustom) return; // Let Calendar handle input when custom is active
 
     if (key.return) {
-      const selected = options[selectedIndex];
-      if (selected.value === "custom") {
-        setIsCustom(true);
-      } else if (selected.value === "reset") {
-        if (selectedTodos.length > 0) {
-          updateTodos(
-            selectedTodos,
-            (t) => (type === "due" ? t.removeDue() : t.removeThreshold()),
-          );
-          closeModal();
-        }
-      } else {
-        const date = new Date();
-        switch (selected.value) {
-          case "today":
-            break;
-          case "tomorrow":
-            date.setDate(date.getDate() + 1);
-            break;
-          case "next-week":
-            date.setDate(date.getDate() + 7);
-            break;
-          case "next-month":
-            date.setMonth(date.getMonth() + 1);
-            break;
-        }
-        if (selectedTodos.length > 0) {
-          updateTodos(
-            selectedTodos,
-            (t) => (type === "due" ? t.setDue(date) : t.setThreshold(date)),
-          );
-        }
-        closeModal();
-      }
+      applyOption(selectedIndex);
       return;
     }
 
@@ -115,6 +130,17 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     }
   }, { autoFocus: true, tag: "set-date-modal" });
 
+  useModalMouseList({
+    isActive: isFocused && !isCustom,
+    modalWidth: "50%",
+    bodyRows: options.length,
+    terminalSize: layoutSize,
+    onRowClick: (rowInItems) => {
+      setSelectedIndex(rowInItems);
+      applyOption(rowInItems);
+    },
+  });
+
   const handleCustomSubmit = (date: Date) => {
     if (selectedTodos.length > 0) {
       updateTodos(
@@ -127,7 +153,12 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
 
   return (
     // @ts-ignore: children prop issue
-    <Modal isFocused={isFocused} title={title} width={isCustom ? 30 : "50%"}>
+    <Modal
+      isFocused={isFocused}
+      title={title}
+      width={isCustom ? 30 : "50%"}
+      onLayoutSizeChange={setLayoutSize}
+    >
       {!isCustom
         ? (
           <Box flexDirection="column" paddingX={1}>
@@ -138,7 +169,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
                   <Text color={SECONDARY_COLOR}>
                     {isSelected ? "» " : "  "}
                   </Text>
-                  <Text>{option.label}</Text>
+                  <Text wrap="truncate">{option.label}</Text>
                 </Box>
               );
             })}

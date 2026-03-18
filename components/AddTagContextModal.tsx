@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
@@ -30,6 +31,9 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
   const [pendingChanges, setPendingChanges] = useState<
     Map<string, "add" | "remove">
   >(new Map());
+  const [layoutSize, setLayoutSize] = useState<
+    { rows?: number; columns?: number }
+  >({});
 
   const prefix = type === "project" ? "+" : "@";
   const title = type === "project" ? "Modify Projects" : "Modify Contexts";
@@ -221,8 +225,37 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
     { autoFocus: true, tag: `add-${type}-modal` },
   );
 
+  const bodyRows = tagItems.length > 0 ? tagItems.length + 2 : 2;
+  useModalMouseList({
+    isActive: isFocused,
+    modalWidth: 40,
+    bodyRows,
+    terminalSize: layoutSize,
+    onRowClick: (rowInBody) => {
+      if (rowInBody === 0) {
+        setSelectedIndex(0);
+        return;
+      }
+
+      if (tagItems.length === 0) return;
+      if (rowInBody === 1) return;
+
+      const optionIndex = rowInBody - 1;
+      if (optionIndex < 1 || optionIndex >= options.length) return;
+
+      setSelectedIndex(optionIndex);
+      const tagName = options[optionIndex];
+      toggleItem(tagName);
+    },
+  });
+
   return (
-    <Modal isFocused={isFocused} title={title} width={40}>
+    <Modal
+      isFocused={isFocused}
+      title={title}
+      width={40}
+      onLayoutSizeChange={setLayoutSize}
+    >
       <Box flexDirection="column" paddingX={1}>
         {/* Custom input option */}
         <Box>
@@ -245,7 +278,7 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
           return (
             <Box key={item.name}>
               <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
-              <Text color={getColor(item)}>
+              <Text color={getColor(item)} wrap="truncate">
                 {getCheckbox(item)} {item.name}
               </Text>
             </Box>

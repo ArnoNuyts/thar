@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Text } from "ink";
-import TextInput from "ink-text-input";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { SECONDARY_COLOR } from "../constants.ts";
+import { ControlledTextInput } from "./ControlledTextInput.tsx";
 
 const BASE_OPTIONS = [
   { label: "Daily", value: "d", unit: "day(s)" },
@@ -30,6 +31,44 @@ export const SetRecurrenceModal = () => {
   const [step, setStep] = useState<"base" | "amount">("base");
   const [selectedBaseIndex, setSelectedBaseIndex] = useState(0);
   const [amount, setAmount] = useState("1");
+  const [hasEditedAmount, setHasEditedAmount] = useState(false);
+  const [layoutSize, setLayoutSize] = useState<
+    { rows?: number; columns?: number }
+  >({});
+  const amountRef = useRef(amount);
+  useEffect(() => {
+    amountRef.current = amount;
+  }, [amount]);
+
+  const handleAmountChange = (value: string) => {
+    let digitsOnly = value.replace(/\D+/g, "");
+    if (
+      !hasEditedAmount && amountRef.current === "1" && digitsOnly.length > 1
+    ) {
+      digitsOnly = digitsOnly.slice(1);
+    }
+    setHasEditedAmount(true);
+    setAmount(digitsOnly);
+    amountRef.current = digitsOnly;
+  };
+
+  const selectBaseOption = (index: number) => {
+    const selected = options[index];
+    if (!selected) return;
+
+    if (selected.value === "reset") {
+      if (selectedTodos.length > 0) {
+        updateTodos(selectedTodos, (t) => t.removeRecurrence());
+        closeModal();
+      }
+      return;
+    }
+
+    setHasEditedAmount(false);
+    setAmount("1");
+    amountRef.current = "1";
+    setStep("amount");
+  };
 
   const { isFocused } = useFocusedInput((_input, key) => {
     switch (true) {
@@ -40,14 +79,7 @@ export const SetRecurrenceModal = () => {
         closeModal();
         break;
       case step === "base" && key.return:
-        if (options[selectedBaseIndex].value === "reset") {
-          if (selectedTodos.length > 0) {
-            updateTodos(selectedTodos, (t) => t.removeRecurrence());
-            closeModal();
-          }
-        } else {
-          setStep("amount");
-        }
+        selectBaseOption(selectedBaseIndex);
         break;
       case step === "base" && key.upArrow:
         setSelectedBaseIndex((
@@ -60,15 +92,26 @@ export const SetRecurrenceModal = () => {
         ) => (prev < options.length - 1 ? prev + 1 : 0));
         break;
       case step === "amount" && key.return:
-        if (selectedTodos.length > 0 && amount.trim().length > 0) {
+        if (selectedTodos.length > 0 && amountRef.current.trim().length > 0) {
           const base = options[selectedBaseIndex].value;
-          const recurrenceString = `${amount}${base}`;
+          const recurrenceString = `${amountRef.current}${base}`;
           updateTodos(selectedTodos, (t) => t.setRecurrence(recurrenceString));
           closeModal();
         }
         break;
     }
   }, { autoFocus: true, tag: "set-recurrence-modal" });
+
+  useModalMouseList({
+    isActive: isFocused && step === "base",
+    modalWidth: "50%",
+    bodyRows: options.length,
+    terminalSize: layoutSize,
+    onRowClick: (rowInItems) => {
+      setSelectedBaseIndex(rowInItems);
+      selectBaseOption(rowInItems);
+    },
+  });
 
   const getTitle = () => {
     if (step === "base") return "Set Recurrence Base";
@@ -78,7 +121,11 @@ export const SetRecurrenceModal = () => {
 
   return (
     // @ts-ignore: children prop issue
-    <Modal isFocused={isFocused} title={getTitle()}>
+    <Modal
+      isFocused={isFocused}
+      title={getTitle()}
+      onLayoutSizeChange={setLayoutSize}
+    >
       {step === "base"
         ? (
           <Box flexDirection="column" paddingX={1}>
@@ -89,7 +136,7 @@ export const SetRecurrenceModal = () => {
                   <Text color={SECONDARY_COLOR}>
                     {isSelected ? "» " : "  "}
                   </Text>
-                  <Text>{option.label}</Text>
+                  <Text wrap="truncate">{option.label}</Text>
                 </Box>
               );
             })}
@@ -99,10 +146,11 @@ export const SetRecurrenceModal = () => {
           <Box flexDirection="column" paddingX={1}>
             <Box>
               <Text>Every</Text>
-              <TextInput
+              <ControlledTextInput
                 focus={isFocused}
                 value={amount}
-                onChange={setAmount}
+                onChange={handleAmountChange}
+                showCursor
               />
               <Text>{BASE_OPTIONS[selectedBaseIndex].unit}</Text>
             </Box>

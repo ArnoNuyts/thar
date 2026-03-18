@@ -216,7 +216,35 @@ Deno.test("TodoMenu: should open edit-todo modal", async () => {
   );
 
   await waitFor(() => assertEquals(focusCount >= 1, true));
+  await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
   stdin.write("e");
+  await waitFor(() =>
+    assertEquals(lastFrame()?.includes("Edit Todo Modal"), true)
+  );
+  unmount();
+});
+
+Deno.test("TodoMenu: single mouse click should trigger menu item action", async () => {
+  const todo1 = new Todo("Todo 1");
+  let focusCount = 0;
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      navValue={{
+        useSelectedTodos: () => [todo1],
+        useSelectedTodo: () => todo1,
+      }}
+    >
+      <AppContentMock />
+      <ModalTrigger />
+      <FocusObserver onFocused={() => focusCount++} />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertEquals(focusCount >= 1, true));
+  await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
+
+  // Frame snapshot shows the "Edit" row sitting at y=6 when the menu is open (x=40 is within the modal body).
+  stdin.write("\x1b[<0;40;6M");
   await waitFor(() =>
     assertEquals(lastFrame()?.includes("Edit Todo Modal"), true)
   );

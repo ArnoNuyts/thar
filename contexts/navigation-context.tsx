@@ -17,6 +17,21 @@ import { extractSearchTerms } from "../utils/search-utils.ts";
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+const areSetsEqual = (a: Set<symbol>, b: Set<symbol>) => {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const value of a) {
+    if (!b.has(value)) return false;
+  }
+  return true;
+};
+
+// Imperative escape hatch for components that need the current selection
+// without subscribing to navigation re-renders.
+export const navigationSelectedTodoRef: { current: Todo | undefined } = {
+  current: undefined,
+};
+
 interface SelectionState {
   cursorId: symbol | undefined;
   anchorId: symbol | undefined;
@@ -706,6 +721,18 @@ export const NavigationProvider = (
 
       const newLastHash = selectedEntry.todo.getHash();
 
+      const selectionUnchanged = prev.selection.cursorId === newId &&
+        prev.selection.anchorId === newAnchor &&
+        areSetsEqual(prev.selection.rangeIds, newRange);
+      const metadataUnchanged = prev.offsetRow === newOffsetRow &&
+        prev.lastIndex === newSelectedRow &&
+        prev.lastHash === newLastHash &&
+        prev.prevIndexes === indexes;
+
+      if (selectionUnchanged && metadataUnchanged) {
+        return prev;
+      }
+
       return {
         selection: {
           cursorId: newId,
@@ -903,6 +930,10 @@ export const NavigationProvider = (
     const todo = todos.find((t) => t.id === activeState.selection.cursorId);
     return todo ? [todo] : [];
   }, [todos, activeState.selection.rangeIds, activeState.selection.cursorId]);
+
+  navigationSelectedTodoRef.current = todos.find((t) =>
+    t.id === activeState.selection.cursorId
+  );
 
   const value = useMemo(
     () => ({

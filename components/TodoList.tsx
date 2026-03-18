@@ -236,7 +236,14 @@ export const TodoList = () => {
 
   const todo = useSelectedTodo();
   const selectedTodos = useSelectedTodos();
-  const lastClickRef = useRef<{ id: symbol; time: number } | null>(null);
+  const lastClickRef = useRef<
+    {
+      id?: symbol;
+      x?: number;
+      y?: number;
+      time: number;
+    } | null
+  >(null);
 
   // Derived state for rendering and mouse hit-testing
   const visibleIndexes: IndexEntry[] = useMemo(
@@ -394,30 +401,60 @@ export const TodoList = () => {
   }, { autoFocus: true, tag: "todo-list" });
 
   useMouseInput((event) => {
-    if (!isFocused) return;
     if (activeModal) return;
-    if (event.wheelUp) return scrollViewportUp();
-    if (event.wheelDown) return scrollViewportDown();
+    if (event.wheelUp) {
+      if (!isFocused) return;
+      return scrollViewportUp();
+    }
+    if (event.wheelDown) {
+      if (!isFocused) return;
+      return scrollViewportDown();
+    }
     if (!event.leftClick || event.y === undefined) return;
+    const now = Date.now();
+    const previousClick = lastClickRef.current;
 
     const searchRows = (isSearchFocused || searchQuery.length > 0) ? 2 : 0;
     const rowInList = event.y - 1 - searchRows;
-    if (rowInList < 0 || rowInList >= visibleIndexes.length) return;
+    if (rowInList < 0 || rowInList >= visibleIndexes.length) {
+      lastClickRef.current = { x: event.x, y: event.y, time: now };
+      return;
+    }
 
     const entry = visibleIndexes[rowInList];
-    if (!entry || entry.type !== IndexType.todo) return;
+    if (!entry || entry.type !== IndexType.todo) {
+      lastClickRef.current = { x: event.x, y: event.y, time: now };
+      return;
+    }
 
-    const now = Date.now();
-    const isDoubleClick = lastClickRef.current?.id === entry.todo.id &&
-      now - lastClickRef.current.time <= 350;
+    const isDoubleClick = (
+      previousClick?.id === entry.todo.id ||
+      (previousClick?.x === event.x && previousClick?.y === event.y)
+    ) &&
+      now - previousClick.time <= 350;
 
     focus();
     setSelectedTodoId(entry.todo.id, event.raw.shift);
     if (isDoubleClick && !event.raw.shift) {
-      toggleTodos([entry.todo]);
+      const checkboxStartColumn = 1 + (maxDigits + 2);
+      const checkboxEndColumn = checkboxStartColumn + 2;
+      const clickX = event.x ?? -1;
+      const clickedCheckbox = clickX >= checkboxStartColumn &&
+        clickX <= checkboxEndColumn;
+
+      if (clickedCheckbox) {
+        toggleTodos([entry.todo]);
+      } else {
+        openModal("edit-todo", entry.todo);
+      }
     }
 
-    lastClickRef.current = { id: entry.todo.id, time: now };
+    lastClickRef.current = {
+      id: entry.todo.id,
+      x: event.x,
+      y: event.y,
+      time: now,
+    };
   }, { isActive: true });
 
   // Calculate the maximum number of digits needed for numbering
@@ -427,7 +464,7 @@ export const TodoList = () => {
 
   return (
     <Box
-      flexGrow={1}
+      flexGrow={0}
       height={listHeight}
       backgroundColor={COLORS.background}
     >

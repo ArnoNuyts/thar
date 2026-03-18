@@ -163,3 +163,41 @@ Deno.test("SetDateModal: should update multiple todos", async () => {
 
   unmount();
 });
+
+Deno.test("SetDateModal: mouse click should select an option", async () => {
+  let updatedTodo: Todo | undefined;
+  const todo = new Todo("Mouse Todo");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("set-due-date");
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "set-due-date" && <SetDateModal type="due" />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ useSelectedTodos: () => [todo] }}
+      todoValue={{
+        updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todos[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Due Date/));
+
+  // rows=20, columns=80, width=40, bodyRows=5 => first body row at y=9, x in [21..60]
+  stdin.write("\x1b[<0;40;9M");
+  await waitFor(() => assertEquals(typeof updatedTodo?.tags.due, "string"));
+  unmount();
+});
