@@ -12,8 +12,8 @@ import { getPriorityOptions, priorityValue } from "../logic/priority.ts";
 export const SetPriorityModal = () => {
   const { closeModal } = useModal();
   const { updateTodos } = useTodo();
-  const { useSelectedTodos } = useNavigation();
-  const selectedTodos = useSelectedTodos();
+  const { getSelectedTodos } = useNavigation();
+  const selectedTodos = getSelectedTodos();
   const todo = selectedTodos[0]; // Reference todo for initial values
   const [layoutSize, setLayoutSize] = useState<
     { rows?: number; columns?: number }

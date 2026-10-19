@@ -32,7 +32,7 @@ Deno.test("SetPriorityModal: should render and set focus", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -82,8 +82,8 @@ Deno.test("SetPriorityModal: should update multiple todos", async () => {
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
       navValue={{
-        useSelectedTodos: () => [todo1, todo2],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1, todo2],
+        getSelectedTodo: () => todo1,
       }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
@@ -131,7 +131,7 @@ Deno.test("SetPriorityModal: mouse click should select priority", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -169,7 +169,7 @@ Deno.test("SetPriorityModal: integration click maps first row on odd height", as
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -211,7 +211,7 @@ Deno.test("SetPriorityModal: integration click maps last row on odd height", asy
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -253,7 +253,7 @@ Deno.test("SetPriorityModal: integration click maps first row on even height", a
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -295,7 +295,7 @@ Deno.test("SetPriorityModal: integration click maps last row on even height", as
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);

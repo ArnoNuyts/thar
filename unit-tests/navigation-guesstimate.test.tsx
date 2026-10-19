@@ -58,7 +58,7 @@ Deno.test(
 
     // Currently Todo 1 is selected by default
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
     );
 
     // Undo delete: Restore Todo 2
@@ -73,7 +73,7 @@ Deno.test(
 
     // Should now select Todo 2 because it was "added" (restored)
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
     );
 
     unmount();
@@ -101,13 +101,13 @@ Deno.test(
     );
 
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
     );
 
     // Move selection to Todo 2
     navContext.navigateDown();
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
     );
 
     // Undo edit on Todo 1 (while Todo 2 is selected)
@@ -120,7 +120,7 @@ Deno.test(
 
     // Should now jump to Todo 1 because it was modified
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1 Original")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1 Original")
     );
 
     unmount();
@@ -145,7 +145,7 @@ Deno.test(
     );
 
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
     );
 
     // Add new todo
@@ -158,7 +158,7 @@ Deno.test(
 
     // Should select the new todo
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "New Todo")
+      assertEquals(navContext.getSelectedTodo()?.text, "New Todo")
     );
 
     unmount();
@@ -186,7 +186,7 @@ Deno.test(
     );
 
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Task 0")
+      assertEquals(navContext.getSelectedTodo()?.text, "Task 0")
     );
 
     // Modify a todo far down the list; guesstimate must find it.
@@ -206,7 +206,7 @@ Deno.test(
 
     await waitFor(() =>
       assertEquals(
-        navContext.useSelectedTodo()?.text,
+        navContext.getSelectedTodo()?.text,
         "Task 250 modified",
       )
     );

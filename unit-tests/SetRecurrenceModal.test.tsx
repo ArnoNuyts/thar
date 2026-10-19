@@ -32,7 +32,7 @@ Deno.test("SetRecurrenceModal: should render and set focus", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -89,8 +89,8 @@ Deno.test("SetRecurrenceModal: should update multiple todos", async () => {
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
       navValue={{
-        useSelectedTodos: () => [todo1, todo2],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1, todo2],
+        getSelectedTodo: () => todo1,
       }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
@@ -142,7 +142,7 @@ Deno.test("SetRecurrenceModal: mouse click should select recurrence base", async
   };
 
   const { unmount, lastFrame, stdin } = render(
-    <TestWrapper navValue={{ useSelectedTodos: () => [todo] }}>
+    <TestWrapper navValue={{ getSelectedTodos: () => [todo] }}>
       <TestComponent />
     </TestWrapper>,
   );
@@ -176,7 +176,7 @@ Deno.test("SetRecurrenceModal: amount should only keep digits", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);

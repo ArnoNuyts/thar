@@ -54,13 +54,13 @@ Deno.test(
     );
 
     await waitFor(() =>
-      assertEquals(navContext!.useSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext!.getSelectedTodo()?.text, "Todo 1")
     );
 
     navContext!.navigateDown(true);
 
     await waitFor(() => {
-      assertEquals(navContext!.useSelectedTodo()?.text, "Todo 2");
+      assertEquals(navContext!.getSelectedTodo()?.text, "Todo 2");
       assertEquals(navContext!.selectedTodoIds.size, 2);
     });
 
@@ -81,15 +81,15 @@ Deno.test(
       <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
     );
 
-    await waitFor(() => assertEquals(navContext!.useSelectedTodo()?.text, "1"));
+    await waitFor(() => assertEquals(navContext!.getSelectedTodo()?.text, "1"));
 
     navContext!.navigateDown(false);
-    await waitFor(() => assertEquals(navContext!.useSelectedTodo()?.text, "2"));
+    await waitFor(() => assertEquals(navContext!.getSelectedTodo()?.text, "2"));
 
     navContext!.navigateUp(true);
 
     await waitFor(() => {
-      assertEquals(navContext!.useSelectedTodo()?.text, "1");
+      assertEquals(navContext!.getSelectedTodo()?.text, "1");
       assertEquals(navContext!.selectedTodoIds.size, 2);
     });
 
@@ -107,14 +107,14 @@ Deno.test("Multi-selection: Moving without shift clears selection", {
     <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
   );
 
-  await waitFor(() => assertEquals(navContext!.useSelectedTodo()?.text, "1"));
+  await waitFor(() => assertEquals(navContext!.getSelectedTodo()?.text, "1"));
 
   navContext!.navigateDown(true);
   await waitFor(() => assertEquals(navContext!.selectedTodoIds.size, 2));
 
   navContext!.navigateDown(false);
   await waitFor(() => {
-    assertEquals(navContext!.useSelectedTodo()?.text, "3");
+    assertEquals(navContext!.getSelectedTodo()?.text, "3");
     assertEquals(navContext!.selectedTodoIds.size, 0);
   });
 
@@ -137,13 +137,13 @@ Deno.test("Multi-selection: Selection across context headers works", {
   );
 
   await waitFor(() =>
-    assertEquals(navContext!.useSelectedTodo()?.text, "B @Home")
+    assertEquals(navContext!.getSelectedTodo()?.text, "B @Home")
   );
 
   navContext!.navigateDown(true);
 
   await waitFor(() => {
-    assertEquals(navContext!.useSelectedTodo()?.text, "A @Work");
+    assertEquals(navContext!.getSelectedTodo()?.text, "A @Work");
     assertEquals(navContext!.selectedTodoIds.size, 2);
   });
 
@@ -160,14 +160,14 @@ Deno.test("Multi-selection: Continuous Shift+Down expands range", {
     <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
   );
 
-  await waitFor(() => assertEquals(navContext!.useSelectedTodo()?.text, "1"));
+  await waitFor(() => assertEquals(navContext!.getSelectedTodo()?.text, "1"));
 
   navContext!.navigateDown(true);
   await waitFor(() => assertEquals(navContext!.selectedTodoIds.size, 2));
 
   navContext!.navigateDown(true);
   await waitFor(() => {
-    assertEquals(navContext!.useSelectedTodo()?.text, "3");
+    assertEquals(navContext!.getSelectedTodo()?.text, "3");
     assertEquals(navContext!.selectedTodoIds.size, 3);
   });
 
@@ -184,7 +184,7 @@ Deno.test("Multi-selection: Pressing Esc clears selection", {
     <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
   );
 
-  await waitFor(() => assertEquals(navContext!.useSelectedTodo()?.text, "1"));
+  await waitFor(() => assertEquals(navContext!.getSelectedTodo()?.text, "1"));
 
   navContext!.navigateDown(true); // 1, 2 selected
   await waitFor(() => assertEquals(navContext!.selectedTodoIds.size, 2));
@@ -194,7 +194,7 @@ Deno.test("Multi-selection: Pressing Esc clears selection", {
 
   await waitFor(() => {
     assertEquals(navContext!.selectedTodoIds.size, 0);
-    assertEquals(navContext!.useSelectedTodo()?.text, "2"); // Cursor should stay at 2
+    assertEquals(navContext!.getSelectedTodo()?.text, "2"); // Cursor should stay at 2
   });
 
   unmount();
