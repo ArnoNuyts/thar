@@ -9,7 +9,8 @@ import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { Calendar } from "./Calendar.tsx";
-import { format } from "date-fns";
+import { dateForOption, formatDateTag, parseDateTag } from "../logic/dates.ts";
+import type { DateOptionValue } from "../logic/dates.ts";
 
 const BASE_OPTIONS = [
   { label: "Today", value: "today" },
@@ -35,12 +36,8 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
   >({});
   const [customDate, setCustomDate] = useState(() => {
     if (!todo) return new Date();
-    const dateStr = type === "due" ? todo.tags.due : todo.tags.t;
-    if (typeof dateStr === "string") {
-      const [year, month, day] = dateStr.split("-").map(Number);
-      return new Date(year, month - 1, day);
-    }
-    return new Date();
+    const dateTag = type === "due" ? todo.tags.due : todo.tags.t;
+    return parseDateTag(dateTag) ?? new Date();
   });
 
   const options = [...BASE_OPTIONS];
@@ -74,20 +71,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
       return;
     }
 
-    const date = new Date();
-    switch (selected.value) {
-      case "today":
-        break;
-      case "tomorrow":
-        date.setDate(date.getDate() + 1);
-        break;
-      case "next-week":
-        date.setDate(date.getDate() + 7);
-        break;
-      case "next-month":
-        date.setMonth(date.getMonth() + 1);
-        break;
-    }
+    const date = dateForOption(selected.value as DateOptionValue);
 
     if (selectedTodos.length > 0) {
       updateTodos(
@@ -155,7 +139,7 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
               isFocused={isFocused}
             />
             <Box>
-              <Text dimColor>Selected: {format(customDate, "yyyy-MM-dd")}</Text>
+              <Text dimColor>Selected: {formatDateTag(customDate)}</Text>
             </Box>
           </Box>
         )}
