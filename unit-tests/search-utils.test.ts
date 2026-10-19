@@ -67,3 +67,17 @@ Deno.test("extractSearchTerms: preserves context and project prefixes", () => {
 Deno.test("extractSearchTerms: strips wrapper punctuation", () => {
   assertEquals(extractSearchTerms("/@work +bug/"), ["@work", "+bug"]);
 });
+
+Deno.test("extractTagsAndContextsFromSearch: extracts tags without a preceding space", () => {
+  assertEquals(
+    extractTagsAndContextsFromSearch("foo+bar baz@home"),
+    " +bar @home ",
+  );
+});
+
+Deno.test("extractTagsAndContextsFromSearch: preserves backslashes in tag names", () => {
+  assertEquals(
+    extractTagsAndContextsFromSearch("+foo\\bar @home\\office"),
+    " +foo\\bar @home\\office ",
+  );
+});
