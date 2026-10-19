@@ -154,10 +154,12 @@ const SuggestionHarness = ({
   todos,
   onSnapshot,
   onCancel,
+  isFocused = true,
 }: {
   todos: Todos;
   onSnapshot: (snapshot: Snapshot) => void;
   onCancel: () => void;
+  isFocused?: boolean;
 }) => {
   const [value, setValue] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -170,7 +172,7 @@ const SuggestionHarness = ({
         onCursorChange={(nextCursor) => setCursor(nextCursor)}
         onSubmit={() => {}}
         onCancel={onCancel}
-        isFocused
+        isFocused={isFocused}
         todos={todos}
         left={0}
         top={0}
@@ -433,3 +435,39 @@ for (const [name, input] of Object.entries(testInputs)) {
     },
   );
 }
+
+Deno.test(
+  "suggestion: ignores input and cancel until focused",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = makeTodos();
+    let snapshot = emptySnapshot();
+    let cancelCount = 0;
+
+    const harness = (isFocused: boolean) => (
+      <SuggestionHarness
+        todos={todos}
+        onSnapshot={(next) => snapshot = next}
+        onCancel={() => cancelCount++}
+        isFocused={isFocused}
+      />
+    );
+
+    const result = render(harness(false));
+
+    await result.stdin.write("+pro");
+    await result.stdin.write("\u001B"); // Escape
+
+    result.rerender(harness(true));
+
+    await result.stdin.write("x");
+
+    await waitFor(() => {
+      assertEquals(snapshot.value, "x");
+      assertEquals(snapshot.suggestions, []);
+    });
+
+    assertEquals(cancelCount, 0);
+    result.unmount();
+  },
+);

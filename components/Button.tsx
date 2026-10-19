@@ -112,8 +112,6 @@ const ButtonGroup = ({
   };
 
   useInput((input, key) => {
-    if (!isFocused) return;
-
     if (key.tab) {
       moveIndex(key.shift ? -1 : 1);
       return;

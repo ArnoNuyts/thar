@@ -77,27 +77,6 @@ export const SuggestionInput = ({
       }
     }
   }, [value]);
-  /*
-  useEffect(() => {
-  if (suggestions.length === 0) return;
-
-  const textUpToCursor = value.slice(0, wordStartIndex);
-  const charsPerLine = dimensions.width; // terminal columns
-  const cursorCol = wordStartIndex % charsPerLine;
-  const cursorLine = Math.floor(textUpToCursor.length / charsPerLine);
-
-  setPosition({
-    left: left + cursorCol,
-    top: top + cursorLine + 1,
-  });
-}, [wordStartIndex, value, dimensions.width, suggestions.length, left, top]);
-
-  useEffect(() => {
-    if (!isFocused) {
-      clearSuggestions();
-    }
-  }, [isFocused]);
-  */
 
   useEffect(() => {
     if (suggestions.length === 0) return;
