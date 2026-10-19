@@ -39,18 +39,30 @@ tool is **not** evidence that those issues are absent.
 
 ## Fix progress
 
-Updated 2026-10-20. Every item below landed through TDD: a failing test first, then the fix, then `deno lint`, `deno check main.tsx`, and the full suite.
+Updated 2026-10-20. Every item below landed through TDD: a failing test first,
+then the fix, then `deno lint`, `deno check main.tsx`, and the full suite.
 
-| Item | Status | Commit | Test evidence |
-| --- | --- | --- | --- |
-| P1 #1 — completion date dropped | ✅ FIXED | `b330585` | `unit-tests/todo.test.ts` |
-| P1 #2 — tags accumulate / cannot be removed | ✅ FIXED | `b330585`, `8ec2046` | `unit-tests/todo.test.ts`, `unit-tests/EditTodoModal.test.tsx` |
-| P1 #3 — duplicate undo snapshots | ✅ FIXED | `d6b944a` | `unit-tests/todo-context-history.test.tsx` |
-| P1 #4 — recurring todo duplicated in StrictMode | ✅ FIXED | `d6b944a` | `unit-tests/todo-context-history.test.tsx` |
-| P1 #5 — no-op archive creates undo entry | ✅ FIXED | `d6b944a` | `unit-tests/todo-context-history.test.tsx` |
-| P1 #6 — clipboard failure unhandled | ✅ FIXED | `3ef1688` | `unit-tests/todo-list.test.tsx` |
+| Item                                            | Status   | Commit               | Test evidence                                                  |
+| ----------------------------------------------- | -------- | -------------------- | -------------------------------------------------------------- |
+| P1 #1 — completion date dropped                 | ✅ FIXED | `b330585`            | `unit-tests/todo.test.ts`                                      |
+| P1 #2 — tags accumulate / cannot be removed     | ✅ FIXED | `b330585`, `8ec2046` | `unit-tests/todo.test.ts`, `unit-tests/EditTodoModal.test.tsx` |
+| P1 #3 — duplicate undo snapshots                | ✅ FIXED | `d6b944a`            | `unit-tests/todo-context-history.test.tsx`                     |
+| P1 #4 — recurring todo duplicated in StrictMode | ✅ FIXED | `d6b944a`            | `unit-tests/todo-context-history.test.tsx`                     |
+| P1 #5 — no-op archive creates undo entry        | ✅ FIXED | `d6b944a`            | `unit-tests/todo-context-history.test.tsx`                     |
+| P1 #6 — clipboard failure unhandled             | ✅ FIXED | `3ef1688`            | `unit-tests/todo-list.test.tsx`                                |
+| P2 #7 — duplicated modal helpers                | ✅ FIXED | `a0fd0aa`            | `unit-tests/modal-layout.test.ts`                              |
+| P2 #8 — duplicated chrome constants             | ✅ FIXED | `a0fd0aa`            | existing modal suites                                          |
+| P2 #9 — duplicated suggestion logic             | ✅ FIXED | `b36a9fa`            | `unit-tests/suggestion-input-shared.test.tsx`                  |
+| P2 #10 — repeated tag regexes                   | ✅ FIXED | `b36a9fa`            | `unit-tests/patterns.test.ts`                                  |
+| P2 #14 — duplicated range-row loops             | ✅ FIXED | `92c3703`            | `unit-tests/navigation-range.test.ts`                          |
+| P2 #15 — duplicated tag aggregation             | ✅ FIXED | `b36a9fa`            | `unit-tests/tag-sources.test.ts`                               |
+| P3 #20 — setState during render                 | ✅ FIXED | `92c3703`            | full navigation suite                                          |
+| P3 #22 — unreachable selection fallback         | ✅ FIXED | `92c3703`            | full navigation suite                                          |
+| P3 #26 — O(n²) guesstimate lookup               | ✅ FIXED | `92c3703`            | `unit-tests/navigation-guesstimate.test.tsx`                   |
+| P4 #33 — ref write during render                | ✅ FIXED | `b36a9fa`            | `unit-tests/SearchInput.test.tsx`                              |
+| P4 #41 — dead `Modal` prop                      | ✅ FIXED | `a0fd0aa`            | `deno check` + modal suites                                    |
 
-Current suite: **214 passed, 0 failed**.
+Current suite: **255 passed, 0 failed**.
 
 ---
 
