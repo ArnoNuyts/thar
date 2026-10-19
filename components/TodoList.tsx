@@ -4,11 +4,9 @@ import { PRIMARY_COLOR } from "../constants.ts";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
-import { useToaster } from "../contexts/toaster-context.tsx";
-import { useTodo } from "../contexts/todo-context.tsx";
 import { ExtendedKey, useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
-import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
+import { useTodoCommands } from "../hooks/useTodoCommands.ts";
 import { IndexEntry } from "../logic/indexes.ts";
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
@@ -213,29 +211,15 @@ export const TodoList = () => {
     navigateEnd,
     setSelectedTodoId,
     useSelectedTodo,
-    useSelectedTodos,
-    toggleShowHidden,
-    showHidden,
     selectedTodoIds,
     clearMultiSelect,
   } = useNavigation();
 
   const { openModal, activeModal } = useModal();
-  const { showToaster } = useToaster();
   const { focusRef, searchQuery, isSearchFocused } = useSearch();
-  const {
-    toggleTodos,
-    toggleHidden,
-    deleteTodos,
-    archiveCompletedTodos,
-    updateTodos,
-    addTodos,
-    undo,
-    redo,
-  } = useTodo();
+  const commands = useTodoCommands();
 
   const todo = useSelectedTodo();
-  const selectedTodos = useSelectedTodos();
   const lastClickRef = useRef<
     {
       id?: symbol;
@@ -263,16 +247,7 @@ export const TodoList = () => {
     if (key.return) return openModal("todo-menu");
     if (key.escape) return clearMultiSelect();
     if (key.delete) {
-      if (selectedTodos.length > 0) {
-        const isMultiple = selectedTodos.length > 1;
-        openModal("confirm-modal", {
-          title: isMultiple ? "Delete Todos" : "Delete Todo",
-          message: isMultiple
-            ? `Are you sure you want to delete ${selectedTodos.length} todos?`
-            : "Are you sure you want to delete this todo?",
-          onConfirm: () => deleteTodos(selectedTodos),
-        });
-      }
+      commands.deleteSelected();
       return;
     }
 
@@ -284,9 +259,7 @@ export const TodoList = () => {
         exit();
         break;
       case " ":
-        if (selectedTodos.length > 0) {
-          toggleTodos(selectedTodos);
-        }
+        commands.toggleSelected();
         break;
       case "x":
         openModal("todo-menu");
@@ -295,117 +268,47 @@ export const TodoList = () => {
         openModal("create-todo");
         break;
       case "z":
-        undo();
+        commands.undo();
         break;
       case "Z":
-        redo();
+        commands.redo();
         break;
-      case "v": {
-        const paste = async () => {
-          try {
-            const text = await readFromClipboard();
-            const lines = text
-              .split(/\r?\n/)
-              .map((line) => line.trim())
-              .filter((line) => line.length > 0);
-            if (lines.length === 0) return;
-
-            const doPaste = () => {
-              const added = addTodos(...lines);
-              if (added.length > 0) {
-                setSelectedTodoId(added[added.length - 1].id);
-              }
-              showToaster(`Pasted ${lines.length} todo(s)`);
-            };
-
-            if (lines.length > 10) {
-              openModal("confirm-modal", {
-                title: "Paste Multiple Todos",
-                message:
-                  `Are you sure you want to paste ${lines.length} todos?`,
-                onConfirm: doPaste,
-              });
-            } else {
-              doPaste();
-            }
-          } catch (e) {
-            showToaster(
-              `Paste failed: ${e instanceof Error ? e.message : String(e)}`,
-            );
-          }
-        };
-        paste();
+      case "v":
+        commands.pasteTodos();
         break;
-      }
       case "e":
-        if (todo) openModal("edit-todo", todo);
+        commands.editSelected();
         break;
       case "a":
-        openModal("confirm-modal", {
-          title: "Archive Completed",
-          message: "Archive all completed todos to done.txt?",
-          onConfirm: () => {
-            archiveCompletedTodos();
-          },
-        });
+        commands.archiveSelected();
         break;
       case "d":
-        openModal("set-due-date");
+        commands.setDueDate();
         break;
       case "t":
-        openModal("set-threshold-date");
+        commands.setThresholdDate();
         break;
       case "r":
-        openModal("set-recurrence");
+        commands.setRecurrence();
         break;
       case "c":
-        if (selectedTodos.length > 0) {
-          const copy = async () => {
-            try {
-              await copyToClipboard(
-                selectedTodos.map((t) => t.toString()).join("\n"),
-              );
-              showToaster(
-                selectedTodos.length === 1
-                  ? "Todo copied"
-                  : `${selectedTodos.length} todos copied`,
-              );
-            } catch (e) {
-              showToaster(
-                `Copy failed: ${e instanceof Error ? e.message : String(e)}`,
-              );
-            }
-          };
-          copy();
-        }
+        commands.copySelected();
         break;
       case "h":
-        if (selectedTodos.length > 0) toggleHidden(selectedTodos);
+        commands.toggleSelectedHidden();
         break;
       case "H":
-        toggleShowHidden();
-        showToaster(showHidden ? "Hidden todos hidden" : "Hidden todos shown");
+        commands.toggleHiddenView({ notify: true });
         break;
       case "+":
-        openModal("add-project");
+        commands.addProject();
         break;
       case "@":
-        openModal("add-context");
+        commands.addContext();
         break;
       default:
         if (["A", "B", "C", "D", "E", "F"].includes(input)) {
-          const newPriority = input.toUpperCase() as UpperCaseLetter;
-          if (selectedTodos.length > 0) {
-            // Toggle off if all items have the same priority
-            const allHaveSamePriority = selectedTodos.every((t) =>
-              t.priority === newPriority
-            );
-            updateTodos(
-              selectedTodos,
-              (t) =>
-                t.setPriority(allHaveSamePriority ? undefined : newPriority),
-            );
-          }
+          commands.setPriority(input.toUpperCase() as UpperCaseLetter);
         }
         break;
     }
@@ -454,7 +357,7 @@ export const TodoList = () => {
         clickX <= checkboxEndColumn;
 
       if (clickedCheckbox) {
-        toggleTodos([entry.todo]);
+        commands.toggle([entry.todo]);
       } else {
         openModal("edit-todo", entry.todo);
       }
