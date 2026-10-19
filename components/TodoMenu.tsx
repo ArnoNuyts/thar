@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useListSelection } from "../hooks/useListSelection.ts";
 import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { useTodoCommands } from "../hooks/useTodoCommands.ts";
 import { Key } from "../hooks/useInput.ts";
 import { Modal } from "./Modal.tsx";
+import { SELECTED_MARKER, UNSELECTED_MARKER } from "./SelectList.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 
@@ -87,7 +89,6 @@ export const resolveMenuShortcut = (
 export const TodoMenu = () => {
   const { closeModal } = useModal();
   const commands = useTodoCommands();
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [layoutSize, setLayoutSize] = useState<
     { rows?: number; columns?: number }
   >({});
@@ -145,31 +146,15 @@ export const TodoMenu = () => {
     }
   };
 
+  const selection = useListSelection({
+    itemCount: MENU_ITEMS.length,
+    onSelect: (index) => handleAction(MENU_ITEMS[index].action),
+    onCancel: closeModal,
+  });
+
   const { isFocused } = useFocusedInput(
     (input, key) => {
-      if (key.escape) {
-        closeModal();
-        return;
-      }
-
-      if (key.return) {
-        handleAction(MENU_ITEMS[selectedIndex].action);
-        return;
-      }
-
-      if (key.upArrow) {
-        setSelectedIndex((prev: number) =>
-          prev > 0 ? prev - 1 : MENU_ITEMS.length - 1
-        );
-        return;
-      }
-
-      if (key.downArrow) {
-        setSelectedIndex((prev: number) =>
-          prev < MENU_ITEMS.length - 1 ? prev + 1 : 0
-        );
-        return;
-      }
+      if (selection.handleKey(key)) return;
 
       const action = resolveMenuShortcut(input, key);
       if (action) {
@@ -184,10 +169,8 @@ export const TodoMenu = () => {
     modalWidth: "50%",
     bodyRows: MENU_ITEMS.length,
     terminalSize: layoutSize,
-    onRowClick: (rowInItems) => {
-      setSelectedIndex(rowInItems);
-      handleAction(MENU_ITEMS[rowInItems].action);
-    },
+    onRowClick: selection.selectAt,
+    onRowHover: selection.setSelectedIndex,
   });
 
   return (
@@ -198,7 +181,7 @@ export const TodoMenu = () => {
     >
       <Box flexDirection="column">
         {MENU_ITEMS.map((item, index) => {
-          const isSelected = index === selectedIndex;
+          const isSelected = index === selection.selectedIndex;
           return (
             <Box
               key={item.action}
@@ -206,7 +189,9 @@ export const TodoMenu = () => {
               paddingRight={1}
             >
               <Box>
-                <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
+                <Text color={SECONDARY_COLOR}>
+                  {isSelected ? SELECTED_MARKER : UNSELECTED_MARKER}
+                </Text>
                 <Text wrap="truncate">{item.label}</Text>
               </Box>
               <Box>
