@@ -3,6 +3,7 @@ import {
   ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -10,6 +11,7 @@ import { useSearch } from "./search-context.tsx";
 import { useWindowSize } from "ink";
 import { Todos } from "../logic/Todos.ts";
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
+import { getSelectionRangeRows } from "../logic/selection.ts";
 import { IndexType } from "../types/enums.ts";
 import { Todo } from "../logic/todo.ts";
 import { extractSearchTerms } from "../utils/search-utils.ts";
@@ -71,8 +73,9 @@ function guesstimateSelection(
   }
 
   // Priority 2: Select first visible modified todo (if cursor is no longer valid)
+  const prevById = new Map(prevTodos.map((todo) => [todo.id, todo]));
   const modified = todos.filter((t) => {
-    const oldTodo = prevTodos.find((ot) => ot.id === t.id);
+    const oldTodo = prevById.get(t.id);
     return oldTodo && oldTodo.getHash() !== t.getHash();
   });
 
@@ -150,12 +153,6 @@ function validateSelection(
     }
   }
 
-  // Fallback 3: First todo
-  const firstEntry = indexes[firstTodoIndex];
-  if (firstEntry.type === IndexType.todo) {
-    return firstEntry.todo.id;
-  }
-
   return undefined;
 }
 
@@ -217,6 +214,182 @@ function calculateScrollOffset(
     // though clamp to cursorMin/Max handles that).
     return clamp(target, cursorMin, cursorMax);
   }
+}
+
+// ============================================================================
+// Pure Reconciliation Function
+// ============================================================================
+
+/**
+ * Reconcile navigation metadata with the current todos and indexes.
+ * Returns the same state object when nothing needs to change, so callers can
+ * commit the result without triggering a render loop.
+ */
+function reconcileNavState(
+  state: NavState,
+  todos: Todos,
+  indexes: IndexEntry[],
+  listHeight: number,
+): NavState {
+  let next = state;
+
+  // 1. Prop Sync (Guesstimate on content change)
+  if (todos !== next.prevTodos) {
+    // Step 1: Guesstimate
+    const guesstimatedId = guesstimateSelection(
+      todos,
+      next.prevTodos,
+      indexes,
+      next.selection.cursorId,
+    );
+
+    // Step 2: Validate
+    const cursorToValidate = guesstimatedId ?? next.selection.cursorId;
+    const validatedCursorId = validateSelection(
+      cursorToValidate,
+      indexes,
+      next.lastHash,
+      next.lastIndex,
+    );
+
+    // Step 3: Scroll & Metadata
+    const selectedRow = validatedCursorId
+      ? indexes.findIndex((e) =>
+        e.type === IndexType.todo && e.todo.id === validatedCursorId
+      )
+      : 0;
+
+    const selectionRangeRows = getSelectionRangeRows(
+      indexes,
+      next.selection.rangeIds,
+      selectedRow,
+    );
+
+    const newOffsetRow = calculateScrollOffset(
+      selectedRow,
+      selectionRangeRows,
+      next.offsetRow,
+      listHeight,
+      indexes.length,
+    );
+
+    let newLastHash = next.lastHash;
+    if (selectedRow !== -1 && validatedCursorId) {
+      const entry = indexes[selectedRow];
+      if (entry?.type === IndexType.todo) {
+        newLastHash = entry.todo.getHash();
+      }
+    }
+
+    // Prepare new selection state
+    let newSelection = next.selection;
+    if (
+      validatedCursorId !== next.selection.cursorId ||
+      guesstimatedId !== undefined
+    ) {
+      if (guesstimatedId !== undefined) {
+        newSelection = {
+          cursorId: validatedCursorId,
+          anchorId: undefined,
+          rangeIds: new Set(),
+        };
+      } else {
+        newSelection = {
+          ...next.selection,
+          cursorId: validatedCursorId,
+        };
+      }
+    }
+
+    next = {
+      selection: newSelection,
+      offsetRow: newOffsetRow,
+      prevTodos: todos,
+      prevIndexes: indexes,
+      lastIndex: selectedRow !== -1 ? selectedRow : next.lastIndex,
+      lastHash: newLastHash,
+    };
+  }
+
+  // 2. Validation / Auto-Correction
+  // Ensures selection is valid (exists in indexes) after Init, Filter change, or Guesstimate.
+  const currentCursor = next.selection.cursorId;
+  const validatedCursor = validateSelection(
+    currentCursor,
+    indexes,
+    next.lastHash,
+    next.lastIndex,
+  );
+
+  const indexesChanged = indexes !== next.prevIndexes;
+
+  if (validatedCursor !== currentCursor || indexesChanged) {
+    const selectedRow = validatedCursor
+      ? indexes.findIndex((e) =>
+        e.type === IndexType.todo && e.todo.id === validatedCursor
+      )
+      : 0;
+
+    const selectionRangeRows = getSelectionRangeRows(
+      indexes,
+      next.selection.rangeIds,
+      selectedRow,
+    );
+
+    const newOffsetRow = calculateScrollOffset(
+      selectedRow,
+      selectionRangeRows,
+      next.offsetRow,
+      listHeight,
+      indexes.length,
+    );
+
+    let newLastHash = next.lastHash;
+    if (selectedRow !== -1 && validatedCursor) {
+      const entry = indexes[selectedRow];
+      if (entry?.type === IndexType.todo) {
+        newLastHash = entry.todo.getHash();
+      }
+    }
+
+    next = {
+      ...next,
+      selection: {
+        ...next.selection,
+        cursorId: validatedCursor,
+      },
+      offsetRow: newOffsetRow,
+      prevIndexes: indexes,
+      lastIndex: selectedRow !== -1 ? selectedRow : next.lastIndex,
+      lastHash: newLastHash,
+    };
+  }
+
+  // 3. Clear multi-select if any selected todo is filtered out
+  if (next.selection.rangeIds.size > 0) {
+    const visibleIds = new Set<symbol>();
+    for (const entry of indexes) {
+      if (entry.type === IndexType.todo) {
+        visibleIds.add(entry.todo.id);
+      }
+    }
+
+    for (const id of next.selection.rangeIds) {
+      if (!visibleIds.has(id)) {
+        next = {
+          ...next,
+          selection: {
+            ...next.selection,
+            rangeIds: new Set<symbol>(),
+            anchorId: undefined,
+          },
+        };
+        break;
+      }
+    }
+  }
+
+  return next;
 }
 
 // ============================================================================
@@ -335,196 +508,22 @@ export const NavigationProvider = (
     return createIndexes(filteredTodos);
   }, [todos, searchQuery, showHidden]);
 
-  // Derived State: Handle prop changes synchronously during render
-  // We use a local variable `activeState` to ensure the current render sees the *new* state immediately.
-  let activeState = state;
-
-  // 1. Prop Sync (Guesstimate on content change)
-  if (todos !== state.prevTodos) {
-    const prevTodos = state.prevTodos;
-
-    // Step 1: Guesstimate
-    const guesstimatedId = guesstimateSelection(
-      todos,
-      prevTodos,
-      indexes,
-      state.selection.cursorId,
-    );
-
-    // Step 2: Validate
-    const cursorToValidate = guesstimatedId ?? state.selection.cursorId;
-    const validatedCursorId = validateSelection(
-      cursorToValidate,
-      indexes,
-      state.lastHash,
-      state.lastIndex,
-    );
-
-    // Step 3: Scroll & Metadata
-    const selectedRow = validatedCursorId
-      ? indexes.findIndex((e) =>
-        e.type === IndexType.todo && e.todo.id === validatedCursorId
-      )
-      : 0;
-
-    // Calculate range logic (simplified for immediate update)
-    let rangeMin = selectedRow;
-    let rangeMax = selectedRow;
-    if (state.selection.rangeIds.size > 0) {
-      indexes.forEach((entry, index) => {
-        if (
-          entry.type === IndexType.todo &&
-          state.selection.rangeIds.has(entry.todo.id)
-        ) {
-          rangeMin = Math.min(rangeMin, index);
-          rangeMax = Math.max(rangeMax, index);
-        }
-      });
-    }
-
-    const newOffsetRow = calculateScrollOffset(
-      selectedRow,
-      { min: rangeMin, max: rangeMax },
-      state.offsetRow,
-      listHeight,
-      indexes.length,
-    );
-
-    let newLastHash = state.lastHash;
-    if (selectedRow !== -1 && validatedCursorId) {
-      const entry = indexes[selectedRow];
-      if (entry?.type === IndexType.todo) {
-        newLastHash = entry.todo.getHash();
-      }
-    }
-
-    // Prepare new selection state
-    let newSelection = state.selection;
-    if (
-      validatedCursorId !== state.selection.cursorId ||
-      guesstimatedId !== undefined
-    ) {
-      if (guesstimatedId !== undefined) {
-        newSelection = {
-          cursorId: validatedCursorId,
-          anchorId: undefined,
-          rangeIds: new Set(),
-        };
-      } else {
-        newSelection = {
-          ...state.selection,
-          cursorId: validatedCursorId,
-        };
-      }
-    }
-
-    activeState = {
-      selection: newSelection,
-      offsetRow: newOffsetRow,
-      prevTodos: todos,
-      prevIndexes: indexes,
-      lastIndex: selectedRow !== -1 ? selectedRow : state.lastIndex,
-      lastHash: newLastHash,
-    };
-    setState(activeState);
-  }
-
-  // 2. Validation / Auto-Correction (Runs on every render)
-  // Ensures selection is valid (exists in indexes) after Init, Filter change, or Guesstimate.
-  const currentCursor = activeState.selection.cursorId;
-  const validatedCursor = validateSelection(
-    currentCursor,
-    indexes,
-    activeState.lastHash,
-    activeState.lastIndex,
+  // Derived state is reconciled purely during render, then committed in an
+  // effect. The current render already sees the reconciled result, and the
+  // effect persists the metadata (previous todos/indexes, last hash/index) so
+  // future renders and handlers stay in sync.
+  const activeState = useMemo(
+    () => reconcileNavState(state, todos, indexes, listHeight),
+    [state, todos, indexes, listHeight],
   );
 
-  const indexesChanged = indexes !== activeState.prevIndexes;
+  useEffect(() => {
+    if (activeState === state) return;
 
-  if (validatedCursor !== currentCursor || indexesChanged) {
-    const selectedRow = validatedCursor
-      ? indexes.findIndex((e) =>
-        e.type === IndexType.todo && e.todo.id === validatedCursor
-      )
-      : 0;
-
-    let rangeMin = selectedRow;
-    let rangeMax = selectedRow;
-    if (activeState.selection.rangeIds.size > 0) {
-      indexes.forEach((entry, index) => {
-        if (
-          entry.type === IndexType.todo &&
-          activeState.selection.rangeIds.has(entry.todo.id)
-        ) {
-          rangeMin = Math.min(rangeMin, index);
-          rangeMax = Math.max(rangeMax, index);
-        }
-      });
-    }
-
-    const newOffsetRow = calculateScrollOffset(
-      selectedRow,
-      { min: rangeMin, max: rangeMax },
-      activeState.offsetRow,
-      listHeight,
-      indexes.length,
-    );
-
-    let newLastHash = activeState.lastHash;
-    if (selectedRow !== -1 && validatedCursor) {
-      const entry = indexes[selectedRow];
-      if (entry?.type === IndexType.todo) {
-        newLastHash = entry.todo.getHash();
-      }
-    }
-
-    activeState = {
-      ...activeState,
-      selection: {
-        ...activeState.selection,
-        cursorId: validatedCursor,
-      },
-      offsetRow: newOffsetRow,
-      prevIndexes: indexes,
-      lastIndex: selectedRow !== -1 ? selectedRow : activeState.lastIndex,
-      lastHash: newLastHash,
-    };
-    setState(activeState);
-  }
-
-  // Derived state: Clear multi-select if filtered out
-  const visibleIds = useMemo(() => {
-    const ids = new Set<symbol>();
-    for (const entry of indexes) {
-      if (entry.type === IndexType.todo) {
-        ids.add(entry.todo.id);
-      }
-    }
-    return ids;
-  }, [indexes]);
-
-  if (activeState.selection.rangeIds.size > 0) {
-    let hasInvisible = false;
-    for (const id of activeState.selection.rangeIds) {
-      if (!visibleIds.has(id)) {
-        hasInvisible = true;
-        break;
-      }
-    }
-
-    if (hasInvisible) {
-      const newState: NavState = {
-        ...activeState,
-        selection: {
-          ...activeState.selection,
-          rangeIds: new Set<symbol>(),
-          anchorId: undefined,
-        },
-      };
-      setState(newState);
-      activeState = newState;
-    }
-  }
+    // Only commit if state has not changed since this reconciliation, so a
+    // newer update from an event handler is never clobbered.
+    setState((prev) => prev === state ? activeState : prev);
+  }, [activeState, state]);
 
   const setSelectedTodoId = useCallback(
     (id: symbol | undefined, shift = false) => {
@@ -555,22 +554,11 @@ export const NavigationProvider = (
             }
           }
 
-          const selectionRangeRows = (() => {
-            if (newRange.size === 0) {
-              return { min: targetRow, max: targetRow };
-            }
-            let min = targetRow;
-            let max = targetRow;
-            indexes.forEach((entry, index) => {
-              if (
-                entry.type === IndexType.todo && newRange.has(entry.todo.id)
-              ) {
-                min = Math.min(min, index);
-                max = Math.max(max, index);
-              }
-            });
-            return { min, max };
-          })();
+          const selectionRangeRows = getSelectionRangeRows(
+            indexes,
+            newRange,
+            targetRow,
+          );
 
           const newOffset = calculateScrollOffset(
             targetRow,
@@ -696,20 +684,11 @@ export const NavigationProvider = (
         newAnchor = undefined;
       }
 
-      const selectionRangeRows = (() => {
-        if (newRange.size === 0) {
-          return { min: newSelectedRow, max: newSelectedRow };
-        }
-        let min = newSelectedRow;
-        let max = newSelectedRow;
-        indexes.forEach((entry, index) => {
-          if (entry.type === IndexType.todo && newRange.has(entry.todo.id)) {
-            min = Math.min(min, index);
-            max = Math.max(max, index);
-          }
-        });
-        return { min, max };
-      })();
+      const selectionRangeRows = getSelectionRangeRows(
+        indexes,
+        newRange,
+        newSelectedRow,
+      );
 
       const newOffsetRow = calculateScrollOffset(
         newSelectedRow,
