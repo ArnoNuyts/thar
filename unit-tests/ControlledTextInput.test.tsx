@@ -320,6 +320,327 @@ Deno.test("ControlledTextInput - Normal Delete should only remove one character"
   unmount();
 });
 
+type WordMotionState = {
+  value: string;
+  cursor: number;
+};
+
+function WordMotionHarness(
+  { initialValue, initialCursor, state }: {
+    initialValue: string;
+    initialCursor: number;
+    state: WordMotionState;
+  },
+) {
+  const [value, setValue] = React.useState(initialValue);
+  const [cursor, setCursor] = React.useState(initialCursor);
+
+  React.useEffect(() => {
+    state.value = value;
+    state.cursor = cursor;
+  }, [value, cursor]);
+
+  return (
+    <ControlledTextInput
+      value={value}
+      onChange={setValue}
+      cursorOffset={cursor}
+      onCursorChange={setCursor}
+    />
+  );
+}
+
+async function pressWordMotion(
+  initialValue: string,
+  initialCursor: number,
+  sequence: string,
+  expected: WordMotionState,
+) {
+  const state: WordMotionState = {
+    value: initialValue,
+    cursor: initialCursor,
+  };
+  const { stdin, unmount } = render(
+    <WordMotionHarness
+      initialValue={initialValue}
+      initialCursor={initialCursor}
+      state={state}
+    />,
+  );
+
+  try {
+    await stdin.write(sequence);
+    await waitFor(() => {
+      assertEquals(state.cursor, expected.cursor, "unexpected cursor");
+      assertEquals(state.value, expected.value, "unexpected value");
+    });
+  } finally {
+    unmount();
+  }
+}
+
+Deno.test("ControlledTextInput - Ctrl+Left word motion handles punctuation and spaces", async (t) => {
+  const cases: Array<{
+    name: string;
+    value: string;
+    cursor: number;
+    sequence: string;
+    expected: WordMotionState;
+  }> = [
+    {
+      name: "punctuation is part of the word",
+      value: "foo.bar baz",
+      cursor: 11,
+      sequence: "\x1b[1;5D",
+      expected: { value: "foo.bar baz", cursor: 8 },
+    },
+    {
+      name: "multiple spaces are skipped",
+      value: "foo  bar",
+      cursor: 8,
+      sequence: "\x1b[1;5D",
+      expected: { value: "foo  bar", cursor: 5 },
+    },
+    {
+      name: "starting on whitespace lands on previous word start",
+      value: "foo  bar",
+      cursor: 3,
+      sequence: "\x1b[1;5D",
+      expected: { value: "foo  bar", cursor: 0 },
+    },
+    {
+      name: "ctrl+shift+left uses the same word motion",
+      value: "foo bar",
+      cursor: 7,
+      sequence: "\x1b[1;6D",
+      expected: { value: "foo bar", cursor: 4 },
+    },
+  ];
+
+  for (
+    const { name, value, cursor, sequence, expected } of cases
+  ) {
+    await t.step(name, async () => {
+      await pressWordMotion(value, cursor, sequence, expected);
+    });
+  }
+});
+
+Deno.test("ControlledTextInput - Ctrl+Right word motion handles punctuation and spaces", async (t) => {
+  const cases: Array<{
+    name: string;
+    value: string;
+    cursor: number;
+    sequence: string;
+    expected: WordMotionState;
+  }> = [
+    {
+      name: "punctuation is part of the word",
+      value: "foo.bar baz",
+      cursor: 0,
+      sequence: "\x1b[1;5C",
+      expected: { value: "foo.bar baz", cursor: 8 },
+    },
+    {
+      name: "multiple spaces are skipped",
+      value: "foo  bar",
+      cursor: 0,
+      sequence: "\x1b[1;5C",
+      expected: { value: "foo  bar", cursor: 5 },
+    },
+    {
+      name: "starting on whitespace stops at the next word start",
+      value: "foo  bar",
+      cursor: 3,
+      sequence: "\x1b[1;5C",
+      expected: { value: "foo  bar", cursor: 5 },
+    },
+    {
+      name: "ctrl+shift+right uses the same word motion",
+      value: "foo bar",
+      cursor: 0,
+      sequence: "\x1b[1;6C",
+      expected: { value: "foo bar", cursor: 4 },
+    },
+  ];
+
+  for (
+    const { name, value, cursor, sequence, expected } of cases
+  ) {
+    await t.step(name, async () => {
+      await pressWordMotion(value, cursor, sequence, expected);
+    });
+  }
+});
+
+Deno.test("ControlledTextInput - Ctrl+Backspace word deletion handles punctuation and spaces", async (t) => {
+  const cases: Array<{
+    name: string;
+    value: string;
+    cursor: number;
+    expected: WordMotionState;
+  }> = [
+    {
+      name: "deletes punctuation word",
+      value: "foo.bar baz",
+      cursor: 11,
+      expected: { value: "foo.bar ", cursor: 8 },
+    },
+    {
+      name: "deletes word after multiple spaces",
+      value: "foo  bar",
+      cursor: 8,
+      expected: { value: "foo  ", cursor: 5 },
+    },
+    {
+      name: "deletes preceding word and spaces",
+      value: "foo  bar",
+      cursor: 5,
+      expected: { value: "bar", cursor: 0 },
+    },
+    {
+      name: "alt+backspace uses the same word deletion",
+      value: "hello world",
+      cursor: 11,
+      expected: { value: "hello ", cursor: 6 },
+    },
+  ];
+
+  for (const { name, value, cursor, expected } of cases) {
+    await t.step(name, async () => {
+      await pressWordMotion(
+        value,
+        cursor,
+        name.startsWith("alt") ? "\x1b\x7f" : "\x17",
+        expected,
+      );
+    });
+  }
+});
+
+Deno.test("ControlledTextInput - Ctrl+Delete word deletion handles punctuation and spaces", async (t) => {
+  const cases: Array<{
+    name: string;
+    value: string;
+    cursor: number;
+    expected: WordMotionState;
+  }> = [
+    {
+      name: "deletes punctuation word",
+      value: "foo.bar baz",
+      cursor: 0,
+      expected: { value: "baz", cursor: 0 },
+    },
+    {
+      name: "deletes word and following spaces",
+      value: "foo  bar",
+      cursor: 0,
+      expected: { value: "bar", cursor: 0 },
+    },
+    {
+      name: "when starting on whitespace deletes spaces and next word",
+      value: "foo  bar",
+      cursor: 3,
+      expected: { value: "foo", cursor: 3 },
+    },
+    {
+      name: "when starting on whitespace keeps spaces after the deleted word",
+      value: "foo  bar  baz",
+      cursor: 3,
+      expected: { value: "foo  baz", cursor: 3 },
+    },
+    {
+      name: "when starting in a word deletes following spaces too",
+      value: "foo  bar  baz",
+      cursor: 0,
+      expected: { value: "bar  baz", cursor: 0 },
+    },
+  ];
+
+  for (const { name, value, cursor, expected } of cases) {
+    await t.step(name, async () => {
+      await pressWordMotion(value, cursor, "\x1b[3;5~", expected);
+    });
+  }
+});
+
+Deno.test("ControlledTextInput - word motion clamps at string boundaries", async (t) => {
+  const cases: Array<{
+    name: string;
+    value: string;
+    cursor: number;
+    sequence: string;
+    expected: WordMotionState;
+  }> = [
+    {
+      name: "empty text ctrl+left then type",
+      value: "",
+      cursor: 0,
+      sequence: "\x1b[1;5D",
+      expected: { value: "x", cursor: 1 },
+    },
+    {
+      name: "empty text ctrl+right then type",
+      value: "",
+      cursor: 0,
+      sequence: "\x1b[1;5C",
+      expected: { value: "x", cursor: 1 },
+    },
+    {
+      name: "empty text ctrl+backspace then type",
+      value: "",
+      cursor: 0,
+      sequence: "\x17",
+      expected: { value: "x", cursor: 1 },
+    },
+    {
+      name: "empty text ctrl+delete then type",
+      value: "",
+      cursor: 0,
+      sequence: "\x1b[3;5~",
+      expected: { value: "x", cursor: 1 },
+    },
+    {
+      name: "ctrl+right at end stays at end",
+      value: "foo bar",
+      cursor: 7,
+      sequence: "\x1b[1;5C",
+      expected: { value: "foo barx", cursor: 8 },
+    },
+    {
+      name: "ctrl+left at start stays at start",
+      value: "foo bar",
+      cursor: 0,
+      sequence: "\x1b[1;5D",
+      expected: { value: "xfoo bar", cursor: 1 },
+    },
+  ];
+
+  for (const { name, value, cursor, sequence, expected } of cases) {
+    await t.step(name, async () => {
+      const state: WordMotionState = { value, cursor };
+      const { stdin, unmount } = render(
+        <WordMotionHarness
+          initialValue={value}
+          initialCursor={cursor}
+          state={state}
+        />,
+      );
+
+      try {
+        await stdin.write(sequence);
+        await stdin.write("x");
+        await waitFor(() => {
+          assertEquals(state.cursor, expected.cursor, "unexpected cursor");
+          assertEquals(state.value, expected.value, "unexpected value");
+        });
+      } finally {
+        unmount();
+      }
+    });
+  }
+});
+
 Deno.test("ControlledTextInput - Mouse wheel escape does not insert characters", async (t) => {
   let currentValue = "hello";
 

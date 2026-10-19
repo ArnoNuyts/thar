@@ -248,6 +248,98 @@ const keyName: Record<string, string> = {
 };
 
 /**
+ * Escape sequences that carry a Shift modifier. Some sequences also appear in
+ * the Ctrl or Meta sets below on purpose, because they combine modifiers.
+ */
+const SHIFT_SEQUENCES = new Set([
+  "\x1b[1;2A",
+  "\x1b[1;2B",
+  "\x1b[1;2C",
+  "\x1b[1;2D",
+  "\x1b[1;4A",
+  "\x1b[1;4B",
+  "\x1b[1;4C",
+  "\x1b[1;4D",
+  "\x1b[1;6A",
+  "\x1b[1;6B",
+  "\x1b[1;6C",
+  "\x1b[1;6D",
+  "\x1b[1;8A",
+  "\x1b[1;8B",
+  "\x1b[1;8C",
+  "\x1b[1;8D",
+  "\x1b[3;2~",
+  "\x1b[3;4~",
+  "\x1b[3;6~",
+  "\x1b[3;8~",
+  "\x1b[3$",
+  "\x1b[3@",
+  "\x1b[Z", // Shift+Tab
+]);
+
+/** Escape sequences that carry a Ctrl modifier. */
+const CTRL_SEQUENCES = new Set([
+  "\x1b[1;5A",
+  "\x1b[1;5B",
+  "\x1b[1;5C",
+  "\x1b[1;5D",
+  "\x1b[1;6A",
+  "\x1b[1;6B",
+  "\x1b[1;6C",
+  "\x1b[1;6D",
+  "\x1b[1;7A",
+  "\x1b[1;7B",
+  "\x1b[1;7C",
+  "\x1b[1;7D",
+  "\x1b[1;8A",
+  "\x1b[1;8B",
+  "\x1b[1;8C",
+  "\x1b[1;8D",
+  "\x1b[3;5~",
+  "\x1b[3;6~",
+  "\x1b[3;7~",
+  "\x1b[3;8~",
+  "\x1b[3^",
+  "\x1b[3@",
+  "\x17", // Ctrl+W
+  "\x1b\x08", // Alt+Ctrl+H
+  "\x04", // Ctrl+D
+  "\x1b\x04",
+  "\x1bd",
+]);
+
+/** Escape sequences that carry a Meta/Alt modifier. */
+const META_SEQUENCES = new Set([
+  "\x1b[1;3A",
+  "\x1b[1;3B",
+  "\x1b[1;3C",
+  "\x1b[1;3D",
+  "\x1b[1;9A",
+  "\x1b[1;9B",
+  "\x1b[1;9C",
+  "\x1b[1;9D",
+  "\x1b[1;4A",
+  "\x1b[1;4B",
+  "\x1b[1;4C",
+  "\x1b[1;4D",
+  "\x1b[1;7A",
+  "\x1b[1;7B",
+  "\x1b[1;7C",
+  "\x1b[1;7D",
+  "\x1b[1;8A",
+  "\x1b[1;8B",
+  "\x1b[1;8C",
+  "\x1b[1;8D",
+  "\x1b[3;3~",
+  "\x1b[3;4~",
+  "\x1b[3;7~",
+  "\x1b[3;8~",
+  "\x1b\x7f",
+  "\x1b\x08",
+  "\x1bd",
+]);
+
+/**
 A custom version of Ink's useInput that correctly handles Home/End keys
 and fixes Backspace/Delete issues on Windows.
 */
@@ -403,103 +495,19 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
 
         // Modifier detection from escape sequences (redundant for named keys but useful for flags)
         // Check for Shift+Arrow keys
-        if (
-          [
-            "\x1b[1;2A",
-            "\x1b[1;2B",
-            "\x1b[1;2C",
-            "\x1b[1;2D",
-            "\x1b[1;4A",
-            "\x1b[1;4B",
-            "\x1b[1;4C",
-            "\x1b[1;4D",
-            "\x1b[1;6A",
-            "\x1b[1;6B",
-            "\x1b[1;6C",
-            "\x1b[1;6D",
-            "\x1b[1;8A",
-            "\x1b[1;8B",
-            "\x1b[1;8C",
-            "\x1b[1;8D",
-            "\x1b[3;2~",
-            "\x1b[3;4~",
-            "\x1b[3;6~",
-            "\x1b[3;8~",
-            "\x1b[3$",
-            "\x1b[3@",
-            "\x1b[Z", // Shift+Tab
-          ].includes(s)
-        ) {
+        if (SHIFT_SEQUENCES.has(s)) {
           key.shift = true;
         }
 
         // Check for Ctrl keys (Arrow, Delete, Backspace via Ctrl+H handled above)
-        if (
-          [
-            "\x1b[1;5A",
-            "\x1b[1;5B",
-            "\x1b[1;5C",
-            "\x1b[1;5D",
-            "\x1b[1;6A",
-            "\x1b[1;6B",
-            "\x1b[1;6C",
-            "\x1b[1;6D",
-            "\x1b[1;7A",
-            "\x1b[1;7B",
-            "\x1b[1;7C",
-            "\x1b[1;7D",
-            "\x1b[1;8A",
-            "\x1b[1;8B",
-            "\x1b[1;8C",
-            "\x1b[1;8D",
-            "\x1b[3;5~",
-            "\x1b[3;6~",
-            "\x1b[3;7~",
-            "\x1b[3;8~",
-            "\x1b[3^",
-            "\x1b[3@",
-            "\x17", // Ctrl+W
-            "\x1b\x08", // Alt+Ctrl+H
-            "\x04", // Ctrl+D
-            "\x1b\x04",
-            "\x1bd",
-          ].includes(s)
-        ) {
+        if (CTRL_SEQUENCES.has(s)) {
           key.ctrl = true;
         }
 
         // Check for Meta/Alt keys
         if (
           key.meta || // already detected
-          [
-            "\x1b[1;3A",
-            "\x1b[1;3B",
-            "\x1b[1;3C",
-            "\x1b[1;3D",
-            "\x1b[1;9A",
-            "\x1b[1;9B",
-            "\x1b[1;9C",
-            "\x1b[1;9D",
-            "\x1b[1;4A",
-            "\x1b[1;4B",
-            "\x1b[1;4C",
-            "\x1b[1;4D",
-            "\x1b[1;7A",
-            "\x1b[1;7B",
-            "\x1b[1;7C",
-            "\x1b[1;7D",
-            "\x1b[1;8A",
-            "\x1b[1;8B",
-            "\x1b[1;8C",
-            "\x1b[1;8D",
-            "\x1b[3;3~",
-            "\x1b[3;4~",
-            "\x1b[3;7~",
-            "\x1b[3;8~",
-            "\x1b\x7f",
-            "\x1b\x08",
-            "\x1bd",
-          ].includes(s)
+          META_SEQUENCES.has(s)
         ) {
           key.meta = true;
         }
