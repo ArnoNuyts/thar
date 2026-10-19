@@ -8,13 +8,12 @@ import { useModal } from "../contexts/modal-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
 import { FocusObserver, TestWrapper } from "./test-components.tsx";
-import { Todos } from "../logic/Todos.ts";
 
 Deno.test("AddTagContextModal: should render projects correctly", async () => {
   const t1 = new Todo("Todo 1 +work");
   const t2 = new Todo("Todo 2 +work +personal");
   const t3 = new Todo("Todo 3");
-  const todos = new Todos(t1, t2, t3);
+  const todos = [t1, t2, t3];
 
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();
@@ -56,7 +55,7 @@ Deno.test("AddTagContextModal: should render projects correctly", async () => {
 Deno.test("AddTagContextModal: should toggle existing project", async () => {
   const t1 = new Todo("Todo 1 +work");
   const t2 = new Todo("Todo 2 +work");
-  const todos = new Todos(t1, t2);
+  const todos = [t1, t2];
   let updatedTodos: Todo[] = [];
   let transformFn: ((t: Todo) => Todo) | undefined;
 
@@ -131,7 +130,7 @@ Deno.test("AddTagContextModal: should toggle existing project", async () => {
 
 Deno.test("AddTagContextModal: should add custom project", async () => {
   const t1 = new Todo("Todo 1");
-  const todos = new Todos(t1);
+  const todos = [t1];
   let updatedTodos: Todo[] = [];
   let transformFn: ((t: Todo) => Todo) | undefined;
 
@@ -199,7 +198,7 @@ Deno.test("AddTagContextModal: should add custom project", async () => {
 Deno.test("AddTagContextModal: should cycle through 3 states for 'some' state", async () => {
   const t1 = new Todo("Todo 1 +work");
   const t2 = new Todo("Todo 2");
-  const todos = new Todos(t1, t2);
+  const todos = [t1, t2];
 
   let focusedTag: string | undefined;
 
@@ -265,7 +264,7 @@ Deno.test("AddTagContextModal: should cycle through 3 states for 'some' state", 
 Deno.test("AddTagContextModal: mouse click should toggle existing project", async () => {
   const t1 = new Todo("Todo 1 +work");
   const t2 = new Todo("Todo 2 +work");
-  const todos = new Todos(t1, t2);
+  const todos = [t1, t2];
 
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();

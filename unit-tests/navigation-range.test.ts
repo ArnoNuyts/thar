@@ -4,9 +4,10 @@ import { getSelectionRangeRows } from "../logic/selection.ts";
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
 
-const todoEntry = (todo: Todo): IndexEntry => ({
+const todoEntry = (todo: Todo, number: number): IndexEntry => ({
   type: IndexType.todo,
   todo,
+  number,
 });
 
 const contextEntry = (contextName: string): IndexEntry => ({
@@ -17,7 +18,7 @@ const contextEntry = (contextName: string): IndexEntry => ({
 
 const createIndexesFixture = (todos: Todo[]): IndexEntry[] => [
   contextEntry("None"),
-  ...todos.map(todoEntry),
+  ...todos.map((todo, index) => todoEntry(todo, index + 1)),
 ];
 
 Deno.test("getSelectionRangeRows: no range falls back to the cursor row", () => {
@@ -90,10 +91,10 @@ Deno.test("getSelectionRangeRows: context entries are ignored when calculating r
   const todos = Array.from({ length: 3 }, (_, i) => new Todo(`Todo ${i}`));
   const indexes: IndexEntry[] = [
     contextEntry("A"),
-    todoEntry(todos[0]),
+    todoEntry(todos[0], 1),
     contextEntry("B"),
-    todoEntry(todos[1]),
-    todoEntry(todos[2]),
+    todoEntry(todos[1], 2),
+    todoEntry(todos[2], 3),
   ];
   const rangeIds = new Set([todos[0].id, todos[2].id]);
 

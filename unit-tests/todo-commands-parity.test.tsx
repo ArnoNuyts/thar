@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
 
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
 import { waitFor } from "./test-utils.ts";
 import {
@@ -131,7 +131,7 @@ Deno.test({
     const listResult: string[] = [];
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = new Todos(...initial);
+      let captured = [...initial];
       const harness = renderHarness(
         initial,
         (todos) => captured = todos,
@@ -150,7 +150,7 @@ Deno.test({
 
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = new Todos(...initial);
+      let captured = [...initial];
       const harness = renderHarness(
         initial,
         (todos) => captured = todos,
@@ -184,7 +184,7 @@ Deno.test({
     const listResult: string[] = [];
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = new Todos(...initial);
+      let captured = [...initial];
       const harness = renderHarness(
         initial,
         (todos) => captured = todos,
@@ -208,7 +208,7 @@ Deno.test({
 
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = new Todos(...initial);
+      let captured = [...initial];
       const harness = renderHarness(
         initial,
         (todos) => captured = todos,
@@ -306,7 +306,7 @@ Deno.test({
     const listResult: string[] = [];
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = new Todos(...initial);
+      let captured = [...initial];
       const harness = renderHarness(
         initial,
         (todos) => captured = todos,
@@ -328,7 +328,7 @@ Deno.test({
 
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = new Todos(...initial);
+      let captured = [...initial];
       const harness = renderHarness(
         initial,
         (todos) => captured = todos,

@@ -8,7 +8,7 @@ import {
 } from "../contexts/navigation-context.tsx";
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 
 // Helper component to interact with NavigationContext
@@ -40,9 +40,9 @@ Deno.test(
   { sanitizeResources: false, sanitizeOps: false },
   async (t) => {
     await t.step("should scroll down with padding consistently", async () => {
-      const todos = new Todos(
+      const todos = [
         ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i + 1}`)),
-      );
+      ];
       // deno-lint-ignore no-explicit-any
       let navContext: any;
 
@@ -88,9 +88,9 @@ Deno.test(
     });
 
     await t.step("should scroll up with padding consistently", async () => {
-      const todos = new Todos(
+      const todos = [
         ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i + 1}`)),
-      );
+      ];
       // deno-lint-ignore no-explicit-any
       let navContext: any;
 
@@ -143,9 +143,9 @@ Deno.test(
     });
 
     await t.step("should not scroll past the end of the list", async () => {
-      const todos = new Todos(
+      const todos = [
         ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i + 1}`)),
-      );
+      ];
       // deno-lint-ignore no-explicit-any
       let navContext: any;
 

@@ -9,7 +9,7 @@ import {
 } from "../contexts/navigation-context.tsx";
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 
 const TestWrapper = (
@@ -43,11 +43,11 @@ Deno.test(
     sanitizeOps: false,
   },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Todo 1"),
       new Todo("Todo 2"),
       new Todo("Todo 3"),
-    );
+    ];
     let navContext: NavigationContextType | undefined;
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
@@ -75,7 +75,7 @@ Deno.test(
     sanitizeOps: false,
   },
   async () => {
-    const todos = new Todos(new Todo("1"), new Todo("2"), new Todo("3"));
+    const todos = [new Todo("1"), new Todo("2"), new Todo("3")];
     let navContext: NavigationContextType | undefined;
     const { unmount } = render(
       <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
@@ -101,7 +101,7 @@ Deno.test("Multi-selection: Moving without shift clears selection", {
   sanitizeResources: false,
   sanitizeOps: false,
 }, async () => {
-  const todos = new Todos(new Todo("1"), new Todo("2"), new Todo("3"));
+  const todos = [new Todo("1"), new Todo("2"), new Todo("3")];
   let navContext: NavigationContextType | undefined;
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
@@ -127,10 +127,10 @@ Deno.test("Multi-selection: Selection across context headers works", {
 }, async () => {
   // Use names that don't reorder if possible, or expect reordered
   // Home (H) comes before Work (W)
-  const todos = new Todos(
+  const todos = [
     new Todo("B @Home"),
     new Todo("A @Work"),
-  );
+  ];
   let navContext: NavigationContextType | undefined;
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
@@ -154,7 +154,7 @@ Deno.test("Multi-selection: Continuous Shift+Down expands range", {
   sanitizeResources: false,
   sanitizeOps: false,
 }, async () => {
-  const todos = new Todos(new Todo("1"), new Todo("2"), new Todo("3"));
+  const todos = [new Todo("1"), new Todo("2"), new Todo("3")];
   let navContext: NavigationContextType | undefined;
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(c) => navContext = c} />,
@@ -178,7 +178,7 @@ Deno.test("Multi-selection: Pressing Esc clears selection", {
   sanitizeResources: false,
   sanitizeOps: false,
 }, async () => {
-  const todos = new Todos(new Todo("1"), new Todo("2"), new Todo("3"));
+  const todos = [new Todo("1"), new Todo("2"), new Todo("3")];
   let navContext: NavigationContextType | undefined;
   const { unmount } = render(
     <TestWrapper todos={todos} onContext={(c) => navContext = c} />,

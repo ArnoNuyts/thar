@@ -13,7 +13,7 @@ import {
   useSearch,
 } from "../contexts/search-context.tsx";
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 import { IndexType } from "../types/enums.ts";
 import { IndexEntry, TodoIndexEntry } from "../logic/indexes.ts";
@@ -45,11 +45,11 @@ const NavigationTester = (
 Deno.test("should initialize with first todo selected", {
   sanitizeResources: false,
 }, async () => {
-  const todos = new Todos(
+  const todos = [
     new Todo("Todo 1"),
     new Todo("Todo 2"),
     new Todo("Todo 3"),
-  );
+  ];
   let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
@@ -75,11 +75,11 @@ Deno.test("should navigate down", {
   sanitizeResources: false,
   sanitizeOps: false,
 }, async () => {
-  const todos = new Todos(
+  const todos = [
     new Todo("Todo 1"),
     new Todo("Todo 2"),
     new Todo("Todo 3"),
-  );
+  ];
   let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
@@ -103,10 +103,10 @@ Deno.test("should navigate up", {
   sanitizeResources: false,
   sanitizeOps: false,
 }, async () => {
-  const todos = new Todos(
+  const todos = [
     new Todo("Todo 1"),
     new Todo("Todo 2"),
-  );
+  ];
   let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
@@ -137,13 +137,13 @@ Deno.test("should jump between contexts", {
   sanitizeResources: false,
   sanitizeOps: false,
 }, async () => {
-  const todos = new Todos(
+  const todos = [
     new Todo("Alpha @A"),
     new Todo("Beta @A"),
     new Todo("Charlie @B"),
     new Todo("Delta @B"),
     new Todo("Echo @C"),
-  );
+  ];
   let navContext: NavigationContextType = null!;
 
   const { unmount } = render(
@@ -202,10 +202,10 @@ Deno.test(
   "should clamp navigation at bounds",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Todo 1"),
       new Todo("Todo 2"),
-    );
+    ];
     let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
@@ -245,7 +245,7 @@ Deno.test(
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2"); // Target for selection
     const todo3 = new Todo("Todo 3");
-    const todos = new Todos(todo1, todo2, todo3);
+    const todos = [todo1, todo2, todo3];
     let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
@@ -260,7 +260,7 @@ Deno.test(
 
     // Mutate Todo 2
     const updatedTodo2 = todo2.setText("Todo 2 Updated");
-    const newTodos = new Todos(todo1, updatedTodo2, todo3);
+    const newTodos = [todo1, updatedTodo2, todo3];
 
     // Re-render
     rerender(
@@ -292,7 +292,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2");
     const todo3 = new Todo("Todo 3");
     // Initial set of todos
-    const initialTodos = new Todos(todo1, todo2, todo3);
+    const initialTodos = [todo1, todo2, todo3];
 
     let navContext: NavigationContextType = null!;
 
@@ -314,7 +314,7 @@ Deno.test(
     const newTodo1 = new Todo("Todo 1");
     const newTodo2 = new Todo("Todo 2"); // Same content as old selected
     const newTodo3 = new Todo("Todo 3");
-    const reloadedTodos = new Todos(newTodo1, newTodo2, newTodo3);
+    const reloadedTodos = [newTodo1, newTodo2, newTodo3];
 
     // Re-render with new instances
     rerender(
@@ -346,7 +346,7 @@ Deno.test(
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2");
     const todo3 = new Todo("Todo 3");
-    const todos = new Todos(todo1, todo2, todo3);
+    const todos = [todo1, todo2, todo3];
     let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
@@ -361,7 +361,7 @@ Deno.test(
     );
 
     // Delete Todo 2
-    const newTodos = new Todos(todo1, todo3);
+    const newTodos = [todo1, todo3];
     rerender(
       <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
     );
@@ -380,7 +380,7 @@ Deno.test(
   async () => {
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2");
-    const todos = new Todos(todo1, todo2);
+    const todos = [todo1, todo2];
     let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
@@ -394,7 +394,7 @@ Deno.test(
     );
 
     // Delete Todo 2
-    const newTodos = new Todos(todo1);
+    const newTodos = [todo1];
     rerender(
       <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
     );
@@ -414,7 +414,7 @@ Deno.test(
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2"); // Target
     const todo3 = new Todo("Todo 3");
-    const todos = new Todos(todo1, todo2, todo3);
+    const todos = [todo1, todo2, todo3];
     let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
@@ -430,7 +430,7 @@ Deno.test(
 
     // Change Priority
     const updatedTodo2 = todo2.setPriority("A");
-    const newTodos = new Todos(todo1, updatedTodo2, todo3);
+    const newTodos = [todo1, updatedTodo2, todo3];
 
     // Re-render
     rerender(
@@ -454,7 +454,7 @@ Deno.test(
     const todo1 = new Todo("Todo 1");
     const todo2 = new Todo("Todo 2"); // Target
     const todo3 = new Todo("Todo 3");
-    const todos = new Todos(todo1, todo2, todo3);
+    const todos = [todo1, todo2, todo3];
     let navContext: NavigationContextType = null!;
 
     const { rerender, unmount } = render(
@@ -469,7 +469,7 @@ Deno.test(
 
     // Toggle completion
     const { updated: updatedTodo2 } = todo2.toggleState();
-    const newTodos = new Todos(todo1, updatedTodo2, todo3);
+    const newTodos = [todo1, updatedTodo2, todo3];
 
     // Re-render
     rerender(
@@ -491,11 +491,11 @@ Deno.test(
   "should navigate home (first item)",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Todo 1"),
       new Todo("Todo 2"),
       new Todo("Todo 3"),
-    );
+    ];
     let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
@@ -527,11 +527,11 @@ Deno.test(
   "should navigate to end (last item)",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Todo 1"),
       new Todo("Todo 2"),
       new Todo("Todo 3"),
-    );
+    ];
     let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
@@ -556,11 +556,11 @@ Deno.test(
   "should navigate page up to first item if less than a page of todos",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Todo 1"),
       new Todo("Todo 2"),
       new Todo("Todo 3"),
-    );
+    ];
     let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
@@ -593,11 +593,11 @@ Deno.test(
   "should navigate page down to last item if less than a page of todos",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Todo 1"),
       new Todo("Todo 2"),
       new Todo("Todo 3"),
-    );
+    ];
     let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
@@ -623,11 +623,11 @@ Deno.test(
   "NavigationContext: should filter by context",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Buy groceries @Home +Shopping"),
       new Todo("Fix bug @Work +Development"),
       new Todo("Call mom @Home"),
-    );
+    ];
     let navContext: NavigationContextType = null!;
     let searchContext: SearchContextType = null!;
 
@@ -674,11 +674,11 @@ Deno.test(
   "NavigationContext: should filter by project",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Buy groceries @Home +Shopping"),
       new Todo("Fix bug @Work +Development"),
       new Todo("Call mom @Home"),
-    );
+    ];
     let navContext: NavigationContextType = null!;
     let searchContext: SearchContextType = null!;
 
@@ -725,11 +725,11 @@ Deno.test(
   "NavigationContext: should filter by text content (case-insensitive)",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Buy groceries @Home +Shopping"),
       new Todo("Fix bug @Work +Development"),
       new Todo("Call mom @Home"),
-    );
+    ];
     let navContext: NavigationContextType = null!;
     let searchContext: SearchContextType = null!;
 
@@ -776,11 +776,11 @@ Deno.test(
   "NavigationContext: should match whitespace-separated terms in any order",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("bla @Work doing +Bug"),
       new Todo("bla @Work doing +Feature"),
       new Todo("random @Home +Bug"),
-    );
+    ];
     let navContext: NavigationContextType = null!;
     let searchContext: SearchContextType = null!;
 
@@ -828,9 +828,9 @@ Deno.test(
   "should update offset when navigating home/end",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       ...Array.from({ length: 15 }, (_, i) => new Todo(`Todo ${i}`)),
-    );
+    ];
     let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
@@ -899,9 +899,9 @@ Deno.test(
   async () => {
     // 10 items. Height 6 (header + 5 todos).
     // Visible initially: Index 0 (Header), 1, 2, 3, 4, 5.
-    const todos = new Todos(
+    const todos = [
       ...Array.from({ length: 10 }, (_, i) => new Todo(`Todo ${i}`)),
-    );
+    ];
     let navContext: NavigationContextType = null!;
 
     const { unmount } = render(
@@ -950,11 +950,11 @@ Deno.test(
   "should clear multi-selection when search hides selected items",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Apple"),
       new Todo("Banana"),
       new Todo("Cherry"),
-    );
+    ];
     let context: { nav: NavigationContextType; search: SearchContextType } =
       null!;
 
@@ -1022,11 +1022,11 @@ Deno.test(
   "should PRESERVE multi-selection when search keeps all selected items visible",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       new Todo("Apple"),
       new Todo("Apricot"),
       new Todo("Banana"),
-    );
+    ];
     let context: { nav: NavigationContextType; search: SearchContextType } =
       null!;
 
@@ -1091,9 +1091,9 @@ Deno.test(
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
     // 20 items. Height 5.
-    const todos = new Todos(
+    const todos = [
       ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
-    );
+    ];
     let context: { nav: NavigationContextType; search: SearchContextType } =
       null!;
 
@@ -1156,9 +1156,9 @@ Deno.test(
   "should scroll to keep multi-select visible when search is cleared",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
-    );
+    ];
     let context: { nav: NavigationContextType; search: SearchContextType } =
       null!;
 
@@ -1221,9 +1221,9 @@ Deno.test(
   "should prioritize cursor visibility over multi-select range when search is cleared",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = new Todos(
+    const todos = [
       ...Array.from({ length: 20 }, (_, i) => new Todo(`Todo ${i}`)),
-    );
+    ];
     let context: { nav: NavigationContextType; search: SearchContextType } =
       null!;
 
@@ -1294,11 +1294,11 @@ Deno.test(
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
     // 30 items: 10 'Match' items in the middle, surrounded by 'Other' items.
-    const todos = new Todos(
+    const todos = [
       ...Array.from({ length: 10 }, (_, i) => new Todo(`OtherA ${i}`)),
       ...Array.from({ length: 10 }, (_, i) => new Todo(`Match ${i}`)),
       ...Array.from({ length: 10 }, (_, i) => new Todo(`OtherB ${i}`)),
-    );
+    ];
     let context: { nav: NavigationContextType; search: SearchContextType } =
       null!;
 

@@ -3,7 +3,7 @@ import { assertEquals } from "@std/assert";
 import { useEffect, useState } from "react";
 
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
 import { SearchInput } from "../components/SearchInput.tsx";
@@ -36,12 +36,11 @@ const emptySnapshot = (): Snapshot => ({
   focused: false,
 });
 
-const makeTodos = () =>
-  new Todos(
-    new Todo("Task one +project-a +personal @home @office"),
-    new Todo("Task two +project-b @context"),
-    new Todo("Task three +project-c @context2"),
-  );
+const makeTodos = () => [
+  new Todo("Task one +project-a +personal @home @office"),
+  new Todo("Task two +project-b @context"),
+  new Todo("Task three +project-c @context2"),
+];
 
 const NavigationWrapper = ({ children }: { children: React.ReactNode }) => {
   const { todos } = useTodo();

@@ -17,6 +17,8 @@ const TODO_REGEX =
   /^((?<done>[x])\s){0,1}(\((?<prio>[A-Z])\)\s){0,1}((?<completionDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}((?<creationDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}(?<rest>[^\n\r]+)\s*$/;
 const TAG_REGEX = /(^|\s)(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
 
+let nextTodoId = 0;
+
 export class Todo {
   readonly id: symbol;
   private _text: string = "";
@@ -54,7 +56,7 @@ export class Todo {
   }
 
   constructor(text: string) {
-    this.id = Symbol();
+    this.id = Symbol(String(nextTodoId++));
     const match = text.match(TODO_REGEX);
     if (match?.groups) {
       if (match.groups.done) {
