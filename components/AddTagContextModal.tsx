@@ -6,7 +6,7 @@ import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
-import { SECONDARY_COLOR } from "../constants.ts";
+import { COLORS } from "../theme/colors.ts";
 
 interface AddTagContextModalProps {
   type: "project" | "context";
@@ -258,7 +258,7 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
       <Box flexDirection="column" paddingX={1}>
         {/* Custom input option */}
         <Box>
-          <Text color={SECONDARY_COLOR}>{isCustomSelected ? "» " : "  "}</Text>
+          <Text color={COLORS.secondary}>{isCustomSelected ? "» " : "  "}</Text>
           <Text>New:</Text>
           <Text color="cyan">{prefix}</Text>
           <Text inverse={isCustomSelected}>{customInput || " "}</Text>
@@ -276,7 +276,7 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
           const isSelected = selectedIndex === index + 1;
           return (
             <Box key={item.name}>
-              <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
+              <Text color={COLORS.secondary}>{isSelected ? "» " : "  "}</Text>
               <Text color={getColor(item)} wrap="truncate">
                 {getCheckbox(item)} {item.name}
               </Text>

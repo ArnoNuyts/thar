@@ -8,7 +8,7 @@ import { Key } from "../hooks/useInput.ts";
 import { Modal } from "./Modal.tsx";
 import { SELECTED_MARKER, UNSELECTED_MARKER } from "./SelectList.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
-import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
+import { COLORS } from "../theme/colors.ts";
 
 export type MenuAction =
   | "edit"
@@ -189,13 +189,13 @@ export const TodoMenu = () => {
               paddingRight={1}
             >
               <Box>
-                <Text color={SECONDARY_COLOR}>
+                <Text color={COLORS.secondary}>
                   {isSelected ? SELECTED_MARKER : UNSELECTED_MARKER}
                 </Text>
                 <Text wrap="truncate">{item.label}</Text>
               </Box>
               <Box>
-                <Text color={PRIMARY_COLOR}>{item.shortcut}</Text>
+                <Text color={COLORS.primary}>{item.shortcut}</Text>
               </Box>
             </Box>
           );
