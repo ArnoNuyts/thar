@@ -21,22 +21,13 @@ function setupMocks() {
   (Deno as any).watchFs = () => mockWatcher;
 
   // deno-lint-ignore no-explicit-any
-  (Deno as any).stat = async () => {
-    await delay(0);
-    return { isFile: true };
-  };
-
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).readTextFile = async () => {
-    await delay(0);
+  (Deno as any).readTextFile = () => {
     readCount++;
-    return "";
+    return Promise.resolve("");
   };
 
   // deno-lint-ignore no-explicit-any
-  (Deno as any).writeTextFile = async () => {
-    await delay(0);
-  };
+  (Deno as any).writeTextFile = () => Promise.resolve();
 }
 
 function teardownMocks() {

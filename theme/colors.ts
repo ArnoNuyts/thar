@@ -1,6 +1,7 @@
 export const COLORS = {
   background: "#181818",
   foreground: "#EEECE5",
+  white: "#FFFFFF",
   muted: "#676560",
   inverseForeground: "#141210",
   inverseBackground: "#ECECEC",

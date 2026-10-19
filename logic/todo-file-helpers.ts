@@ -2,27 +2,20 @@ import { Todo } from "./todo.ts";
 import { Todos } from "./Todos.ts";
 
 export async function readTodosFromFile(filename: string) {
+  let data: string;
   try {
-    await Deno.stat(filename); // Check if file exists
+    data = await Deno.readTextFile(filename);
   } catch (error) {
     if (error instanceof Deno.errors.NotFound) {
       await Deno.writeTextFile(filename, ""); // Create the file if it doesn't exist
       return new Todos(); // Return empty Todos after creating the file
     }
-    throw error; // Re-throw other errors from stat()
+    throw error;
   }
 
-  try {
-    // Read the file content
-    const data = await Deno.readTextFile(filename);
-
-    return new Todos(
-      ...data.split("\n").filter((x) => x.trim()).map((x) => new Todo(x)),
-    );
-  } catch (err: unknown) {
-    console.error(`Error reading file "${filename}":`, (err as Error).message);
-    Deno.exit(1);
-  }
+  return new Todos(
+    ...data.split("\n").filter((x) => x.trim()).map((x) => new Todo(x)),
+  );
 }
 
 export const writeTodosToFile = async (

@@ -71,7 +71,7 @@ export const Calendar: React.FC<CalendarProps> = (
     if (!isSameMonth(value, viewDate)) {
       setViewDate(startOfMonth(value));
     }
-  }, [value]);
+  }, [value, viewDate]);
 
   const monthStart = startOfMonth(viewDate);
   const monthEnd = endOfMonth(monthStart);
@@ -84,8 +84,8 @@ export const Calendar: React.FC<CalendarProps> = (
   });
 
   // Group days into weeks
-  const weeks = [];
-  let currentWeek = [];
+  const weeks: Date[][] = [];
+  let currentWeek: Date[] = [];
   for (const day of days) {
     currentWeek.push(day);
     if (currentWeek.length === 7) {
