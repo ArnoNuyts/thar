@@ -1,3 +1,5 @@
+import { CONTEXT_TOKEN_REGEX, PROJECT_TOKEN_REGEX } from "../logic/patterns.ts";
+
 /**
  * Extracts tags and contexts from a search query.
  * Returns them formatted as they should appear in a todo.
@@ -11,13 +13,13 @@ export function extractTagsAndContextsFromSearch(
   const tags: string[] = [];
 
   // Extract projects (+tag)
-  const projectMatches = trimmed.matchAll(/(\+[\w\.\\_\-]+)/g);
+  const projectMatches = trimmed.matchAll(PROJECT_TOKEN_REGEX);
   for (const match of projectMatches) {
     tags.push(match[1]);
   }
 
   // Extract contexts (@context)
-  const contextMatches = trimmed.matchAll(/(@[\w\.\\_\-]+)/g);
+  const contextMatches = trimmed.matchAll(CONTEXT_TOKEN_REGEX);
   for (const match of contextMatches) {
     tags.push(match[1]);
   }
