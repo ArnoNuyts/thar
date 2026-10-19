@@ -1,8 +1,6 @@
 import { useWindowSize } from "ink";
-import {
-  getModalBodyRowFromClick,
-  getTerminalSize,
-} from "../utils/modal-mouse.ts";
+import { getModalBodyRowFromClick } from "../utils/modal-mouse.ts";
+import { getTerminalSize } from "../utils/terminal-size.ts";
 import { useMouseInput } from "./useMouseInput.ts";
 
 interface UseModalMouseListOptions {
