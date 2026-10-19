@@ -5,7 +5,6 @@ import { COLORS } from "../theme/colors.ts";
 
 interface ModalProps {
   children?: ReactNode;
-  isFocused?: boolean;
   title?: string;
   width?: number | string;
   onLayoutSizeChange?: (size: { columns: number; rows: number }) => void;

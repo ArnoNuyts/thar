@@ -8,6 +8,10 @@ import { SuggestionInput } from "./SuggestionInput.tsx";
 import { SECONDARY_COLOR } from "../constants.ts";
 import { Button } from "./Button.tsx";
 import { resolveModalWidth } from "../utils/modal-mouse.ts";
+import {
+  countWrappedLines,
+  getHoveredButtonIndex,
+} from "../utils/modal-layout.ts";
 import { getTerminalSize } from "../utils/terminal-size.ts";
 
 import { Todos } from "../logic/Todos.ts";
@@ -144,7 +148,6 @@ export const ModalTodoInput = ({
 
   return (
     <Modal
-      isFocused={isFocused}
       title={mode === "create" ? "Create new todo" : "Edit todo"}
       onLayoutSizeChange={setLayoutSize}
     >
@@ -187,79 +190,4 @@ export const ModalTodoInput = ({
       </Box>
     </Modal>
   );
-};
-
-interface HoverHitOptions {
-  rows: number;
-  columns: number;
-  modalWidth: number;
-  bodyRows: number;
-  buttonRowIndex: number;
-  labels: [string, string];
-}
-
-const getHoveredButtonIndex = (
-  x: number | undefined,
-  y: number | undefined,
-  opts: HoverHitOptions,
-): number | null => {
-  if (x === undefined || y === undefined) return null;
-
-  const modalTopChromeRows = 3;
-  const modalBottomChromeRows = 2;
-  const modalHeight = modalTopChromeRows + opts.bodyRows +
-    modalBottomChromeRows;
-  const modalLeft = Math.floor((opts.columns - opts.modalWidth) / 2) + 1;
-  const modalTop = Math.ceil((opts.rows - modalHeight) / 2) + 1;
-  const buttonY = modalTop + modalTopChromeRows + opts.buttonRowIndex;
-  if (y !== buttonY) return null;
-
-  const leftHalfWidth = Math.floor(opts.modalWidth / 2);
-  const rightHalfWidth = opts.modalWidth - leftHalfWidth;
-  const leftLabel = `« ${opts.labels[0]} »`;
-  const rightLabel = `« ${opts.labels[1]} »`;
-  const leftWidth = Array.from(leftLabel).length;
-  const rightWidth = Array.from(rightLabel).length;
-
-  const leftStart = modalLeft + Math.floor((leftHalfWidth - leftWidth) / 2);
-  const leftEnd = leftStart + leftWidth - 1;
-  if (x >= leftStart && x <= leftEnd) return 0;
-
-  const rightHalfLeft = modalLeft + leftHalfWidth;
-  const rightStart = rightHalfLeft +
-    Math.floor((rightHalfWidth - rightWidth) / 2);
-  const rightEnd = rightStart + rightWidth - 1;
-  if (x >= rightStart && x <= rightEnd) return 1;
-
-  return null;
-};
-
-const countWrappedLines = (text: string, width: number): number => {
-  if (width <= 0) return 1;
-  if (text.length === 0) return 1;
-
-  const paragraphs = text.split("\n");
-  let lineCount = 0;
-
-  for (const paragraph of paragraphs) {
-    if (paragraph.length === 0) {
-      lineCount += 1;
-      continue;
-    }
-
-    let remaining = paragraph;
-    while (remaining.length > width) {
-      const candidate = remaining.slice(0, width + 1);
-      const breakAt = candidate.lastIndexOf(" ");
-      if (breakAt > 0) {
-        remaining = remaining.slice(breakAt + 1);
-      } else {
-        remaining = remaining.slice(width);
-      }
-      lineCount += 1;
-    }
-    lineCount += 1;
-  }
-
-  return lineCount;
 };
