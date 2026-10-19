@@ -11,6 +11,7 @@ import {
 } from "date-fns";
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
+import { formatDateTag, parseDateTag } from "./dates.ts";
 import { CONTEXT_REGEX, PROJECT_REGEX } from "./patterns.ts";
 
 const TODO_REGEX =
@@ -207,16 +208,18 @@ export class Todo {
   }
 
   isOverdue() {
-    if (typeof this._tags.due !== "string") return false;
-    const dueDate = startOfDay(parseISO(this._tags.due));
+    const dueDate = parseDateTag(this._tags.due);
+    // A missing or malformed due tag means the todo is not overdue.
+    if (!dueDate) return false;
     const today = startOfDay(new Date());
     // isOverdue returns true if today >= dueDate
     return isSameDay(today, dueDate) || isBefore(dueDate, today);
   }
 
   isPassedThreshold() {
-    if (typeof this._tags.t !== "string") return true;
-    const thresholdDate = startOfDay(parseISO(this._tags.t));
+    const thresholdDate = parseDateTag(this._tags.t);
+    // A missing or malformed threshold tag does not hide the todo.
+    if (!thresholdDate) return true;
     const today = startOfDay(new Date());
     return isSameDay(today, thresholdDate) || isBefore(thresholdDate, today);
   }
@@ -277,13 +280,13 @@ export class Todo {
 
   setDue(date: Date): Todo {
     return this.with((next) => {
-      next._tags.due = format(date, "yyyy-MM-dd");
+      next._tags.due = formatDateTag(date);
     });
   }
 
   setThreshold(date: Date): Todo {
     return this.with((next) => {
-      next._tags.t = format(date, "yyyy-MM-dd");
+      next._tags.t = formatDateTag(date);
     });
   }
 
