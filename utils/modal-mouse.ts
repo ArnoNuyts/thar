@@ -4,8 +4,8 @@ import {
   TerminalSize,
 } from "./terminal-size.ts";
 
-const MODAL_TOP_CHROME_ROWS = 3;
-const MODAL_BOTTOM_CHROME_ROWS = 2;
+export const MODAL_TOP_CHROME_ROWS = 3;
+export const MODAL_BOTTOM_CHROME_ROWS = 2;
 
 export const resolveModalWidth = (
   columns: number,

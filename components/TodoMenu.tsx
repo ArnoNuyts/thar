@@ -316,7 +316,6 @@ export const TodoMenu = () => {
   return (
     // @ts-ignore: children prop issue
     <Modal
-      isFocused={isFocused}
       title="Todo menu"
       onLayoutSizeChange={setLayoutSize}
     >

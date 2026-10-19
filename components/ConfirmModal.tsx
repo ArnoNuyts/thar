@@ -7,6 +7,10 @@ import {
   getModalBodyCellFromClick,
   resolveModalWidth,
 } from "../utils/modal-mouse.ts";
+import {
+  countWrappedLines,
+  getHoveredButtonIndex,
+} from "../utils/modal-layout.ts";
 import { getTerminalSize } from "../utils/terminal-size.ts";
 import { Modal } from "./Modal.tsx";
 import { Button } from "./Button.tsx";
@@ -21,8 +25,6 @@ export interface ConfirmModalProps {
 export const ConfirmModal = (
   { title, message, onConfirm, onCancel }: ConfirmModalProps,
 ) => {
-  const MODAL_TOP_CHROME_ROWS = 3;
-  const MODAL_BOTTOM_CHROME_ROWS = 2;
   const { closeModal } = useModal();
   const windowSize = useWindowSize();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -76,8 +78,6 @@ export const ConfirmModal = (
         bodyRows,
         buttonRowIndex,
         labels: ["Confirm", "Cancel"],
-        modalTopChromeRows: MODAL_TOP_CHROME_ROWS,
-        modalBottomChromeRows: MODAL_BOTTOM_CHROME_ROWS,
       });
       setHoveredIndex(hovered);
       return;
@@ -113,7 +113,6 @@ export const ConfirmModal = (
 
   return (
     <Modal
-      isFocused={isFocused}
       title={title}
       onLayoutSizeChange={setLayoutSize}
     >
@@ -134,78 +133,4 @@ export const ConfirmModal = (
       </Box>
     </Modal>
   );
-};
-
-interface HoverHitOptions {
-  rows: number;
-  columns: number;
-  modalWidth: number;
-  bodyRows: number;
-  buttonRowIndex: number;
-  labels: [string, string];
-  modalTopChromeRows: number;
-  modalBottomChromeRows: number;
-}
-
-const getHoveredButtonIndex = (
-  x: number | undefined,
-  y: number | undefined,
-  opts: HoverHitOptions,
-): number | null => {
-  if (x === undefined || y === undefined) return null;
-
-  const modalHeight = opts.modalTopChromeRows + opts.bodyRows +
-    opts.modalBottomChromeRows;
-  const modalLeft = Math.floor((opts.columns - opts.modalWidth) / 2) + 1;
-  const modalTop = Math.ceil((opts.rows - modalHeight) / 2) + 1;
-  const buttonY = modalTop + opts.modalTopChromeRows + opts.buttonRowIndex;
-  if (y !== buttonY) return null;
-
-  const leftHalfWidth = Math.floor(opts.modalWidth / 2);
-  const rightHalfWidth = opts.modalWidth - leftHalfWidth;
-  const confirmText = `« ${opts.labels[0]} »`;
-  const cancelText = `« ${opts.labels[1]} »`;
-  const confirmWidth = Array.from(confirmText).length;
-  const cancelWidth = Array.from(cancelText).length;
-
-  const confirmStart = modalLeft +
-    Math.floor((leftHalfWidth - confirmWidth) / 2);
-  const confirmEnd = confirmStart + confirmWidth - 1;
-  if (x >= confirmStart && x <= confirmEnd) return 0;
-
-  const cancelHalfLeft = modalLeft + leftHalfWidth;
-  const cancelStart = cancelHalfLeft +
-    Math.floor((rightHalfWidth - cancelWidth) / 2);
-  const cancelEnd = cancelStart + cancelWidth - 1;
-  if (x >= cancelStart && x <= cancelEnd) return 1;
-
-  return null;
-};
-
-const countWrappedLines = (text: string, width: number): number => {
-  if (width <= 0) return 1;
-  const paragraphs = text.split("\n");
-  let lineCount = 0;
-
-  for (const paragraph of paragraphs) {
-    if (paragraph.length === 0) {
-      lineCount += 1;
-      continue;
-    }
-
-    let remaining = paragraph;
-    while (remaining.length > width) {
-      const candidate = remaining.slice(0, width + 1);
-      const breakAt = candidate.lastIndexOf(" ");
-      if (breakAt > 0) {
-        remaining = remaining.slice(breakAt + 1);
-      } else {
-        remaining = remaining.slice(width);
-      }
-      lineCount += 1;
-    }
-    lineCount += 1;
-  }
-
-  return lineCount;
 };
