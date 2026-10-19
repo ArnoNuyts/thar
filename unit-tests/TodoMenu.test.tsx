@@ -436,6 +436,66 @@ Deno.test({
 });
 
 Deno.test({
+  name: "TodoMenu: should show failure toast when clipboard copy fails",
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, async () => {
+  // deno-lint-ignore no-explicit-any
+  const originalCommand = (Deno as any).Command;
+  let testUnmount: (() => void) | undefined;
+  try {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = class {
+      constructor() {}
+      spawn() {
+        return {
+          stdin: {
+            getWriter: () => ({
+              write: () => Promise.reject(new Error("clipboard unavailable")),
+              close: () => Promise.resolve(),
+              releaseLock: () => {},
+            }),
+          },
+          status: Promise.resolve({ success: false, code: 1 }),
+        };
+      }
+    };
+
+    const todo1 = new Todo("Todo 1");
+    let focusCount = 0;
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper
+        navValue={{
+          useSelectedTodos: () => [todo1],
+          useSelectedTodo: () => todo1,
+        }}
+      >
+        <AppContentMock />
+        <ModalTrigger />
+        <FocusObserver onFocused={() => focusCount++} />
+      </TestWrapper>,
+    );
+    testUnmount = unmount;
+
+    await waitFor(() => assertEquals(focusCount >= 1, true));
+    stdin.write("c");
+
+    await waitFor(() =>
+      assertEquals(
+        lastFrame()?.includes("Copy failed: clipboard unavailable"),
+        true,
+      )
+    );
+    assertEquals(lastFrame()?.includes("Todo copied"), false);
+    assertEquals(lastFrame()?.includes("Todo menu"), false);
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+  }
+  testUnmount?.();
+});
+
+Deno.test({
   name: "TodoMenu: should call paste",
   sanitizeResources: false,
   sanitizeOps: false,
