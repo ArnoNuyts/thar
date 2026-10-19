@@ -1,5 +1,4 @@
 import { Todo } from "./todo.ts";
-import { Todos } from "./Todos.ts";
 import { IndexType } from "../types/enums.ts";
 
 export type ContextIndexEntry = {
@@ -11,44 +10,46 @@ export type ContextIndexEntry = {
 export type TodoIndexEntry = {
   type: IndexType.todo;
   todo: Todo;
+  /** 1-based position among todo entries, ignoring context headers. */
+  number: number;
 };
 
 export type IndexEntry = ContextIndexEntry | TodoIndexEntry;
 
-export const createIndexes = (todos: Todos): IndexEntry[] => {
-  const indexArray: IndexEntry[] = [];
-  let prevTodo: Todo | null = null;
-  let currHeader: ContextIndexEntry | null = null;
-  let currHeaderTodoCounter = 0;
+type TodoGroup = {
+  context: string | undefined;
+  todos: Todo[];
+};
+
+export const createIndexes = (todos: Todo[]): IndexEntry[] => {
+  // Group consecutive todos by context first so headers are emitted once with
+  // their final count instead of being mutated after insertion.
+  const groups: TodoGroup[] = [];
 
   for (const todo of todos) {
-    if (!todo?.id) {
-      continue;
+    const context = todo.contexts.values().next().value;
+    const currentGroup = groups[groups.length - 1];
+
+    if (!currentGroup || currentGroup.context !== context) {
+      groups.push({ context, todos: [todo] });
+    } else {
+      currentGroup.todos.push(todo);
     }
-
-    const currentContext = todo?.contexts?.values().next().value;
-    const prevContext = prevTodo?.contexts?.values().next().value;
-    if (prevTodo === null || currentContext != prevContext) {
-      if (currHeader) {
-        currHeader.todoCount = currHeaderTodoCounter;
-        currHeaderTodoCounter = 0;
-      }
-
-      currHeader = {
-        type: IndexType.context,
-        todoCount: 0,
-        contextName: currentContext ?? "None",
-      };
-      indexArray.push(currHeader);
-    }
-
-    indexArray.push({ type: IndexType.todo, todo });
-    currHeaderTodoCounter++;
-    prevTodo = todo;
   }
 
-  if (currHeader) {
-    currHeader.todoCount = currHeaderTodoCounter;
+  const indexArray: IndexEntry[] = [];
+  let number = 0;
+
+  for (const group of groups) {
+    indexArray.push({
+      type: IndexType.context,
+      todoCount: group.todos.length,
+      contextName: group.context ?? "None",
+    });
+
+    for (const todo of group.todos) {
+      indexArray.push({ type: IndexType.todo, todo, number: ++number });
+    }
   }
 
   return indexArray;

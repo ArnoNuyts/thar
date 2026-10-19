@@ -8,7 +8,7 @@ import {
 } from "../contexts/navigation-context.tsx";
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 
 const TestWrapper = (
@@ -44,7 +44,7 @@ Deno.test(
     const todo3 = new Todo("Todo 3");
 
     // Initial state: 1 and 3 (2 was deleted)
-    const initialTodos = new Todos(todo1, todo3);
+    const initialTodos = [todo1, todo3];
 
     // deno-lint-ignore no-explicit-any
     let navContext: any;
@@ -62,7 +62,7 @@ Deno.test(
     );
 
     // Undo delete: Restore Todo 2
-    const restoredTodos = new Todos(todo1, todo2, todo3);
+    const restoredTodos = [todo1, todo2, todo3];
 
     rerender(
       <TestWrapper
@@ -88,7 +88,7 @@ Deno.test(
     const todo2 = new Todo("Todo 2");
 
     // Initial state: Select Todo 1
-    const initialTodos = new Todos(todo1, todo2);
+    const initialTodos = [todo1, todo2];
 
     // deno-lint-ignore no-explicit-any
     let navContext: any;
@@ -112,7 +112,7 @@ Deno.test(
 
     // Undo edit on Todo 1 (while Todo 2 is selected)
     const undoEditedTodo1 = todo1.setText("Todo 1 Original");
-    const undidTodos = new Todos(undoEditedTodo1, todo2);
+    const undidTodos = [undoEditedTodo1, todo2];
 
     rerender(
       <TestWrapper todos={undidTodos} onContext={(ctx) => navContext = ctx} />,
@@ -132,7 +132,7 @@ Deno.test(
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todo1 = new Todo("Todo 1");
-    const initialTodos = new Todos(todo1);
+    const initialTodos = [todo1];
 
     // deno-lint-ignore no-explicit-any
     let navContext: any;
@@ -150,7 +150,7 @@ Deno.test(
 
     // Add new todo
     const todo2 = new Todo("New Todo");
-    const newTodos = new Todos(todo1, todo2);
+    const newTodos = [todo1, todo2];
 
     rerender(
       <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
@@ -173,7 +173,7 @@ Deno.test(
       { length: 300 },
       (_, i) => new Todo(`Task ${i}`),
     );
-    const initialTodos = new Todos(...todos);
+    const initialTodos = [...todos];
 
     // deno-lint-ignore no-explicit-any
     let navContext: any;
@@ -191,11 +191,11 @@ Deno.test(
 
     // Modify a todo far down the list; guesstimate must find it.
     const modified = todos[250].setText("Task 250 modified");
-    const modifiedTodos = new Todos(
+    const modifiedTodos = [
       ...todos.slice(0, 250),
       modified,
       ...todos.slice(251),
-    );
+    ];
 
     rerender(
       <TestWrapper

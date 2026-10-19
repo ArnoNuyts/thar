@@ -1,5 +1,4 @@
 import { Todo } from "./todo.ts";
-import { Todos } from "./Todos.ts";
 
 export async function readTodosFromFile(filename: string) {
   let data: string;
@@ -8,14 +7,15 @@ export async function readTodosFromFile(filename: string) {
   } catch (error) {
     if (error instanceof Deno.errors.NotFound) {
       await Deno.writeTextFile(filename, ""); // Create the file if it doesn't exist
-      return new Todos(); // Return empty Todos after creating the file
+      return []; // Return an empty list after creating the file
     }
     throw error;
   }
 
-  return new Todos(
-    ...data.split("\n").filter((x) => x.trim()).map((x) => new Todo(x)),
-  );
+  return data
+    .split("\n")
+    .filter((x) => x.trim())
+    .map((x) => new Todo(x));
 }
 
 export const writeTodosToFile = async (
