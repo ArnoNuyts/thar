@@ -360,12 +360,23 @@ export const TodoList = () => {
         break;
       case "c":
         if (selectedTodos.length > 0) {
-          copyToClipboard(selectedTodos.map((t) => t.toString()).join("\n"));
-          showToaster(
-            selectedTodos.length === 1
-              ? "Todo copied"
-              : `${selectedTodos.length} todos copied`,
-          );
+          const copy = async () => {
+            try {
+              await copyToClipboard(
+                selectedTodos.map((t) => t.toString()).join("\n"),
+              );
+              showToaster(
+                selectedTodos.length === 1
+                  ? "Todo copied"
+                  : `${selectedTodos.length} todos copied`,
+              );
+            } catch (e) {
+              showToaster(
+                `Copy failed: ${e instanceof Error ? e.message : String(e)}`,
+              );
+            }
+          };
+          copy();
         }
         break;
       case "h":
