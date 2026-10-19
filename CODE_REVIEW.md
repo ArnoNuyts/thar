@@ -61,8 +61,22 @@ then the fix, then `deno lint`, `deno check main.tsx`, and the full suite.
 | P3 #26 — O(n²) guesstimate lookup               | ✅ FIXED | `92c3703`            | `unit-tests/navigation-guesstimate.test.tsx`                   |
 | P4 #33 — ref write during render                | ✅ FIXED | `b36a9fa`            | `unit-tests/SearchInput.test.tsx`                              |
 | P4 #41 — dead `Modal` prop                      | ✅ FIXED | `a0fd0aa`            | `deno check` + modal suites                                    |
+| P2 #12 — duplicated todo commands               | ✅ FIXED | `23b0e62`            | `unit-tests/todo-commands-parity.test.tsx`                     |
+| P2 #13 — menu shortcut drift                    | ✅ FIXED | `23b0e62`            | `unit-tests/todo-menu-shortcuts.test.ts`                       |
+| P2 #16 — modal if-chain                         | ✅ FIXED | `3894323`            | `unit-tests/modal-registry.test.tsx`                           |
+| P3 #23 — repeated Todo setters                  | ✅ FIXED | `cea8988`            | `unit-tests/todo-setters.test.ts`                              |
+| P3 #28 — watcher/debounce lifecycle             | ✅ FIXED | `9ce9221`            | `unit-tests/todo-context-lifecycle.test.tsx`                   |
+| P3 #29 — per-keystroke arrays                   | ✅ FIXED | `d16f9fa`            | `unit-tests/useInput.test.tsx`                                 |
+| P4 #30 — `Deno.exit` in file helper             | ✅ FIXED | `c703a53`            | `unit-tests/todo-file-helpers.test.ts`                         |
+| P4 #31 — manual `done.txt` path                 | ✅ FIXED | `9ce9221`            | `unit-tests/todo-context-archive-path.test.tsx`                |
+| P4 #36 — duplicated word motion                 | ✅ FIXED | `d16f9fa`            | `unit-tests/ControlledTextInput.test.tsx`                      |
+| P4 #37 — hardcoded color                        | ✅ FIXED | `c703a53`            | existing Button suites                                         |
+| P4 #39 — broken `install-hooks` task            | ✅ FIXED | `c703a53`            | `deno task`                                                    |
+| P4 #42 — Calendar deps/types                    | ✅ FIXED | `c703a53`            | `deno check` + Calendar suites                                 |
+| P4 #44 — terminal-size re-export                | ✅ FIXED | `c703a53`            | `deno check`                                                   |
+| P4 #45 — fixed test sleeps                      | ✅ FIXED | `c703a53`            | full suite                                                     |
 
-Current suite: **255 passed, 0 failed**.
+Current suite: **306 passed, 0 failed**.
 
 ---
 
