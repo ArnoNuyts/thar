@@ -210,6 +210,38 @@ function setupCaptureClipboardMock(onCapture: (text: string) => void) {
   };
 }
 
+// Clipboard mock that makes the copy command fail
+function setupFailingClipboardMock(message: string) {
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class {
+    command: string;
+    // deno-lint-ignore no-explicit-any
+    constructor(command: string, _options: any) {
+      this.command = command;
+    }
+    // deno-lint-ignore no-explicit-any
+    spawn(): any {
+      return {
+        stdin: {
+          getWriter() {
+            return {
+              write: () => Promise.reject(new Error(message)),
+              close: () => Promise.resolve(),
+            };
+          },
+        },
+        status: Promise.resolve({ success: false, code: 1 }),
+      };
+    }
+  };
+  return () => {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+    restoreDenoMocks();
+  };
+}
+
 // --- Tests ---
 
 Deno.test({
@@ -1032,6 +1064,40 @@ Deno.test({
     await waitFor(() => {
       assertEquals(capturedText.trim(), "Todo 1");
     });
+
+    unmount();
+    restore();
+  },
+});
+
+Deno.test({
+  name: "TodoList: 'c' should show failure toast when clipboard copy fails",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const restore = setupFailingClipboardMock("clipboard unavailable");
+
+    const todo1 = new Todo("Todo 1");
+    let focused = false;
+
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper initialTodos={[todo1]}>
+        <AppContentMock />
+        <FocusObserver onFocused={() => focused = true} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focused, true));
+
+    stdin.write("c");
+
+    await waitFor(() => {
+      assertEquals(
+        lastFrame()?.includes("Copy failed: clipboard unavailable"),
+        true,
+      );
+    });
+    assertEquals(lastFrame()?.includes("Todo copied"), false);
 
     unmount();
     restore();
