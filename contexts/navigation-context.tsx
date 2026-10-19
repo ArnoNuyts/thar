@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useSearch } from "./search-context.tsx";
 import { useWindowSize } from "ink";
-import { Todos } from "../logic/Todos.ts";
+import { filterHidden, sortByImportance, type Todos } from "../logic/Todos.ts";
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
 import { getSelectionRangeRows } from "../logic/selection.ts";
 import { IndexType } from "../types/enums.ts";
@@ -63,6 +63,15 @@ function guesstimateSelection(
   // If ALL todos are "added", it's likely a reload or reset - don't guesstimate,
   // let validation handle it (supports hash-matching).
   if (added.length > 0 && added.length < todos.length) {
+    // Keep an explicit selection of a newly added todo (e.g. pasting several
+    // todos selects the last one, not the first).
+    if (
+      currentCursorId !== undefined &&
+      added.some((todo) => todo.id === currentCursorId)
+    ) {
+      return undefined;
+    }
+
     const firstVisibleAdded = indexes.find((entry) =>
       entry.type === IndexType.todo &&
       added.some((a) => a.id === entry.todo.id)
@@ -472,38 +481,32 @@ export const NavigationProvider = (
     (windowRows - 2 - (searchBarVisible ? 2 : 0));
 
   const indexes: IndexEntry[] = useMemo(() => {
-    let filteredTodos = todos.sortByImportance();
+    let filteredTodos = sortByImportance(todos);
 
     if (!showHidden) {
-      filteredTodos = filteredTodos.filterHidden();
+      filteredTodos = filterHidden(filteredTodos);
     }
 
     // Apply search filter if query exists
     if (searchQuery.trim()) {
       const terms = extractSearchTerms(searchQuery);
-      filteredTodos = new Todos(
-        ...filteredTodos.filter((todo) => {
-          const text = todo.text.toLowerCase();
-          const contexts = Array.from(todo.contexts).map((c) =>
-            c.toLowerCase()
-          );
-          const projects = Array.from(todo.projects).map((p) =>
-            p.toLowerCase()
-          );
+      filteredTodos = filteredTodos.filter((todo) => {
+        const text = todo.text.toLowerCase();
+        const contexts = Array.from(todo.contexts).map((c) => c.toLowerCase());
+        const projects = Array.from(todo.projects).map((p) => p.toLowerCase());
 
-          return terms.every((term) => {
-            const normalized = term.startsWith("@") || term.startsWith("+")
-              ? term.slice(1)
-              : term;
+        return terms.every((term) => {
+          const normalized = term.startsWith("@") || term.startsWith("+")
+            ? term.slice(1)
+            : term;
 
-            return (
-              text.includes(term) ||
-              contexts.some((c) => c.includes(normalized)) ||
-              projects.some((p) => p.includes(normalized))
-            );
-          });
-        }),
-      );
+          return (
+            text.includes(term) ||
+            contexts.some((c) => c.includes(normalized)) ||
+            projects.some((p) => p.includes(normalized))
+          );
+        });
+      });
     }
     return createIndexes(filteredTodos);
   }, [todos, searchQuery, showHidden]);
