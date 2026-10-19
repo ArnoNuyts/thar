@@ -1,7 +1,7 @@
 const DEFAULT_TERMINAL_ROWS = 24;
 const DEFAULT_TERMINAL_COLUMNS = 80;
 
-type TerminalSize = {
+export type TerminalSize = {
   rows?: number;
   columns?: number;
 };
