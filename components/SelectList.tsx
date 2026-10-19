@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import { SECONDARY_COLOR } from "../constants.ts";
+import { COLORS } from "../theme/colors.ts";
 
 export const SELECTED_MARKER = "» ";
 export const UNSELECTED_MARKER = "  ";
@@ -28,7 +28,7 @@ export const SelectList = ({
         const isSelected = index === selectedIndex;
         return (
           <Box key={item.key}>
-            <Text color={SECONDARY_COLOR}>
+            <Text color={COLORS.secondary}>
               {isSelected ? SELECTED_MARKER : UNSELECTED_MARKER}
             </Text>
             <Text wrap="truncate">{item.label}</Text>

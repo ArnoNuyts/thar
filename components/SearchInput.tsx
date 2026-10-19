@@ -7,7 +7,6 @@ import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { useSuggestionInput } from "../hooks/useSuggestionInput.ts";
 import { useTagSources } from "../hooks/useTagSources.ts";
-import { SECONDARY_COLOR } from "../constants.ts";
 import { COLORS } from "../theme/colors.ts";
 
 import type { Todos } from "../logic/Todos.ts";
@@ -142,7 +141,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
       borderRight={false}
       borderBottom
     >
-      <Text color={isFocused ? SECONDARY_COLOR : COLORS.muted}>{` / `}</Text>
+      <Text color={isFocused ? COLORS.secondary : COLORS.muted}>{` / `}</Text>
       <Box flexGrow={1}>
         {isFocused
           ? (
@@ -160,7 +159,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
             </Text>
           )}
       </Box>
-      <Text color={isFocused ? SECONDARY_COLOR : COLORS.muted}>{` / `}</Text>
+      <Text color={isFocused ? COLORS.secondary : COLORS.muted}>{` / `}</Text>
     </Box>
   );
 };
