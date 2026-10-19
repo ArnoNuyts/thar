@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -40,6 +41,15 @@ export const ToasterProvider = (
     toasterTimeoutRef.current = setTimeout(() => {
       setToasterMessage(undefined);
     }, 2000);
+  }, []);
+
+  // Clear the pending hide-timer on unmount so it does not leak.
+  useEffect(() => {
+    return () => {
+      if (toasterTimeoutRef.current) {
+        clearTimeout(toasterTimeoutRef.current);
+      }
+    };
   }, []);
 
   const value = useMemo(
