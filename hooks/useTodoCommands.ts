@@ -40,12 +40,12 @@ export const useTodoCommands = () => {
     setSelectedTodoId,
     showHidden,
     toggleShowHidden,
-    useSelectedTodo,
-    useSelectedTodos,
+    getSelectedTodo,
+    getSelectedTodos,
   } = useNavigation();
 
-  const todo = useSelectedTodo();
-  const selectedTodos = useSelectedTodos();
+  const todo = getSelectedTodo();
+  const selectedTodos = getSelectedTodos();
 
   const editSelected = () => {
     if (todo) openModal("edit-todo", todo);

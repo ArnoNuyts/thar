@@ -63,9 +63,9 @@ Deno.test("should initialize with first todo selected", {
   // Verify initial state
   // indexes should have 3 todos + 1 context header = 4
   // selectedTodoId should match Todo 1's ID
-  // We can check if useSelectedTodo returns Todo 1
+  // We can check if getSelectedTodo returns Todo 1
   await waitFor(() => {
-    assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+    assertEquals(navContext.getSelectedTodo()?.text, "Todo 1");
   });
 
   unmount();
@@ -87,13 +87,13 @@ Deno.test("should navigate down", {
   );
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+    assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
   );
 
   navContext.navigateDown();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+    assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
   ); // State update
 
   unmount();
@@ -114,20 +114,20 @@ Deno.test("should navigate up", {
   );
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+    assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
   );
 
   // Start at 1
   navContext.navigateDown();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+    assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
   );
 
   navContext.navigateUp();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+    assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
   );
 
   unmount();
@@ -151,48 +151,48 @@ Deno.test("should jump between contexts", {
   );
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Alpha @A")
+    assertEquals(navContext.getSelectedTodo()?.text, "Alpha @A")
   );
 
   navContext.navigateContextDown();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Charlie @B")
+    assertEquals(navContext.getSelectedTodo()?.text, "Charlie @B")
   );
 
   navContext.navigateContextDown();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Echo @C")
+    assertEquals(navContext.getSelectedTodo()?.text, "Echo @C")
   );
 
   navContext.navigateContextDown();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Echo @C")
+    assertEquals(navContext.getSelectedTodo()?.text, "Echo @C")
   );
 
   navContext.navigateContextUp();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Charlie @B")
+    assertEquals(navContext.getSelectedTodo()?.text, "Charlie @B")
   );
 
   navContext.navigateDown();
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Delta @B")
+    assertEquals(navContext.getSelectedTodo()?.text, "Delta @B")
   );
 
   navContext.navigateContextUp();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Alpha @A")
+    assertEquals(navContext.getSelectedTodo()?.text, "Alpha @A")
   );
 
   navContext.navigateContextUp();
 
   await waitFor(() =>
-    assertEquals(navContext.useSelectedTodo()?.text, "Alpha @A")
+    assertEquals(navContext.getSelectedTodo()?.text, "Alpha @A")
   );
 
   unmount();
@@ -213,25 +213,25 @@ Deno.test(
     );
 
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
     );
 
     // Up from top
     navContext.navigateUp();
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
     );
 
     // Down to bottom
     navContext.navigateDown();
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
     );
 
     // Down past bottom
     navContext.navigateDown(); // Should stay at 2
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
     );
 
     unmount();
@@ -255,7 +255,7 @@ Deno.test(
     // Select Todo 2
     navContext.navigateDown(); // Selects Todo 2
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
     );
 
     // Mutate Todo 2
@@ -269,7 +269,7 @@ Deno.test(
 
     await waitFor(() => {
       // Verify selection is preserved on the *same* todo
-      const selected = navContext.useSelectedTodo();
+      const selected = navContext.getSelectedTodo();
 
       // If bug exists, it will likely select "Todo 1" (first item fallback)
       if (selected?.text === "Todo 1") {
@@ -307,7 +307,7 @@ Deno.test(
     navContext.navigateDown();
 
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
     );
 
     // Simulate file reload: New instances, same content
@@ -325,7 +325,7 @@ Deno.test(
     );
 
     await waitFor(() => { // Verify "Todo 2" is still selected (by hash fallback)
-      const selected = navContext.useSelectedTodo();
+      const selected = navContext.getSelectedTodo();
 
       if (selected?.text === "Todo 1") {
         throw new Error("Selection reset to first item after reload!");
@@ -357,7 +357,7 @@ Deno.test(
     navContext.navigateDown();
 
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
     );
 
     // Delete Todo 2
@@ -366,7 +366,7 @@ Deno.test(
       <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
     );
     await waitFor(() => { // Should select Todo 3 (next item)
-      const selected = navContext.useSelectedTodo();
+      const selected = navContext.getSelectedTodo();
       assertEquals(selected?.text, "Todo 3");
     });
 
@@ -390,7 +390,7 @@ Deno.test(
     // Select Todo 2 (last)
     navContext.navigateDown();
     await waitFor(() =>
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
     );
 
     // Delete Todo 2
@@ -400,7 +400,7 @@ Deno.test(
     );
     await waitFor(() =>
       // Should select Todo 1 (previous/last remaining)
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
     );
 
     unmount();
@@ -425,7 +425,7 @@ Deno.test(
     navContext.navigateDown();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2");
     });
 
     // Change Priority
@@ -438,7 +438,7 @@ Deno.test(
     );
 
     await waitFor(() => { // Selection should follow the todo
-      const selected = navContext.useSelectedTodo();
+      const selected = navContext.getSelectedTodo();
       assertEquals(selected?.text, "Todo 2");
       assertEquals(selected?.priority, "A");
     });
@@ -464,7 +464,7 @@ Deno.test(
     // Select Todo 2
     navContext.navigateDown();
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 2");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2");
     });
 
     // Toggle completion
@@ -479,7 +479,7 @@ Deno.test(
     await waitFor(() => {});
 
     // Selection should follow the todo
-    const selected = navContext.useSelectedTodo();
+    const selected = navContext.getSelectedTodo();
     assertEquals(selected?.text, "Todo 2");
     assertEquals(selected?.isDone(), true);
 
@@ -503,20 +503,20 @@ Deno.test(
     );
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1");
     });
 
     navContext.navigateDown();
     navContext.navigateDown();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 3");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 3");
     });
 
     navContext.navigateHome();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1");
     });
 
     unmount();
@@ -539,13 +539,13 @@ Deno.test(
     );
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1");
     });
 
     navContext.navigateEnd();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 3");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 3");
     });
 
     unmount();
@@ -568,21 +568,21 @@ Deno.test(
     );
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1");
     });
 
     // Go to last item
     navContext.navigateEnd();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 3");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 3");
     });
 
     // Page up
     navContext.navigatePageUp();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1");
     });
 
     unmount();
@@ -605,14 +605,14 @@ Deno.test(
     );
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 1");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1");
     });
 
     // Page down
     navContext.navigatePageDown();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 3");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 3");
     });
 
     unmount();
@@ -843,7 +843,7 @@ Deno.test(
 
     // Initial state: Todo 0, offset 0
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 0");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 0");
       assertEquals(navContext.offsetRow, 0);
     });
 
@@ -851,7 +851,7 @@ Deno.test(
     navContext.navigateEnd();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 14");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 14");
     });
 
     // Todo 14 is the last item.
@@ -878,7 +878,7 @@ Deno.test(
     navContext.navigateHome();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 0");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 0");
     });
 
     await waitFor(() => {
@@ -913,7 +913,7 @@ Deno.test(
     );
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 0");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 0");
     });
 
     // Navigate down 4 times to select Todo 4
@@ -923,7 +923,7 @@ Deno.test(
     navContext.navigateDown();
 
     await waitFor(() => {
-      assertEquals(navContext.useSelectedTodo()?.text, "Todo 4");
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 4");
     });
 
     // Todo 4 is at index 5 (0 is header).
@@ -983,7 +983,7 @@ Deno.test(
 
     // Initial state: Apple selected (Index 1, 0 is header)
     await waitFor(() => {
-      assertEquals(context.nav.useSelectedTodo()?.text, "Apple");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Apple");
     });
 
     // Select Banana (Shift+Down)
@@ -991,7 +991,7 @@ Deno.test(
     context.nav.navigateDown(true); // shift=true
 
     await waitFor(() => {
-      assertEquals(context.nav.useSelectedTodo()?.text, "Banana");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Banana");
       // Verify multi-select (Range should have 2 items: Apple and Banana)
       assertEquals(context.nav.selectedTodoIds.size, 2);
     });
@@ -1011,7 +1011,7 @@ Deno.test(
         );
       }
       // Assert selected item is Apple (only one left)
-      assertEquals(context.nav.useSelectedTodo()?.text, "Apple");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Apple");
     });
 
     unmount();
@@ -1055,14 +1055,14 @@ Deno.test(
 
     // Initial state: Apple selected
     await waitFor(() => {
-      assertEquals(context.nav.useSelectedTodo()?.text, "Apple");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Apple");
     });
 
     // Select Apricot (Shift+Down)
     context.nav.navigateDown(true);
 
     await waitFor(() => {
-      assertEquals(context.nav.useSelectedTodo()?.text, "Apricot");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Apricot");
       assertEquals(context.nav.selectedTodoIds.size, 2); // Apple + Apricot
     });
 
@@ -1079,7 +1079,7 @@ Deno.test(
       }
       // Assert selection is still Apricot (or Apple, but cursor usually stays)
       // Since Apricot is visible, cursor should stay on it.
-      assertEquals(context.nav.useSelectedTodo()?.text, "Apricot");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Apricot");
     });
 
     unmount();
@@ -1129,7 +1129,7 @@ Deno.test(
     context.search.setSearchQuery("Todo 15");
 
     await waitFor(() => {
-      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 15");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Todo 15");
       // Offset should be 0 because list is short (1 match + 1 date header maybe?)
       assertEquals(context.nav.offsetRow, 0);
     });
@@ -1140,7 +1140,7 @@ Deno.test(
     context.search.setSearchQuery("");
 
     await waitFor(() => {
-      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 15");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Todo 15");
       const offset = context.nav.offsetRow;
       const visible = 16 >= offset && 16 < offset + 5;
       if (!visible) {
@@ -1193,7 +1193,7 @@ Deno.test(
     context.search.setSearchQuery("Todo 1");
 
     await waitFor(() => {
-      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 1");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Todo 1");
     });
 
     // Select down once. "Todo 1" is item 1. next matches...
@@ -1255,7 +1255,7 @@ Deno.test(
 
     context.search.setSearchQuery("Todo 1");
     await waitFor(() =>
-      assertEquals(context.nav.useSelectedTodo()?.text, "Todo 1")
+      assertEquals(context.nav.getSelectedTodo()?.text, "Todo 1")
     );
 
     // Select down twice.
@@ -1335,7 +1335,7 @@ Deno.test(
 
     await waitFor(() => {
       // Should show Match 0
-      assertEquals(context.nav.useSelectedTodo()?.text, "Match 0");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Match 0");
     });
 
     // 2. Select all 10 "Match" items.
@@ -1345,7 +1345,7 @@ Deno.test(
 
     await waitFor(() => {
       assertEquals(context.nav.selectedTodoIds.size, 10);
-      assertEquals(context.nav.useSelectedTodo()?.text, "Match 9");
+      assertEquals(context.nav.getSelectedTodo()?.text, "Match 9");
     });
 
     // 3. Clear search.
