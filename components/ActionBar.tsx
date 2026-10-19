@@ -1,6 +1,5 @@
 import { Box, Text, useApp, useWindowSize } from "ink";
 import { Fragment, memo } from "react";
-import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
@@ -79,7 +78,7 @@ export const ActionBar = memo(() => {
         {ACTION_ITEMS.map((item) => {
           return (
             <Fragment key={item.key}>
-              <Text color={PRIMARY_COLOR}>{` ${item.key}`}</Text>
+              <Text color={COLORS.primary}>{` ${item.key}`}</Text>
               <Text>{` ${item.text}  `}</Text>
             </Fragment>
           );
@@ -87,7 +86,7 @@ export const ActionBar = memo(() => {
       </Box>
       {toasterMessage && (
         <Box padding={0}>
-          <Text color={SECONDARY_COLOR}>{toasterMessage}</Text>
+          <Text color={COLORS.secondary}>{toasterMessage}</Text>
         </Box>
       )}
     </Box>
