@@ -88,9 +88,6 @@ export function ControlledTextInput({
     cursorOffsetRef.current = cursorOffset;
   }, [cursorOffset]);
 
-  // Listen to raw stdin to capture actual key sequences
-  // DELETED: Raw data listener is now handled in custom useInput
-
   // Sync cursor when controlled offset changes
   useEffect(() => {
     if (controlledCursorOffset !== undefined) {
