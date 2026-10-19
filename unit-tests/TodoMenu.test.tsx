@@ -431,7 +431,6 @@ Deno.test({
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
-    await new Promise((r) => setTimeout(r, 200)); // Let things settle
   }
   testUnmount?.();
 });
@@ -491,7 +490,6 @@ Deno.test({
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
-    await new Promise((r) => setTimeout(r, 200)); // Let things settle
   }
   testUnmount?.();
 });
