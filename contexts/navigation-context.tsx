@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { useSearch } from "./search-context.tsx";
-import { useStdout } from "ink";
+import { useWindowSize } from "ink";
 import { Todos } from "../logic/Todos.ts";
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
 import { IndexType } from "../types/enums.ts";
@@ -271,7 +271,7 @@ export const NavigationProvider = (
   },
 ) => {
   const { searchQuery, isSearchFocused } = useSearch();
-  const { stdout } = useStdout();
+  const { rows: windowRows } = useWindowSize();
 
   const [showHidden, setShowHidden] = useState(false);
 
@@ -296,7 +296,7 @@ export const NavigationProvider = (
   // Search bar takes 2 rows (content + border) when visible
   const searchBarVisible = isSearchFocused || searchQuery.length > 0;
   const listHeight = listHeightForTest ??
-    (stdout.rows - 2 - (searchBarVisible ? 2 : 0));
+    (windowRows - 2 - (searchBarVisible ? 2 : 0));
 
   const indexes: IndexEntry[] = useMemo(() => {
     let filteredTodos = todos.sortByImportance();
