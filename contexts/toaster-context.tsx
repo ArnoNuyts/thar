@@ -28,7 +28,9 @@ export const ToasterProvider = (
   const [toasterMessage, setToasterMessage] = useState<string | undefined>(
     undefined,
   );
-  const toasterTimeoutRef = useRef<number | undefined>(undefined);
+  const toasterTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
   const showToaster = useCallback((message: string) => {
     setToasterMessage(message);

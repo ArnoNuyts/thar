@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Box, measureElement, Text, useStdout } from "ink";
+import { Box, measureElement, Text, useWindowSize } from "ink";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
@@ -67,9 +67,9 @@ export const ModalTodoInput = ({
     autoFocus: true,
     tag: tag || (mode === "create" ? "create-todo-input" : "edit-todo-input"),
   });
-  const { stdout } = useStdout();
+  const windowSize = useWindowSize();
   const { columns: terminalWidth, rows: terminalHeight } = getTerminalSize(
-    stdout,
+    windowSize,
     layoutSize,
   );
 

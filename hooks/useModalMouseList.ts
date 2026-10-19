@@ -1,4 +1,4 @@
-import { useStdout } from "ink";
+import { useWindowSize } from "ink";
 import {
   getModalBodyRowFromClick,
   getTerminalSize,
@@ -14,11 +14,11 @@ interface UseModalMouseListOptions {
 }
 
 export const useModalMouseList = (options: UseModalMouseListOptions) => {
-  const { stdout } = useStdout();
+  const windowSize = useWindowSize();
 
   useMouseInput((event) => {
     if (!options.isActive) return;
-    const terminalSize = getTerminalSize(stdout, options.terminalSize);
+    const terminalSize = getTerminalSize(windowSize, options.terminalSize);
 
     const row = getModalBodyRowFromClick(event, terminalSize, {
       modalWidth: options.modalWidth ?? "50%",
