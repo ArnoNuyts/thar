@@ -86,7 +86,6 @@ export const SetPriorityModal = () => {
 
   return (
     <Modal
-      isFocused={isFocused}
       title="Set Priority"
       width={30}
       onLayoutSizeChange={setLayoutSize}

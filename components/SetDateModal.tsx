@@ -154,7 +154,6 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
   return (
     // @ts-ignore: children prop issue
     <Modal
-      isFocused={isFocused}
       title={title}
       width={isCustom ? 30 : "50%"}
       onLayoutSizeChange={setLayoutSize}
