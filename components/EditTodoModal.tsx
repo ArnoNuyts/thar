@@ -9,7 +9,7 @@ export const EditTodoModal = () => {
 
   const handleSubmit = (value: string) => {
     if (todo && value.trim().length > 0) {
-      updateTodos([todo], (t) => t.setText(value));
+      updateTodos([todo], (t) => t.setText(value, { preserveTags: true }));
     }
   };
 
