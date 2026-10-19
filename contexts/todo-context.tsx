@@ -7,6 +7,7 @@ import {
   useRef,
 } from "react";
 import { debounce } from "@std/async/debounce";
+import { dirname, join } from "@std/path";
 import {
   readTodosFromFile,
   writeTodosToFile,
@@ -124,10 +125,22 @@ export const TodoProvider = ({
 
   // Initial load
   useEffect(() => {
-    readTodosFromFile(filename).then((initialTodos) => {
-      justReadFileFlag.current = true;
-      dispatch({ type: "load", todos: new Todos(...initialTodos) });
-    });
+    let cancelled = false;
+    readTodosFromFile(filename)
+      .then((initialTodos) => {
+        if (cancelled) return;
+        justReadFileFlag.current = true;
+        dispatch({ type: "load", todos: new Todos(...initialTodos) });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error("Failed to load todos:", error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [filename]);
 
   // Save effect
@@ -139,11 +152,23 @@ export const TodoProvider = ({
           return;
         }
         lastWriteTimeRef.current = Date.now();
-        await writeTodosToFile(currentTodos, filename);
-        lastWriteTimeRef.current = Date.now();
+        try {
+          await writeTodosToFile(currentTodos, filename);
+        } catch (error) {
+          console.error("Failed to save todos:", error);
+        } finally {
+          lastWriteTimeRef.current = Date.now();
+        }
       }, 50),
     [filename],
   );
+
+  // Cancel a pending save only when the debounced function is replaced (for
+  // example when `filename` changes) or the provider unmounts. Ordinary todo
+  // updates must not cancel the debounce.
+  useEffect(() => {
+    return () => saveTodos.clear();
+  }, [saveTodos]);
 
   useEffect(() => {
     saveTodos(todos);
@@ -151,6 +176,7 @@ export const TodoProvider = ({
 
   // Watcher effect
   useEffect(() => {
+    let cancelled = false;
     let watcher: Deno.FsWatcher | undefined;
     try {
       watcher = Deno.watchFs(filename);
@@ -159,32 +185,52 @@ export const TodoProvider = ({
     }
 
     const readTodosDebounced = debounce(async () => {
-      justReadFileFlag.current = true;
-      const todosFromFile = await readTodosFromFile(filename);
-      dispatch({ type: "load", todos: new Todos(...todosFromFile) });
-      showToaster("File reloaded");
+      try {
+        const todosFromFile = await readTodosFromFile(filename);
+        if (cancelled) return;
+        justReadFileFlag.current = true;
+        dispatch({ type: "load", todos: new Todos(...todosFromFile) });
+        showToaster("File reloaded");
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to reload todos:", error);
+        }
+      }
     }, 500);
 
     const processEvents = async () => {
       if (!watcher) return;
-      for await (const event of watcher) {
-        if (event.kind === "modify") {
-          // Prevent write-read loop
-          if (Date.now() - lastWriteTimeRef.current < 1000) {
-            continue;
+      try {
+        for await (const event of watcher) {
+          if (cancelled) break;
+          if (event.kind === "modify") {
+            // Prevent write-read loop
+            if (Date.now() - lastWriteTimeRef.current < 1000) {
+              continue;
+            }
+            readTodosDebounced();
           }
-          readTodosDebounced();
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to process file events:", error);
         }
       }
     };
     processEvents();
 
     return () => {
+      cancelled = true;
+      readTodosDebounced.clear();
       if (watcher) {
-        watcher.close();
+        try {
+          watcher.close();
+        } catch (error) {
+          console.error("Failed to close file watcher:", error);
+        }
       }
     };
-  }, [filename]);
+  }, [filename, showToaster]);
 
   const setTodos = (todos: Todos) => {
     dispatch({ type: "set", todos });
@@ -284,16 +330,8 @@ export const TodoProvider = ({
     const completedTodos = todos.filter((t: Todo) => t.isDone());
     if (completedTodos.length === 0) return;
 
-    // Append to done.txt
-    // Assuming done.txt is in the same directory as the main file
-    const separator = filename.includes("\\") ? "\\" : "/";
-    const lastIndex = filename.lastIndexOf(separator);
-    let doneFile = "done.txt";
-
-    if (lastIndex !== -1) {
-      const dir = filename.substring(0, lastIndex);
-      doneFile = `${dir}${separator}done.txt`;
-    }
+    // Append to done.txt next to the main file, using the platform separator.
+    const doneFile = join(dirname(filename), "done.txt");
 
     await writeTodosToFile(completedTodos, doneFile, {
       append: true,
