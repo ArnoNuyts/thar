@@ -80,8 +80,14 @@ then the fix, then `deno lint`, `deno check main.tsx`, and the full suite.
 | P4 #34 — priority type mismatch                 | ✅ FIXED | `27392ce`            | `unit-tests/priority-list.test.ts`                             |
 | P4 #35 — dead/commented code                    | ✅ FIXED | `b63ca53`            | full suite                                                     |
 | P4 #38 — mixed focused-input patterns           | ✅ FIXED | `b63ca53`            | `unit-tests/calendar.test.tsx`, `unit-tests/button.test.tsx`   |
+| P3 #18 — `Todos extends Array` leak             | ✅ FIXED | `320d60a`            | `unit-tests/todos-collection.test.ts`                          |
+| P3 #24 — four chained sorts                     | ✅ FIXED | `320d60a`            | `unit-tests/todos-sort.test.ts`                                |
+| P3 #25 — O(n²) numbering / weak keys            | ✅ FIXED | `320d60a`            | `unit-tests/indexes-grouping.test.ts`                          |
+| P3 #27 — mutated pushed headers                 | ✅ FIXED | `320d60a`            | `unit-tests/indexes-grouping.test.ts`                          |
+| P4 #32 — duplicated date parsing                | ✅ FIXED | `a645f95`            | `unit-tests/dates.test.ts`                                     |
+| P4 #43 — manual date arithmetic                 | ✅ FIXED | `a645f95`            | `unit-tests/SetDateModal.test.tsx`, `unit-tests/dates.test.ts` |
 
-Current suite: **323 passed, 0 failed**.
+Current suite: **349 passed, 0 failed**.
 
 ---
 
