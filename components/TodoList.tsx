@@ -10,7 +10,7 @@ import { useTodoCommands } from "../hooks/useTodoCommands.ts";
 import { IndexEntry } from "../logic/indexes.ts";
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
-import { UpperCaseLetter } from "../types/types.ts";
+import { isPriorityInput } from "../logic/priority.ts";
 import { TodoListScrollbar } from "./TodoListScrollbar.tsx";
 import { COLORS } from "../theme/colors.ts";
 
@@ -307,8 +307,8 @@ export const TodoList = () => {
         commands.addContext();
         break;
       default:
-        if (["A", "B", "C", "D", "E", "F"].includes(input)) {
-          commands.setPriority(input.toUpperCase() as UpperCaseLetter);
+        if (isPriorityInput(input)) {
+          commands.setPriority(input);
         }
         break;
     }

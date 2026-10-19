@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useListSelection } from "../hooks/useListSelection.ts";
 import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
+import { SelectList } from "./SelectList.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { Calendar } from "./Calendar.tsx";
 import { format } from "date-fns";
-import { SECONDARY_COLOR } from "../constants.ts";
 
 const BASE_OPTIONS = [
   { label: "Today", value: "today" },
@@ -28,7 +29,6 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
   const { useSelectedTodos } = useNavigation();
   const selectedTodos = useSelectedTodos();
   const todo = selectedTodos[0]; // Reference todo for initial values
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [isCustom, setIsCustom] = useState(false);
   const [layoutSize, setLayoutSize] = useState<
     { rows?: number; columns?: number }
@@ -98,36 +98,16 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     closeModal();
   };
 
+  const selection = useListSelection({
+    itemCount: options.length,
+    isActive: !isCustom,
+    onSelect: applyOption,
+    // Escape leaves the calendar first, then closes the modal.
+    onCancel: () => (isCustom ? setIsCustom(false) : closeModal()),
+  });
+
   const { isFocused } = useFocusedInput((_input, key) => {
-    if (key.escape) {
-      if (isCustom) {
-        setIsCustom(false);
-      } else {
-        closeModal();
-      }
-      return;
-    }
-
-    if (isCustom) return; // Let Calendar handle input when custom is active
-
-    if (key.return) {
-      applyOption(selectedIndex);
-      return;
-    }
-
-    if (key.upArrow) {
-      setSelectedIndex((
-        prev: number,
-      ) => (prev > 0 ? prev - 1 : options.length - 1));
-      return;
-    }
-
-    if (key.downArrow) {
-      setSelectedIndex((
-        prev: number,
-      ) => (prev < options.length - 1 ? prev + 1 : 0));
-      return;
-    }
+    selection.handleKey(key);
   }, { autoFocus: true, tag: "set-date-modal" });
 
   useModalMouseList({
@@ -135,10 +115,8 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     modalWidth: "50%",
     bodyRows: options.length,
     terminalSize: layoutSize,
-    onRowClick: (rowInItems) => {
-      setSelectedIndex(rowInItems);
-      applyOption(rowInItems);
-    },
+    onRowClick: selection.selectAt,
+    onRowHover: selection.setSelectedIndex,
   });
 
   const handleCustomSubmit = (date: Date) => {
@@ -160,19 +138,13 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     >
       {!isCustom
         ? (
-          <Box flexDirection="column" paddingX={1}>
-            {options.map((option, index) => {
-              const isSelected = index === selectedIndex;
-              return (
-                <Box key={option.value}>
-                  <Text color={SECONDARY_COLOR}>
-                    {isSelected ? "» " : "  "}
-                  </Text>
-                  <Text wrap="truncate">{option.label}</Text>
-                </Box>
-              );
-            })}
-          </Box>
+          <SelectList
+            items={options.map((option) => ({
+              key: option.value,
+              label: option.label,
+            }))}
+            selectedIndex={selection.selectedIndex}
+          />
         )
         : (
           <Box flexDirection="column" alignItems="center">
