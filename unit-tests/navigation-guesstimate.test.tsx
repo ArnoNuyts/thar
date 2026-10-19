@@ -164,3 +164,53 @@ Deno.test(
     unmount();
   },
 );
+
+Deno.test(
+  "should select a modified todo in a large list",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = Array.from(
+      { length: 300 },
+      (_, i) => new Todo(`Task ${i}`),
+    );
+    const initialTodos = new Todos(...todos);
+
+    // deno-lint-ignore no-explicit-any
+    let navContext: any;
+
+    const { rerender, unmount } = render(
+      <TestWrapper
+        todos={initialTodos}
+        onContext={(ctx) => navContext = ctx}
+      />,
+    );
+
+    await waitFor(() =>
+      assertEquals(navContext.useSelectedTodo()?.text, "Task 0")
+    );
+
+    // Modify a todo far down the list; guesstimate must find it.
+    const modified = todos[250].setText("Task 250 modified");
+    const modifiedTodos = new Todos(
+      ...todos.slice(0, 250),
+      modified,
+      ...todos.slice(251),
+    );
+
+    rerender(
+      <TestWrapper
+        todos={modifiedTodos}
+        onContext={(ctx) => navContext = ctx}
+      />,
+    );
+
+    await waitFor(() =>
+      assertEquals(
+        navContext.useSelectedTodo()?.text,
+        "Task 250 modified",
+      )
+    );
+
+    unmount();
+  },
+);
