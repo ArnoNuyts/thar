@@ -374,6 +374,7 @@ Deno.test("isOverdue - returns correctly", () => {
       expected: true,
     },
     { input: "No due date", expected: false },
+    { input: "Malformed due:not-a-date", expected: false },
   ];
 
   for (const { input, expected } of testCases) {
@@ -400,6 +401,7 @@ Deno.test("isPassedThreshold - returns correctly", () => {
       expected: true,
     },
     { input: "No threshold date", expected: true },
+    { input: "Malformed t:not-a-date", expected: true },
   ];
 
   for (const { input, expected } of testCases) {
