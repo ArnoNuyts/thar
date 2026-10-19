@@ -132,9 +132,6 @@ export class Todo {
         const amount = parseInt(match[1]);
         const unit = match[2];
         let newDueDate = new Date();
-        /*if (this._tags.due) {
-          newDueDate = parseISO(this._tags.due as string);
-        }*/
 
         switch (unit) {
           case "d":
