@@ -86,8 +86,14 @@ then the fix, then `deno lint`, `deno check main.tsx`, and the full suite.
 | P3 #27 — mutated pushed headers                 | ✅ FIXED | `320d60a`            | `unit-tests/indexes-grouping.test.ts`                          |
 | P4 #32 — duplicated date parsing                | ✅ FIXED | `a645f95`            | `unit-tests/dates.test.ts`                                     |
 | P4 #43 — manual date arithmetic                 | ✅ FIXED | `a645f95`            | `unit-tests/SetDateModal.test.tsx`, `unit-tests/dates.test.ts` |
+| P3 #19 — 1000-line navigation module            | ✅ FIXED | `ba99a30`            | `unit-tests/navigation-pure.test.ts`                           |
+| P3 #21 — hook-named plain selectors             | ✅ FIXED | `ba99a30`            | `unit-tests/navigation-*.test.tsx`                             |
+| P4 #40 — `constants.ts` pass-through            | ✅ FIXED | `a0fcc8e`            | `deno check` + component suites                                |
 
-Current suite: **349 passed, 0 failed**.
+Current suite: **371 passed, 0 failed**.
+
+All 44 items are fixed. The sections below remain the original findings (line
+numbers refer to the reviewed snapshot); the table above is the current status.
 
 ---
 
