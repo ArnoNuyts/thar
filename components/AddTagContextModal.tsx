@@ -251,7 +251,6 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
 
   return (
     <Modal
-      isFocused={isFocused}
       title={title}
       width={40}
       onLayoutSizeChange={setLayoutSize}

@@ -122,7 +122,6 @@ export const SetRecurrenceModal = () => {
   return (
     // @ts-ignore: children prop issue
     <Modal
-      isFocused={isFocused}
       title={getTitle()}
       onLayoutSizeChange={setLayoutSize}
     >
