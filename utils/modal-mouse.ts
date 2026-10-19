@@ -26,12 +26,12 @@ export interface ModalBodyCell {
   modalWidth: number;
 }
 
-export const getModalBodyCellFromClick = (
+export const getModalBodyCellAtPosition = (
   event: MouseEvent,
   terminal: TerminalSize,
   options: { modalWidth?: number | string; bodyRows: number },
 ): ModalBodyCell | undefined => {
-  if (!event.leftClick || event.x === undefined || event.y === undefined) {
+  if (event.x === undefined || event.y === undefined) {
     return undefined;
   }
 
@@ -57,6 +57,23 @@ export const getModalBodyCellFromClick = (
     column: event.x - modalLeft,
     modalWidth,
   };
+};
+
+export const getModalBodyCellFromClick = (
+  event: MouseEvent,
+  terminal: TerminalSize,
+  options: { modalWidth?: number | string; bodyRows: number },
+): ModalBodyCell | undefined => {
+  if (!event.leftClick) return undefined;
+  return getModalBodyCellAtPosition(event, terminal, options);
+};
+
+export const getModalBodyRowFromEvent = (
+  event: MouseEvent,
+  terminal: TerminalSize,
+  options: { modalWidth?: number | string; bodyRows: number },
+): number | undefined => {
+  return getModalBodyCellAtPosition(event, terminal, options)?.row;
 };
 
 export const getModalBodyRowFromClick = (

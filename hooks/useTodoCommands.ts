@@ -3,7 +3,7 @@ import { useNavigation } from "../contexts/navigation-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
-import { UpperCaseLetter } from "../types/types.ts";
+import { Priority } from "../logic/priority.ts";
 
 export interface CommandOptions {
   /** Called once the command has finished, if it acted on a selection. */
@@ -80,7 +80,7 @@ export const useTodoCommands = () => {
   const setRecurrence = () => openModal("set-recurrence");
 
   /** Inline A-F priority shortcut: pressing the current priority unsets it. */
-  const setPriority = (priority: UpperCaseLetter) => {
+  const setPriority = (priority: Priority) => {
     if (selectedTodos.length === 0) return;
 
     const allHaveSamePriority = selectedTodos.every((selected) =>
