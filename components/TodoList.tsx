@@ -210,7 +210,7 @@ export const TodoList = () => {
     navigateHome,
     navigateEnd,
     setSelectedTodoId,
-    useSelectedTodo,
+    getSelectedTodo,
     selectedTodoIds,
     clearMultiSelect,
   } = useNavigation();
@@ -219,7 +219,7 @@ export const TodoList = () => {
   const { focusRef, searchQuery, isSearchFocused } = useSearch();
   const commands = useTodoCommands();
 
-  const todo = useSelectedTodo();
+  const todo = getSelectedTodo();
   const lastClickRef = useRef<
     {
       id?: symbol;

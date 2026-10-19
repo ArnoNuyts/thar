@@ -22,8 +22,8 @@ const RESET_OPTION = { label: "Reset", value: "reset", unit: "" };
 export const SetRecurrenceModal = () => {
   const { closeModal } = useModal();
   const { updateTodos } = useTodo();
-  const { useSelectedTodos } = useNavigation();
-  const selectedTodos = useSelectedTodos();
+  const { getSelectedTodos } = useNavigation();
+  const selectedTodos = getSelectedTodos();
   const todo = selectedTodos[0]; // Reference todo for initial values
   const hasRecurrence = todo?.tags.rec !== undefined;
   const options = hasRecurrence

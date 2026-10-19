@@ -30,7 +30,7 @@ Deno.test("EditTodoModal: should render and set focus", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodo: () => todo }}
+      navValue={{ getSelectedTodo: () => todo }}
       todoValue={{
         updateTodos: (todosToUpdate: Todo[], transform: (t: Todo) => Todo) => {
           const updatedTodo = transform(todosToUpdate[0]);
@@ -82,7 +82,7 @@ Deno.test("EditTodoModal: preserves tags when editing text", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodo: () => todo }}
+      navValue={{ getSelectedTodo: () => todo }}
       todoValue={{
         updateTodos: (todosToUpdate: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todosToUpdate[0]);
@@ -137,7 +137,7 @@ Deno.test("EditTodoModal: tags typed in the modal override preserved tags", asyn
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodo: () => todo }}
+      navValue={{ getSelectedTodo: () => todo }}
       todoValue={{
         updateTodos: (todosToUpdate: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todosToUpdate[0]);

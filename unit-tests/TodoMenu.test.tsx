@@ -61,8 +61,8 @@ Deno.test("TodoMenu: should call toggleTodos for all selected items (Mocked)", a
     <TestWrapper
       todoValue={{ toggleTodos: (todos: Todo[]) => toggledTodos = todos }}
       navValue={{
-        useSelectedTodos: () => [todo1, todo2],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1, todo2],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -95,8 +95,8 @@ Deno.test("TodoMenu: should call deleteTodos after real confirmation (Mocked)", 
     <TestWrapper
       todoValue={{ deleteTodos: (todos: Todo[]) => deletedTodos = todos }}
       navValue={{
-        useSelectedTodos: () => [todo1, todo2],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1, todo2],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -177,8 +177,8 @@ Deno.test("TodoMenu: should call toggleHidden (Mocked)", async () => {
     <TestWrapper
       todoValue={{ toggleHidden: (todos: Todo[]) => toggledHidden = todos }}
       navValue={{
-        useSelectedTodos: () => [todo1],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -205,8 +205,8 @@ Deno.test("TodoMenu: should open edit-todo modal", async () => {
   const { unmount, stdin, lastFrame } = render(
     <TestWrapper
       navValue={{
-        useSelectedTodos: () => [todo1],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -230,8 +230,8 @@ Deno.test("TodoMenu: single mouse click should trigger menu item action", async 
   const { unmount, stdin, lastFrame } = render(
     <TestWrapper
       navValue={{
-        useSelectedTodos: () => [todo1],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -407,8 +407,8 @@ Deno.test({
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper
         navValue={{
-          useSelectedTodos: () => [todo1],
-          useSelectedTodo: () => todo1,
+          getSelectedTodos: () => [todo1],
+          getSelectedTodo: () => todo1,
         }}
       >
         <AppContentMock />
@@ -466,8 +466,8 @@ Deno.test({
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper
         navValue={{
-          useSelectedTodos: () => [todo1],
-          useSelectedTodo: () => todo1,
+          getSelectedTodos: () => [todo1],
+          getSelectedTodo: () => todo1,
         }}
       >
         <AppContentMock />

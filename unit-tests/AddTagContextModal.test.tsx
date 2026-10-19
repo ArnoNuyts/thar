@@ -32,7 +32,7 @@ Deno.test("AddTagContextModal: should render projects correctly", async () => {
     <TestWrapper
       todoValue={{ todos }}
       navValue={{
-        useSelectedTodos: () => [t1, t2],
+        getSelectedTodos: () => [t1, t2],
       }}
     >
       <TestComponent />
@@ -85,7 +85,7 @@ Deno.test("AddTagContextModal: should toggle existing project", async () => {
         },
       }}
       navValue={{
-        useSelectedTodos: () => [t1, t2],
+        getSelectedTodos: () => [t1, t2],
       }}
     >
       <TestComponent />
@@ -160,7 +160,7 @@ Deno.test("AddTagContextModal: should add custom project", async () => {
         },
       }}
       navValue={{
-        useSelectedTodos: () => [t1],
+        getSelectedTodos: () => [t1],
       }}
     >
       <TestComponent />
@@ -220,7 +220,7 @@ Deno.test("AddTagContextModal: should cycle through 3 states for 'some' state", 
     <TestWrapper
       todoValue={{ todos }}
       navValue={{
-        useSelectedTodos: () => [t1, t2],
+        getSelectedTodos: () => [t1, t2],
       }}
     >
       <TestComponent />
@@ -282,7 +282,7 @@ Deno.test("AddTagContextModal: mouse click should toggle existing project", asyn
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
       todoValue={{ todos }}
-      navValue={{ useSelectedTodos: () => [t1, t2] }}
+      navValue={{ getSelectedTodos: () => [t1, t2] }}
     >
       <TestComponent />
     </TestWrapper>,

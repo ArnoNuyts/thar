@@ -14,7 +14,7 @@ const hasHighlight = (frame: string | undefined, label: string) =>
   (frame ?? "").includes(`» ${label}`);
 
 const alwaysSelected = (todo: Todo) => ({
-  navValue: { useSelectedTodos: () => [todo] },
+  navValue: { getSelectedTodos: () => [todo] },
 });
 
 type PriorityHarness = {

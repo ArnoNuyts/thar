@@ -23,8 +23,8 @@ interface TagItem {
 export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
   const { closeModal } = useModal();
   const { updateTodos, todos } = useTodo();
-  const { useSelectedTodos } = useNavigation();
-  const selectedTodos = useSelectedTodos();
+  const { getSelectedTodos } = useNavigation();
+  const selectedTodos = getSelectedTodos();
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [customInput, setCustomInput] = useState("");

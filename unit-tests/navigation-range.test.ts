@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { IndexEntry } from "../logic/indexes.ts";
-import { getSelectionRangeRows } from "../logic/selection.ts";
+import { getSelectionRangeRows } from "../logic/navigation.ts";
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
 
