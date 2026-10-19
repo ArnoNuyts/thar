@@ -75,8 +75,13 @@ then the fix, then `deno lint`, `deno check main.tsx`, and the full suite.
 | P4 #42 — Calendar deps/types                    | ✅ FIXED | `c703a53`            | `deno check` + Calendar suites                                 |
 | P4 #44 — terminal-size re-export                | ✅ FIXED | `c703a53`            | `deno check`                                                   |
 | P4 #45 — fixed test sleeps                      | ✅ FIXED | `c703a53`            | full suite                                                     |
+| P2 #11 — duplicated select-list modals          | ✅ FIXED | `27392ce`            | `unit-tests/select-list.test.tsx`                              |
+| P2 #17 — duplicated priority list               | ✅ FIXED | `27392ce`            | `unit-tests/priority-list.test.ts`                             |
+| P4 #34 — priority type mismatch                 | ✅ FIXED | `27392ce`            | `unit-tests/priority-list.test.ts`                             |
+| P4 #35 — dead/commented code                    | ✅ FIXED | `b63ca53`            | full suite                                                     |
+| P4 #38 — mixed focused-input patterns           | ✅ FIXED | `b63ca53`            | `unit-tests/calendar.test.tsx`, `unit-tests/button.test.tsx`   |
 
-Current suite: **306 passed, 0 failed**.
+Current suite: **323 passed, 0 failed**.
 
 ---
 
