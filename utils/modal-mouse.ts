@@ -1,8 +1,5 @@
 import { MouseEvent } from "../hooks/useMouseInput.ts";
-import {
-  getTerminalSize as getResolvedTerminalSize,
-  TerminalSize,
-} from "./terminal-size.ts";
+import { TerminalSize } from "./terminal-size.ts";
 
 export const MODAL_TOP_CHROME_ROWS = 3;
 export const MODAL_BOTTOM_CHROME_ROWS = 2;
@@ -28,11 +25,6 @@ export interface ModalBodyCell {
   column: number;
   modalWidth: number;
 }
-
-export const getTerminalSize = (
-  terminal?: TerminalSize,
-  measured?: TerminalSize,
-) => getResolvedTerminalSize(terminal, measured);
 
 export const getModalBodyCellFromClick = (
   event: MouseEvent,

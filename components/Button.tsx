@@ -40,7 +40,11 @@ const ButtonBase = (
 ) => (
   <Text
     bold={isSelected || isHovered}
-    color={isHovered ? COLORS.warning : isSelected ? "#FFFFFF" : COLORS.muted}
+    color={isHovered
+      ? COLORS.warning
+      : isSelected
+      ? COLORS.white
+      : COLORS.muted}
     dimColor={!isSelected && !isHovered}
   >
     {(isSelected || isHovered) ? `« ${label} »` : `‹ ${label} ›`}

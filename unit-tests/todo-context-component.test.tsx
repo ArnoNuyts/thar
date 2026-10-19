@@ -22,26 +22,19 @@ function setupMocks() {
   (Deno as any).watchFs = () => mockWatcher;
 
   // deno-lint-ignore no-explicit-any
-  (Deno as any).stat = async () => {
-    await delay(0);
-    return { isFile: true };
-  };
-
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).readTextFile = async () => {
-    await delay(0);
+  (Deno as any).readTextFile = () => {
     readCount++;
-    return "";
+    return Promise.resolve("");
   };
 
   // deno-lint-ignore no-explicit-any
-  (Deno as any).writeTextFile = async () => {
-    await delay(0);
+  (Deno as any).writeTextFile = () => {
     writeCount++;
     // Simulate FS event after write
     setTimeout(() => {
       mockWatcher.emit("modify");
     }, 10);
+    return Promise.resolve();
   };
 }
 
@@ -89,9 +82,14 @@ Deno.test({
     // Wait for the write to happen
     await waitFor(() => assertEquals(writeCount, 1));
 
-    // Now, wait a bit more to ensure no read-back happens
-    await delay(600); // Wait past the 500ms debounce
-    assertEquals(readCount, 0, "Should NOT have read back");
+    // Wait past the read-back debounce (500ms) while asserting no read happens.
+    const writeCompletedAt = Date.now();
+    await waitFor(() => {
+      assertEquals(readCount, 0, "Should NOT have read back");
+      if (Date.now() - writeCompletedAt < 600) {
+        throw new Error("read-back debounce window still open");
+      }
+    }, { interval: 25 });
 
     unmount();
     mockWatcher.close();

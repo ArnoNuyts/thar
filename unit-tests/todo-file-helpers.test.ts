@@ -1,34 +1,53 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
+import { join } from "node:path";
 import { readTodosFromFile } from "../logic/todo-file-helpers.ts";
 
-Deno.test("readTodosFromFile - should return empty Todos and create file if not found", async () => {
-  const tempFilename = `temp_test_file_${Date.now()}.txt`;
-
+async function withTempDir(fn: (dir: string) => Promise<void>) {
+  const dir = await Deno.makeTempDir();
   try {
-    // Ensure file does not exist before test
-    try {
-      await Deno.remove(tempFilename);
-    } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) {
-        throw error;
-      }
-    }
+    await fn(dir);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+}
 
-    const todos = await readTodosFromFile(tempFilename);
+Deno.test("readTodosFromFile - creates a missing file and returns empty Todos", async () => {
+  await withTempDir(async (dir) => {
+    const filename = join(dir, "todos.txt");
+
+    const todos = await readTodosFromFile(filename);
 
     assertEquals(todos.length, 0, "Should return an empty Todos object");
+    assertEquals(
+      await Deno.readTextFile(filename),
+      "",
+      "Missing file should be created empty",
+    );
+  });
+});
 
-    // Check if the file was created
-    const fileInfo = await Deno.stat(tempFilename);
-    assertEquals(fileInfo.isFile, true, "File should be created");
-  } finally {
-    // Clean up
-    try {
-      await Deno.remove(tempFilename);
-    } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) {
-        console.error(`Error cleaning up temp file ${tempFilename}:`, error);
-      }
-    }
-  }
+Deno.test("readTodosFromFile - throws on unreadable paths instead of exiting", async () => {
+  await withTempDir(async (dir) => {
+    // Reading a directory fails with an error other than NotFound.
+    await assertRejects(
+      () => readTodosFromFile(dir),
+      Deno.errors.IsADirectory,
+    );
+  });
+});
+
+Deno.test("readTodosFromFile - parses existing file lines", async () => {
+  await withTempDir(async (dir) => {
+    const filename = join(dir, "todos.txt");
+    await Deno.writeTextFile(
+      filename,
+      "(A) First task\n\n(B) Second task\n",
+    );
+
+    const todos = await readTodosFromFile(filename);
+
+    assertEquals(todos.length, 2);
+    assertEquals(todos[0].toString(), "(A) First task");
+    assertEquals(todos[1].toString(), "(B) Second task");
+  });
 });
