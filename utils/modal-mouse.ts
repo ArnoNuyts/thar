@@ -1,5 +1,8 @@
 import { MouseEvent } from "../hooks/useMouseInput.ts";
-import { getTerminalSize as getResolvedTerminalSize } from "./terminal-size.ts";
+import {
+  getTerminalSize as getResolvedTerminalSize,
+  TerminalSize,
+} from "./terminal-size.ts";
 
 const MODAL_TOP_CHROME_ROWS = 3;
 const MODAL_BOTTOM_CHROME_ROWS = 2;
@@ -27,21 +30,21 @@ export interface ModalBodyCell {
 }
 
 export const getTerminalSize = (
-  stdout: { rows?: number; columns?: number } | undefined,
-  measured?: { rows?: number; columns?: number },
-) => getResolvedTerminalSize(stdout, measured);
+  terminal?: TerminalSize,
+  measured?: TerminalSize,
+) => getResolvedTerminalSize(terminal, measured);
 
 export const getModalBodyCellFromClick = (
   event: MouseEvent,
-  stdout: { rows?: number; columns?: number },
+  terminal: TerminalSize,
   options: { modalWidth?: number | string; bodyRows: number },
 ): ModalBodyCell | undefined => {
   if (!event.leftClick || event.x === undefined || event.y === undefined) {
     return undefined;
   }
 
-  const rows = stdout.rows;
-  const columns = stdout.columns;
+  const rows = terminal.rows;
+  const columns = terminal.columns;
   if (!rows || !columns) return undefined;
 
   const modalWidth = resolveModalWidth(columns, options.modalWidth);
@@ -66,8 +69,8 @@ export const getModalBodyCellFromClick = (
 
 export const getModalBodyRowFromClick = (
   event: MouseEvent,
-  stdout: { rows?: number; columns?: number },
+  terminal: TerminalSize,
   options: { modalWidth?: number | string; bodyRows: number },
 ): number | undefined => {
-  return getModalBodyCellFromClick(event, stdout, options)?.row;
+  return getModalBodyCellFromClick(event, terminal, options)?.row;
 };

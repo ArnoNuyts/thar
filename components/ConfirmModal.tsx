@@ -1,4 +1,4 @@
-import { Box, Text, useStdout } from "ink";
+import { Box, Text, useWindowSize } from "ink";
 import { useMemo, useState } from "react";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
@@ -24,7 +24,7 @@ export const ConfirmModal = (
   const MODAL_TOP_CHROME_ROWS = 3;
   const MODAL_BOTTOM_CHROME_ROWS = 2;
   const { closeModal } = useModal();
-  const { stdout } = useStdout();
+  const windowSize = useWindowSize();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [layoutSize, setLayoutSize] = useState<
@@ -41,13 +41,15 @@ export const ConfirmModal = (
     closeModal();
   };
 
+  const terminalSize = getTerminalSize(windowSize, layoutSize);
+
   const messageLineCount = useMemo(() => {
-    const columns = getTerminalSize(stdout).columns;
+    const columns = terminalSize.columns;
     const modalWidth = resolveModalWidth(columns, "50%");
     // Modal body has a single left border plus horizontal padding on both sides.
     const contentWidth = Math.max(1, modalWidth - 3);
     return countWrappedLines(message, contentWidth);
-  }, [message, stdout]);
+  }, [message, terminalSize.columns]);
 
   const buttonRowIndex = messageLineCount + 1;
   const bodyRows = messageLineCount + 2;
@@ -64,13 +66,13 @@ export const ConfirmModal = (
 
   useMouseInput((event) => {
     if (!isFocused) return;
-    const terminalSize = getTerminalSize(stdout, layoutSize);
+    const currentTerminalSize = getTerminalSize(windowSize, layoutSize);
 
     if (event.move) {
       const hovered = getHoveredButtonIndex(event.x, event.y, {
-        rows: terminalSize.rows,
-        columns: terminalSize.columns,
-        modalWidth: resolveModalWidth(terminalSize.columns, "50%"),
+        rows: currentTerminalSize.rows,
+        columns: currentTerminalSize.columns,
+        modalWidth: resolveModalWidth(currentTerminalSize.columns, "50%"),
         bodyRows,
         buttonRowIndex,
         labels: ["Confirm", "Cancel"],
@@ -81,7 +83,7 @@ export const ConfirmModal = (
       return;
     }
 
-    const bodyCell = getModalBodyCellFromClick(event, terminalSize, {
+    const bodyCell = getModalBodyCellFromClick(event, currentTerminalSize, {
       modalWidth: "50%",
       bodyRows,
     });
