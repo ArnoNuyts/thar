@@ -12,7 +12,7 @@ import {
   readTodosFromFile,
   writeTodosToFile,
 } from "../logic/todo-file-helpers.ts";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
 import { useToaster } from "./toaster-context.tsx";
 
@@ -48,7 +48,7 @@ type TodoAction =
   | { type: "redo" };
 
 const createInitialState = (): TodoHistoryState => ({
-  todos: new Todos(),
+  todos: [],
   history: [],
   redoStack: [],
 });
@@ -130,7 +130,7 @@ export const TodoProvider = ({
       .then((initialTodos) => {
         if (cancelled) return;
         justReadFileFlag.current = true;
-        dispatch({ type: "load", todos: new Todos(...initialTodos) });
+        dispatch({ type: "load", todos: [...initialTodos] });
       })
       .catch((error) => {
         if (!cancelled) {
@@ -189,7 +189,7 @@ export const TodoProvider = ({
         const todosFromFile = await readTodosFromFile(filename);
         if (cancelled) return;
         justReadFileFlag.current = true;
-        dispatch({ type: "load", todos: new Todos(...todosFromFile) });
+        dispatch({ type: "load", todos: [...todosFromFile] });
         showToaster("File reloaded");
       } catch (error) {
         if (!cancelled) {
@@ -255,7 +255,7 @@ export const TodoProvider = ({
     );
     dispatch({
       type: "mutate",
-      updater: (prev) => new Todos(...prev, ...newTodos),
+      updater: (prev) => [...prev, ...newTodos],
     });
     return newTodos;
   };
@@ -267,10 +267,9 @@ export const TodoProvider = ({
     const idsToUpdate = new Set(todosToUpdate.map((t) => t.id));
     dispatch({
       type: "mutate",
-      updater: (prev) =>
-        new Todos(
-          ...prev.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t)),
-        ),
+      updater: (prev) => [
+        ...prev.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t)),
+      ],
     });
   };
 
@@ -278,8 +277,7 @@ export const TodoProvider = ({
     const idsToDelete = new Set(todosToDelete.map((t) => t.id));
     dispatch({
       type: "mutate",
-      updater: (prev) =>
-        new Todos(...prev.filter((t) => !idsToDelete.has(t.id))),
+      updater: (prev) => [...prev.filter((t) => !idsToDelete.has(t.id))],
     });
   };
 
@@ -299,7 +297,7 @@ export const TodoProvider = ({
       return t;
     });
     return {
-      todos: new Todos(...transformed, ...newInstances),
+      todos: [...transformed, ...newInstances],
       recurringCount: newInstances.length,
     };
   };
@@ -341,7 +339,7 @@ export const TodoProvider = ({
     // Remove completed todos from the current state
     dispatch({
       type: "mutate",
-      updater: (prev) => new Todos(...prev.filter((t) => !t.isDone())),
+      updater: (prev) => [...prev.filter((t) => !t.isDone())],
     });
   };
 

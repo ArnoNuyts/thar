@@ -14,7 +14,7 @@ import {
 } from "../utils/modal-layout.ts";
 import { getTerminalSize } from "../utils/terminal-size.ts";
 
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 
 const HELP_TEXT =
   "Tab/Shift+Tab = toggle action, Enter = selected action, Esc = cancel";

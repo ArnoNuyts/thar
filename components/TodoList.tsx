@@ -392,27 +392,23 @@ export const TodoList = () => {
             if (entry.type === IndexType.context) {
               return (
                 <ContextTitle
-                  key={originalIndex}
+                  key={`context-${entry.contextName}-${originalIndex}`}
                   title={entry.contextName}
                   count={entry.todoCount}
                 />
               );
             }
-            // Calculate the todo number by counting all todo entries before this one
-            const todoNumber = indexes.slice(0, originalIndex + 1).filter(
-              (e) => e.type === IndexType.todo,
-            ).length;
 
             const isFocused = entry.todo === todo;
             const isSelectedInRange = selectedTodoIds.has(entry.todo.id);
 
             return (
               <TodoItem
-                key={index + entry.todo.getHash()}
+                key={String(entry.todo.id)}
                 todo={entry.todo}
                 isFocused={isFocused}
                 isSelectedInRange={isSelectedInRange}
-                number={todoNumber}
+                number={entry.number}
                 maxDigits={maxDigits}
               />
             );

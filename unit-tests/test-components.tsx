@@ -8,7 +8,6 @@ import {
 } from "../contexts/navigation-context.tsx";
 import { ModalProvider } from "../contexts/modal-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
-import { Todos } from "../logic/Todos.ts";
 
 export const FocusObserver = (
   { onFocused }: { onFocused: (tag?: string) => void },
@@ -86,7 +85,7 @@ export const TestWrapper = ({
   navValue?: Partial<NavigationContextType>;
 }) => {
   const fullTodoValue = {
-    todos: new Todos(),
+    todos: [],
     setTodos: () => {},
     addTodos: () => [],
     updateTodos: () => {},

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
 import { TodoContext } from "../contexts/todo-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
@@ -14,7 +14,7 @@ export const MockTodoProvider = ({
   initialTodos?: Todo[];
   onTodosChange?: (todos: Todos) => void;
 }) => {
-  const [todos, setTodos] = useState<Todos>(new Todos(...initialTodos));
+  const [todos, setTodos] = useState<Todos>([...initialTodos]);
   const [history, setHistory] = useState<Todos[]>([]);
   const [redoStack, setRedoStack] = useState<Todos[]>([]);
   const { showToaster } = useToaster();
@@ -53,7 +53,7 @@ export const MockTodoProvider = ({
     const newTodos = texts.map((text) =>
       new Todo(text).setCreationDate(new Date())
     );
-    internalSetTodos(new Todos(...todos, ...newTodos));
+    internalSetTodos([...todos, ...newTodos]);
     return newTodos;
   };
 
@@ -61,7 +61,7 @@ export const MockTodoProvider = ({
     pushHistory();
     const idsToDelete = new Set(todosToDelete.map((t) => t.id));
     const newTodos = todos.filter((t: Todo) => !idsToDelete.has(t.id));
-    internalSetTodos(new Todos(...newTodos));
+    internalSetTodos([...newTodos]);
   };
 
   const toggleTodos = (todosToToggle: Todo[]) => {
@@ -80,7 +80,7 @@ export const MockTodoProvider = ({
       return t;
     });
 
-    internalSetTodos(new Todos(...transformed, ...newInstances));
+    internalSetTodos([...transformed, ...newInstances]);
 
     if (newInstances.length === 1) {
       showToaster("Recurring todo created");
@@ -96,7 +96,7 @@ export const MockTodoProvider = ({
   const archiveCompletedTodos = () => {
     pushHistory();
     const remainingTodos = todos.filter((t: Todo) => !t.isDone());
-    internalSetTodos(new Todos(...remainingTodos));
+    internalSetTodos([...remainingTodos]);
     // No-op for file writing in mock
     return Promise.resolve();
   };
@@ -108,9 +108,7 @@ export const MockTodoProvider = ({
     pushHistory();
     const idsToUpdate = new Set(todosToUpdate.map((t) => t.id));
     internalSetTodos(
-      new Todos(
-        ...todos.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t)),
-      ),
+      [...todos.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t))],
     );
   };
 

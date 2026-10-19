@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { Todo } from "../logic/todo.ts"; // Adjust the path as needed
-import { Todos } from "../logic/Todos.ts";
+import { filterHidden, sortByImportance } from "../logic/Todos.ts";
 
 Deno.test("sortByImportance - should sort correctly", () => {
   const testCases = [
@@ -42,11 +42,10 @@ Deno.test("sortByImportance - should sort correctly", () => {
   ];
 
   for (const { todos, expected, text } of testCases) {
-    const sorted = new Todos(...todos.map((x) => new Todo(x)))
-      .sortByImportance();
+    const sorted = sortByImportance(todos.map((x) => new Todo(x)));
 
     assertEquals(
-      [...sorted].map((x) => x.toString()), // spreading get rid of Todos methods :/
+      sorted.map((x) => x.toString()),
       expected,
       text,
     );
@@ -68,10 +67,10 @@ Deno.test("filterHidden - should hide correct todos", () => {
   ];
 
   for (const { todos, expected, text } of testCases) {
-    const sorted = new Todos(...todos.map((x) => new Todo(x))).filterHidden();
+    const sorted = filterHidden(todos.map((x) => new Todo(x)));
 
     assertEquals(
-      [...sorted].map((x) => x.toString()), // spreading get rid of Todos methods :/
+      sorted.map((x) => x.toString()),
       expected,
       text,
     );
