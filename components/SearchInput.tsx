@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
-import { useFocusable } from "../hooks/useFocusable.ts";
+import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { useSuggestionInput } from "../hooks/useSuggestionInput.ts";
 import { useTagSources } from "../hooks/useTagSources.ts";
@@ -15,9 +15,8 @@ import type { Todos } from "../logic/Todos.ts";
 export const SearchInput = ({ todos }: { todos: Todos }) => {
   const { searchQuery, setSearchQuery, focusRef, setIsSearchFocused } =
     useSearch();
-  const { setPosition, clearSuggestions } = useSuggestion();
+  const { setPosition, clearSuggestions, suggestions } = useSuggestion();
 
-  const { isFocused, focus, blur } = useFocusable({ tag: "search-input" });
   // Get navigation functions
   const {
     navigateUp,
@@ -29,6 +28,55 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
   } = useNavigation();
   const [cursorPos, setCursorPos] = useState(searchQuery.length);
   const tagSources = useTagSources(todos);
+
+  const { isFocused, focus, blur } = useFocusedInput((_input, key) => {
+    // While suggestions are open they own the arrow keys, Enter and Escape.
+    if (
+      suggestions.length > 0 &&
+      (key.upArrow || key.downArrow || key.return || key.escape)
+    ) {
+      return;
+    }
+
+    if (key.upArrow) {
+      navigateUp(key.shift);
+      return;
+    }
+    if (key.downArrow) {
+      navigateDown(key.shift);
+      return;
+    }
+    if (key.pageUp) {
+      navigatePageUp(key.shift);
+      return;
+    }
+    if (key.pageDown) {
+      navigatePageDown(key.shift);
+      return;
+    }
+    if (key.home) {
+      navigateHome();
+      return;
+    }
+    if (key.end) {
+      navigateEnd();
+      return;
+    }
+
+    if (key.return) {
+      // Unfocus but keep filter active
+      blur();
+      return;
+    }
+
+    if (key.escape) {
+      // Clear filter and unfocus
+      setSearchQuery("");
+      setCursorPos(0);
+      blur();
+      return;
+    }
+  }, { tag: "search-input" });
 
   // Register focus function with context ref after commit so we never write to
   // the ref during render.
@@ -45,7 +93,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
     setIsSearchFocused(isFocused);
   }, [isFocused, clearSuggestions, setIsSearchFocused]);
 
-  const { suggestions, wordStartIndex, updateSuggestions } = useSuggestionInput(
+  const { wordStartIndex, updateSuggestions } = useSuggestionInput(
     {
       value: searchQuery,
       cursor: cursorPos,
@@ -55,47 +103,6 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
         setCursorPos(newCursor);
       },
       isActive: isFocused,
-      onUnhandledKey: (_input, key) => {
-        // Navigation fallback when no suggestions are open
-        if (key.upArrow) {
-          navigateUp(key.shift);
-          return;
-        }
-        if (key.downArrow) {
-          navigateDown(key.shift);
-          return;
-        }
-        if (key.pageUp) {
-          navigatePageUp(key.shift);
-          return;
-        }
-        if (key.pageDown) {
-          navigatePageDown(key.shift);
-          return;
-        }
-        if (key.home) {
-          navigateHome();
-          return;
-        }
-        if (key.end) {
-          navigateEnd();
-          return;
-        }
-
-        if (key.return) {
-          // Unfocus but keep filter active
-          blur();
-          return;
-        }
-
-        if (key.escape) {
-          // Clear filter and unfocus
-          setSearchQuery("");
-          setCursorPos(0);
-          blur();
-          return;
-        }
-      },
     },
   );
 
