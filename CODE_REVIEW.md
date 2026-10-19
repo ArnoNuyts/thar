@@ -37,6 +37,23 @@ tool is **not** evidence that those issues are absent.
 
 ---
 
+## Fix progress
+
+Updated 2026-10-20. Every item below landed through TDD: a failing test first, then the fix, then `deno lint`, `deno check main.tsx`, and the full suite.
+
+| Item | Status | Commit | Test evidence |
+| --- | --- | --- | --- |
+| P1 #1 — completion date dropped | ✅ FIXED | `b330585` | `unit-tests/todo.test.ts` |
+| P1 #2 — tags accumulate / cannot be removed | ✅ FIXED | `b330585`, `8ec2046` | `unit-tests/todo.test.ts`, `unit-tests/EditTodoModal.test.tsx` |
+| P1 #3 — duplicate undo snapshots | ✅ FIXED | `d6b944a` | `unit-tests/todo-context-history.test.tsx` |
+| P1 #4 — recurring todo duplicated in StrictMode | ✅ FIXED | `d6b944a` | `unit-tests/todo-context-history.test.tsx` |
+| P1 #5 — no-op archive creates undo entry | ✅ FIXED | `d6b944a` | `unit-tests/todo-context-history.test.tsx` |
+| P1 #6 — clipboard failure unhandled | ✅ FIXED | `3ef1688` | `unit-tests/todo-list.test.tsx` |
+
+Current suite: **214 passed, 0 failed**.
+
+---
+
 ## P1 — Correctness bugs hiding behind smells
 
 ### 1. Completion date is dropped when a done todo has no creation date — PROVEN
