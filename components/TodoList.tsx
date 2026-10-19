@@ -1,6 +1,5 @@
 import { Box, Newline, Text, useApp } from "ink";
 import { memo, useMemo, useRef } from "react";
-import { PRIMARY_COLOR } from "../constants.ts";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
@@ -144,7 +143,7 @@ const ContextTitle = memo(
   ({ title, count }: { title: string; count: number; key?: React.Key }) => {
     return (
       <Box>
-        <Text backgroundColor={PRIMARY_COLOR} color={COLORS.inverseForeground}>
+        <Text backgroundColor={COLORS.primary} color={COLORS.inverseForeground}>
           {`  ${title} (${count})  `}
         </Text>
       </Box>

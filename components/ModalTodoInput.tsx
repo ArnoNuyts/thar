@@ -5,7 +5,7 @@ import { useModal } from "../contexts/modal-context.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { SuggestionInput } from "./SuggestionInput.tsx";
-import { SECONDARY_COLOR } from "../constants.ts";
+import { COLORS } from "../theme/colors.ts";
 import { Button } from "./Button.tsx";
 import { resolveModalWidth } from "../utils/modal-mouse.ts";
 import {
@@ -154,7 +154,7 @@ export const ModalTodoInput = ({
       <Box flexDirection="column" position="relative" ref={inputRef}>
         <Box flexDirection="row">
           <Box width={2}>
-            <Text color={SECONDARY_COLOR}>{`» `}</Text>
+            <Text color={COLORS.secondary}>{`» `}</Text>
           </Box>
           <SuggestionInput
             value={value}
