@@ -81,6 +81,18 @@ export class Todo {
     this.internalParseText(text);
   }
 
+  /**
+   * Returns an independent copy of this todo with `mutate` applied to it.
+   * All setters go through this helper, so callers always get a new todo with
+   * its own projects, contexts, and tags (including array-valued tags), and
+   * the receiver is never modified.
+   */
+  private with(mutate: (next: Todo) => void): Todo {
+    const next = this.clone();
+    mutate(next);
+    return next;
+  }
+
   private clone(): Todo {
     const next = Object.create(Todo.prototype);
     Object.assign(next, this);
@@ -96,16 +108,17 @@ export class Todo {
   }
 
   toggleState(): { updated: Todo; recurring?: Todo } {
-    const next = this.clone();
-    next._state = next._state == TodoStateEnum.todo
-      ? TodoStateEnum.done
-      : TodoStateEnum.todo;
-    if (next._state === TodoStateEnum.done && next._creationDate) {
-      next._completionDate = new Date();
-    }
-    if (next._state === TodoStateEnum.todo && next._completionDate) {
-      next._completionDate = undefined;
-    }
+    const next = this.with((next) => {
+      next._state = next._state == TodoStateEnum.todo
+        ? TodoStateEnum.done
+        : TodoStateEnum.todo;
+      if (next._state === TodoStateEnum.done && next._creationDate) {
+        next._completionDate = new Date();
+      }
+      if (next._state === TodoStateEnum.todo && next._completionDate) {
+        next._completionDate = undefined;
+      }
+    });
 
     if (next._state === TodoStateEnum.done && next._tags.rec) {
       const recurrence = next._tags.rec as string;
@@ -159,27 +172,27 @@ export class Todo {
       (Object.keys(this._tags).map((k) => k + ":" + this._tags[k]).join(" "));
   }
   setPriority(key?: UpperCaseLetter): Todo {
-    const next = this.clone();
-    next._priority = key;
-    return next;
+    return this.with((next) => {
+      next._priority = key;
+    });
   }
 
   setCreationDate(date: Date): Todo {
-    const next = this.clone();
-    next._creationDate = date;
-    return next;
+    return this.with((next) => {
+      next._creationDate = date;
+    });
   }
 
   setCompletionDate(date: Date | undefined): Todo {
-    const next = this.clone();
-    next._completionDate = date;
-    return next;
+    return this.with((next) => {
+      next._completionDate = date;
+    });
   }
 
   setState(state: TodoStateEnum): Todo {
-    const next = this.clone();
-    next._state = state;
-    return next;
+    return this.with((next) => {
+      next._state = state;
+    });
   }
 
   isDone() {
@@ -210,9 +223,9 @@ export class Todo {
   }
 
   setText(text: string, options: { preserveTags?: boolean } = {}): Todo {
-    const next = this.clone();
-    next.internalParseText(text, options.preserveTags);
-    return next;
+    return this.with((next) => {
+      next.internalParseText(text, options.preserveTags);
+    });
   }
 
   private internalParseText(text: string, preserveTags = false) {
@@ -252,49 +265,49 @@ export class Todo {
   }
 
   setRecurrence(recurrence: string): Todo {
-    const next = this.clone();
-    next._tags.rec = recurrence;
-    return next;
+    return this.with((next) => {
+      next._tags.rec = recurrence;
+    });
   }
 
   removeRecurrence(): Todo {
-    const next = this.clone();
-    delete next._tags.rec;
-    return next;
+    return this.with((next) => {
+      delete next._tags.rec;
+    });
   }
 
   setDue(date: Date): Todo {
-    const next = this.clone();
-    next._tags.due = format(date, "yyyy-MM-dd");
-    return next;
+    return this.with((next) => {
+      next._tags.due = format(date, "yyyy-MM-dd");
+    });
   }
 
   setThreshold(date: Date): Todo {
-    const next = this.clone();
-    next._tags.t = format(date, "yyyy-MM-dd");
-    return next;
+    return this.with((next) => {
+      next._tags.t = format(date, "yyyy-MM-dd");
+    });
   }
 
   removeDue(): Todo {
-    const next = this.clone();
-    delete next._tags.due;
-    return next;
+    return this.with((next) => {
+      delete next._tags.due;
+    });
   }
 
   removeThreshold(): Todo {
-    const next = this.clone();
-    delete next._tags.t;
-    return next;
+    return this.with((next) => {
+      delete next._tags.t;
+    });
   }
 
   toggleHidden(): Todo {
-    const next = this.clone();
-    if (next._tags.h && next._tags.h !== "0") {
-      delete next._tags.h;
-    } else {
-      next._tags.h = "1";
-    }
-    return next;
+    return this.with((next) => {
+      if (next._tags.h && next._tags.h !== "0") {
+        delete next._tags.h;
+      } else {
+        next._tags.h = "1";
+      }
+    });
   }
 
   addContext(context: string): Todo {
