@@ -33,7 +33,7 @@ Deno.test("SetDateModal: should render due and set focus", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -84,7 +84,7 @@ Deno.test("SetDateModal: should render threshold and set focus", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -133,8 +133,8 @@ Deno.test("SetDateModal: should update multiple todos", async () => {
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
       navValue={{
-        useSelectedTodos: () => [todo1, todo2],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1, todo2],
+        getSelectedTodo: () => todo1,
       }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
@@ -183,7 +183,7 @@ Deno.test("SetDateModal: mouse click should select an option", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -221,7 +221,7 @@ const renderDateModal = (type: "due" | "threshold", todos: Todo[]) => {
 
   const rendered = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => todos }}
+      navValue={{ getSelectedTodos: () => todos }}
       todoValue={{
         updateTodos: (selected: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodos = selected.map(transform);
