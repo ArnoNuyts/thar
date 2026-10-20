@@ -13,17 +13,23 @@ import { isPriorityInput } from "../logic/priority.ts";
 import { TodoListScrollbar } from "./TodoListScrollbar.tsx";
 import { COLORS } from "../theme/colors.ts";
 
-const renderTodoText = (
+export const renderTodoText = (
   text: string,
   isHighlighted: boolean,
   isOverdue: boolean,
 ) => {
   const parts = text.split(/(@[^ ]+|\+[^ ]+)/g);
-  return parts.map((part, i) => {
+  let offset = 0;
+  return parts.map((part) => {
+    // Offset + content stays unique even when the same tag repeats, unlike
+    // the array index which changes when segments are inserted or reordered.
+    const key = `${offset}:${part}`;
+    offset += part.length;
+
     if (part.startsWith("@")) {
       return (
         <Text
-          key={i}
+          key={key}
           color={isHighlighted ? COLORS.textOnHighlight : COLORS.tagContext}
         >
           {part}
@@ -32,7 +38,7 @@ const renderTodoText = (
     } else if (part.startsWith("+")) {
       return (
         <Text
-          key={i}
+          key={key}
           color={isHighlighted ? COLORS.textOnHighlight : COLORS.tagProject}
         >
           {part}
@@ -41,7 +47,7 @@ const renderTodoText = (
     }
     return (
       <Text
-        key={i}
+        key={key}
         color={isHighlighted
           ? COLORS.textOnHighlight
           : (isOverdue ? COLORS.danger : undefined)}

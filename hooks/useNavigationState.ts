@@ -7,6 +7,7 @@ import {
   areSetsEqual,
   calculateScrollOffset,
   clamp,
+  getNavigableRow,
   getSelectionRangeRows,
   type NavState,
   reconcileNavState,
@@ -309,29 +310,7 @@ export const useNavigationState = (
           entry.todo.id === prev.selection.cursorId,
       );
       const currentRow = todoIndex === -1 ? 0 : todoIndex;
-      const direction = step > 0 ? 1 : -1;
-      let newSelectedRow = clamp(currentRow + step, 0, indexes.length - 1);
-
-      // Skip context headers
-      while (indexes[newSelectedRow]?.type === IndexType.context) {
-        newSelectedRow += direction;
-        if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
-          if (direction === -1) {
-            const firstTodoIndex = indexes.findIndex((e) =>
-              e.type === IndexType.todo
-            );
-            newSelectedRow = firstTodoIndex !== -1
-              ? firstTodoIndex
-              : currentRow;
-          } else {
-            const lastTodoIndex = indexes.findLastIndex((e) =>
-              e.type === IndexType.todo
-            );
-            newSelectedRow = lastTodoIndex !== -1 ? lastTodoIndex : currentRow;
-          }
-          break;
-        }
-      }
+      const newSelectedRow = getNavigableRow(indexes, currentRow, step);
 
       return applySelectionChange(prev, newSelectedRow, shift);
     });

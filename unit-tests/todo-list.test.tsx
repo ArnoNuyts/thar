@@ -13,7 +13,8 @@ import { ConfirmModal } from "../components/ConfirmModal.tsx";
 import { HiddenIndicator } from "../components/HiddenIndicator.tsx";
 import { SetDateModal } from "../components/SetDateModal.tsx";
 import { SetRecurrenceModal } from "../components/SetRecurrenceModal.tsx";
-import { TodoList } from "../components/TodoList.tsx";
+import { renderTodoText, TodoList } from "../components/TodoList.tsx";
+import { COLORS } from "../theme/colors.ts";
 
 import { FocusProvider } from "../contexts/focus-context.tsx";
 import {
@@ -1355,5 +1356,70 @@ Deno.test({
     }, { timeout: 10000 });
 
     unmount();
+  },
+});
+
+Deno.test("TodoList: repeated tags get unique content-offset keys and colors", () => {
+  const text = "first @home second @home +work +work";
+  const parts = renderTodoText(text, false, false);
+
+  assertEquals(parts.length, 9);
+
+  const keys = parts.map((part) => String(part.key));
+  assertEquals(new Set(keys).size, parts.length);
+  keys.forEach((key, index) => {
+    assertEquals(key === String(index), false);
+  });
+
+  assertEquals(parts[1].props.color, COLORS.tagContext);
+  assertEquals(parts[3].props.color, COLORS.tagContext);
+  assertEquals(parts[5].props.color, COLORS.tagProject);
+  assertEquals(parts[7].props.color, COLORS.tagProject);
+  assertEquals(parts[0].props.color, undefined);
+
+  const highlighted = renderTodoText(text, true, false);
+  highlighted.forEach((part) => {
+    assertEquals(part.props.color, COLORS.textOnHighlight);
+  });
+
+  const overdue = renderTodoText("late @home +work", false, true);
+  assertEquals(overdue[0].props.color, COLORS.danger);
+  assertEquals(overdue[1].props.color, COLORS.tagContext);
+  assertEquals(overdue[2].props.color, COLORS.danger);
+  assertEquals(overdue[3].props.color, COLORS.tagProject);
+});
+
+Deno.test({
+  name: "TodoList: repeated tag text renders without duplicate-key warnings",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const text = "review @home then @home again +work and +work";
+    const todo = new Todo(text);
+    const originalError = console.error;
+    const errors: string[] = [];
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map((arg) => String(arg)).join(" "));
+    };
+
+    const { lastFrame, unmount } = render(
+      <TestWrapper initialTodos={[todo]}>
+        <AppContentMock todos={[todo]} />
+      </TestWrapper>,
+    );
+
+    try {
+      await waitFor(() => {
+        assertEquals(lastFrame()?.includes(text), true);
+      });
+
+      assertEquals(
+        errors.some((message) => message.includes("same key")),
+        false,
+      );
+    } finally {
+      unmount();
+      console.error = originalError;
+    }
   },
 });
