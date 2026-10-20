@@ -1045,6 +1045,11 @@
       "npm:ink-testing-library@4",
       "npm:ink@8",
       "npm:react@^19.3.0"
-    ]
+    ],
+    "packageJson": {
+      "dependencies": [
+        "npm:react@^19.3.0"
+      ]
+    }
   }
 }
