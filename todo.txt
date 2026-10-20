@@ -46,7 +46,7 @@ x 2025-12-24 2025-12-10 What to do with longer todos, longer than terminal width
 x 2025-12-22 2025-12-12 Make Todo.js immutable -> that way it is easier for react to know it needs to update. @v0.3
 x 2025-12-22 2025-12-16 Implement home / end for navigation @v0.3
 x 2025-12-31 2025-12-23 +Multi-select support @v0.4
-2025-12-23 +Multi-select : seperate menu / menu content @v0.4
+x 2026-10-20 2025-12-23 +Multi-select : seperate menu / menu content @v0.4
 x 2026-01-05 2025-12-23 +Multi-select : set prio @v0.4
 x 2026-01-05 2025-12-23 +Multi-select : toggle state @v0.4
 x (A) 2026-02-09 2025-12-23 after search cancel, should set screen-position to take full advantage of terminal height @v0.4 +Bug
