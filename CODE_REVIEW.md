@@ -31,7 +31,7 @@ tool is **not** evidence that those issues are absent.
 | -------- | ----------------------------------- | -------------------- |
 | P1       | Correctness bugs behind smells      | 6                    |
 | P2       | DRY / duplicated logic              | 11                   |
-| P3       | Simplicity, data model, performance | 11                   |
+| P3       | Simplicity, data model, performance | 12                   |
 | P4       | Small cleanups                      | 16                   |
 | RD       | Additional react-doctor findings    | 4 rules / 9 warnings |
 
@@ -92,7 +92,7 @@ then the fix, then `deno lint`, `deno check main.tsx`, and the full suite.
 
 Current suite: **371 passed, 0 failed**.
 
-All 44 items are fixed. The sections below remain the original findings (line
+All 45 items are fixed. The sections below remain the original findings (line
 numbers refer to the reviewed snapshot); the table above is the current status.
 
 ---
