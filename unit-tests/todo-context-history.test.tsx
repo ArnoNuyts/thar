@@ -8,7 +8,6 @@ import {
 } from "../contexts/todo-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
 import { assertEquals } from "@std/assert";
-import { delay } from "@std/async";
 
 import { MockWatcher, restoreDenoMocks, waitFor } from "./test-utils.ts";
 
@@ -24,20 +23,20 @@ function setupMocks() {
 
   // deno-lint-ignore no-explicit-any
   (Deno as any).stat = async () => {
-    await delay(0);
+    await Promise.resolve();
     return { isFile: true };
   };
 
   // deno-lint-ignore no-explicit-any
   (Deno as any).readTextFile = async () => {
-    await delay(0);
+    await Promise.resolve();
     readCount++;
     return "";
   };
 
   // deno-lint-ignore no-explicit-any
   (Deno as any).writeTextFile = async () => {
-    await delay(0);
+    await Promise.resolve();
   };
 }
 
@@ -227,13 +226,11 @@ Deno.test({
 
     // No completed todos: archive must be a true no-op.
     await getApi().archiveCompletedTodos();
-    await delay(100);
 
     assertEquals(getApi().canUndo, false);
 
     // Undo must do nothing and must not consume a phantom entry.
     getApi().undo();
-    await delay(100);
     assertEquals(getApi().todos.length, 0);
     assertEquals(getApi().canUndo, false);
 

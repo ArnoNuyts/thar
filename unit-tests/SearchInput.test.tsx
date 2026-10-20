@@ -131,9 +131,24 @@ const MultiSelectionObserver = ({
 const FocusRequester = () => {
   const { focusRef } = useSearch();
   useEffect(() => {
-    setTimeout(() => {
-      focusRef.current?.();
-    }, 50);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const tryFocus = () => {
+      if (cancelled) return;
+      if (focusRef.current) {
+        focusRef.current();
+        return;
+      }
+      timer = setTimeout(tryFocus, 0);
+    };
+
+    tryFocus();
+
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+    };
   }, [focusRef]);
   return null;
 };
@@ -229,7 +244,6 @@ Deno.test(
 
 Deno.test(
   "SearchInput: should auto-select first item when current selection is filtered out",
-  // ... (this test doesn't use FocusRequester/delay so maybe leave it or update if relevant)
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
     const todos = [

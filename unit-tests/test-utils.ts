@@ -5,8 +5,14 @@ export type MockedStdout = {
 export class MockWatcher {
   private listeners: ((event: Deno.FsEvent | undefined) => void)[] = [];
   private closed = false;
+  private nextCalls = 0;
+
+  get nextCallCount() {
+    return this.nextCalls;
+  }
 
   private nextEvent(): Promise<Deno.FsEvent | undefined> {
+    this.nextCalls++;
     if (this.closed) return Promise.resolve(undefined);
     return new Promise((resolve) => {
       this.listeners.push(resolve);
@@ -78,4 +84,18 @@ export async function waitFor(
     ? lastError.message
     : String(lastError);
   throw new Error(`Timed out after ${timeout}ms. Last error: ${errorMessage}`);
+}
+
+/**
+ * Polls until at least `ms` milliseconds have elapsed. Use this only when
+ * there is no observable state to wait for, such as a debounce that must run
+ * before the next step.
+ */
+export async function waitPast(ms: number, interval = 10) {
+  const start = Date.now();
+  await waitFor(() => {
+    if (Date.now() - start < ms) {
+      throw new Error(`Waiting for ${ms}ms`);
+    }
+  }, { interval });
 }
