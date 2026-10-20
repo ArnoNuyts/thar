@@ -4,6 +4,8 @@ import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
 import { useSuggestionInput } from "../hooks/useSuggestionInput.ts";
 import { useTagSources } from "../hooks/useTagSources.ts";
+import { useInput } from "../hooks/useInput.ts";
+import { matchTagWordStart } from "../logic/patterns.ts";
 
 import type { Todos } from "../logic/Todos.ts";
 
@@ -43,6 +45,20 @@ export const SuggestionInput = ({
   const { setPosition } = useSuggestion();
   const tagSources = useTagSources(todos);
 
+  // Same criterion `useSuggestionInput` uses to decide whether a tag word
+  // start has matches. Kept in sync with that hook so the parent notification
+  // can happen on the input event instead of in an effect.
+  const hasMatchingSuggestions = (text: string, cursor: number) => {
+    const wordStart = matchTagWordStart(text.slice(0, cursor));
+    if (!wordStart) return false;
+
+    const items = wordStart.type === "project"
+      ? tagSources.projects
+      : tagSources.contexts;
+    const searchTerm = wordStart.searchTerm.toLowerCase();
+    return items.some((item) => item.toLowerCase().startsWith(searchTerm));
+  };
+
   const { suggestions, wordStartIndex, updateSuggestions } = useSuggestionInput(
     {
       value,
@@ -52,6 +68,8 @@ export const SuggestionInput = ({
         onChange(newValue);
         setCursorPos(newCursor);
         onCursorChange(newCursor, newValue);
+        // Applying a suggestion clears the suggestion list.
+        onSuggestionsStateChange?.(false);
       },
       isActive: isFocused,
       onUnhandledKey: (_input, key) => {
@@ -62,9 +80,13 @@ export const SuggestionInput = ({
     },
   );
 
-  useEffect(() => {
-    onSuggestionsStateChange?.(suggestions.length > 0);
-  }, [onSuggestionsStateChange, suggestions.length]);
+  // `useSuggestionInput` clears the list itself on Escape, so mirror that
+  // transition from the key event rather than re-deriving it in an effect.
+  useInput((_input, key) => {
+    if (key.escape && suggestions.length > 0) {
+      onSuggestionsStateChange?.(false);
+    }
+  }, { isActive: isFocused });
 
   useEffect(() => {
     if (ref.current) {
@@ -113,7 +135,15 @@ export const SuggestionInput = ({
       left: left + lineLength - 2,
       top: top + cursorLine + 1,
     });
-  }, [wordStartIndex, value, dimensions.width, suggestions.length, left, top]);
+  }, [
+    wordStartIndex,
+    value,
+    dimensions.width,
+    suggestions.length,
+    left,
+    top,
+    setPosition,
+  ]);
 
   const handleChange = (newValue: string) => {
     onChange(newValue);
@@ -123,6 +153,7 @@ export const SuggestionInput = ({
     setCursorPos(newCursor);
     updateSuggestions(newValue, newCursor);
     onCursorChange(newCursor, newValue);
+    onSuggestionsStateChange?.(hasMatchingSuggestions(newValue, newCursor));
   };
 
   return (
