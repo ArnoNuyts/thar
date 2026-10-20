@@ -240,6 +240,12 @@ export const TodoList = () => {
     [listHeight, offsetRow, indexes],
   );
 
+  const openContextMenu = () => {
+    openModal(
+      selectedTodoIds.size > 0 ? "multi-select-menu" : "todo-menu",
+    );
+  };
+
   const { isFocused, focus } = useFocusedInput((input, key: ExtendedKey) => {
     if (key.upArrow && key.ctrl) return navigateContextUp(key.shift);
     if (key.downArrow && key.ctrl) return navigateContextDown(key.shift);
@@ -249,7 +255,7 @@ export const TodoList = () => {
     if (key.pageDown) return navigatePageDown(key.shift);
     if (key.home) return navigateHome();
     if (key.end) return navigateEnd();
-    if (key.return) return openModal("todo-menu");
+    if (key.return) return openContextMenu();
     if (key.escape) return clearMultiSelect();
     if (key.delete) {
       commands.deleteSelected();
@@ -267,7 +273,7 @@ export const TodoList = () => {
         commands.toggleSelected();
         break;
       case "x":
-        openModal("todo-menu");
+        openContextMenu();
         break;
       case "n":
         openModal("create-todo");

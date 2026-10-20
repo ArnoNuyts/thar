@@ -9,6 +9,7 @@ const EXPECTED_GENERIC_MODAL_IDS = [
   "create-todo",
   "edit-todo",
   "todo-menu",
+  "multi-select-menu",
   "set-due-date",
   "set-threshold-date",
   "set-recurrence",

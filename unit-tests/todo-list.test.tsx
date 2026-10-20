@@ -29,7 +29,7 @@ import {
 import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
-import { TodoMenu } from "../components/TodoMenu.tsx";
+import { MultiSelectMenu, TodoMenu } from "../components/TodoMenu.tsx";
 
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useEffect } from "react";
@@ -107,6 +107,7 @@ const AppContentMock = ({ todos = [] }: { todos?: Todos }) => {
         <SetDateModal type="threshold" />}
       {activeModal === "set-recurrence" && <SetRecurrenceModal />}
       {activeModal === "todo-menu" && <TodoMenu />}
+      {activeModal === "multi-select-menu" && <MultiSelectMenu />}
     </Box>
   );
 };
@@ -853,7 +854,9 @@ Deno.test({
     await waitFor(() => assertEquals(selectedCount, 2));
 
     stdin.write("x");
-    await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
+    await waitFor(() =>
+      assertEquals(lastFrame()?.includes("Multi-select menu"), true)
+    );
     await waitFor(() => assertEquals(focusCount >= 2, true));
 
     stdin.write(" ");
@@ -898,7 +901,9 @@ Deno.test({
     await waitFor(() => assertEquals(selectedCount, 2));
 
     stdin.write("x");
-    await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
+    await waitFor(() =>
+      assertEquals(lastFrame()?.includes("Multi-select menu"), true)
+    );
     await waitFor(() => assertEquals(focusCount >= 2, true));
 
     stdin.write("\x1b[3~"); // Delete
@@ -945,12 +950,14 @@ Deno.test({
     await waitFor(() => assertEquals(selectedCount, 2));
 
     stdin.write("x"); // Use 'x' to test both
-    await waitFor(() => assertEquals(lastFrame()?.includes("Todo menu"), true));
+    await waitFor(() =>
+      assertEquals(lastFrame()?.includes("Multi-select menu"), true)
+    );
     await waitFor(() => assertEquals(focusCount >= 2, true));
 
     stdin.write("c");
     await waitFor(() =>
-      assertEquals(lastFrame()?.includes("Todo menu"), false)
+      assertEquals(lastFrame()?.includes("Multi-select menu"), false)
     );
 
     unmount();

@@ -1,6 +1,10 @@
 import { assertEquals } from "@std/assert";
 import { Key } from "../hooks/useInput.ts";
-import { MENU_ITEMS, resolveMenuShortcut } from "../components/TodoMenu.tsx";
+import {
+  MENU_ITEMS,
+  MULTI_SELECT_MENU_ITEMS,
+  resolveMenuShortcut,
+} from "../components/TodoMenu.tsx";
 
 const key = (overrides: Partial<Key> = {}): Key => ({
   upArrow: false,
@@ -38,6 +42,50 @@ Deno.test("TodoMenu: every displayed shortcut resolves to its declared action", 
       resolved,
       item.action,
       `shortcut ${item.shortcut} should dispatch ${item.action}`,
+    );
+  }
+});
+
+Deno.test("MultiSelectMenu: every displayed shortcut resolves to its action", () => {
+  for (const item of MULTI_SELECT_MENU_ITEMS) {
+    const resolved = item.shortcut === "del"
+      ? resolveMenuShortcut("", key({ delete: true }), MULTI_SELECT_MENU_ITEMS)
+      : item.shortcut === "space"
+      ? resolveMenuShortcut(" ", key(), MULTI_SELECT_MENU_ITEMS)
+      : resolveMenuShortcut(item.shortcut, key(), MULTI_SELECT_MENU_ITEMS);
+
+    assertEquals(
+      resolved,
+      item.action,
+      `shortcut ${item.shortcut} should dispatch ${item.action}`,
+    );
+  }
+});
+
+Deno.test("MultiSelectMenu: only selection-wide actions are listed", () => {
+  assertEquals(
+    MULTI_SELECT_MENU_ITEMS.map(({ action }) => action),
+    [
+      "delete",
+      "toggle",
+      "due",
+      "threshold",
+      "recurrence",
+      "priority",
+      "add-project",
+      "add-context",
+      "toggle-hidden",
+      "copy",
+    ],
+  );
+});
+
+Deno.test("MultiSelectMenu: single-todo and global shortcuts do not dispatch", () => {
+  for (const shortcut of ["e", "a", "H", "z", "Z", "v"]) {
+    assertEquals(
+      resolveMenuShortcut(shortcut, key(), MULTI_SELECT_MENU_ITEMS),
+      undefined,
+      `${shortcut} should not be active in the multi-select menu`,
     );
   }
 });

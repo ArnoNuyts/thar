@@ -6,7 +6,7 @@ import { Box, Text } from "ink";
 import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
 
-import { TodoMenu } from "../components/TodoMenu.tsx";
+import { MultiSelectMenu, TodoMenu } from "../components/TodoMenu.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { ConfirmModal } from "../components/ConfirmModal.tsx";
@@ -24,6 +24,7 @@ const AppContentMock = () => {
         </Text>}
       </Box>
       {activeModal === "todo-menu" && <TodoMenu />}
+      {activeModal === "multi-select-menu" && <MultiSelectMenu />}
       {activeModal === "confirm-modal" && isConfirmModalData(modalData) && (
         <ConfirmModal
           title={modalData.title}
@@ -50,6 +51,56 @@ function ModalTrigger() {
   }, []);
   return null;
 }
+
+function MultiSelectMenuTrigger() {
+  const { openModal } = useModal();
+  useEffect(() => {
+    openModal("multi-select-menu");
+  }, []);
+  return null;
+}
+
+Deno.test("MultiSelectMenu: should show only selection-wide actions", async () => {
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
+  let toggledTodos: Todo[] = [];
+
+  let focusCount = 0;
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      todoValue={{ toggleTodos: (todos: Todo[]) => toggledTodos = todos }}
+      navValue={{
+        getSelectedTodos: () => [todo1, todo2],
+        getSelectedTodo: () => todo1,
+      }}
+    >
+      <AppContentMock />
+      <MultiSelectMenuTrigger />
+      <FocusObserver onFocused={() => focusCount++} />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => assertEquals(focusCount >= 1, true));
+  await waitFor(() =>
+    assertEquals(lastFrame()?.includes("Multi-select menu"), true)
+  );
+
+  const frame = lastFrame() ?? "";
+  assertEquals(frame.includes("Edit"), false);
+  assertEquals(frame.includes("Archive Completed"), false);
+  assertEquals(frame.includes("Undo"), false);
+  assertEquals(frame.includes("Redo"), false);
+  assertEquals(frame.includes("Paste"), false);
+
+  stdin.write(" ");
+  await waitFor(() => {
+    assertEquals(toggledTodos.length, 2);
+    assertEquals(toggledTodos[0].text, "Todo 1");
+    assertEquals(toggledTodos[1].text, "Todo 2");
+  });
+
+  unmount();
+});
 
 Deno.test("TodoMenu: should call toggleTodos for all selected items (Mocked)", async () => {
   const todo1 = new Todo("Todo 1");

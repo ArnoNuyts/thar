@@ -5,7 +5,7 @@ import { EditTodoModal } from "./EditTodoModal.tsx";
 import { SetDateModal } from "./SetDateModal.tsx";
 import { SetPriorityModal } from "./SetPriorityModal.tsx";
 import { SetRecurrenceModal } from "./SetRecurrenceModal.tsx";
-import { TodoMenu } from "./TodoMenu.tsx";
+import { MultiSelectMenu, TodoMenu } from "./TodoMenu.tsx";
 import type { ModalId } from "../contexts/modal-context.tsx";
 
 /**
@@ -24,6 +24,7 @@ export const modalRegistry: Record<GenericModalId, ComponentType> = {
   "create-todo": CreateTodoModal,
   "edit-todo": EditTodoModal,
   "todo-menu": TodoMenu,
+  "multi-select-menu": MultiSelectMenu,
   "set-due-date": () => <SetDateModal type="due" />,
   "set-threshold-date": () => <SetDateModal type="threshold" />,
   "set-recurrence": SetRecurrenceModal,
