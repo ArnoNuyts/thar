@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useFocusable, UseFocusableOptions } from "./useFocusable.ts";
 import { Key, useInput } from "./useInput.ts";
 
@@ -10,7 +10,10 @@ export const useFocusedInput = (
 ) => {
   const { isFocused, focus, blur } = useFocusable(options);
   const handlerRef = useRef(handler);
-  handlerRef.current = handler;
+
+  useLayoutEffect(() => {
+    handlerRef.current = handler;
+  });
 
   useInput((input, key) => {
     if (!isFocused) return;

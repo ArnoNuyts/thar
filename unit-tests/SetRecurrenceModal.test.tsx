@@ -204,3 +204,70 @@ Deno.test("SetRecurrenceModal: amount should only keep digits", async () => {
 
   unmount();
 });
+
+Deno.test(
+  "SetRecurrenceModal: first typed digit replaces the default amount and resets between bases",
+  async () => {
+    let updatedTodo: Todo | undefined;
+    const todo = new Todo("Amount editing todo");
+
+    const TestComponent = () => {
+      const { openModal, activeModal } = useModal();
+      useEffect(() => {
+        openModal("set-recurrence");
+      }, [openModal]);
+
+      return (
+        <Box flexDirection="column" height={20} width={80}>
+          {activeModal === "set-recurrence" && <SetRecurrenceModal />}
+        </Box>
+      );
+    };
+
+    const { unmount, lastFrame, stdin } = render(
+      <TestWrapper
+        navValue={{ getSelectedTodos: () => [todo] }}
+        todoValue={{
+          updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+            updatedTodo = transform(todos[0]);
+          },
+        }}
+      >
+        <TestComponent />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertMatch(lastFrame() || "", /Set Recurrence Base/));
+
+    stdin.write("\r"); // Daily
+    await waitFor(() =>
+      assertMatch(lastFrame() || "", /Set Recurrence Interval \(Daily\)/)
+    );
+
+    // Edit the amount (a paste replaces the default "1" then keeps digits),
+    // then back out to the base list.
+    stdin.write("23");
+    await waitFor(() => assertMatch(lastFrame() || "", /Every23/));
+    stdin.write("\x1b"); // Esc: back to base list
+
+    await waitFor(() => assertMatch(lastFrame() || "", /Set Recurrence Base/));
+
+    stdin.write("\u001B[B"); // Down: Weekly
+    stdin.write("\r");
+    await waitFor(() =>
+      assertMatch(lastFrame() || "", /Set Recurrence Interval \(Weekly\)/)
+    );
+
+    // Choosing a new base resets the amount to "1", so "45" replaces it.
+    await waitFor(() => assertMatch(lastFrame() || "", /Every1/));
+    stdin.write("45");
+    await waitFor(() => assertMatch(lastFrame() || "", /Every45/));
+    stdin.write("\r");
+
+    await waitFor(() => {
+      assertEquals(updatedTodo?.tags.rec, "45w");
+    });
+
+    unmount();
+  },
+);

@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -97,6 +98,27 @@ const todoReducer = (
 export const TodoContext = createContext<TodoContextType | undefined>(
   undefined,
 );
+
+const buildToggledTodos = (
+  prev: Todos,
+  idsToToggle: Set<symbol>,
+): { todos: Todos; recurringCount: number } => {
+  const newInstances: Todo[] = [];
+  const transformed = prev.map((t) => {
+    if (idsToToggle.has(t.id)) {
+      const { updated, recurring } = t.toggleState();
+      if (recurring) {
+        newInstances.push(recurring);
+      }
+      return updated;
+    }
+    return t;
+  });
+  return {
+    todos: [...transformed, ...newInstances],
+    recurringCount: newInstances.length,
+  };
+};
 
 export const useTodo = () => {
   const context = useContext(TodoContext);
@@ -240,23 +262,26 @@ export const TodoProvider = ({
     };
   }, [filename, showToaster]);
 
-  const setTodos = (todos: Todos) => {
-    dispatch({ type: "set", todos });
-  };
+  const canUndo = state.history.length > 0;
+  const canRedo = state.redoStack.length > 0;
 
-  const undo = () => {
-    if (state.history.length === 0) return;
+  const setTodos = useCallback((todos: Todos) => {
+    dispatch({ type: "set", todos });
+  }, []);
+
+  const undo = useCallback(() => {
+    if (!canUndo) return;
     dispatch({ type: "undo" });
     showToaster("Undo successful");
-  };
+  }, [canUndo, showToaster]);
 
-  const redo = () => {
-    if (state.redoStack.length === 0) return;
+  const redo = useCallback(() => {
+    if (!canRedo) return;
     dispatch({ type: "redo" });
     showToaster("Redo successful");
-  };
+  }, [canRedo, showToaster]);
 
-  const addTodos = (...texts: string[]): Todo[] => {
+  const addTodos = useCallback((...texts: string[]): Todo[] => {
     if (texts.length === 0) return [];
     const newTodos = texts.map((text) =>
       new Todo(text).setCreationDate(new Date())
@@ -266,9 +291,9 @@ export const TodoProvider = ({
       updater: (prev) => [...prev, ...newTodos],
     });
     return newTodos;
-  };
+  }, []);
 
-  const updateTodos = (
+  const updateTodos = useCallback((
     todosToUpdate: Todo[],
     transform: (todo: Todo) => Todo,
   ) => {
@@ -279,38 +304,17 @@ export const TodoProvider = ({
         ...prev.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t)),
       ],
     });
-  };
+  }, []);
 
-  const deleteTodos = (todosToDelete: Todo[]) => {
+  const deleteTodos = useCallback((todosToDelete: Todo[]) => {
     const idsToDelete = new Set(todosToDelete.map((t) => t.id));
     dispatch({
       type: "mutate",
       updater: (prev) => [...prev.filter((t) => !idsToDelete.has(t.id))],
     });
-  };
+  }, []);
 
-  const buildToggledTodos = (
-    prev: Todos,
-    idsToToggle: Set<symbol>,
-  ): { todos: Todos; recurringCount: number } => {
-    const newInstances: Todo[] = [];
-    const transformed = prev.map((t) => {
-      if (idsToToggle.has(t.id)) {
-        const { updated, recurring } = t.toggleState();
-        if (recurring) {
-          newInstances.push(recurring);
-        }
-        return updated;
-      }
-      return t;
-    });
-    return {
-      todos: [...transformed, ...newInstances],
-      recurringCount: newInstances.length,
-    };
-  };
-
-  const toggleTodos = (todosToToggle: Todo[]) => {
+  const toggleTodos = useCallback((todosToToggle: Todo[]) => {
     const idsToToggle = new Set(todosToToggle.map((t) => t.id));
     // Compute the toast count from the current state; the reducer updater
     // stays pure so StrictMode's double invocation cannot duplicate instances.
@@ -326,13 +330,13 @@ export const TodoProvider = ({
     } else if (recurringCount > 1) {
       showToaster(`${recurringCount} recurring todos created`);
     }
-  };
+  }, [todos, showToaster]);
 
-  const toggleHidden = (todosToToggle: Todo[]) => {
+  const toggleHidden = useCallback((todosToToggle: Todo[]) => {
     updateTodos(todosToToggle, (t) => t.toggleHidden());
-  };
+  }, [updateTodos]);
 
-  const archiveCompletedTodos = async () => {
+  const archiveCompletedTodos = useCallback(async () => {
     const completedTodos = todos.filter((t: Todo) => t.isDone());
     if (completedTodos.length === 0) return;
 
@@ -349,25 +353,41 @@ export const TodoProvider = ({
       type: "mutate",
       updater: (prev) => [...prev.filter((t) => !t.isDone())],
     });
-  };
+  }, [todos, filename]);
+
+  const value = useMemo(
+    () => ({
+      todos,
+      setTodos,
+      addTodos,
+      updateTodos,
+      deleteTodos,
+      toggleTodos,
+      toggleHidden,
+      archiveCompletedTodos,
+      undo,
+      canUndo,
+      redo,
+      canRedo,
+    }),
+    [
+      todos,
+      setTodos,
+      addTodos,
+      updateTodos,
+      deleteTodos,
+      toggleTodos,
+      toggleHidden,
+      archiveCompletedTodos,
+      undo,
+      canUndo,
+      redo,
+      canRedo,
+    ],
+  );
 
   return (
-    <TodoContext.Provider
-      value={{
-        todos,
-        setTodos,
-        addTodos,
-        updateTodos,
-        deleteTodos,
-        toggleTodos,
-        toggleHidden,
-        archiveCompletedTodos,
-        undo,
-        canUndo: state.history.length > 0,
-        redo,
-        canRedo: state.redoStack.length > 0,
-      }}
-    >
+    <TodoContext.Provider value={value}>
       {children}
     </TodoContext.Provider>
   );
