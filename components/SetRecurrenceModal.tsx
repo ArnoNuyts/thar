@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useListSelection } from "../hooks/useListSelection.ts";
@@ -31,23 +31,21 @@ export const SetRecurrenceModal = () => {
     : BASE_OPTIONS;
   const [step, setStep] = useState<"base" | "amount">("base");
   const [amount, setAmount] = useState("1");
-  const [hasEditedAmount, setHasEditedAmount] = useState(false);
+  const hasEditedAmountRef = useRef(false);
   const [layoutSize, setLayoutSize] = useState<
     { rows?: number; columns?: number }
   >({});
   const amountRef = useRef(amount);
-  useEffect(() => {
-    amountRef.current = amount;
-  }, [amount]);
 
   const handleAmountChange = (value: string) => {
     let digitsOnly = value.replace(/\D+/g, "");
     if (
-      !hasEditedAmount && amountRef.current === "1" && digitsOnly.length > 1
+      !hasEditedAmountRef.current && amountRef.current === "1" &&
+      digitsOnly.length > 1
     ) {
       digitsOnly = digitsOnly.slice(1);
     }
-    setHasEditedAmount(true);
+    hasEditedAmountRef.current = true;
     setAmount(digitsOnly);
     amountRef.current = digitsOnly;
   };
@@ -64,7 +62,7 @@ export const SetRecurrenceModal = () => {
       return;
     }
 
-    setHasEditedAmount(false);
+    hasEditedAmountRef.current = false;
     setAmount("1");
     amountRef.current = "1";
     setStep("amount");
