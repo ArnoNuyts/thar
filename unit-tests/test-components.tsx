@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { FocusProvider, useFocusManager } from "../contexts/focus-context.tsx";
 import { TodoContext, TodoContextType } from "../contexts/todo-context.tsx";
 import {
@@ -75,51 +75,64 @@ export const NavController = ({
 
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
 
+// Stable fallbacks so omitting the overrides never creates a fresh object on
+// every render of TestWrapper.
+const EMPTY_TODO_VALUE: Partial<TodoContextType> = {};
+const EMPTY_NAV_VALUE: Partial<NavigationContextType> = {};
+
 export const TestWrapper = ({
   children,
-  todoValue = {},
-  navValue = {},
+  todoValue = EMPTY_TODO_VALUE,
+  navValue = EMPTY_NAV_VALUE,
 }: {
   children: React.ReactNode;
   todoValue?: Partial<TodoContextType>;
   navValue?: Partial<NavigationContextType>;
 }) => {
-  const fullTodoValue = {
-    todos: [],
-    setTodos: () => {},
-    addTodos: () => [],
-    updateTodos: () => {},
-    deleteTodos: () => {},
-    toggleTodos: () => {},
-    toggleHidden: () => {},
-    archiveCompletedTodos: async () => {},
-    undo: () => {},
-    canUndo: false,
-    redo: () => {},
-    canRedo: false,
-    ...todoValue,
-  } as TodoContextType;
+  const fullTodoValue = useMemo(
+    () =>
+      ({
+        todos: [],
+        setTodos: () => {},
+        addTodos: () => [],
+        updateTodos: () => {},
+        deleteTodos: () => {},
+        toggleTodos: () => {},
+        toggleHidden: () => {},
+        archiveCompletedTodos: async () => {},
+        undo: () => {},
+        canUndo: false,
+        redo: () => {},
+        canRedo: false,
+        ...todoValue,
+      }) as TodoContextType,
+    [todoValue],
+  );
 
-  const fullNavValue = {
-    indexes: [],
-    offsetRow: 0,
-    listHeight: 10,
-    navigateUp: () => {},
-    navigateDown: () => {},
-    navigatePageUp: () => {},
-    navigatePageDown: () => {},
-    navigateHome: () => {},
-    navigateEnd: () => {},
-    selectedTodoId: undefined,
-    setSelectedTodoId: () => {},
-    selectedTodoIds: new Set<symbol>(),
-    clearMultiSelect: () => {},
-    getSelectedTodo: () => undefined,
-    getSelectedTodos: () => [],
-    showHidden: false,
-    toggleShowHidden: () => {},
-    ...navValue,
-  } as NavigationContextType;
+  const fullNavValue = useMemo(
+    () =>
+      ({
+        indexes: [],
+        offsetRow: 0,
+        listHeight: 10,
+        navigateUp: () => {},
+        navigateDown: () => {},
+        navigatePageUp: () => {},
+        navigatePageDown: () => {},
+        navigateHome: () => {},
+        navigateEnd: () => {},
+        selectedTodoId: undefined,
+        setSelectedTodoId: () => {},
+        selectedTodoIds: new Set<symbol>(),
+        clearMultiSelect: () => {},
+        getSelectedTodo: () => undefined,
+        getSelectedTodos: () => [],
+        showHidden: false,
+        toggleShowHidden: () => {},
+        ...navValue,
+      }) as NavigationContextType,
+    [navValue],
+  );
 
   return (
     <ToasterProvider>
