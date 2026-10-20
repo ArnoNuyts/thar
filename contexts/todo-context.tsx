@@ -1,3 +1,4 @@
+import { dirname, join } from "node:path";
 import {
   createContext,
   useCallback,
@@ -7,8 +8,7 @@ import {
   useReducer,
   useRef,
 } from "react";
-import { debounce } from "@std/async/debounce";
-import { dirname, join } from "@std/path";
+import { debounce } from "../utils/debounce.ts";
 import {
   readTodosFromFile,
   writeTodosToFile,
@@ -343,10 +343,7 @@ export const TodoProvider = ({
     // Append to done.txt next to the main file, using the platform separator.
     const doneFile = join(dirname(filename), "done.txt");
 
-    await writeTodosToFile(completedTodos, doneFile, {
-      append: true,
-      create: true,
-    });
+    await writeTodosToFile(completedTodos, doneFile, { append: true });
 
     // Remove completed todos from the current state
     dispatch({
