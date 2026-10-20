@@ -106,20 +106,24 @@ export const resolveMenuShortcut = (
   key: Key,
   items: MenuItem[] = MENU_ITEMS,
 ): MenuAction | undefined => {
-  const actions = items === MENU_ITEMS
-    ? MENU_SHORTCUT_ACTIONS
-    : buildShortcutActions(items);
+  const actions =
+    items === MENU_ITEMS ? MENU_SHORTCUT_ACTIONS : buildShortcutActions(items);
   return actions.get(normalizeInput(input, key));
 };
 
-const TodoMenuView = (
-  { items, title }: { items: MenuItem[]; title: string },
-) => {
+const TodoMenuView = ({
+  items,
+  title,
+}: {
+  items: MenuItem[];
+  title: string;
+}) => {
   const { closeModal } = useModal();
   const commands = useTodoCommands();
-  const [layoutSize, setLayoutSize] = useState<
-    { rows?: number; columns?: number }
-  >({});
+  const [layoutSize, setLayoutSize] = useState<{
+    rows?: number;
+    columns?: number;
+  }>({});
 
   const handleAction = async (action: MenuAction) => {
     switch (action) {
@@ -203,10 +207,7 @@ const TodoMenuView = (
 
   return (
     // @ts-ignore: children prop issue
-    <Modal
-      title={title}
-      onLayoutSizeChange={setLayoutSize}
-    >
+    <Modal title={title} onLayoutSizeChange={setLayoutSize}>
       <Box flexDirection="column">
         {items.map((item, index) => {
           const isSelected = index === selection.selectedIndex;

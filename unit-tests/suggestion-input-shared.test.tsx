@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals } from "@std/assert";
+
 import { useEffect, useState } from "react";
 
 import { Todo } from "../logic/todo.ts";
@@ -205,7 +206,7 @@ type RenderedInput = {
 const renderSearch = (todos: Todos): RenderedInput => {
   let snapshot = emptySnapshot();
   const result = render(
-    <SearchHarness todos={todos} onSnapshot={(next) => snapshot = next} />,
+    <SearchHarness todos={todos} onSnapshot={(next) => (snapshot = next)} />,
   );
   return {
     stdin: result.stdin,
@@ -221,7 +222,7 @@ const renderSuggestionInput = (todos: Todos): RenderedInput => {
   const result = render(
     <SuggestionHarness
       todos={todos}
-      onSnapshot={(next) => snapshot = next}
+      onSnapshot={(next) => (snapshot = next)}
       onCancel={() => cancelCount++}
     />,
   );
@@ -235,7 +236,7 @@ const renderSuggestionInput = (todos: Todos): RenderedInput => {
 
 const waitForFocus = async (result: RenderedInput) => {
   await waitFor(() => {
-    assertEquals(result.snapshot().focused, true);
+    expect(result.snapshot().focused).toEqual(true);
   });
 };
 
@@ -263,220 +264,200 @@ const testInputs: Record<string, TestInput> = {
 };
 
 for (const [name, input] of Object.entries(testInputs)) {
-  Deno.test(
-    `${name}: suggests matching projects and contexts at a word start`,
-    { sanitizeResources: false, sanitizeOps: false },
-    async () => {
-      const result = input.render(makeTodos());
-      await input.waitForReady(result);
+  test(`${name}: suggests matching projects and contexts at a word start`, async () => {
+    const result = input.render(makeTodos());
+    await input.waitForReady(result);
 
-      input.type(result, "buy +pro");
-
-      await waitFor(() => {
-        const snapshot = result.snapshot();
-        assertEquals(snapshot.suggestions, [
-          "project-a",
-          "project-b",
-          "project-c",
-        ]);
-        assertEquals(snapshot.type, "project");
-        assertEquals(snapshot.selectedIndex, 0);
-        assertEquals(snapshot.value, "buy +pro");
-      });
-
-      // Replace the active tag with a context tag.
-      result.stdin.write("\x7f"); // Backspace
-      result.stdin.write("\x7f");
-      result.stdin.write("\x7f");
-      result.stdin.write("\x7f");
-      input.type(result, "@con");
-
-      await waitFor(() => {
-        const snapshot = result.snapshot();
-        assertEquals(snapshot.suggestions, ["context", "context2"]);
-        assertEquals(snapshot.type, "context");
-        assertEquals(snapshot.selectedIndex, 0);
-      });
-
-      result.unmount();
-    },
-  );
-
-  Deno.test(
-    `${name}: navigates suggestions with up/down and wraps`,
-    { sanitizeResources: false, sanitizeOps: false },
-    async () => {
-      const result = input.render(makeTodos());
-      await input.waitForReady(result);
-
-      input.type(result, "+pro");
-
-      await waitFor(() => {
-        assertEquals(result.snapshot().suggestions, [
-          "project-a",
-          "project-b",
-          "project-c",
-        ]);
-        assertEquals(result.snapshot().selectedIndex, 0);
-      });
-
-      result.stdin.write("\u001B[B"); // Down
-      await waitFor(() => {
-        assertEquals(result.snapshot().selectedIndex, 1);
-      });
-
-      result.stdin.write("\u001B[B"); // Down
-      await waitFor(() => {
-        assertEquals(result.snapshot().selectedIndex, 2);
-      });
-
-      result.stdin.write("\u001B[B"); // Down, wraps
-      await waitFor(() => {
-        assertEquals(result.snapshot().selectedIndex, 0);
-      });
-
-      result.stdin.write("\u001B[A"); // Up, wraps
-      await waitFor(() => {
-        assertEquals(result.snapshot().selectedIndex, 2);
-      });
-
-      result.stdin.write("\u001B[A"); // Up
-      await waitFor(() => {
-        assertEquals(result.snapshot().selectedIndex, 1);
-      });
-
-      result.stdin.write("\u001B[A"); // Up
-      await waitFor(() => {
-        assertEquals(result.snapshot().selectedIndex, 0);
-      });
-
-      result.unmount();
-    },
-  );
-
-  Deno.test(
-    `${name}: inserts the selected suggestion and preserves surrounding text`,
-    { sanitizeResources: false, sanitizeOps: false },
-    async () => {
-      const result = input.render(makeTodos());
-      await input.waitForReady(result);
-
-      input.type(result, "buy +pro");
-
-      await waitFor(() => {
-        assertEquals(result.snapshot().suggestions, [
-          "project-a",
-          "project-b",
-          "project-c",
-        ]);
-      });
-
-      input.type(result, " ");
-      input.type(result, "milk");
-
-      await waitFor(() => {
-        assertEquals(result.snapshot().suggestions, []);
-      });
-
-      // Move the cursor to just after "+pro" so text on both sides remains.
-      result.stdin.write("\u001B[D");
-      result.stdin.write("\u001B[D");
-      result.stdin.write("\u001B[D");
-      result.stdin.write("\u001B[D");
-      result.stdin.write("\u001B[D");
-
-      await waitFor(() => {
-        assertEquals(result.snapshot().suggestions, [
-          "project-a",
-          "project-b",
-          "project-c",
-        ]);
-      });
-
-      result.stdin.write("\u001B[B"); // Select "project-b"
-      await waitFor(() => {
-        assertEquals(result.snapshot().selectedIndex, 1);
-      });
-
-      result.stdin.write("\r");
-
-      await waitFor(() => {
-        const snapshot = result.snapshot();
-        assertEquals(snapshot.value, "buy +project-b  milk");
-        assertEquals(snapshot.suggestions, []);
-        if (name === "suggestion") {
-          assertEquals(snapshot.cursor, "buy +project-b ".length);
-        }
-      });
-
-      result.unmount();
-    },
-  );
-
-  Deno.test(
-    `${name}: closes suggestions on escape without changing the text`,
-    { sanitizeResources: false, sanitizeOps: false },
-    async () => {
-      const result = input.render(makeTodos());
-      await input.waitForReady(result);
-
-      input.type(result, "buy +pro");
-
-      await waitFor(() => {
-        assertEquals(result.snapshot().suggestions, [
-          "project-a",
-          "project-b",
-          "project-c",
-        ]);
-      });
-
-      result.stdin.write("\u001B");
-
-      await waitFor(() => {
-        const snapshot = result.snapshot();
-        assertEquals(snapshot.suggestions, []);
-        assertEquals(snapshot.value, "buy +pro");
-      });
-
-      assertEquals(result.cancelCount(), 0);
-
-      result.unmount();
-    },
-  );
-}
-
-Deno.test(
-  "suggestion: ignores input and cancel until focused",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todos = makeTodos();
-    let snapshot = emptySnapshot();
-    let cancelCount = 0;
-
-    const harness = (isFocused: boolean) => (
-      <SuggestionHarness
-        todos={todos}
-        onSnapshot={(next) => snapshot = next}
-        onCancel={() => cancelCount++}
-        isFocused={isFocused}
-      />
-    );
-
-    const result = render(harness(false));
-
-    await result.stdin.write("+pro");
-    await result.stdin.write("\u001B"); // Escape
-
-    result.rerender(harness(true));
-
-    await result.stdin.write("x");
+    input.type(result, "buy +pro");
 
     await waitFor(() => {
-      assertEquals(snapshot.value, "x");
-      assertEquals(snapshot.suggestions, []);
+      const snapshot = result.snapshot();
+      expect(snapshot.suggestions).toEqual([
+        "project-a",
+        "project-b",
+        "project-c",
+      ]);
+      expect(snapshot.type).toEqual("project");
+      expect(snapshot.selectedIndex).toEqual(0);
+      expect(snapshot.value).toEqual("buy +pro");
     });
 
-    assertEquals(cancelCount, 0);
+    // Replace the active tag with a context tag.
+    result.stdin.write("\x7f"); // Backspace
+    result.stdin.write("\x7f");
+    result.stdin.write("\x7f");
+    result.stdin.write("\x7f");
+    input.type(result, "@con");
+
+    await waitFor(() => {
+      const snapshot = result.snapshot();
+      expect(snapshot.suggestions).toEqual(["context", "context2"]);
+      expect(snapshot.type).toEqual("context");
+      expect(snapshot.selectedIndex).toEqual(0);
+    });
+
     result.unmount();
-  },
-);
+  });
+
+  test(`${name}: navigates suggestions with up/down and wraps`, async () => {
+    const result = input.render(makeTodos());
+    await input.waitForReady(result);
+
+    input.type(result, "+pro");
+
+    await waitFor(() => {
+      expect(result.snapshot().suggestions).toEqual([
+        "project-a",
+        "project-b",
+        "project-c",
+      ]);
+      expect(result.snapshot().selectedIndex).toEqual(0);
+    });
+
+    result.stdin.write("\u001B[B"); // Down
+    await waitFor(() => {
+      expect(result.snapshot().selectedIndex).toEqual(1);
+    });
+
+    result.stdin.write("\u001B[B"); // Down
+    await waitFor(() => {
+      expect(result.snapshot().selectedIndex).toEqual(2);
+    });
+
+    result.stdin.write("\u001B[B"); // Down, wraps
+    await waitFor(() => {
+      expect(result.snapshot().selectedIndex).toEqual(0);
+    });
+
+    result.stdin.write("\u001B[A"); // Up, wraps
+    await waitFor(() => {
+      expect(result.snapshot().selectedIndex).toEqual(2);
+    });
+
+    result.stdin.write("\u001B[A"); // Up
+    await waitFor(() => {
+      expect(result.snapshot().selectedIndex).toEqual(1);
+    });
+
+    result.stdin.write("\u001B[A"); // Up
+    await waitFor(() => {
+      expect(result.snapshot().selectedIndex).toEqual(0);
+    });
+
+    result.unmount();
+  });
+
+  test(`${name}: inserts the selected suggestion and preserves surrounding text`, async () => {
+    const result = input.render(makeTodos());
+    await input.waitForReady(result);
+
+    input.type(result, "buy +pro");
+
+    await waitFor(() => {
+      expect(result.snapshot().suggestions).toEqual([
+        "project-a",
+        "project-b",
+        "project-c",
+      ]);
+    });
+
+    input.type(result, " ");
+    input.type(result, "milk");
+
+    await waitFor(() => {
+      expect(result.snapshot().suggestions).toEqual([]);
+    });
+
+    // Move the cursor to just after "+pro" so text on both sides remains.
+    result.stdin.write("\u001B[D");
+    result.stdin.write("\u001B[D");
+    result.stdin.write("\u001B[D");
+    result.stdin.write("\u001B[D");
+    result.stdin.write("\u001B[D");
+
+    await waitFor(() => {
+      expect(result.snapshot().suggestions).toEqual([
+        "project-a",
+        "project-b",
+        "project-c",
+      ]);
+    });
+
+    result.stdin.write("\u001B[B"); // Select "project-b"
+    await waitFor(() => {
+      expect(result.snapshot().selectedIndex).toEqual(1);
+    });
+
+    result.stdin.write("\r");
+
+    await waitFor(() => {
+      const snapshot = result.snapshot();
+      expect(snapshot.value).toEqual("buy +project-b  milk");
+      expect(snapshot.suggestions).toEqual([]);
+      if (name === "suggestion") {
+        expect(snapshot.cursor).toEqual("buy +project-b ".length);
+      }
+    });
+
+    result.unmount();
+  });
+
+  test(`${name}: closes suggestions on escape without changing the text`, async () => {
+    const result = input.render(makeTodos());
+    await input.waitForReady(result);
+
+    input.type(result, "buy +pro");
+
+    await waitFor(() => {
+      expect(result.snapshot().suggestions).toEqual([
+        "project-a",
+        "project-b",
+        "project-c",
+      ]);
+    });
+
+    result.stdin.write("\u001B");
+
+    await waitFor(() => {
+      const snapshot = result.snapshot();
+      expect(snapshot.suggestions).toEqual([]);
+      expect(snapshot.value).toEqual("buy +pro");
+    });
+
+    expect(result.cancelCount()).toEqual(0);
+
+    result.unmount();
+  });
+}
+
+test("suggestion: ignores input and cancel until focused", async () => {
+  const todos = makeTodos();
+  let snapshot = emptySnapshot();
+  let cancelCount = 0;
+
+  const harness = (isFocused: boolean) => (
+    <SuggestionHarness
+      todos={todos}
+      onSnapshot={(next) => (snapshot = next)}
+      onCancel={() => cancelCount++}
+      isFocused={isFocused}
+    />
+  );
+
+  const result = render(harness(false));
+
+  await result.stdin.write("+pro");
+  await result.stdin.write("\u001B"); // Escape
+
+  result.rerender(harness(true));
+
+  await result.stdin.write("x");
+
+  await waitFor(() => {
+    expect(snapshot.value).toEqual("x");
+    expect(snapshot.suggestions).toEqual([]);
+  });
+
+  expect(cancelCount).toEqual(0);
+  result.unmount();
+});

@@ -1,3 +1,4 @@
+import { expect, test } from "vitest";
 import {
   format,
   formatDate,
@@ -5,12 +6,12 @@ import {
   startOfTomorrow,
   startOfYesterday,
 } from "date-fns";
-import { assertEquals } from "@std/assert";
+
 import { Todo } from "../logic/todo.ts"; // Adjust the path as needed
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
 
-Deno.test("Todo constructor - sets text correctly", () => {
+test("Todo constructor - sets text correctly", () => {
   const testCases = [
     { input: "x Completed", expected: "Completed" },
     { input: "(B) With prio", expected: "With prio" },
@@ -40,15 +41,14 @@ Deno.test("Todo constructor - sets text correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
+    expect(
       todo.text,
-      expected,
       `Input "${input}" should have exactly the text: ${expected}`,
-    );
+    ).toEqual(expected);
   }
 });
 
-Deno.test("Todo constructor - sets state correctly", () => {
+test("Todo constructor - sets state correctly", () => {
   const testCases = [
     { input: "todo", expected: TodoStateEnum.todo },
     { input: "x Completed", expected: TodoStateEnum.done },
@@ -59,15 +59,14 @@ Deno.test("Todo constructor - sets state correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
+    expect(
       todo.state,
-      expected,
       `Input "${input}" should have exactly the state: ${expected}`,
-    );
+    ).toEqual(expected);
   }
 });
 
-Deno.test("Todo constructor - sets priority correctly", () => {
+test("Todo constructor - sets priority correctly", () => {
   const testCases = [
     { input: "x (A) Completed", expected: "A" },
     { input: "(B) Todo", expected: "B" },
@@ -80,15 +79,14 @@ Deno.test("Todo constructor - sets priority correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
+    expect(
       todo.priority,
-      expected,
       `Input "${input}" should have exactly the priority: ${expected}`,
-    );
+    ).toEqual(expected);
   }
 });
 
-Deno.test("Todo constructor - sets completionDate correctly", () => {
+test("Todo constructor - sets completionDate correctly", () => {
   const testCases = [
     {
       input: "x 2024-06-02 2024-06-01 Happy path",
@@ -107,19 +105,18 @@ Deno.test("Todo constructor - sets completionDate correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
+    expect(
       todo.completionDate
         ? format(todo.completionDate, "yyyy-MM-dd")
         : undefined,
-      expected ? format(expected, "yyyy-MM-dd") : undefined,
       `Input "${input}" should have exactly the date: ${
         expected ? format(expected, "yyyy-MM-dd") : "undefined"
       }`,
-    );
+    ).toEqual(expected ? format(expected, "yyyy-MM-dd") : undefined);
   }
 });
 
-Deno.test("Todo constructor - parses completion date without a creation date", () => {
+test("Todo constructor - parses completion date without a creation date", () => {
   const testCases = [
     {
       input: "x 2024-01-01 buy milk",
@@ -141,57 +138,50 @@ Deno.test("Todo constructor - parses completion date without a creation date", (
     },
   ];
 
-  for (
-    const {
-      input,
-      expectedCompletionDate,
-      expectedCreationDate,
-      expectedState,
-    } of testCases
-  ) {
+  for (const {
+    input,
+    expectedCompletionDate,
+    expectedCreationDate,
+    expectedState,
+  } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
+    expect(
       todo.completionDate
         ? format(todo.completionDate, "yyyy-MM-dd")
         : undefined,
-      expectedCompletionDate,
       `Input "${input}" should have completion date: ${expectedCompletionDate}`,
-    );
-    assertEquals(
+    ).toEqual(expectedCompletionDate);
+    expect(
       todo.creationDate ? format(todo.creationDate, "yyyy-MM-dd") : undefined,
-      expectedCreationDate,
       `Input "${input}" should have creation date: ${expectedCreationDate}`,
-    );
-    assertEquals(
+    ).toEqual(expectedCreationDate);
+    expect(
       todo.state,
-      expectedState,
       `Input "${input}" should have state: ${expectedState}`,
-    );
+    ).toEqual(expectedState);
   }
 });
 
-Deno.test("Todo constructor - keeps creation date empty with completion date only", () => {
+test("Todo constructor - keeps creation date empty with completion date only", () => {
   const input = "x 2024-06-01 Buy groceries";
   const todo = new Todo(input);
-  assertEquals(
+  expect(
     todo.completionDate ? format(todo.completionDate, "yyyy-MM-dd") : undefined,
-    "2024-06-01",
-  );
-  assertEquals(todo.creationDate, undefined);
+  ).toEqual("2024-06-01");
+  expect(todo.creationDate).toEqual(undefined);
 });
 
-Deno.test("Todo constructor - sets creationDate correctly", () => {
+test("Todo constructor - sets creationDate correctly", () => {
   const input = "2024-06-01 Buy groceries";
   const todo = new Todo(input);
-  assertEquals(
+  expect(
     todo.creationDate ? format(todo.creationDate, "yyyy-MM-dd") : undefined,
-    "2024-06-01",
-  );
+  ).toEqual("2024-06-01");
 });
 
 // Test for `projects` extraction
-Deno.test("Todo constructor - extracts projects correctly", () => {
+test("Todo constructor - extracts projects correctly", () => {
   const testCases = [
     { input: "Buy groceries @home", expected: ["home"] },
     { input: "Fix the car @garage @tools", expected: ["garage", "tools"] },
@@ -207,18 +197,17 @@ Deno.test("Todo constructor - extracts projects correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
+    expect(
       Array.from(todo.contexts),
-      expected,
-      `Input "${input}" should have exactly the contexts: ${
-        expected.join(", ")
-      }`,
-    );
+      `Input "${input}" should have exactly the contexts: ${expected.join(
+        ", ",
+      )}`,
+    ).toEqual(expected);
   }
 });
 
 // Test for `contexts` extraction
-Deno.test("Todo constructor - extracts contexts correctly", () => {
+test("Todo constructor - extracts contexts correctly", () => {
   const testCases = [
     { input: "Buy groceries +home", expected: ["home"] },
     { input: "Fix the car +garage +tools", expected: ["garage", "tools"] },
@@ -234,18 +223,17 @@ Deno.test("Todo constructor - extracts contexts correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
+    expect(
       Array.from(todo.projects),
-      expected,
-      `Input "${input}" should have exactly the contexts: ${
-        expected.join(", ")
-      }`,
-    );
+      `Input "${input}" should have exactly the contexts: ${expected.join(
+        ", ",
+      )}`,
+    ).toEqual(expected);
   }
 });
 
 // Test for `tags` extraction
-Deno.test("Todo constructor - extracts tags correctly", () => {
+test("Todo constructor - extracts tags correctly", () => {
   const testCases = [
     { input: "Todo h:1", expected: { h: "1" } },
     { input: "Todo due:2024-01-01", expected: { due: "2024-01-01" } },
@@ -267,62 +255,61 @@ Deno.test("Todo constructor - extracts tags correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
+    expect(
       todo.tags,
-      expected as unknown,
-      `Input "${input}" should have exactly the tags: ${
-        JSON.stringify(expected)
-      }`,
-    );
+      `Input "${input}" should have exactly the tags: ${JSON.stringify(
+        expected,
+      )}`,
+    ).toEqual(expected as unknown);
   }
 });
 
-Deno.test("Todo constructor - parses multiple distinct tags", () => {
+test("Todo constructor - parses multiple distinct tags", () => {
   const todo = new Todo("a rec:1d due:2024-01-01");
 
-  assertEquals(todo.tags, { rec: "1d", due: "2024-01-01" });
+  expect(todo.tags).toEqual({ rec: "1d", due: "2024-01-01" });
 });
 
-Deno.test("Todo setText - is idempotent when reparsing the same tags", () => {
+test("Todo setText - is idempotent when reparsing the same tags", () => {
   const todo = new Todo("a rec:1d").setText("a rec:1d");
 
-  assertEquals(todo.tags, { rec: "1d" });
-  assertEquals(todo.text, "a");
+  expect(todo.tags).toEqual({ rec: "1d" });
+  expect(todo.text).toEqual("a");
 });
 
-Deno.test("Todo setText - replaces tags with those in the supplied text", () => {
+test("Todo setText - replaces tags with those in the supplied text", () => {
   const todo = new Todo("a rec:1d").setText("a");
 
-  assertEquals(todo.tags, {});
-  assertEquals(todo.text, "a");
+  expect(todo.tags).toEqual({});
+  expect(todo.text).toEqual("a");
 });
 
-Deno.test("Todo project and context edits preserve programmatic tags", () => {
+test("Todo project and context edits preserve programmatic tags", () => {
   const withProject = new Todo("a").setRecurrence("1d").addProject("p");
-  assertEquals(withProject.tags.rec, "1d");
-  assertEquals(Array.from(withProject.projects), ["p"]);
+  expect(withProject.tags.rec).toEqual("1d");
+  expect(Array.from(withProject.projects)).toEqual(["p"]);
 
   const withContext = new Todo("a").setRecurrence("1d").addContext("c");
-  assertEquals(withContext.tags.rec, "1d");
-  assertEquals(Array.from(withContext.contexts), ["c"]);
+  expect(withContext.tags.rec).toEqual("1d");
+  expect(Array.from(withContext.contexts)).toEqual(["c"]);
 
-  const withoutProject = new Todo("a +p").setRecurrence("1d").removeProject(
-    "p",
-  );
-  assertEquals(withoutProject.tags.rec, "1d");
-  assertEquals(Array.from(withoutProject.projects), []);
+  const withoutProject = new Todo("a +p")
+    .setRecurrence("1d")
+    .removeProject("p");
+  expect(withoutProject.tags.rec).toEqual("1d");
+  expect(Array.from(withoutProject.projects)).toEqual([]);
 
-  const withoutContext = new Todo("a @c").setRecurrence("1d").removeContext(
-    "c",
-  );
-  assertEquals(withoutContext.tags.rec, "1d");
-  assertEquals(Array.from(withoutContext.contexts), []);
+  const withoutContext = new Todo("a @c")
+    .setRecurrence("1d")
+    .removeContext("c");
+  expect(withoutContext.tags.rec).toEqual("1d");
+  expect(Array.from(withoutContext.contexts)).toEqual([]);
 
   const withDue = new Todo("a").setDue(new Date("2024-01-01")).addProject("p");
-  assertEquals(withDue.tags.due, "2024-01-01");
+  expect(withDue.tags.due).toEqual("2024-01-01");
 });
 
-Deno.test("isDone - returns correctly", () => {
+test("isDone - returns correctly", () => {
   const testCases = [
     { input: "x Done", expected: true },
     { input: "Todo", expected: false },
@@ -331,14 +318,11 @@ Deno.test("isDone - returns correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
-      todo.isDone(),
-      expected,
-    );
+    expect(todo.isDone()).toEqual(expected);
   }
 });
 
-Deno.test("isHidden - returns correctly", () => {
+test("isHidden - returns correctly", () => {
   const testCases = [
     { input: "Hidden h:1", expected: true },
     { input: "Hidden h:2", expected: true },
@@ -349,15 +333,11 @@ Deno.test("isHidden - returns correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
-      todo.isHidden(),
-      expected,
-      input,
-    );
+    expect(todo.isHidden(), input).toEqual(expected);
   }
 });
 
-Deno.test("isOverdue - returns correctly", () => {
+test("isOverdue - returns correctly", () => {
   const testCases = [
     { input: "In the past due:1999-01-01", expected: true },
     { input: "In the future due:3000-01-01", expected: false },
@@ -380,15 +360,11 @@ Deno.test("isOverdue - returns correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
-      todo.isOverdue(),
-      expected,
-      input,
-    );
+    expect(todo.isOverdue(), input).toEqual(expected);
   }
 });
 
-Deno.test("isPassedThreshold - returns correctly", () => {
+test("isPassedThreshold - returns correctly", () => {
   const testCases = [
     { input: "In the past t:1999-01-01", expected: true },
     { input: "In the future t:3000-01-01", expected: false },
@@ -407,15 +383,11 @@ Deno.test("isPassedThreshold - returns correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
-      todo.isPassedThreshold(),
-      expected,
-      input,
-    );
+    expect(todo.isPassedThreshold(), input).toEqual(expected);
   }
 });
 
-Deno.test("toggleState - sets state correctly", () => {
+test("toggleState - sets state correctly", () => {
   const testCases = [
     { input: "todo", expected: TodoStateEnum.done },
     { input: "x Completed", expected: TodoStateEnum.todo },
@@ -425,15 +397,14 @@ Deno.test("toggleState - sets state correctly", () => {
     const todo = new Todo(input);
     const { updated } = todo.toggleState();
 
-    assertEquals(
+    expect(
       updated.state,
-      expected,
       `Input "${input}" should have exactly the state: ${expected}`,
-    );
+    ).toEqual(expected);
   }
 });
 
-Deno.test("toggleHidden - sets hidden correctly", () => {
+test("toggleHidden - sets hidden correctly", () => {
   const testCases = [
     { input: "todo", expected: true },
     { input: "todo h:1", expected: false },
@@ -445,15 +416,14 @@ Deno.test("toggleHidden - sets hidden correctly", () => {
     const todo = new Todo(input);
     const updated = todo.toggleHidden();
 
-    assertEquals(
+    expect(
       updated.isHidden(),
-      expected,
       `Input "${input}" should be: ${expected}`,
-    );
+    ).toEqual(expected);
   }
 });
 
-Deno.test("setPriority - sets priority correctly", () => {
+test("setPriority - sets priority correctly", () => {
   const testCases = [
     { text: "todo", input: "A" as UpperCaseLetter, expected: "A" },
     { text: "(A) todo", input: "A" as UpperCaseLetter, expected: "A" },
@@ -464,15 +434,13 @@ Deno.test("setPriority - sets priority correctly", () => {
     const todo = new Todo(text);
     const updated = todo.setPriority(input);
 
-    assertEquals(
-      updated.priority,
+    expect(updated.priority, `Input "${input}" should be: ${expected}`).toEqual(
       expected,
-      `Input "${input}" should be: ${expected}`,
     );
   }
 });
 
-Deno.test("setDue - sets correctly", () => {
+test("setDue - sets correctly", () => {
   const testCases = [
     { text: "todo", input: new Date("1999-01-01"), expected: "1999-01-01" },
     {
@@ -486,15 +454,13 @@ Deno.test("setDue - sets correctly", () => {
     const todo = new Todo(text);
     const updated = todo.setDue(input);
 
-    assertEquals(
-      updated.tags.due,
+    expect(updated.tags.due, `Input "${input}" should be: ${expected}`).toEqual(
       expected,
-      `Input "${input}" should be: ${expected}`,
     );
   }
 });
 
-Deno.test("setThreshold - sets correctly", () => {
+test("setThreshold - sets correctly", () => {
   const testCases = [
     { text: "todo", input: new Date("1999-01-01"), expected: "1999-01-01" },
     {
@@ -508,15 +474,13 @@ Deno.test("setThreshold - sets correctly", () => {
     const todo = new Todo(text);
     const updated = todo.setThreshold(input);
 
-    assertEquals(
-      updated.tags.t,
+    expect(updated.tags.t, `Input "${input}" should be: ${expected}`).toEqual(
       expected,
-      `Input "${input}" should be: ${expected}`,
     );
   }
 });
 
-Deno.test("Todo toString - puts completion date before creation date", () => {
+test("Todo toString - puts completion date before creation date", () => {
   const creationDate = new Date("2023-01-01");
   const completionDate = new Date("2023-01-02");
 
@@ -528,12 +492,12 @@ Deno.test("Todo toString - puts completion date before creation date", () => {
   const str = todo.toString();
 
   const parts = str.split(" ");
-  assertEquals(parts[0], "x");
-  assertEquals(parts[1], "2023-01-02"); // Completion date should be first
-  assertEquals(parts[2], "2023-01-01"); // Creation date should be second
+  expect(parts[0]).toEqual("x");
+  expect(parts[1]).toEqual("2023-01-02"); // Completion date should be first
+  expect(parts[2]).toEqual("2023-01-01"); // Creation date should be second
 });
 
-Deno.test("setRecurrence - sets correctly", () => {
+test("setRecurrence - sets correctly", () => {
   const testCases = [
     { text: "todo", input: "1d", expected: "1d" },
     { text: "todo", input: "2w", expected: "2w" },
@@ -546,15 +510,13 @@ Deno.test("setRecurrence - sets correctly", () => {
     const todo = new Todo(text);
     const updated = todo.setRecurrence(input);
 
-    assertEquals(
-      updated.tags.rec,
+    expect(updated.tags.rec, `Input "${input}" should be: ${expected}`).toEqual(
       expected,
-      `Input "${input}" should be: ${expected}`,
     );
   }
 });
 
-Deno.test("removeRecurrence - removes correctly", () => {
+test("removeRecurrence - removes correctly", () => {
   const testCases = [
     { text: "todo rec:1d", expectedHasRec: false },
     { text: "todo rec:2w", expectedHasRec: false },
@@ -565,24 +527,23 @@ Deno.test("removeRecurrence - removes correctly", () => {
     const todo = new Todo(text);
     const updated = todo.removeRecurrence();
 
-    assertEquals(
+    expect(
       updated.tags.rec !== undefined,
-      expectedHasRec,
       `After removing recurrence, todo "${text}" should have rec: ${expectedHasRec}`,
-    );
+    ).toEqual(expectedHasRec);
   }
 });
 
-Deno.test("removeRecurrence - preserves other tags", () => {
+test("removeRecurrence - preserves other tags", () => {
   const todo = new Todo("todo rec:1d due:2024-01-01 t:2024-01-01");
   const updated = todo.removeRecurrence();
 
-  assertEquals(updated.tags.rec, undefined);
-  assertEquals(updated.tags.due, "2024-01-01");
-  assertEquals(updated.tags.t, "2024-01-01");
+  expect(updated.tags.rec).toEqual(undefined);
+  expect(updated.tags.due).toEqual("2024-01-01");
+  expect(updated.tags.t).toEqual("2024-01-01");
 });
 
-Deno.test("Todo constructor - trims leading and trailing whitespace", () => {
+test("Todo constructor - trims leading and trailing whitespace", () => {
   const testCases = [
     {
       input: "x    excessive space before",
@@ -606,15 +567,14 @@ Deno.test("Todo constructor - trims leading and trailing whitespace", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
+    expect(
       todo.text,
-      expected,
       `Input "${input}" should have trimmed text: "${expected}", got: "${todo.text}"`,
-    );
+    ).toEqual(expected);
   }
 });
 
-Deno.test("Todo setText - trims leading and trailing whitespace", () => {
+test("Todo setText - trims leading and trailing whitespace", () => {
   const todo = new Todo("initial");
 
   const testCases = [
@@ -627,10 +587,9 @@ Deno.test("Todo setText - trims leading and trailing whitespace", () => {
   for (const { input, expected } of testCases) {
     const updated = todo.setText(input);
 
-    assertEquals(
+    expect(
       updated.text,
-      expected,
       `setText("${input}") should result in trimmed text: "${expected}", got: "${updated.text}"`,
-    );
+    ).toEqual(expected);
   }
 });

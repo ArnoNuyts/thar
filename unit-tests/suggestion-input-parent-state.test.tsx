@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals, assertMatch } from "@std/assert";
+
 import { useState } from "react";
 import { Text } from "ink";
 
@@ -75,122 +76,107 @@ const renderHarness = () => {
   };
 };
 
-Deno.test(
-  "SuggestionInput: reports suggestion state while typing",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const result = renderHarness();
+test("SuggestionInput: reports suggestion state while typing", async () => {
+  const result = renderHarness();
 
-    try {
-      result.stdin.write("+pro");
+  try {
+    result.stdin.write("+pro");
 
-      await waitFor(() => {
-        assertEquals(result.lastState(), true);
-        assertMatch(result.lastFrame() ?? "", /suggestions:2/);
-      });
+    await waitFor(() => {
+      expect(result.lastState()).toEqual(true);
+      expect(result.lastFrame() ?? "").toMatch(/suggestions:2/);
+    });
 
-      // Removing the tag prefix means there is no word start anymore.
-      result.stdin.write("\x7f");
-      result.stdin.write("\x7f");
-      result.stdin.write("\x7f");
-      result.stdin.write("\x7f");
+    // Removing the tag prefix means there is no word start anymore.
+    result.stdin.write("\x7f");
+    result.stdin.write("\x7f");
+    result.stdin.write("\x7f");
+    result.stdin.write("\x7f");
 
-      await waitFor(() => {
-        assertEquals(result.lastState(), false);
-      });
-    } finally {
-      result.unmount();
-    }
-  },
-);
+    await waitFor(() => {
+      expect(result.lastState()).toEqual(false);
+    });
+  } finally {
+    result.unmount();
+  }
+});
 
-Deno.test(
-  "SuggestionInput: reports that suggestions closed on Escape",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const result = renderHarness();
+test("SuggestionInput: reports that suggestions closed on Escape", async () => {
+  const result = renderHarness();
 
-    try {
-      result.stdin.write("+pro");
+  try {
+    result.stdin.write("+pro");
 
-      await waitFor(() => {
-        assertEquals(result.lastState(), true);
-        assertMatch(result.lastFrame() ?? "", /suggestions:2/);
-      });
+    await waitFor(() => {
+      expect(result.lastState()).toEqual(true);
+      expect(result.lastFrame() ?? "").toMatch(/suggestions:2/);
+    });
 
-      result.stdin.write("\u001B");
+    result.stdin.write("\u001B");
 
-      await waitFor(() => {
-        assertEquals(result.lastState(), false);
-        assertMatch(result.lastFrame() ?? "", /suggestions:0/);
-      });
-    } finally {
-      result.unmount();
-    }
-  },
-);
+    await waitFor(() => {
+      expect(result.lastState()).toEqual(false);
+      expect(result.lastFrame() ?? "").toMatch(/suggestions:0/);
+    });
+  } finally {
+    result.unmount();
+  }
+});
 
-Deno.test(
-  "SuggestionInput: reports that suggestions closed after applying one",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const result = renderHarness();
+test("SuggestionInput: reports that suggestions closed after applying one", async () => {
+  const result = renderHarness();
 
-    try {
-      result.stdin.write("+pro");
+  try {
+    result.stdin.write("+pro");
 
-      await waitFor(() => {
-        assertEquals(result.lastState(), true);
-        assertMatch(result.lastFrame() ?? "", /suggestions:2/);
-      });
+    await waitFor(() => {
+      expect(result.lastState()).toEqual(true);
+      expect(result.lastFrame() ?? "").toMatch(/suggestions:2/);
+    });
 
-      result.stdin.write("\r");
+    result.stdin.write("\r");
 
-      await waitFor(() => {
-        assertEquals(result.lastState(), false);
-        assertMatch(result.lastFrame() ?? "", /suggestions:0/);
-      });
+    await waitFor(() => {
+      expect(result.lastState()).toEqual(false);
+      expect(result.lastFrame() ?? "").toMatch(/suggestions:0/);
+    });
 
-      assertMatch(result.lastFrame() ?? "", /project-a/);
-    } finally {
-      result.unmount();
-    }
-  },
-);
+    expect(result.lastFrame() ?? "").toMatch(/project-a/);
+  } finally {
+    result.unmount();
+  }
+});
 
 const FocusableProbe = ({ tag }: { tag: string }) => {
   const { id, isFocused } = useFocusable({ autoFocus: true, tag });
 
-  return <Text>{`${isFocused ? "focused" : "blurred"}:${id.description}`}
-  </Text>;
+  return (
+    <Text>{`${isFocused ? "focused" : "blurred"}:${id.description}`}</Text>
+  );
 };
 
-Deno.test(
-  "useFocusable: keeps its focus identity stable when the tag prop changes",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const result = render(
+test("useFocusable: keeps its focus identity stable when the tag prop changes", async () => {
+  const result = render(
+    <FocusProvider>
+      <FocusableProbe tag="first-tag" />
+    </FocusProvider>,
+  );
+
+  try {
+    await waitFor(() => {
+      expect(result.lastFrame() ?? "").toMatch(/focused:first-tag/);
+    });
+
+    result.rerender(
       <FocusProvider>
-        <FocusableProbe tag="first-tag" />
+        <FocusableProbe tag="second-tag" />
       </FocusProvider>,
     );
 
-    try {
-      await waitFor(() => {
-        assertMatch(result.lastFrame() ?? "", /focused:first-tag/);
-      });
-
-      result.rerender(
-        <FocusProvider>
-          <FocusableProbe tag="second-tag" />
-        </FocusProvider>,
-      );
-
-      await waitFor(() => {
-        assertMatch(result.lastFrame() ?? "", /focused:first-tag/);
-      });
-    } finally {
-      result.unmount();
-    }
-  },
-);
+    await waitFor(() => {
+      expect(result.lastFrame() ?? "").toMatch(/focused:first-tag/);
+    });
+  } finally {
+    result.unmount();
+  }
+});

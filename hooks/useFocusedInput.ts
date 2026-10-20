@@ -15,10 +15,13 @@ export const useFocusedInput = (
     handlerRef.current = handler;
   });
 
-  useInput((input, key) => {
-    if (!isFocused) return;
-    handlerRef.current(input, key);
-  }, { isActive: isFocused });
+  useInput(
+    (input, key) => {
+      if (!isFocused) return;
+      handlerRef.current(input, key);
+    },
+    { isActive: isFocused },
+  );
 
   return { isFocused, focus, blur };
 };

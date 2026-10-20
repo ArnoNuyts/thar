@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals, assertMatch, assertNotMatch } from "@std/assert";
+
 import { useEffect } from "react";
 import { Box } from "ink";
 
@@ -13,7 +14,7 @@ import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
 const activeButtonLabel = (label: string) => `\u00ab ${label} \u00bb`;
 const inactiveButtonLabel = (label: string) => `\u2039 ${label} \u203a`;
 
-Deno.test("CreateTodoModal: should render and handle input", async () => {
+test("CreateTodoModal: should render and handle input", async () => {
   let focusedTag: string | undefined;
   let addedText = "";
 
@@ -26,7 +27,7 @@ Deno.test("CreateTodoModal: should render and handle input", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "create-todo" && <CreateTodoModal />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -47,26 +48,26 @@ Deno.test("CreateTodoModal: should render and handle input", async () => {
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Create new todo/);
-    assertEquals(focusedTag, "create-todo-input");
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+    expect(focusedTag).toEqual("create-todo-input");
   });
 
   stdin.write("New Todo Item");
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /New Todo Item/);
+    expect(lastFrame() || "").toMatch(/New Todo Item/);
   });
 
   stdin.write("\r");
 
   await waitFor(() => {
-    assertEquals(addedText, "New Todo Item");
+    expect(addedText).toEqual("New Todo Item");
   });
 
   unmount();
 });
 
-Deno.test("CreateTodoModal: should prefill context from search query", async () => {
+test("CreateTodoModal: should prefill context from search query", async () => {
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();
     const { setSearchQuery } = useSearch();
@@ -92,14 +93,14 @@ Deno.test("CreateTodoModal: should prefill context from search query", async () 
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Create new todo/);
-    assertMatch(lastFrame() || "", /@home/);
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+    expect(lastFrame() || "").toMatch(/@home/);
   });
 
   unmount();
 });
 
-Deno.test("CreateTodoModal: should prefill project from search query", async () => {
+test("CreateTodoModal: should prefill project from search query", async () => {
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();
     const { setSearchQuery } = useSearch();
@@ -125,14 +126,14 @@ Deno.test("CreateTodoModal: should prefill project from search query", async () 
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Create new todo/);
-    assertMatch(lastFrame() || "", /\+work/);
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+    expect(lastFrame() || "").toMatch(/\+work/);
   });
 
   unmount();
 });
 
-Deno.test("CreateTodoModal: should prefill multiple tags and contexts from search query", async () => {
+test("CreateTodoModal: should prefill multiple tags and contexts from search query", async () => {
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();
     const { setSearchQuery } = useSearch();
@@ -158,15 +159,15 @@ Deno.test("CreateTodoModal: should prefill multiple tags and contexts from searc
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Create new todo/);
-    assertMatch(lastFrame() || "", /\+work/);
-    assertMatch(lastFrame() || "", /@home/);
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+    expect(lastFrame() || "").toMatch(/\+work/);
+    expect(lastFrame() || "").toMatch(/@home/);
   });
 
   unmount();
 });
 
-Deno.test("CreateTodoModal: mouse hover and click should use the visible button row", async () => {
+test("CreateTodoModal: mouse hover and click should use the visible button row", async () => {
   let activeModalName: string | null = null;
 
   const TestComponent = () => {
@@ -195,26 +196,28 @@ Deno.test("CreateTodoModal: mouse hover and click should use the visible button 
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Create new todo/);
-    assertNotMatch(lastFrame() || "", new RegExp(activeButtonLabel("Cancel")));
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+    expect(lastFrame() || "").not.toMatch(
+      new RegExp(activeButtonLabel("Cancel")),
+    );
   });
 
   stdin.write("\x1b[<35;60;13M");
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", new RegExp(activeButtonLabel("Cancel")));
+    expect(lastFrame() || "").toMatch(new RegExp(activeButtonLabel("Cancel")));
   });
 
   stdin.write("\x1b[<0;60;13M");
 
   await waitFor(() => {
-    assertEquals(activeModalName, null);
+    expect(activeModalName).toEqual(null);
   });
 
   unmount();
 });
 
-Deno.test("CreateTodoModal: mouse hover should stay aligned when help text wraps", async () => {
+test("CreateTodoModal: mouse hover should stay aligned when help text wraps", async () => {
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();
     useEffect(() => {
@@ -237,20 +240,22 @@ Deno.test("CreateTodoModal: mouse hover should stay aligned when help text wraps
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Create new todo/);
-    assertNotMatch(lastFrame() || "", new RegExp(activeButtonLabel("Cancel")));
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+    expect(lastFrame() || "").not.toMatch(
+      new RegExp(activeButtonLabel("Cancel")),
+    );
   });
 
   stdin.write("\x1b[<35;36;13M");
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", new RegExp(activeButtonLabel("Cancel")));
+    expect(lastFrame() || "").toMatch(new RegExp(activeButtonLabel("Cancel")));
   });
 
   unmount();
 });
 
-Deno.test("CreateTodoModal: Tab should toggle buttons without blurring the input", async () => {
+test("CreateTodoModal: Tab should toggle buttons without blurring the input", async () => {
   let focusedTag: string | undefined;
   let addedText = "";
 
@@ -263,7 +268,7 @@ Deno.test("CreateTodoModal: Tab should toggle buttons without blurring the input
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "create-todo" && <CreateTodoModal />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -284,46 +289,50 @@ Deno.test("CreateTodoModal: Tab should toggle buttons without blurring the input
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Create new todo/);
-    assertEquals(focusedTag, "create-todo-input");
-    assertMatch(lastFrame() || "", new RegExp(activeButtonLabel("Save")));
-    assertMatch(lastFrame() || "", new RegExp(inactiveButtonLabel("Cancel")));
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+    expect(focusedTag).toEqual("create-todo-input");
+    expect(lastFrame() || "").toMatch(new RegExp(activeButtonLabel("Save")));
+    expect(lastFrame() || "").toMatch(
+      new RegExp(inactiveButtonLabel("Cancel")),
+    );
   });
 
   stdin.write("Alpha");
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Alpha/);
+    expect(lastFrame() || "").toMatch(/Alpha/);
   });
 
   stdin.write("\t");
 
   await waitFor(() => {
-    assertEquals(focusedTag, "create-todo-input");
-    assertMatch(lastFrame() || "", new RegExp(activeButtonLabel("Cancel")));
-    assertMatch(lastFrame() || "", new RegExp(inactiveButtonLabel("Save")));
+    expect(focusedTag).toEqual("create-todo-input");
+    expect(lastFrame() || "").toMatch(new RegExp(activeButtonLabel("Cancel")));
+    expect(lastFrame() || "").toMatch(new RegExp(inactiveButtonLabel("Save")));
   });
 
   stdin.write(" ");
   stdin.write("beta");
 
   await waitFor(() => {
-    assertEquals(focusedTag, "create-todo-input");
-    assertMatch(lastFrame() || "", /Alpha beta/);
+    expect(focusedTag).toEqual("create-todo-input");
+    expect(lastFrame() || "").toMatch(/Alpha beta/);
   });
 
   stdin.write("\t");
 
   await waitFor(() => {
-    assertEquals(focusedTag, "create-todo-input");
-    assertMatch(lastFrame() || "", new RegExp(activeButtonLabel("Save")));
-    assertMatch(lastFrame() || "", new RegExp(inactiveButtonLabel("Cancel")));
+    expect(focusedTag).toEqual("create-todo-input");
+    expect(lastFrame() || "").toMatch(new RegExp(activeButtonLabel("Save")));
+    expect(lastFrame() || "").toMatch(
+      new RegExp(inactiveButtonLabel("Cancel")),
+    );
   });
 
   stdin.write("\r");
 
   await waitFor(() => {
-    assertEquals(addedText, "Alpha beta");
+    expect(addedText).toEqual("Alpha beta");
   });
 
   unmount();

@@ -9,9 +9,11 @@ import {
 import { ModalProvider } from "../contexts/modal-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 
-export const FocusObserver = (
-  { onFocused }: { onFocused: (tag?: string) => void },
-) => {
+export const FocusObserver = ({
+  onFocused,
+}: {
+  onFocused: (tag?: string) => void;
+}) => {
   const { activeId } = useFocusManager();
   useEffect(() => {
     if (activeId) {
@@ -40,13 +42,11 @@ export const SelectionObserver = ({
 export const SelectionStateObserver = ({
   onSelectionChange,
 }: {
-  onSelectionChange: (
-    state: {
-      cursorId: symbol | undefined;
-      anchorId: symbol | undefined;
-      rangeIds: Set<symbol>;
-    },
-  ) => void;
+  onSelectionChange: (state: {
+    cursorId: symbol | undefined;
+    anchorId: symbol | undefined;
+    rangeIds: Set<symbol>;
+  }) => void;
 }) => {
   const { selectedTodoId, selectedTodoIds } = useNavigation();
 
@@ -140,9 +140,7 @@ export const TestWrapper = ({
         <NavigationContext.Provider value={fullNavValue}>
           <FocusProvider>
             <SuggestionProvider>
-              <ModalProvider>
-                {children}
-              </ModalProvider>
+              <ModalProvider>{children}</ModalProvider>
             </SuggestionProvider>
           </FocusProvider>
         </NavigationContext.Provider>

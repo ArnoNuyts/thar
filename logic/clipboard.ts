@@ -1,19 +1,21 @@
-export async function copyToClipboard(text: string) {
-  let command: Deno.Command;
+import { Runtime, type RuntimeCommand } from "../utils/runtime.ts";
 
-  if (Deno.build.os === "windows") {
+export async function copyToClipboard(text: string) {
+  let command: RuntimeCommand;
+
+  if (Runtime.platform === "windows") {
     // Use clip.exe on Windows which reads from stdin
-    command = new Deno.Command("clip", {
+    command = new Runtime.Command("clip", {
       stdin: "piped",
     });
-  } else if (Deno.build.os === "darwin") {
+  } else if (Runtime.platform === "darwin") {
     // Use pbcopy on macOS
-    command = new Deno.Command("pbcopy", {
+    command = new Runtime.Command("pbcopy", {
       stdin: "piped",
     });
   } else {
     // Try xclip on Linux
-    command = new Deno.Command("xclip", {
+    command = new Runtime.Command("xclip", {
       args: ["-selection", "clipboard"],
       stdin: "piped",
     });
@@ -27,22 +29,22 @@ export async function copyToClipboard(text: string) {
 }
 
 export async function readFromClipboard(): Promise<string> {
-  let command: Deno.Command;
+  let command: RuntimeCommand;
 
-  if (Deno.build.os === "windows") {
+  if (Runtime.platform === "windows") {
     // Use powershell on Windows
-    command = new Deno.Command("powershell.exe", {
+    command = new Runtime.Command("powershell.exe", {
       args: ["-Command", "Get-Clipboard"],
       stdout: "piped",
     });
-  } else if (Deno.build.os === "darwin") {
+  } else if (Runtime.platform === "darwin") {
     // Use pbpaste on macOS
-    command = new Deno.Command("pbpaste", {
+    command = new Runtime.Command("pbpaste", {
       stdout: "piped",
     });
   } else {
     // Try xclip on Linux
-    command = new Deno.Command("xclip", {
+    command = new Runtime.Command("xclip", {
       args: ["-selection", "clipboard", "-o"],
       stdout: "piped",
     });

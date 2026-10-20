@@ -112,9 +112,10 @@ export class Todo {
 
   toggleState(): { updated: Todo; recurring?: Todo } {
     const next = this.with((next) => {
-      next._state = next._state == TodoStateEnum.todo
-        ? TodoStateEnum.done
-        : TodoStateEnum.todo;
+      next._state =
+        next._state == TodoStateEnum.todo
+          ? TodoStateEnum.done
+          : TodoStateEnum.todo;
       if (next._state === TodoStateEnum.done && next._creationDate) {
         next._completionDate = new Date();
       }
@@ -159,7 +160,8 @@ export class Todo {
     return { updated: next };
   }
   toString() {
-    return (this.isDone() ? "x " : "") +
+    return (
+      (this.isDone() ? "x " : "") +
       (this._priority ? `(${this._priority}) ` : "") +
       (this._completionDate
         ? format(this._completionDate, "yyyy-MM-dd") + " "
@@ -169,7 +171,10 @@ export class Todo {
         : "") +
       this._text +
       (Object.keys(this._tags).length > 0 ? " " : "") +
-      (Object.keys(this._tags).map((k) => k + ":" + this._tags[k]).join(" "));
+      Object.keys(this._tags)
+        .map((k) => k + ":" + this._tags[k])
+        .join(" ")
+    );
   }
   setPriority(key?: UpperCaseLetter): Todo {
     return this.with((next) => {

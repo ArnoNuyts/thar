@@ -15,18 +15,18 @@ export const SetPriorityModal = () => {
   const { getSelectedTodos } = useNavigation();
   const selectedTodos = getSelectedTodos();
   const todo = selectedTodos[0]; // Reference todo for initial values
-  const [layoutSize, setLayoutSize] = useState<
-    { rows?: number; columns?: number }
-  >({});
+  const [layoutSize, setLayoutSize] = useState<{
+    rows?: number;
+    columns?: number;
+  }>({});
 
   const options = getPriorityOptions(Boolean(todo?.priority));
 
   const applyPriority = (index: number) => {
     if (selectedTodos.length === 0) return;
 
-    updateTodos(
-      selectedTodos,
-      (t) => t.setPriority(priorityValue(options[index])),
+    updateTodos(selectedTodos, (t) =>
+      t.setPriority(priorityValue(options[index])),
     );
     closeModal();
   };
@@ -37,9 +37,12 @@ export const SetPriorityModal = () => {
     onCancel: closeModal,
   });
 
-  const { isFocused } = useFocusedInput((_input, key) => {
-    selection.handleKey(key);
-  }, { autoFocus: true, tag: "set-priority-modal" });
+  const { isFocused } = useFocusedInput(
+    (_input, key) => {
+      selection.handleKey(key);
+    },
+    { autoFocus: true, tag: "set-priority-modal" },
+  );
 
   useModalMouseList({
     isActive: isFocused,
@@ -51,11 +54,7 @@ export const SetPriorityModal = () => {
   });
 
   return (
-    <Modal
-      title="Set Priority"
-      width={30}
-      onLayoutSizeChange={setLayoutSize}
-    >
+    <Modal title="Set Priority" width={30} onLayoutSizeChange={setLayoutSize}>
       <SelectList
         items={options.map((option) => ({ key: option, label: option }))}
         selectedIndex={selection.selectedIndex}

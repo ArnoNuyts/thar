@@ -38,12 +38,8 @@ export const CONTEXT_TOKEN_REGEX = new RegExp(
   "g",
 );
 
-const TAG_WORD_START_AT_END = new RegExp(
-  `[\\s]([\\+@]${TAG_NAME_CHARS}*)$`,
-);
-const TAG_WORD_START_AT_BEGINNING = new RegExp(
-  `^([\\+@]${TAG_NAME_CHARS}*)$`,
-);
+const TAG_WORD_START_AT_END = new RegExp(`[\\s]([\\+@]${TAG_NAME_CHARS}*)$`);
+const TAG_WORD_START_AT_BEGINNING = new RegExp(`^([\\+@]${TAG_NAME_CHARS}*)$`);
 
 export type TagType = "project" | "context";
 
@@ -65,7 +61,8 @@ export const matchContexts = (text: string): string[] =>
  * `leftPart`, or `null` when the cursor is not at a tag word start.
  */
 export const matchTagWordStart = (leftPart: string): TagWordStart | null => {
-  const match = leftPart.match(TAG_WORD_START_AT_END) ??
+  const match =
+    leftPart.match(TAG_WORD_START_AT_END) ??
     leftPart.match(TAG_WORD_START_AT_BEGINNING);
 
   if (!match) return null;

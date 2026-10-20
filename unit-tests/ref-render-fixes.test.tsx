@@ -1,4 +1,5 @@
-import { assertEquals, assertMatch } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { render } from "ink-testing-library";
 import { Text } from "ink";
 import { Button } from "../components/Button.tsx";
@@ -20,10 +21,9 @@ function InputHarness({ onInput }: { onInput: InputHandler }) {
 }
 
 function FocusedInputHarness({ onInput }: { onInput: InputHandler }) {
-  const { isFocused } = useFocusedInput(
-    (input) => onInput(input),
-    { autoFocus: true },
-  );
+  const { isFocused } = useFocusedInput((input) => onInput(input), {
+    autoFocus: true,
+  });
   return <Text>{isFocused ? "focused" : "blurred"}</Text>;
 }
 
@@ -32,7 +32,7 @@ function MouseHarness({ onMouse }: { onMouse: (event: MouseEvent) => void }) {
   return <Text>mouse</Text>;
 }
 
-Deno.test("useInput: first render handler receives input", async () => {
+test("useInput: first render handler receives input", async () => {
   const calls: string[] = [];
   const { stdin, unmount } = render(
     <InputHarness onInput={(input) => calls.push(`first:${input}`)} />,
@@ -40,13 +40,13 @@ Deno.test("useInput: first render handler receives input", async () => {
 
   try {
     await stdin.write("a");
-    await waitFor(() => assertEquals(calls, ["first:a"]));
+    await waitFor(() => expect(calls).toEqual(["first:a"]));
   } finally {
     unmount();
   }
 });
 
-Deno.test("useInput: rerender uses the latest handler", async () => {
+test("useInput: rerender uses the latest handler", async () => {
   const calls: string[] = [];
   const { stdin, rerender, unmount } = render(
     <InputHarness onInput={(input) => calls.push(`first:${input}`)} />,
@@ -58,24 +58,22 @@ Deno.test("useInput: rerender uses the latest handler", async () => {
     );
 
     await stdin.write("b");
-    await waitFor(() => assertEquals(calls, ["second:b"]));
+    await waitFor(() => expect(calls).toEqual(["second:b"]));
   } finally {
     unmount();
   }
 });
 
-Deno.test("useFocusedInput: rerender uses the latest handler while focused", async () => {
+test("useFocusedInput: rerender uses the latest handler while focused", async () => {
   const calls: string[] = [];
   const { stdin, rerender, lastFrame, unmount } = render(
     <FocusProvider>
-      <FocusedInputHarness
-        onInput={(input) => calls.push(`first:${input}`)}
-      />
+      <FocusedInputHarness onInput={(input) => calls.push(`first:${input}`)} />
     </FocusProvider>,
   );
 
   try {
-    await waitFor(() => assertMatch(lastFrame() ?? "", /focused/));
+    await waitFor(() => expect(lastFrame() ?? "").toMatch(/focused/));
 
     rerender(
       <FocusProvider>
@@ -85,16 +83,16 @@ Deno.test("useFocusedInput: rerender uses the latest handler while focused", asy
       </FocusProvider>,
     );
 
-    await waitFor(() => assertMatch(lastFrame() ?? "", /focused/));
+    await waitFor(() => expect(lastFrame() ?? "").toMatch(/focused/));
 
     await stdin.write("c");
-    await waitFor(() => assertEquals(calls, ["second:c"]));
+    await waitFor(() => expect(calls).toEqual(["second:c"]));
   } finally {
     unmount();
   }
 });
 
-Deno.test("useMouseInput: rerender uses the latest handler", async () => {
+test("useMouseInput: rerender uses the latest handler", async () => {
   const calls: string[] = [];
   const { stdin, rerender, unmount } = render(
     <MouseHarness onMouse={() => calls.push("first")} />,
@@ -105,13 +103,13 @@ Deno.test("useMouseInput: rerender uses the latest handler", async () => {
 
     // SGR left click at column 5, row 5.
     await stdin.write("\x1b[<0;5;5M");
-    await waitFor(() => assertEquals(calls, ["second"]));
+    await waitFor(() => expect(calls).toEqual(["second"]));
   } finally {
     unmount();
   }
 });
 
-Deno.test("Button.Group: controlled selection changes retarget activation", async () => {
+test("Button.Group: controlled selection changes retarget activation", async () => {
   const pressed: string[] = [];
   const tree = (selectedIndex: number) => (
     <Button.Group
@@ -129,13 +127,13 @@ Deno.test("Button.Group: controlled selection changes retarget activation", asyn
     rerender(tree(1));
 
     await stdin.write("\r");
-    await waitFor(() => assertEquals(pressed, ["Second"]));
+    await waitFor(() => expect(pressed).toEqual(["Second"]));
   } finally {
     unmount();
   }
 });
 
-Deno.test("Button.Group: first render activation uses the initial selection", async () => {
+test("Button.Group: first render activation uses the initial selection", async () => {
   const pressed: string[] = [];
   const { stdin, unmount } = render(
     <Button.Group
@@ -150,7 +148,7 @@ Deno.test("Button.Group: first render activation uses the initial selection", as
 
   try {
     await stdin.write("\r");
-    await waitFor(() => assertEquals(pressed, ["Second"]));
+    await waitFor(() => expect(pressed).toEqual(["Second"]));
   } finally {
     unmount();
   }

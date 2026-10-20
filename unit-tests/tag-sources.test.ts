@@ -1,22 +1,23 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { Todo } from "../logic/todo.ts";
 import { collectTagSources } from "../logic/tag-sources.ts";
 
-Deno.test("tag-sources: collects unique sorted projects and contexts", () => {
+test("tag-sources: collects unique sorted projects and contexts", () => {
   const todos = [
     new Todo("Task one +zeta +alpha @office @home"),
     new Todo("Task two +alpha @work"),
     new Todo("Task three"),
   ];
 
-  assertEquals(collectTagSources(todos), {
+  expect(collectTagSources(todos)).toEqual({
     projects: ["alpha", "zeta"],
     contexts: ["home", "office", "work"],
   });
 });
 
-Deno.test("tag-sources: returns empty lists for no todos", () => {
-  assertEquals(collectTagSources([]), {
+test("tag-sources: returns empty lists for no todos", () => {
+  expect(collectTagSources([])).toEqual({
     projects: [],
     contexts: [],
   });

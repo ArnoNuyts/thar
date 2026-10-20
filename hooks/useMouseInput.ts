@@ -25,19 +25,25 @@ export const useMouseInput = (
     handlerRef.current = handler;
   });
 
-  useInput((_input, key) => {
-    const hasMouseEvent = key.mouseWheelUp || key.mouseWheelDown ||
-      key.mouseLeft || key.mouseMove;
-    if (!hasMouseEvent) return;
+  useInput(
+    (_input, key) => {
+      const hasMouseEvent =
+        key.mouseWheelUp ||
+        key.mouseWheelDown ||
+        key.mouseLeft ||
+        key.mouseMove;
+      if (!hasMouseEvent) return;
 
-    handlerRef.current({
-      wheelUp: key.mouseWheelUp,
-      wheelDown: key.mouseWheelDown,
-      leftClick: key.mouseLeft,
-      move: key.mouseMove,
-      x: key.mouseX,
-      y: key.mouseY,
-      raw: key,
-    });
-  }, { isActive: options.isActive, enableMouse: true });
+      handlerRef.current({
+        wheelUp: key.mouseWheelUp,
+        wheelDown: key.mouseWheelDown,
+        leftClick: key.mouseLeft,
+        move: key.mouseMove,
+        x: key.mouseX,
+        y: key.mouseY,
+        raw: key,
+      });
+    },
+    { isActive: options.isActive, enableMouse: true },
+  );
 };

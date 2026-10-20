@@ -31,9 +31,10 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
   const selectedTodos = getSelectedTodos();
   const todo = selectedTodos[0]; // Reference todo for initial values
   const [isCustom, setIsCustom] = useState(false);
-  const [layoutSize, setLayoutSize] = useState<
-    { rows?: number; columns?: number }
-  >({});
+  const [layoutSize, setLayoutSize] = useState<{
+    rows?: number;
+    columns?: number;
+  }>({});
   const [customDate, setCustomDate] = useState(() => {
     if (!todo) return new Date();
     const dateTag = type === "due" ? todo.tags.due : todo.tags.t;
@@ -62,9 +63,8 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
 
     if (selected.value === "reset") {
       if (selectedTodos.length > 0) {
-        updateTodos(
-          selectedTodos,
-          (t) => (type === "due" ? t.removeDue() : t.removeThreshold()),
+        updateTodos(selectedTodos, (t) =>
+          type === "due" ? t.removeDue() : t.removeThreshold(),
         );
         closeModal();
       }
@@ -74,9 +74,8 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     const date = dateForOption(selected.value as DateOptionValue);
 
     if (selectedTodos.length > 0) {
-      updateTodos(
-        selectedTodos,
-        (t) => (type === "due" ? t.setDue(date) : t.setThreshold(date)),
+      updateTodos(selectedTodos, (t) =>
+        type === "due" ? t.setDue(date) : t.setThreshold(date),
       );
     }
     closeModal();
@@ -90,9 +89,12 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
     onCancel: () => (isCustom ? setIsCustom(false) : closeModal()),
   });
 
-  const { isFocused } = useFocusedInput((_input, key) => {
-    selection.handleKey(key);
-  }, { autoFocus: true, tag: "set-date-modal" });
+  const { isFocused } = useFocusedInput(
+    (_input, key) => {
+      selection.handleKey(key);
+    },
+    { autoFocus: true, tag: "set-date-modal" },
+  );
 
   useModalMouseList({
     isActive: isFocused && !isCustom,
@@ -105,9 +107,8 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
 
   const handleCustomSubmit = (date: Date) => {
     if (selectedTodos.length > 0) {
-      updateTodos(
-        selectedTodos,
-        (t) => (type === "due" ? t.setDue(date) : t.setThreshold(date)),
+      updateTodos(selectedTodos, (t) =>
+        type === "due" ? t.setDue(date) : t.setThreshold(date),
       );
       closeModal();
     }
@@ -120,29 +121,27 @@ export const SetDateModal = ({ type }: SetDateModalProps) => {
       width={isCustom ? 30 : "50%"}
       onLayoutSizeChange={setLayoutSize}
     >
-      {!isCustom
-        ? (
-          <SelectList
-            items={options.map((option) => ({
-              key: option.value,
-              label: option.label,
-            }))}
-            selectedIndex={selection.selectedIndex}
+      {!isCustom ? (
+        <SelectList
+          items={options.map((option) => ({
+            key: option.value,
+            label: option.label,
+          }))}
+          selectedIndex={selection.selectedIndex}
+        />
+      ) : (
+        <Box flexDirection="column" alignItems="center">
+          <Calendar
+            value={customDate}
+            onChange={setCustomDate}
+            onSubmit={handleCustomSubmit}
+            isFocused={isFocused}
           />
-        )
-        : (
-          <Box flexDirection="column" alignItems="center">
-            <Calendar
-              value={customDate}
-              onChange={setCustomDate}
-              onSubmit={handleCustomSubmit}
-              isFocused={isFocused}
-            />
-            <Box>
-              <Text dimColor>Selected: {formatDateTag(customDate)}</Text>
-            </Box>
+          <Box>
+            <Text dimColor>Selected: {formatDateTag(customDate)}</Text>
           </Box>
-        )}
+        </Box>
+      )}
     </Modal>
   );
 };
