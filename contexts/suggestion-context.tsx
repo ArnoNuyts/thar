@@ -3,6 +3,7 @@ import {
   ReactNode,
   useCallback,
   useContext,
+  useMemo,
   useState,
 } from "react";
 
@@ -39,20 +40,33 @@ export const SuggestionProvider = ({ children }: { children: ReactNode }) => {
     setType(null);
   }, []);
 
+  const value = useMemo(
+    () => ({
+      suggestions,
+      setSuggestions,
+      selectedIndex,
+      setSelectedIndex,
+      type,
+      setType,
+      position,
+      setPosition,
+      clearSuggestions,
+    }),
+    [
+      suggestions,
+      setSuggestions,
+      selectedIndex,
+      setSelectedIndex,
+      type,
+      setType,
+      position,
+      setPosition,
+      clearSuggestions,
+    ],
+  );
+
   return (
-    <SuggestionContext.Provider
-      value={{
-        suggestions,
-        setSuggestions,
-        selectedIndex,
-        setSelectedIndex,
-        type,
-        setType,
-        position,
-        setPosition,
-        clearSuggestions,
-      }}
-    >
+    <SuggestionContext.Provider value={value}>
       {children}
     </SuggestionContext.Provider>
   );
