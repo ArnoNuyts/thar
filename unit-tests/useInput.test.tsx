@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { render } from "ink-testing-library";
 import { Text } from "ink";
 import { type Key, useInput } from "../hooks/useInput.ts";
@@ -23,7 +24,7 @@ async function press(sequence: string): Promise<Captured> {
 
   try {
     await stdin.write(sequence);
-    await waitFor(() => assertEquals(captured.length, 1));
+    await waitFor(() => expect(captured.length).toEqual(1));
     return captured[0];
   } finally {
     unmount();
@@ -36,7 +37,7 @@ const modifierFlags = (key: Key) => ({
   meta: key.meta,
 });
 
-Deno.test("useInput - escape sequences set the expected modifier flags", async (t) => {
+test("useInput - escape sequences set the expected modifier flags", async () => {
   // Representative sequences from the shift, ctrl and meta sets, plus
   // sequences that intentionally belong to more than one set.
   const cases: Array<{
@@ -111,19 +112,19 @@ Deno.test("useInput - escape sequences set the expected modifier flags", async (
     },
   ];
 
-  for (const { name, sequence, expected } of cases) {
-    await t.step(name, async () => {
+  for (const { sequence, expected } of cases) {
+    await (async () => {
       const captured = await press(sequence);
-      assertEquals(modifierFlags(captured.key), expected);
-    });
+      expect(modifierFlags(captured.key)).toEqual(expected);
+    })();
   }
 });
 
-Deno.test("useInput - alt+character keeps meta set by the parsed sequence", async () => {
+test("useInput - alt+character keeps meta set by the parsed sequence", async () => {
   const captured = await press("\x1ba");
 
-  assertEquals(captured.input, "a");
-  assertEquals(modifierFlags(captured.key), {
+  expect(captured.input).toEqual("a");
+  expect(modifierFlags(captured.key)).toEqual({
     shift: false,
     ctrl: false,
     meta: true,

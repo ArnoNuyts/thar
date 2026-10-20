@@ -31,9 +31,10 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
   const [pendingChanges, setPendingChanges] = useState<
     Map<string, "add" | "remove">
   >(new Map());
-  const [layoutSize, setLayoutSize] = useState<
-    { rows?: number; columns?: number }
-  >({});
+  const [layoutSize, setLayoutSize] = useState<{
+    rows?: number;
+    columns?: number;
+  }>({});
 
   const prefix = type === "project" ? "+" : "@";
   const title = type === "project" ? "Modify Projects" : "Modify Contexts";
@@ -250,11 +251,7 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
   });
 
   return (
-    <Modal
-      title={title}
-      width={40}
-      onLayoutSizeChange={setLayoutSize}
-    >
+    <Modal title={title} width={40} onLayoutSizeChange={setLayoutSize}>
       <Box flexDirection="column" paddingX={1}>
         {/* Custom input option */}
         <Box>

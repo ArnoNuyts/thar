@@ -1,5 +1,8 @@
 # Code Smell Review — todotui
 
+> Historical note: this review predates the Node migration. See `agent.md` for
+> the current toolchain and verification commands.
+
 - **Date:** 2026-10-19
 - **Reviewed snapshot:** `feature/ink-8` @ `d4e4413`
 - **Scope:** all 81 TypeScript/TSX files (production code + tests)

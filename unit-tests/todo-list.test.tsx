@@ -1,4 +1,6 @@
-import { assertEquals, assertMatch } from "@std/assert";
+import { Runtime } from "../utils/runtime.ts";
+import { expect, test } from "vitest";
+
 import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
 
@@ -6,7 +8,7 @@ import { Todo } from "../logic/todo.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { SearchInput } from "../components/SearchInput.tsx";
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
-import { restoreDenoMocks, waitFor } from "./test-utils.ts";
+import { restoreRuntimeMocks, waitFor } from "./test-utils.ts";
 
 import { ActionBar } from "../components/ActionBar.tsx";
 import { ConfirmModal } from "../components/ConfirmModal.tsx";
@@ -103,8 +105,9 @@ const AppContentMock = ({ todos = [] }: { todos?: Todos }) => {
       {activeModal === "create-todo" && <Text>Create Todo Modal</Text>}
       {activeModal === "edit-todo" && <Text>Edit Todo Modal</Text>}
       {activeModal === "set-due-date" && <SetDateModal type="due" />}
-      {activeModal === "set-threshold-date" &&
-        <SetDateModal type="threshold" />}
+      {activeModal === "set-threshold-date" && (
+        <SetDateModal type="threshold" />
+      )}
       {activeModal === "set-recurrence" && <SetRecurrenceModal />}
       {activeModal === "todo-menu" && <TodoMenu />}
       {activeModal === "multi-select-menu" && <MultiSelectMenu />}
@@ -112,11 +115,7 @@ const AppContentMock = ({ todos = [] }: { todos?: Todos }) => {
   );
 };
 
-const SearchQuerySetter = ({
-  query,
-}: {
-  query: string;
-}) => {
+const SearchQuerySetter = ({ query }: { query: string }) => {
   const { setSearchQuery } = useSearch();
   useEffect(() => {
     setSearchQuery(query);
@@ -125,11 +124,10 @@ const SearchQuerySetter = ({
 };
 
 // Clipboard Mocks
-const originalCommand = Deno.Command;
+const originalCommand = Runtime.Command;
 
 function setupClipboardMock(text: string) {
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).Command = class {
+  (Runtime as any).Command = class {
     command: string;
     constructor(command: string, _options: unknown) {
       this.command = command;
@@ -171,22 +169,18 @@ function setupClipboardMock(text: string) {
 }
 
 function teardownClipboardMock() {
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).Command = originalCommand;
-  restoreDenoMocks();
+  (Runtime as any).Command = originalCommand;
+  restoreRuntimeMocks();
 }
 
 // Custom clipboard mock for copy tests
 function setupCaptureClipboardMock(onCapture: (text: string) => void) {
-  const originalCommand = Deno.Command;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).Command = class {
+  const originalCommand = Runtime.Command;
+  (Runtime as any).Command = class {
     command: string;
-    // deno-lint-ignore no-explicit-any
     constructor(command: string, _options: any) {
       this.command = command;
     }
-    // deno-lint-ignore no-explicit-any
     spawn(): any {
       return {
         stdin: {
@@ -206,23 +200,19 @@ function setupCaptureClipboardMock(onCapture: (text: string) => void) {
     }
   };
   return () => {
-    // deno-lint-ignore no-explicit-any
-    (Deno as any).Command = originalCommand;
-    restoreDenoMocks();
+    (Runtime as any).Command = originalCommand;
+    restoreRuntimeMocks();
   };
 }
 
 // Clipboard mock that makes the copy command fail
 function setupFailingClipboardMock(message: string) {
-  const originalCommand = Deno.Command;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).Command = class {
+  const originalCommand = Runtime.Command;
+  (Runtime as any).Command = class {
     command: string;
-    // deno-lint-ignore no-explicit-any
     constructor(command: string, _options: any) {
       this.command = command;
     }
-    // deno-lint-ignore no-explicit-any
     spawn(): any {
       return {
         stdin: {
@@ -238,1195 +228,1065 @@ function setupFailingClipboardMock(message: string) {
     }
   };
   return () => {
-    // deno-lint-ignore no-explicit-any
-    (Deno as any).Command = originalCommand;
-    restoreDenoMocks();
+    (Runtime as any).Command = originalCommand;
+    restoreRuntimeMocks();
   };
 }
 
 // --- Tests ---
 
-Deno.test({
-  name: "TodoList: 'H' should toggle show hidden todos global state",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todoVisible = new Todo("visible todo");
-    const todoHidden = new Todo("h:1 hidden todo");
-    const initialTodos = [todoVisible, todoHidden];
+test("TodoList: 'H' should toggle show hidden todos global state", async () => {
+  const todoVisible = new Todo("visible todo");
+  const todoHidden = new Todo("h:1 hidden todo");
+  const initialTodos = [todoVisible, todoHidden];
 
-    let isFocused = false;
+  let isFocused = false;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={initialTodos}
-      >
-        <AppContentMock todos={[...initialTodos]} />
-        <FocusObserver onFocused={() => isFocused = true} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper initialTodos={initialTodos}>
+      <AppContentMock todos={[...initialTodos]} />
+      <FocusObserver onFocused={() => (isFocused = true)} />
+    </TestWrapper>,
+  );
 
-    // Initial check: only visible todo should be shown
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("visible todo"), true);
-      assertEquals(frame?.includes("hidden todo"), false);
-      assertEquals(isFocused, true);
-    });
+  // Initial check: only visible todo should be shown
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("visible todo")).toEqual(true);
+    expect(frame?.includes("hidden todo")).toEqual(false);
+    expect(isFocused).toEqual(true);
+  });
 
-    // Press 'H' to toggle showHidden
-    stdin.write("H");
+  // Press 'H' to toggle showHidden
+  stdin.write("H");
 
-    // Check: both todos should be shown
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("visible todo"), true);
-      assertEquals(frame?.includes("hidden todo"), true);
-    });
+  // Check: both todos should be shown
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("visible todo")).toEqual(true);
+    expect(frame?.includes("hidden todo")).toEqual(true);
+  });
 
-    // Press 'H' again to toggle back
-    stdin.write("H");
+  // Press 'H' again to toggle back
+  stdin.write("H");
 
-    // Check: only visible todo should be shown again
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("visible todo"), true);
-      assertEquals(frame?.includes("hidden todo"), false);
-    });
+  // Check: only visible todo should be shown again
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("visible todo")).toEqual(true);
+    expect(frame?.includes("hidden todo")).toEqual(false);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: 'h' should toggle selected todo hidden state",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo1 = new Todo("Todo 1");
-    const initialTodos = [todo1];
+test("TodoList: 'h' should toggle selected todo hidden state", async () => {
+  const todo1 = new Todo("Todo 1");
+  const initialTodos = [todo1];
 
-    let capturedTodos: Todo[] = [...initialTodos];
-    let isFocused = false;
+  let capturedTodos: Todo[] = [...initialTodos];
+  let isFocused = false;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={initialTodos}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[...initialTodos]} />
-        <FocusObserver onFocused={() => isFocused = true} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      initialTodos={initialTodos}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[...initialTodos]} />
+      <FocusObserver onFocused={() => (isFocused = true)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      assertEquals(isFocused, true);
-      assertEquals(lastFrame()?.includes("Todo 1"), true);
-    });
+  await waitFor(() => {
+    expect(isFocused).toEqual(true);
+    expect(lastFrame()?.includes("Todo 1")).toEqual(true);
+  });
 
-    // Initially not hidden
-    assertEquals(capturedTodos[0].isHidden(), false);
+  // Initially not hidden
+  expect(capturedTodos[0].isHidden()).toEqual(false);
 
-    // Press 'h' to hide the selected todo
-    stdin.write("h");
+  // Press 'h' to hide the selected todo
+  stdin.write("h");
 
-    // It should now be hidden in the business logic
-    await waitFor(() => {
-      assertEquals(capturedTodos[0].isHidden(), true);
-    });
+  // It should now be hidden in the business logic
+  await waitFor(() => {
+    expect(capturedTodos[0].isHidden()).toEqual(true);
+  });
 
-    // And it should disappear from the list (since showHidden is false)
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Todo 1"), false);
-    });
+  // And it should disappear from the list (since showHidden is false)
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Todo 1")).toEqual(false);
+  });
 
-    // Toggle 'H' to see it again
-    stdin.write("H");
-    await waitFor(() => {
-      assertEquals(lastFrame()?.includes("Todo 1"), true);
-    });
+  // Toggle 'H' to see it again
+  stdin.write("H");
+  await waitFor(() => {
+    expect(lastFrame()?.includes("Todo 1")).toEqual(true);
+  });
 
-    // Press 'h' again to unhide
-    stdin.write("h");
-    await waitFor(() => {
-      assertEquals(capturedTodos[0].isHidden(), false);
-    });
+  // Press 'h' again to unhide
+  stdin.write("h");
+  await waitFor(() => {
+    expect(capturedTodos[0].isHidden()).toEqual(false);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: should paste todos when 'v' is pressed",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    setupClipboardMock("Pasted Todo 1\n  \n\nPasted Todo 2");
+test("TodoList: should paste todos when 'v' is pressed", async () => {
+  setupClipboardMock("Pasted Todo 1\n  \n\nPasted Todo 2");
 
-    const initialTodos = [new Todo("Existing Todo")];
+  const initialTodos = [new Todo("Existing Todo")];
 
-    // We need to capture the todos to see if they were updated
-    let capturedTodos: Todo[] = [...initialTodos];
-    let isFocused = false;
+  // We need to capture the todos to see if they were updated
+  let capturedTodos: Todo[] = [...initialTodos];
+  let isFocused = false;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={initialTodos}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[...initialTodos]} />
-        <FocusObserver onFocused={() => isFocused = true} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      initialTodos={initialTodos}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[...initialTodos]} />
+      <FocusObserver onFocused={() => (isFocused = true)} />
+    </TestWrapper>,
+  );
 
-    // Initial check
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Existing Todo"), true);
-      assertEquals(isFocused, true);
-    });
+  // Initial check
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Existing Todo")).toEqual(true);
+    expect(isFocused).toEqual(true);
+  });
 
-    // Press 'v'
-    stdin.write("v");
+  // Press 'v'
+  stdin.write("v");
 
-    // Wait for todos to be updated
-    await waitFor(() => {
-      assertEquals(capturedTodos.length, 3);
-      assertEquals(capturedTodos[1].text, "Pasted Todo 1");
-      assertEquals(capturedTodos[2].text, "Pasted Todo 2");
-    });
+  // Wait for todos to be updated
+  await waitFor(() => {
+    expect(capturedTodos.length).toEqual(3);
+    expect(capturedTodos[1].text).toEqual("Pasted Todo 1");
+    expect(capturedTodos[2].text).toEqual("Pasted Todo 2");
+  });
 
-    unmount();
-    teardownClipboardMock();
-  },
+  unmount();
+  teardownClipboardMock();
 });
 
-Deno.test({
-  name: "TodoList: should select the last pasted todo",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    setupClipboardMock("Pasted Todo 1\nPasted Todo 2");
+test("TodoList: should select the last pasted todo", async () => {
+  setupClipboardMock("Pasted Todo 1\nPasted Todo 2");
 
-    const initialTodos = [new Todo("Existing Todo")];
+  const initialTodos = [new Todo("Existing Todo")];
 
-    let capturedTodos: Todo[] = [...initialTodos];
-    let isFocused = false;
-    let currentSelectionId: symbol | undefined = undefined;
+  let capturedTodos: Todo[] = [...initialTodos];
+  let isFocused = false;
+  let currentSelectionId: symbol | undefined = undefined;
 
-    const { unmount, stdin } = render(
-      <TestWrapper
-        initialTodos={initialTodos}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <SelectionObserver
-          onSelectionIdChange={(id) => (currentSelectionId = id)}
-        />
-        <AppContentMock todos={[...initialTodos]} />
-        <FocusObserver onFocused={() => isFocused = true} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin } = render(
+    <TestWrapper
+      initialTodos={initialTodos}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <SelectionObserver
+        onSelectionIdChange={(id) => (currentSelectionId = id)}
+      />
+      <AppContentMock todos={[...initialTodos]} />
+      <FocusObserver onFocused={() => (isFocused = true)} />
+    </TestWrapper>,
+  );
 
-    // Initial check - "Existing Todo" should be selected
-    await waitFor(() => {
-      assertEquals(isFocused, true);
-      assertEquals(currentSelectionId, initialTodos[0].id);
-    });
+  // Initial check - "Existing Todo" should be selected
+  await waitFor(() => {
+    expect(isFocused).toEqual(true);
+    expect(currentSelectionId).toEqual(initialTodos[0].id);
+  });
 
-    // Press 'v'
-    stdin.write("v");
+  // Press 'v'
+  stdin.write("v");
 
-    // Wait for todos to be updated and last one to be selected
-    await waitFor(() => {
-      assertEquals(capturedTodos.length, 3);
-      assertEquals(capturedTodos[2].text, "Pasted Todo 2");
-    });
+  // Wait for todos to be updated and last one to be selected
+  await waitFor(() => {
+    expect(capturedTodos.length).toEqual(3);
+    expect(capturedTodos[2].text).toEqual("Pasted Todo 2");
+  });
 
-    await waitFor(() => {
-      assertEquals(String(currentSelectionId), String(capturedTodos[2].id));
-    });
+  await waitFor(() => {
+    expect(String(currentSelectionId)).toEqual(String(capturedTodos[2].id));
+  });
 
-    unmount();
-    teardownClipboardMock();
-  },
+  unmount();
+  teardownClipboardMock();
 });
 
-Deno.test({
-  name: "TodoList: should show confirmation when pasting more than 10 todos",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const manyTodos = Array.from({ length: 11 }, (_, i) => `Todo ${i + 1}`)
-      .join("\n");
-    setupClipboardMock(manyTodos);
+test("TodoList: should show confirmation when pasting more than 10 todos", async () => {
+  const manyTodos = Array.from({ length: 11 }, (_, i) => `Todo ${i + 1}`).join(
+    "\n",
+  );
+  setupClipboardMock(manyTodos);
 
-    const initialTodos: Todo[] = [];
-    let capturedTodos: Todo[] = [...initialTodos];
-    let focusCount = 0;
+  const initialTodos: Todo[] = [];
+  let capturedTodos: Todo[] = [...initialTodos];
+  let focusCount = 0;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={initialTodos}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[...initialTodos]} />
-        <FocusObserver onFocused={() => focusCount++} />
-      </TestWrapper>,
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      initialTodos={initialTodos}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[...initialTodos]} />
+      <FocusObserver onFocused={() => focusCount++} />
+    </TestWrapper>,
+  );
+
+  // Wait for initial focus
+  await waitFor(() => {
+    expect(focusCount >= 1).toEqual(true);
+  });
+
+  // Press 'v'
+  stdin.write("v");
+
+  // Should show confirmation modal
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Paste Multiple Todos")).toEqual(true);
+    expect(frame?.includes("Are you sure you want to paste 11 todos?")).toEqual(
+      true,
     );
+  });
 
-    // Wait for initial focus
-    await waitFor(() => {
-      assertEquals(focusCount >= 1, true);
-    });
+  // Wait for modal to gain focus (focusCount should increment)
+  await waitFor(() => {
+    expect(focusCount >= 2).toEqual(true);
+  });
 
-    // Press 'v'
-    stdin.write("v");
+  // Press Enter to confirm
 
-    // Should show confirmation modal
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Paste Multiple Todos"), true);
-      assertEquals(
-        frame?.includes("Are you sure you want to paste 11 todos?"),
-        true,
-      );
-    });
+  stdin.write("\r");
 
-    // Wait for modal to gain focus (focusCount should increment)
-    await waitFor(() => {
-      assertEquals(focusCount >= 2, true);
-    });
+  // Modal should disappear
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Paste Multiple Todos")).toEqual(false);
+  });
 
-    // Press Enter to confirm
+  // Wait for todos to be updated
+  await waitFor(() => {
+    expect(capturedTodos.length).toEqual(11);
+  });
 
-    stdin.write("\r");
-
-    // Modal should disappear
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Paste Multiple Todos"), false);
-    });
-
-    // Wait for todos to be updated
-    await waitFor(() => {
-      assertEquals(capturedTodos.length, 11);
-    });
-
-    unmount();
-    teardownClipboardMock();
-  },
+  unmount();
+  teardownClipboardMock();
 });
 
-Deno.test({
-  name: "TodoList: should handle 'n' key",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const initialTodos: Todo[] = [];
-    let isFocused = false;
+test("TodoList: should handle 'n' key", async () => {
+  const initialTodos: Todo[] = [];
+  let isFocused = false;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper initialTodos={initialTodos}>
-        <AppContentMock todos={[...initialTodos]} />
-        <FocusObserver onFocused={() => isFocused = true} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper initialTodos={initialTodos}>
+      <AppContentMock todos={[...initialTodos]} />
+      <FocusObserver onFocused={() => (isFocused = true)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Douglas Adams"), true);
-      assertEquals(isFocused, true);
-    });
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Douglas Adams")).toEqual(true);
+    expect(isFocused).toEqual(true);
+  });
 
-    // Press 'x'
-    stdin.write("n");
+  // Press 'x'
+  stdin.write("n");
 
-    // Should show Todo Menu
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Create Todo Modal"), true);
-    });
+  // Should show Todo Menu
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Create Todo Modal")).toEqual(true);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: should handle 'd' key with multi-selection",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo1 = new Todo("Todo 1");
-    const todo2 = new Todo("Todo 2");
-    let capturedTodos: Todo[] = [];
-    let focused = false;
-    let focusCount = 0;
-    let selectedCount = 0;
-    let nav: NavigationContextType = null!;
+test("TodoList: should handle 'd' key with multi-selection", async () => {
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
+  let capturedTodos: Todo[] = [];
+  let focused = false;
+  let focusCount = 0;
+  let selectedCount = 0;
+  let nav: NavigationContextType = null!;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={[todo1, todo2]}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[todo1, todo2]} />
-        <FocusObserver
-          onFocused={() => {
-            focused = true;
-            focusCount++;
-          }}
-        />
-        <SelectionStateObserver
-          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
-        />
-        <NavController onNav={(n) => nav = n} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      initialTodos={[todo1, todo2]}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[todo1, todo2]} />
+      <FocusObserver
+        onFocused={() => {
+          focused = true;
+          focusCount++;
+        }}
+      />
+      <SelectionStateObserver
+        onSelectionChange={(s) => (selectedCount = s.rangeIds.size)}
+      />
+      <NavController onNav={(n) => (nav = n)} />
+    </TestWrapper>,
+  );
 
-    // Wait for focus and initial render
-    await waitFor(() => {
-      assertEquals(focused, true);
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Todo 1"), true);
-    });
+  // Wait for focus and initial render
+  await waitFor(() => {
+    expect(focused).toEqual(true);
+    const frame = lastFrame();
+    expect(frame?.includes("Todo 1")).toEqual(true);
+  });
 
-    // Select both (Shift + Down)
-    nav.navigateDown(true);
-    await waitFor(() => assertEquals(selectedCount, 2));
+  // Select both (Shift + Down)
+  nav.navigateDown(true);
+  await waitFor(() => expect(selectedCount).toEqual(2));
 
-    // Press 'd'
-    stdin.write("d");
+  // Press 'd'
+  stdin.write("d");
 
-    // Should show Set Due Date modal
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Set Due Date"), true);
-    });
+  // Should show Set Due Date modal
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Set Due Date")).toEqual(true);
+  });
 
-    // Wait for modal to gain focus
-    await waitFor(() => {
-      assertEquals(focusCount >= 2, true);
-    });
+  // Wait for modal to gain focus
+  await waitFor(() => {
+    expect(focusCount >= 2).toEqual(true);
+  });
 
-    // Press Enter to set "Today" for both
+  // Press Enter to set "Today" for both
 
-    stdin.write("\r");
+  stdin.write("\r");
 
-    // Modal should disappear
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Set Due Date"), false);
-    });
+  // Modal should disappear
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Set Due Date")).toEqual(false);
+  });
 
-    // BOTH should have due date
-    await waitFor(() => {
-      assertEquals(capturedTodos.length >= 2, true);
-      assertEquals(capturedTodos[0].tags.due !== undefined, true);
-      assertEquals(capturedTodos[1].tags.due !== undefined, true);
-    });
+  // BOTH should have due date
+  await waitFor(() => {
+    expect(capturedTodos.length >= 2).toEqual(true);
+    expect(capturedTodos[0].tags.due !== undefined).toEqual(true);
+    expect(capturedTodos[1].tags.due !== undefined).toEqual(true);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: should handle 't' key with multi-selection",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo1 = new Todo("Todo 1");
-    const todo2 = new Todo("Todo 2");
-    let capturedTodos: Todo[] = [];
-    let focused = false;
-    let focusCount = 0;
-    let selectedCount = 0;
-    let nav: NavigationContextType = null!;
+test("TodoList: should handle 't' key with multi-selection", async () => {
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
+  let capturedTodos: Todo[] = [];
+  let focused = false;
+  let focusCount = 0;
+  let selectedCount = 0;
+  let nav: NavigationContextType = null!;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={[todo1, todo2]}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[todo1, todo2]} />
-        <FocusObserver onFocused={() => focused = true} />
-        <SelectionStateObserver
-          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
-        />
-        <NavController onNav={(n) => nav = n} />
-        <FocusObserver
-          onFocused={() => {
-            focused = true;
-            focusCount++;
-          }}
-        />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      initialTodos={[todo1, todo2]}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[todo1, todo2]} />
+      <FocusObserver onFocused={() => (focused = true)} />
+      <SelectionStateObserver
+        onSelectionChange={(s) => (selectedCount = s.rangeIds.size)}
+      />
+      <NavController onNav={(n) => (nav = n)} />
+      <FocusObserver
+        onFocused={() => {
+          focused = true;
+          focusCount++;
+        }}
+      />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => expect(focused).toEqual(true));
 
-    // Select both
-    nav.navigateDown(true);
-    await waitFor(() => assertEquals(selectedCount, 2));
+  // Select both
+  nav.navigateDown(true);
+  await waitFor(() => expect(selectedCount).toEqual(2));
 
-    // Press 't'
-    stdin.write("t");
+  // Press 't'
+  stdin.write("t");
 
-    // Should show Set Threshold Date modal
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Set Threshold Date"), true);
-    });
+  // Should show Set Threshold Date modal
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Set Threshold Date")).toEqual(true);
+  });
 
-    // Wait for modal to gain focus
-    await waitFor(() => {
-      assertEquals(focusCount >= 2, true);
-    });
+  // Wait for modal to gain focus
+  await waitFor(() => {
+    expect(focusCount >= 2).toEqual(true);
+  });
 
-    // Press Enter to set "Today" for both
+  // Press Enter to set "Today" for both
 
-    stdin.write("\r");
+  stdin.write("\r");
 
-    // BOTH should have threshold date
-    await waitFor(() => {
-      assertEquals(capturedTodos.length >= 2, true);
-      assertEquals(capturedTodos[0].tags.t !== undefined, true);
-      assertEquals(capturedTodos[1].tags.t !== undefined, true);
-    });
+  // BOTH should have threshold date
+  await waitFor(() => {
+    expect(capturedTodos.length >= 2).toEqual(true);
+    expect(capturedTodos[0].tags.t !== undefined).toEqual(true);
+    expect(capturedTodos[1].tags.t !== undefined).toEqual(true);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: should handle 'r' key with multi-selection",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo1 = new Todo("Todo 1");
-    const todo2 = new Todo("Todo 2");
-    let capturedTodos: Todo[] = [];
-    let focused = false;
-    let focusCount = 0;
-    let selectedCount = 0;
-    let nav: NavigationContextType = null!;
+test("TodoList: should handle 'r' key with multi-selection", async () => {
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
+  let capturedTodos: Todo[] = [];
+  let focused = false;
+  let focusCount = 0;
+  let selectedCount = 0;
+  let nav: NavigationContextType = null!;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={[todo1, todo2]}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[todo1, todo2]} />
-        <FocusObserver onFocused={() => focused = true} />
-        <SelectionStateObserver
-          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
-        />
-        <NavController onNav={(n) => nav = n} />
-        <FocusObserver
-          onFocused={() => {
-            focused = true;
-            focusCount++;
-          }}
-        />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      initialTodos={[todo1, todo2]}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[todo1, todo2]} />
+      <FocusObserver onFocused={() => (focused = true)} />
+      <SelectionStateObserver
+        onSelectionChange={(s) => (selectedCount = s.rangeIds.size)}
+      />
+      <NavController onNav={(n) => (nav = n)} />
+      <FocusObserver
+        onFocused={() => {
+          focused = true;
+          focusCount++;
+        }}
+      />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => expect(focused).toEqual(true));
 
-    // Select both
-    nav.navigateDown(true);
-    await waitFor(() => assertEquals(selectedCount, 2));
+  // Select both
+  nav.navigateDown(true);
+  await waitFor(() => expect(selectedCount).toEqual(2));
 
-    // Press 'r'
-    stdin.write("r");
+  // Press 'r'
+  stdin.write("r");
 
-    // Should show Set Recurrence modal
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Set Recurrence Base"), true);
-    });
+  // Should show Set Recurrence modal
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Set Recurrence Base")).toEqual(true);
+  });
 
-    // Wait for modal to gain focus
-    await waitFor(() => {
-      assertEquals(focusCount >= 2, true);
-    });
+  // Wait for modal to gain focus
+  await waitFor(() => {
+    expect(focusCount >= 2).toEqual(true);
+  });
 
-    // Select Daily (first option, just press Enter)
-    stdin.write("\r");
+  // Select Daily (first option, just press Enter)
+  stdin.write("\r");
 
-    // Now it asks for amount
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Set Recurrence Interval"), true);
-    });
+  // Now it asks for amount
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Set Recurrence Interval")).toEqual(true);
+  });
 
-    // Confirm amount "1" (default)
+  // Confirm amount "1" (default)
 
-    stdin.write("\r");
+  stdin.write("\r");
 
-    // BOTH should have recurrence
-    await waitFor(() => {
-      assertEquals(capturedTodos.length >= 2, true);
-      assertEquals(capturedTodos[0].tags.rec, "1d");
-      assertEquals(capturedTodos[1].tags.rec, "1d");
-    });
+  // BOTH should have recurrence
+  await waitFor(() => {
+    expect(capturedTodos.length >= 2).toEqual(true);
+    expect(capturedTodos[0].tags.rec).toEqual("1d");
+    expect(capturedTodos[1].tags.rec).toEqual("1d");
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: should only update priority for selected items",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo1 = new Todo("Todo 1");
-    const todo2 = new Todo("Todo 2");
-    const todo3 = new Todo("Todo 3");
-    let capturedTodos: Todo[] = [];
-    let focused = false;
-    let selectedCount = 0;
-    let nav: NavigationContextType = null!;
+test("TodoList: should only update priority for selected items", async () => {
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
+  const todo3 = new Todo("Todo 3");
+  let capturedTodos: Todo[] = [];
+  let focused = false;
+  let selectedCount = 0;
+  let nav: NavigationContextType = null!;
 
-    const { unmount, stdin } = render(
-      <TestWrapper
-        initialTodos={[todo1, todo2, todo3]}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[todo1, todo2, todo3]} />
-        <FocusObserver onFocused={() => focused = true} />
-        <SelectionStateObserver
-          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
-        />
-        <NavController onNav={(n) => nav = n} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin } = render(
+    <TestWrapper
+      initialTodos={[todo1, todo2, todo3]}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[todo1, todo2, todo3]} />
+      <FocusObserver onFocused={() => (focused = true)} />
+      <SelectionStateObserver
+        onSelectionChange={(s) => (selectedCount = s.rangeIds.size)}
+      />
+      <NavController onNav={(n) => (nav = n)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => expect(focused).toEqual(true));
 
-    // Select 1 and 2
-    nav.navigateDown(true);
-    await waitFor(() => assertEquals(selectedCount, 2));
+  // Select 1 and 2
+  nav.navigateDown(true);
+  await waitFor(() => expect(selectedCount).toEqual(2));
 
-    // Press 'A'
-    stdin.write("A");
+  // Press 'A'
+  stdin.write("A");
 
-    // 1 and 2 should be A, 3 should be unset
-    await waitFor(() => {
-      assertEquals(capturedTodos.length >= 3, true);
-      assertEquals(capturedTodos[0].priority, "A");
-      assertEquals(capturedTodos[1].priority, "A");
-      assertEquals(capturedTodos[2].priority, undefined);
-    });
+  // 1 and 2 should be A, 3 should be unset
+  await waitFor(() => {
+    expect(capturedTodos.length >= 3).toEqual(true);
+    expect(capturedTodos[0].priority).toEqual("A");
+    expect(capturedTodos[1].priority).toEqual("A");
+    expect(capturedTodos[2].priority).toEqual(undefined);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: should toggle multiple todos via menu",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo1 = new Todo("Todo 1");
-    const todo2 = new Todo("Todo 2");
-    let capturedTodos: Todo[] = [];
-    let focusCount = 0;
-    let selectedCount = 0;
-    let nav: NavigationContextType = null!;
+test("TodoList: should toggle multiple todos via menu", async () => {
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
+  let capturedTodos: Todo[] = [];
+  let focusCount = 0;
+  let selectedCount = 0;
+  let nav: NavigationContextType = null!;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={[todo1, todo2]}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[todo1, todo2]} />
-        <FocusObserver onFocused={() => focusCount++} />
-        <SelectionStateObserver
-          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
-        />
-        <NavController onNav={(n) => nav = n} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      initialTodos={[todo1, todo2]}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[todo1, todo2]} />
+      <FocusObserver onFocused={() => focusCount++} />
+      <SelectionStateObserver
+        onSelectionChange={(s) => (selectedCount = s.rangeIds.size)}
+      />
+      <NavController onNav={(n) => (nav = n)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => assertEquals(focusCount >= 1, true));
-    nav.navigateDown(true);
-    await waitFor(() => assertEquals(selectedCount, 2));
+  await waitFor(() => expect(focusCount >= 1).toEqual(true));
+  nav.navigateDown(true);
+  await waitFor(() => expect(selectedCount).toEqual(2));
 
-    stdin.write("x");
-    await waitFor(() =>
-      assertEquals(lastFrame()?.includes("Multi-select menu"), true)
-    );
-    await waitFor(() => assertEquals(focusCount >= 2, true));
+  stdin.write("x");
+  await waitFor(() =>
+    expect(lastFrame()?.includes("Multi-select menu")).toEqual(true),
+  );
+  await waitFor(() => expect(focusCount >= 2).toEqual(true));
 
-    stdin.write(" ");
-    await waitFor(() => {
-      assertEquals(capturedTodos.length >= 2, true);
-      assertEquals(capturedTodos[0].isDone(), true);
-      assertEquals(capturedTodos[1].isDone(), true);
-    });
+  stdin.write(" ");
+  await waitFor(() => {
+    expect(capturedTodos.length >= 2).toEqual(true);
+    expect(capturedTodos[0].isDone()).toEqual(true);
+    expect(capturedTodos[1].isDone()).toEqual(true);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: should delete multiple todos via menu",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo1 = new Todo("Todo 1");
-    const todo2 = new Todo("Todo 2");
-    let capturedTodos: Todo[] = [];
-    let focusCount = 0;
-    let selectedCount = 0;
-    let nav: NavigationContextType = null!;
+test("TodoList: should delete multiple todos via menu", async () => {
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
+  let capturedTodos: Todo[] = [];
+  let focusCount = 0;
+  let selectedCount = 0;
+  let nav: NavigationContextType = null!;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={[todo1, todo2]}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[todo1, todo2]} />
-        <FocusObserver onFocused={() => focusCount++} />
-        <SelectionStateObserver
-          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
-        />
-        <NavController onNav={(n) => nav = n} />
-      </TestWrapper>,
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      initialTodos={[todo1, todo2]}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[todo1, todo2]} />
+      <FocusObserver onFocused={() => focusCount++} />
+      <SelectionStateObserver
+        onSelectionChange={(s) => (selectedCount = s.rangeIds.size)}
+      />
+      <NavController onNav={(n) => (nav = n)} />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => expect(focusCount >= 1).toEqual(true));
+  nav.navigateDown(true);
+  await waitFor(() => expect(selectedCount).toEqual(2));
+
+  stdin.write("x");
+  await waitFor(() =>
+    expect(lastFrame()?.includes("Multi-select menu")).toEqual(true),
+  );
+  await waitFor(() => expect(focusCount >= 2).toEqual(true));
+
+  stdin.write("\x1b[3~"); // Delete
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Are you sure you want to delete 2 todos?")).toEqual(
+      true,
     );
+  });
+  await waitFor(() => expect(focusCount >= 3).toEqual(true));
 
-    await waitFor(() => assertEquals(focusCount >= 1, true));
-    nav.navigateDown(true);
-    await waitFor(() => assertEquals(selectedCount, 2));
+  stdin.write("\r");
+  await waitFor(() => expect(capturedTodos.length).toEqual(0));
 
-    stdin.write("x");
-    await waitFor(() =>
-      assertEquals(lastFrame()?.includes("Multi-select menu"), true)
-    );
-    await waitFor(() => assertEquals(focusCount >= 2, true));
-
-    stdin.write("\x1b[3~"); // Delete
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(
-        frame?.includes("Are you sure you want to delete 2 todos?"),
-        true,
-      );
-    });
-    await waitFor(() => assertEquals(focusCount >= 3, true));
-
-    stdin.write("\r");
-    await waitFor(() => assertEquals(capturedTodos.length, 0));
-
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: should copy multiple todos via menu",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo1 = new Todo("Todo 1");
-    const todo2 = new Todo("Todo 2");
-    let focusCount = 0;
-    let selectedCount = 0;
-    let nav: NavigationContextType = null!;
+test("TodoList: should copy multiple todos via menu", async () => {
+  const restoreClipboard = setupCaptureClipboardMock(() => {});
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
+  let focusCount = 0;
+  let selectedCount = 0;
+  let nav: NavigationContextType = null!;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper initialTodos={[todo1, todo2]}>
-        <AppContentMock todos={[todo1, todo2]} />
-        <FocusObserver onFocused={() => focusCount++} />
-        <SelectionStateObserver
-          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
-        />
-        <NavController onNav={(n) => nav = n} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper initialTodos={[todo1, todo2]}>
+      <AppContentMock todos={[todo1, todo2]} />
+      <FocusObserver onFocused={() => focusCount++} />
+      <SelectionStateObserver
+        onSelectionChange={(s) => (selectedCount = s.rangeIds.size)}
+      />
+      <NavController onNav={(n) => (nav = n)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => assertEquals(focusCount >= 1, true));
-    nav.navigateDown(true);
-    await waitFor(() => assertEquals(selectedCount, 2));
+  await waitFor(() => expect(focusCount >= 1).toEqual(true));
+  nav.navigateDown(true);
+  await waitFor(() => expect(selectedCount).toEqual(2));
 
-    stdin.write("x"); // Use 'x' to test both
-    await waitFor(() =>
-      assertEquals(lastFrame()?.includes("Multi-select menu"), true)
-    );
-    await waitFor(() => assertEquals(focusCount >= 2, true));
+  stdin.write("x"); // Use 'x' to test both
+  await waitFor(() =>
+    expect(lastFrame()?.includes("Multi-select menu")).toEqual(true),
+  );
+  await waitFor(() => expect(focusCount >= 2).toEqual(true));
 
-    stdin.write("c");
-    await waitFor(() =>
-      assertEquals(lastFrame()?.includes("Multi-select menu"), false)
-    );
+  stdin.write("c");
+  await waitFor(() =>
+    expect(lastFrame()?.includes("Multi-select menu")).toEqual(false),
+  );
 
-    unmount();
-  },
+  unmount();
+  restoreClipboard();
 });
 
-Deno.test({
-  name: "TodoList: minimal should open menu",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    let isFocused = false;
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper initialTodos={[new Todo("Test")]}>
-        <AppContentMock todos={[new Todo("Test")]} />
-        <FocusObserver onFocused={() => isFocused = true} />
-      </TestWrapper>,
-    );
+test("TodoList: minimal should open menu", async () => {
+  let isFocused = false;
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper initialTodos={[new Todo("Test")]}>
+      <AppContentMock todos={[new Todo("Test")]} />
+      <FocusObserver onFocused={() => (isFocused = true)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => assertEquals(isFocused, true));
+  await waitFor(() => expect(isFocused).toEqual(true));
 
-    stdin.write("x");
-    await waitFor(() => {
-      assertEquals(lastFrame()?.includes("Todo menu"), true);
-    });
+  stdin.write("x");
+  await waitFor(() => {
+    expect(lastFrame()?.includes("Todo menu")).toEqual(true);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: 'c' should copy multiple selected todos",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    let capturedText = "";
-    const restore = setupCaptureClipboardMock((text) => capturedText = text);
+test("TodoList: 'c' should copy multiple selected todos", async () => {
+  let capturedText = "";
+  const restore = setupCaptureClipboardMock((text) => (capturedText = text));
 
-    const todo1 = new Todo("Todo 1");
-    const todo2 = new Todo("Todo 2");
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
 
-    // We expect multiselect behavior.
+  // We expect multiselect behavior.
 
-    let focused = false;
-    let selectedCount = 0;
+  let focused = false;
+  let selectedCount = 0;
 
-    let nav: NavigationContextType = null!;
+  let nav: NavigationContextType = null!;
 
-    const { unmount, stdin } = render(
-      <TestWrapper
-        initialTodos={[todo1, todo2]}
-      >
-        <AppContentMock todos={[todo1, todo2]} />
-        <FocusObserver onFocused={() => focused = true} />
-        <SelectionStateObserver
-          onSelectionChange={(s) => selectedCount = s.rangeIds.size}
-        />
-        <NavController onNav={(n) => nav = n} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin } = render(
+    <TestWrapper initialTodos={[todo1, todo2]}>
+      <AppContentMock todos={[todo1, todo2]} />
+      <FocusObserver onFocused={() => (focused = true)} />
+      <SelectionStateObserver
+        onSelectionChange={(s) => (selectedCount = s.rangeIds.size)}
+      />
+      <NavController onNav={(n) => (nav = n)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => expect(focused).toEqual(true));
 
-    // Select both (Shift + Down)
-    nav.navigateDown(true);
-    await waitFor(() => assertEquals(selectedCount, 2));
+  // Select both (Shift + Down)
+  nav.navigateDown(true);
+  await waitFor(() => expect(selectedCount).toEqual(2));
 
-    // Press 'c'
-    stdin.write("c");
+  // Press 'c'
+  stdin.write("c");
 
-    // Check clipboard content
-    await waitFor(() => {
-      // We expect "Todo 1\nTodo 2" or "Todo 2\nTodo 1" depending on order logic.
-      // Assuming implementation preserves list order.
-      assertMatch(capturedText, /Todo 1/);
-      assertMatch(capturedText, /Todo 2/);
-      assertEquals(capturedText.split(/\r?\n/).length, 2);
-    });
+  // Check clipboard content
+  await waitFor(() => {
+    // We expect "Todo 1\nTodo 2" or "Todo 2\nTodo 1" depending on order logic.
+    // Assuming implementation preserves list order.
+    expect(capturedText).toMatch(/Todo 1/);
+    expect(capturedText).toMatch(/Todo 2/);
+    expect(capturedText.split(/\r?\n/).length).toEqual(2);
+  });
 
-    unmount();
-    restore();
-  },
+  unmount();
+  restore();
 });
 
-Deno.test({
-  name: "TodoList: 'c' should copy single todo",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    let capturedText = "";
-    const restore = setupCaptureClipboardMock((text) => capturedText = text);
+test("TodoList: 'c' should copy single todo", async () => {
+  let capturedText = "";
+  const restore = setupCaptureClipboardMock((text) => (capturedText = text));
 
-    const todo1 = new Todo("Todo 1");
+  const todo1 = new Todo("Todo 1");
 
-    let focused = false;
+  let focused = false;
 
-    const { unmount, stdin } = render(
-      <TestWrapper
-        initialTodos={[todo1]}
-      >
-        <AppContentMock />
-        <FocusObserver onFocused={() => focused = true} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin } = render(
+    <TestWrapper initialTodos={[todo1]}>
+      <AppContentMock />
+      <FocusObserver onFocused={() => (focused = true)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => assertEquals(focused, true));
+  await waitFor(() => expect(focused).toEqual(true));
 
-    // Press 'c'
-    stdin.write("c");
+  // Press 'c'
+  stdin.write("c");
 
-    // Check clipboard content
-    await waitFor(() => {
-      assertEquals(capturedText.trim(), "Todo 1");
-    });
+  // Check clipboard content
+  await waitFor(() => {
+    expect(capturedText.trim()).toEqual("Todo 1");
+  });
 
-    unmount();
-    restore();
-  },
+  unmount();
+  restore();
 });
 
-Deno.test({
-  name: "TodoList: 'c' should show failure toast when clipboard copy fails",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const restore = setupFailingClipboardMock("clipboard unavailable");
+test("TodoList: 'c' should show failure toast when clipboard copy fails", async () => {
+  const restore = setupFailingClipboardMock("clipboard unavailable");
 
-    const todo1 = new Todo("Todo 1");
-    let focused = false;
+  const todo1 = new Todo("Todo 1");
+  let focused = false;
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper initialTodos={[todo1]}>
-        <AppContentMock />
-        <FocusObserver onFocused={() => focused = true} />
-      </TestWrapper>,
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper initialTodos={[todo1]}>
+      <AppContentMock />
+      <FocusObserver onFocused={() => (focused = true)} />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => expect(focused).toEqual(true));
+
+  stdin.write("c");
+
+  await waitFor(() => {
+    expect(lastFrame()?.includes("Copy failed: clipboard unavailable")).toEqual(
+      true,
     );
+  });
+  expect(lastFrame()?.includes("Todo copied")).toEqual(false);
 
-    await waitFor(() => assertEquals(focused, true));
-
-    stdin.write("c");
-
-    await waitFor(() => {
-      assertEquals(
-        lastFrame()?.includes("Copy failed: clipboard unavailable"),
-        true,
-      );
-    });
-    assertEquals(lastFrame()?.includes("Todo copied"), false);
-
-    unmount();
-    restore();
-  },
+  unmount();
+  restore();
 });
 
-Deno.test({
-  name: "TodoList: should show WelcomeScreen when no todos and no search",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const { unmount, lastFrame } = render(
-      <TestWrapper initialTodos={[]}>
-        <AppContentMock />
-      </TestWrapper>,
-    );
+test("TodoList: should show WelcomeScreen when no todos and no search", async () => {
+  const { unmount, lastFrame } = render(
+    <TestWrapper initialTodos={[]}>
+      <AppContentMock />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("Douglas Adams"), true);
-      assertEquals(frame?.includes("Press 'n' to create a new todo"), true);
-    });
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("Douglas Adams")).toEqual(true);
+    expect(frame?.includes("Press 'n' to create a new todo")).toEqual(true);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name:
-    "TodoList: should show SearchEmptyState when search has no results (with todos)",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todos = [new Todo("Task A")];
-    const { unmount, lastFrame } = render(
-      <TestWrapper initialTodos={todos}>
-        <SearchQuerySetter query="xyz123" />
-        <AppContentMock />
-      </TestWrapper>,
-    );
+test("TodoList: should show SearchEmptyState when search has no results (with todos)", async () => {
+  const todos = [new Todo("Task A")];
+  const { unmount, lastFrame } = render(
+    <TestWrapper initialTodos={todos}>
+      <SearchQuerySetter query="xyz123" />
+      <AppContentMock />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("No results found for"), true);
-      assertEquals(frame?.includes("xyz123"), true);
-      assertEquals(frame?.includes("Douglas Adams"), false);
-    });
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("No results found for")).toEqual(true);
+    expect(frame?.includes("xyz123")).toEqual(true);
+    expect(frame?.includes("Douglas Adams")).toEqual(false);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name:
-    "TodoList: should show SearchEmptyState when search has no results (empty list)",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const { unmount, lastFrame } = render(
-      <TestWrapper initialTodos={[]}>
-        <SearchQuerySetter query="abc" />
-        <AppContentMock />
-      </TestWrapper>,
-    );
+test("TodoList: should show SearchEmptyState when search has no results (empty list)", async () => {
+  const { unmount, lastFrame } = render(
+    <TestWrapper initialTodos={[]}>
+      <SearchQuerySetter query="abc" />
+      <AppContentMock />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      const frame = lastFrame();
-      assertEquals(frame?.includes("No results found for"), true);
-      assertEquals(frame?.includes("abc"), true);
-      assertEquals(frame?.includes("Douglas Adams"), false);
-    });
+  await waitFor(() => {
+    const frame = lastFrame();
+    expect(frame?.includes("No results found for")).toEqual(true);
+    expect(frame?.includes("abc")).toEqual(true);
+    expect(frame?.includes("Douglas Adams")).toEqual(false);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: should scroll selected todo into view after search cancel",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todos = Array.from(
-      { length: 100 },
-      (_, i) => new Todo(`Task ${String(i + 1).padStart(3, "0")}`),
-    );
-    let nav: NavigationContextType = null!;
+test("TodoList: should scroll selected todo into view after search cancel", async () => {
+  const todos = Array.from(
+    { length: 100 },
+    (_, i) => new Todo(`Task ${String(i + 1).padStart(3, "0")}`),
+  );
+  let nav: NavigationContextType = null!;
 
-    const { unmount, lastFrame, rerender } = render(
-      <TestWrapper initialTodos={todos}>
-        <SearchQuerySetter query="Task 099" />
-        <AppContentMock />
-        <NavController onNav={(n) => nav = n} />
-      </TestWrapper>,
-    );
+  const { unmount, lastFrame, rerender } = render(
+    <TestWrapper initialTodos={todos}>
+      <SearchQuerySetter query="Task 099" />
+      <AppContentMock />
+      <NavController onNav={(n) => (nav = n)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      const selectedTodo = todos.find((t) => t.id === nav.selectedTodoId);
-      assertEquals(selectedTodo?.text, "Task 099");
-      assertEquals(lastFrame()?.includes("Task 099"), true);
-    });
+  await waitFor(() => {
+    const selectedTodo = todos.find((t) => t.id === nav.selectedTodoId);
+    expect(selectedTodo?.text).toEqual("Task 099");
+    expect(lastFrame()?.includes("Task 099")).toEqual(true);
+  });
 
-    rerender(
-      <TestWrapper initialTodos={todos}>
-        <SearchQuerySetter query="" />
-        <AppContentMock />
-        <NavController onNav={(n) => nav = n} />
-      </TestWrapper>,
-    );
+  rerender(
+    <TestWrapper initialTodos={todos}>
+      <SearchQuerySetter query="" />
+      <AppContentMock />
+      <NavController onNav={(n) => (nav = n)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      assertEquals(lastFrame()?.includes("Task 099"), true);
-    }, { timeout: 2000 });
+  await waitFor(
+    () => {
+      expect(lastFrame()?.includes("Task 099")).toEqual(true);
+    },
+    { timeout: 2000 },
+  );
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: double click on checkbox toggles todo",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo = new Todo("Toggle by bracket");
-    let capturedTodos: Todo[] = [todo];
+test("TodoList: double click on checkbox toggles todo", async () => {
+  const todo = new Todo("Toggle by bracket");
+  let capturedTodos: Todo[] = [todo];
 
-    const { unmount, stdin } = render(
-      <TestWrapper
-        initialTodos={[todo]}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[todo]} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin } = render(
+    <TestWrapper
+      initialTodos={[todo]}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[todo]} />
+    </TestWrapper>,
+  );
 
-    // One uncategorized todo renders under the "None" header.
-    // maxDigits=1 => checkbox columns are x=4..6, todo row y=2.
-    stdin.write("\x1b[<0;4;2M");
-    stdin.write("\x1b[<0;4;2M");
+  // One uncategorized todo renders under the "None" header.
+  // maxDigits=1 => checkbox columns are x=4..6, todo row y=2.
+  stdin.write("\x1b[<0;4;2M");
+  stdin.write("\x1b[<0;4;2M");
 
-    await waitFor(() => {
-      assertEquals(capturedTodos[0].isDone(), true);
-    });
+  await waitFor(() => {
+    expect(capturedTodos[0].isDone()).toEqual(true);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name: "TodoList: double click on text opens edit modal",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo = new Todo("Edit by text");
-    let capturedTodos: Todo[] = [todo];
+test("TodoList: double click on text opens edit modal", async () => {
+  const todo = new Todo("Edit by text");
+  let capturedTodos: Todo[] = [todo];
 
-    const { unmount, stdin, lastFrame } = render(
-      <TestWrapper
-        initialTodos={[todo]}
-        onTodosChange={(todos) => capturedTodos = todos}
-      >
-        <AppContentMock todos={[todo]} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin, lastFrame } = render(
+    <TestWrapper
+      initialTodos={[todo]}
+      onTodosChange={(todos) => (capturedTodos = todos)}
+    >
+      <AppContentMock todos={[todo]} />
+    </TestWrapper>,
+  );
 
-    // Click outside checkbox zone on the todo row below the "None" header.
-    stdin.write("\x1b[<0;10;2M");
-    stdin.write("\x1b[<0;10;2M");
+  // Click outside checkbox zone on the todo row below the "None" header.
+  stdin.write("\x1b[<0;10;2M");
+  stdin.write("\x1b[<0;10;2M");
 
-    await waitFor(() => {
-      assertEquals(lastFrame()?.includes("Edit Todo Modal"), true);
-      assertEquals(capturedTodos[0].isDone(), false);
-    });
+  await waitFor(() => {
+    expect(lastFrame()?.includes("Edit Todo Modal")).toEqual(true);
+    expect(capturedTodos[0].isDone()).toEqual(false);
+  });
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test({
-  name:
-    "TodoList: should scroll multi-selection range into view after search cancel",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todos = Array.from(
-      { length: 100 },
-      (_, i) => new Todo(`Task ${String(i + 1).padStart(3, "0")}`),
-    );
-    let nav: NavigationContextType = null!;
+test("TodoList: should scroll multi-selection range into view after search cancel", async () => {
+  const todos = Array.from(
+    { length: 100 },
+    (_, i) => new Todo(`Task ${String(i + 1).padStart(3, "0")}`),
+  );
+  let nav: NavigationContextType = null!;
 
-    let focusedTag: string | undefined;
-    const { unmount, lastFrame, stdin } = render(
-      <TestWrapper initialTodos={todos}>
-        <AppContentMock todos={[...todos]} />
-        <NavController onNav={(n) => nav = n} />
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
-      </TestWrapper>,
-    );
+  let focusedTag: string | undefined;
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper initialTodos={todos}>
+      <AppContentMock todos={[...todos]} />
+      <NavController onNav={(n) => (nav = n)} />
+      <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
+    </TestWrapper>,
+  );
 
-    // Wait for initial focus
-    await waitFor(() => {
-      assertEquals(focusedTag, "todo-list");
-    });
+  // Wait for initial focus
+  await waitFor(() => {
+    expect(focusedTag).toEqual("todo-list");
+  });
 
-    // 1. Focus search and type "Task 09"
-    stdin.write("/");
+  // 1. Focus search and type "Task 09"
+  stdin.write("/");
 
-    // Wait for search to be focused
-    await waitFor(() => {
-      assertEquals(focusedTag, "search-input");
-    });
+  // Wait for search to be focused
+  await waitFor(() => {
+    expect(focusedTag).toEqual("search-input");
+  });
 
-    stdin.write("Task 09");
+  stdin.write("Task 09");
 
-    // Filtered list will have Task 090, 091... 099
-    // Wait for filter to apply
-    await waitFor(() => {
-      const frame = lastFrame();
+  // Filtered list will have Task 090, 091... 099
+  // Wait for filter to apply
+  await waitFor(() => {
+    const frame = lastFrame();
 
-      assertEquals(frame?.includes("Task 090"), true);
-      assertEquals(frame?.includes("Task 097"), true);
-    });
+    expect(frame?.includes("Task 090")).toEqual(true);
+    expect(frame?.includes("Task 097")).toEqual(true);
+  });
 
-    // Select range 090 to 095
-    const t090 = todos.find((t) => t.text === "Task 090")!;
-    const t095 = todos.find((t) => t.text === "Task 095")!;
+  // Select range 090 to 095
+  const t090 = todos.find((t) => t.text === "Task 090")!;
+  const t095 = todos.find((t) => t.text === "Task 095")!;
 
-    // Select 090 via nav (since we can't easily click, and arrow keys might be tricky if selection reset)
-    // Actually, let's use arrow keys to be safe OR just set it if we trust nav.
-    // Ideally we use keys. Task 090 should be near top.
-    // Let's force set it for stability of this specific test part.
-    nav.setSelectedTodoId(t090.id);
+  // Select 090 via nav (since we can't easily click, and arrow keys might be tricky if selection reset)
+  // Actually, let's use arrow keys to be safe OR just set it if we trust nav.
+  // Ideally we use keys. Task 090 should be near top.
+  // Let's force set it for stability of this specific test part.
+  nav.setSelectedTodoId(t090.id);
 
-    // Press Shift+Down 5 times to select up to 095
-    stdin.write("\u001B[1;2B");
-    stdin.write("\u001B[1;2B");
-    stdin.write("\u001B[1;2B");
-    stdin.write("\u001B[1;2B");
-    stdin.write("\u001B[1;2B");
+  // Press Shift+Down 5 times to select up to 095
+  stdin.write("\u001B[1;2B");
+  stdin.write("\u001B[1;2B");
+  stdin.write("\u001B[1;2B");
+  stdin.write("\u001B[1;2B");
+  stdin.write("\u001B[1;2B");
 
-    await waitFor(() => {
-      assertEquals(nav.selectedTodoIds.has(t090.id), true);
-      assertEquals(nav.selectedTodoIds.has(t095.id), true);
-    });
+  await waitFor(() => {
+    expect(nav.selectedTodoIds.has(t090.id)).toEqual(true);
+    expect(nav.selectedTodoIds.has(t095.id)).toEqual(true);
+  });
 
-    // 3. Clear search via Escape (should clear search and focus list)
-    stdin.write("\u001B");
+  // 3. Clear search via Escape (should clear search and focus list)
+  stdin.write("\u001B");
 
-    await waitFor(() => {
+  await waitFor(
+    () => {
       const frame = lastFrame();
 
       // At least the cursor (095) should be in view
-      assertEquals(frame?.includes("Task 095"), true);
+      expect(frame?.includes("Task 095")).toEqual(true);
       // And ideally some other parts of the range
-      assertEquals(frame?.includes("Task 090"), true);
-    }, { timeout: 10000 });
+      expect(frame?.includes("Task 090")).toEqual(true);
+    },
+    { timeout: 10000 },
+  );
 
-    unmount();
-  },
+  unmount();
 });
 
-Deno.test("TodoList: repeated tags get unique content-offset keys and colors", () => {
+test("TodoList: repeated tags get unique content-offset keys and colors", () => {
   const text = "first @home second @home +work +work";
   const parts = renderTodoText(text, false, false);
 
-  assertEquals(parts.length, 9);
+  expect(parts.length).toEqual(9);
 
   const keys = parts.map((part) => String(part.key));
-  assertEquals(new Set(keys).size, parts.length);
+  expect(new Set(keys).size).toEqual(parts.length);
   keys.forEach((key, index) => {
-    assertEquals(key === String(index), false);
+    expect(key === String(index)).toEqual(false);
   });
 
-  assertEquals(parts[1].props.color, COLORS.tagContext);
-  assertEquals(parts[3].props.color, COLORS.tagContext);
-  assertEquals(parts[5].props.color, COLORS.tagProject);
-  assertEquals(parts[7].props.color, COLORS.tagProject);
-  assertEquals(parts[0].props.color, undefined);
+  expect(parts[1].props.color).toEqual(COLORS.tagContext);
+  expect(parts[3].props.color).toEqual(COLORS.tagContext);
+  expect(parts[5].props.color).toEqual(COLORS.tagProject);
+  expect(parts[7].props.color).toEqual(COLORS.tagProject);
+  expect(parts[0].props.color).toEqual(undefined);
 
   const highlighted = renderTodoText(text, true, false);
   highlighted.forEach((part) => {
-    assertEquals(part.props.color, COLORS.textOnHighlight);
+    expect(part.props.color).toEqual(COLORS.textOnHighlight);
   });
 
   const overdue = renderTodoText("late @home +work", false, true);
-  assertEquals(overdue[0].props.color, COLORS.danger);
-  assertEquals(overdue[1].props.color, COLORS.tagContext);
-  assertEquals(overdue[2].props.color, COLORS.danger);
-  assertEquals(overdue[3].props.color, COLORS.tagProject);
+  expect(overdue[0].props.color).toEqual(COLORS.danger);
+  expect(overdue[1].props.color).toEqual(COLORS.tagContext);
+  expect(overdue[2].props.color).toEqual(COLORS.danger);
+  expect(overdue[3].props.color).toEqual(COLORS.tagProject);
 });
 
-Deno.test({
-  name: "TodoList: repeated tag text renders without duplicate-key warnings",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const text = "review @home then @home again +work and +work";
-    const todo = new Todo(text);
-    const originalError = console.error;
-    const errors: string[] = [];
-    console.error = (...args: unknown[]) => {
-      errors.push(args.map((arg) => String(arg)).join(" "));
-    };
+test("TodoList: repeated tag text renders without duplicate-key warnings", async () => {
+  const text = "review @home then @home again +work and +work";
+  const todo = new Todo(text);
+  const originalError = console.error;
+  const errors: string[] = [];
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map((arg) => String(arg)).join(" "));
+  };
 
-    const { lastFrame, unmount } = render(
-      <TestWrapper initialTodos={[todo]}>
-        <AppContentMock todos={[todo]} />
-      </TestWrapper>,
+  const { lastFrame, unmount } = render(
+    <TestWrapper initialTodos={[todo]}>
+      <AppContentMock todos={[todo]} />
+    </TestWrapper>,
+  );
+
+  try {
+    await waitFor(() => {
+      expect(lastFrame()?.includes(text)).toEqual(true);
+    });
+
+    expect(errors.some((message) => message.includes("same key"))).toEqual(
+      false,
     );
-
-    try {
-      await waitFor(() => {
-        assertEquals(lastFrame()?.includes(text), true);
-      });
-
-      assertEquals(
-        errors.some((message) => message.includes("same key")),
-        false,
-      );
-    } finally {
-      unmount();
-      console.error = originalError;
-    }
-  },
+  } finally {
+    unmount();
+    console.error = originalError;
+  }
 });

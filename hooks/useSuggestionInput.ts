@@ -47,12 +47,11 @@ export const useSuggestionInput = ({
     const wordStart = matchTagWordStart(text.slice(0, nextCursor));
 
     if (wordStart) {
-      const items = wordStart.type === "project"
-        ? source.projects
-        : source.contexts;
+      const items =
+        wordStart.type === "project" ? source.projects : source.contexts;
       const searchTerm = wordStart.searchTerm.toLowerCase();
       const matches = items.filter((item) =>
-        item.toLowerCase().startsWith(searchTerm)
+        item.toLowerCase().startsWith(searchTerm),
       );
 
       if (matches.length > 0) {
@@ -75,8 +74,8 @@ export const useSuggestionInput = ({
     if (!wordStart) return;
 
     const prefix = suggestionType === "project" ? "+" : "@";
-    const newLeft = value.slice(0, wordStart.startIndex) + prefix + suggestion +
-      " ";
+    const newLeft =
+      value.slice(0, wordStart.startIndex) + prefix + suggestion + " ";
     const newValue = newLeft + value.slice(cursor);
 
     onApply(newValue, newLeft.length);
@@ -90,14 +89,14 @@ export const useSuggestionInput = ({
       if (suggestions.length > 0) {
         if (key.upArrow) {
           setSelectedIndex((prev) =>
-            prev > 0 ? prev - 1 : suggestions.length - 1
+            prev > 0 ? prev - 1 : suggestions.length - 1,
           );
           return;
         }
 
         if (key.downArrow) {
           setSelectedIndex((prev) =>
-            prev < suggestions.length - 1 ? prev + 1 : 0
+            prev < suggestions.length - 1 ? prev + 1 : 0,
           );
           return;
         }

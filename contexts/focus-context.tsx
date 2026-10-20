@@ -34,9 +34,7 @@ export const FocusProvider = ({ children }: { children?: ReactNode }) => {
   );
 
   return (
-    <FocusContext.Provider value={value}>
-      {children}
-    </FocusContext.Provider>
+    <FocusContext.Provider value={value}>{children}</FocusContext.Provider>
   );
 };
 

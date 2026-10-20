@@ -32,15 +32,17 @@ export const SetRecurrenceModal = () => {
   const [step, setStep] = useState<"base" | "amount">("base");
   const [amount, setAmount] = useState("1");
   const hasEditedAmountRef = useRef(false);
-  const [layoutSize, setLayoutSize] = useState<
-    { rows?: number; columns?: number }
-  >({});
+  const [layoutSize, setLayoutSize] = useState<{
+    rows?: number;
+    columns?: number;
+  }>({});
   const amountRef = useRef(amount);
 
   const handleAmountChange = (value: string) => {
     let digitsOnly = value.replace(/\D+/g, "");
     if (
-      !hasEditedAmountRef.current && amountRef.current === "1" &&
+      !hasEditedAmountRef.current &&
+      amountRef.current === "1" &&
       digitsOnly.length > 1
     ) {
       digitsOnly = digitsOnly.slice(1);
@@ -76,18 +78,21 @@ export const SetRecurrenceModal = () => {
     onCancel: () => (step === "amount" ? setStep("base") : closeModal()),
   });
 
-  const { isFocused } = useFocusedInput((_input, key) => {
-    if (selection.handleKey(key)) return;
+  const { isFocused } = useFocusedInput(
+    (_input, key) => {
+      if (selection.handleKey(key)) return;
 
-    if (step === "amount" && key.return) {
-      if (selectedTodos.length > 0 && amountRef.current.trim().length > 0) {
-        const base = options[selection.selectedIndex].value;
-        const recurrenceString = `${amountRef.current}${base}`;
-        updateTodos(selectedTodos, (t) => t.setRecurrence(recurrenceString));
-        closeModal();
+      if (step === "amount" && key.return) {
+        if (selectedTodos.length > 0 && amountRef.current.trim().length > 0) {
+          const base = options[selection.selectedIndex].value;
+          const recurrenceString = `${amountRef.current}${base}`;
+          updateTodos(selectedTodos, (t) => t.setRecurrence(recurrenceString));
+          closeModal();
+        }
       }
-    }
-  }, { autoFocus: true, tag: "set-recurrence-modal" });
+    },
+    { autoFocus: true, tag: "set-recurrence-modal" },
+  );
 
   useModalMouseList({
     isActive: isFocused && step === "base",
@@ -106,35 +111,30 @@ export const SetRecurrenceModal = () => {
 
   return (
     // @ts-ignore: children prop issue
-    <Modal
-      title={getTitle()}
-      onLayoutSizeChange={setLayoutSize}
-    >
-      {step === "base"
-        ? (
-          <SelectList
-            items={options.map((option) => ({
-              key: option.value,
-              label: option.label,
-            }))}
-            selectedIndex={selection.selectedIndex}
-          />
-        )
-        : (
-          <Box flexDirection="column" paddingX={1}>
-            <Box>
-              <Text>Every</Text>
-              <ControlledTextInput
-                focus={isFocused}
-                value={amount}
-                onChange={handleAmountChange}
-                showCursor
-              />
-              <Text>{BASE_OPTIONS[selection.selectedIndex].unit}</Text>
-            </Box>
-            <Text dimColor>Enter = save, Esc = back</Text>
+    <Modal title={getTitle()} onLayoutSizeChange={setLayoutSize}>
+      {step === "base" ? (
+        <SelectList
+          items={options.map((option) => ({
+            key: option.value,
+            label: option.label,
+          }))}
+          selectedIndex={selection.selectedIndex}
+        />
+      ) : (
+        <Box flexDirection="column" paddingX={1}>
+          <Box>
+            <Text>Every</Text>
+            <ControlledTextInput
+              focus={isFocused}
+              value={amount}
+              onChange={handleAmountChange}
+              showCursor
+            />
+            <Text>{BASE_OPTIONS[selection.selectedIndex].unit}</Text>
           </Box>
-        )}
+          <Text dimColor>Enter = save, Esc = back</Text>
+        </Box>
+      )}
     </Modal>
   );
 };

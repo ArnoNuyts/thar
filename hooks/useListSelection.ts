@@ -40,13 +40,13 @@ export const useListSelection = ({
 
   const moveUp = () => {
     setSelectedIndexState((prev) =>
-      itemCount <= 0 ? 0 : prev > 0 ? prev - 1 : itemCount - 1
+      itemCount <= 0 ? 0 : prev > 0 ? prev - 1 : itemCount - 1,
     );
   };
 
   const moveDown = () => {
     setSelectedIndexState((prev) =>
-      itemCount <= 0 ? 0 : prev < itemCount - 1 ? prev + 1 : 0
+      itemCount <= 0 ? 0 : prev < itemCount - 1 ? prev + 1 : 0,
     );
   };
 

@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { Key } from "../hooks/useInput.ts";
 import {
   MENU_ITEMS,
@@ -30,111 +31,101 @@ const key = (overrides: Partial<Key> = {}): Key => ({
   ...overrides,
 });
 
-Deno.test("TodoMenu: every displayed shortcut resolves to its declared action", () => {
+test("TodoMenu: every displayed shortcut resolves to its declared action", () => {
   for (const item of MENU_ITEMS) {
-    const resolved = item.shortcut === "del"
-      ? resolveMenuShortcut("", key({ delete: true }))
-      : item.shortcut === "space"
-      ? resolveMenuShortcut(" ", key())
-      : resolveMenuShortcut(item.shortcut, key());
+    const resolved =
+      item.shortcut === "del"
+        ? resolveMenuShortcut("", key({ delete: true }))
+        : item.shortcut === "space"
+          ? resolveMenuShortcut(" ", key())
+          : resolveMenuShortcut(item.shortcut, key());
 
-    assertEquals(
+    expect(
       resolved,
-      item.action,
       `shortcut ${item.shortcut} should dispatch ${item.action}`,
-    );
+    ).toEqual(item.action);
   }
 });
 
-Deno.test("MultiSelectMenu: every displayed shortcut resolves to its action", () => {
+test("MultiSelectMenu: every displayed shortcut resolves to its action", () => {
   for (const item of MULTI_SELECT_MENU_ITEMS) {
-    const resolved = item.shortcut === "del"
-      ? resolveMenuShortcut("", key({ delete: true }), MULTI_SELECT_MENU_ITEMS)
-      : item.shortcut === "space"
-      ? resolveMenuShortcut(" ", key(), MULTI_SELECT_MENU_ITEMS)
-      : resolveMenuShortcut(item.shortcut, key(), MULTI_SELECT_MENU_ITEMS);
+    const resolved =
+      item.shortcut === "del"
+        ? resolveMenuShortcut(
+            "",
+            key({ delete: true }),
+            MULTI_SELECT_MENU_ITEMS,
+          )
+        : item.shortcut === "space"
+          ? resolveMenuShortcut(" ", key(), MULTI_SELECT_MENU_ITEMS)
+          : resolveMenuShortcut(item.shortcut, key(), MULTI_SELECT_MENU_ITEMS);
 
-    assertEquals(
+    expect(
       resolved,
-      item.action,
       `shortcut ${item.shortcut} should dispatch ${item.action}`,
-    );
+    ).toEqual(item.action);
   }
 });
 
-Deno.test("MultiSelectMenu: only selection-wide actions are listed", () => {
-  assertEquals(
-    MULTI_SELECT_MENU_ITEMS.map(({ action }) => action),
-    [
-      "delete",
-      "toggle",
-      "due",
-      "threshold",
-      "recurrence",
-      "priority",
-      "add-project",
-      "add-context",
-      "toggle-hidden",
-      "copy",
-    ],
-  );
+test("MultiSelectMenu: only selection-wide actions are listed", () => {
+  expect(MULTI_SELECT_MENU_ITEMS.map(({ action }) => action)).toEqual([
+    "delete",
+    "toggle",
+    "due",
+    "threshold",
+    "recurrence",
+    "priority",
+    "add-project",
+    "add-context",
+    "toggle-hidden",
+    "copy",
+  ]);
 });
 
-Deno.test("MultiSelectMenu: single-todo and global shortcuts do not dispatch", () => {
+test("MultiSelectMenu: single-todo and global shortcuts do not dispatch", () => {
   for (const shortcut of ["e", "a", "H", "z", "Z", "v"]) {
-    assertEquals(
+    expect(
       resolveMenuShortcut(shortcut, key(), MULTI_SELECT_MENU_ITEMS),
-      undefined,
       `${shortcut} should not be active in the multi-select menu`,
-    );
+    ).toEqual(undefined);
   }
 });
 
-Deno.test("TodoMenu: menu labels and ordering are unchanged", () => {
-  assertEquals(
+test("TodoMenu: menu labels and ordering are unchanged", () => {
+  expect(
     MENU_ITEMS.map(({ label, shortcut, action }) => ({
       label,
       shortcut,
       action,
     })),
-    [
-      { label: "Edit", shortcut: "e", action: "edit" },
-      { label: "Delete", shortcut: "del", action: "delete" },
-      { label: "Toggle Complete", shortcut: "space", action: "toggle" },
-      { label: "Set Due Date", shortcut: "d", action: "due" },
-      { label: "Set Threshold Date", shortcut: "t", action: "threshold" },
-      { label: "Set Recurrence", shortcut: "r", action: "recurrence" },
-      { label: "Set Priority", shortcut: "p", action: "priority" },
-      { label: "Modify Projects", shortcut: "+", action: "add-project" },
-      { label: "Modify Contexts", shortcut: "@", action: "add-context" },
-      { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
-      {
-        label: "Show/Hide Hidden",
-        shortcut: "H",
-        action: "toggle-view-hidden",
-      },
-      { label: "Archive Completed", shortcut: "a", action: "archive" },
-      { label: "Copy", shortcut: "c", action: "copy" },
-      { label: "Undo", shortcut: "z", action: "undo" },
-      { label: "Redo", shortcut: "Z", action: "redo" },
-      { label: "Paste", shortcut: "v", action: "paste" },
-    ],
-  );
+  ).toEqual([
+    { label: "Edit", shortcut: "e", action: "edit" },
+    { label: "Delete", shortcut: "del", action: "delete" },
+    { label: "Toggle Complete", shortcut: "space", action: "toggle" },
+    { label: "Set Due Date", shortcut: "d", action: "due" },
+    { label: "Set Threshold Date", shortcut: "t", action: "threshold" },
+    { label: "Set Recurrence", shortcut: "r", action: "recurrence" },
+    { label: "Set Priority", shortcut: "p", action: "priority" },
+    { label: "Modify Projects", shortcut: "+", action: "add-project" },
+    { label: "Modify Contexts", shortcut: "@", action: "add-context" },
+    { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
+    {
+      label: "Show/Hide Hidden",
+      shortcut: "H",
+      action: "toggle-view-hidden",
+    },
+    { label: "Archive Completed", shortcut: "a", action: "archive" },
+    { label: "Copy", shortcut: "c", action: "copy" },
+    { label: "Undo", shortcut: "z", action: "undo" },
+    { label: "Redo", shortcut: "Z", action: "redo" },
+    { label: "Paste", shortcut: "v", action: "paste" },
+  ]);
 });
 
-Deno.test("TodoMenu: named keys do not fall through to literal dispatch", () => {
-  assertEquals(
-    resolveMenuShortcut("", key({ return: true })),
-    undefined,
-  );
-  assertEquals(
-    resolveMenuShortcut("", key({ escape: true })),
-    undefined,
-  );
-  assertEquals(
-    resolveMenuShortcut("", key({ delete: true })),
-    "delete",
-  );
-  assertEquals(resolveMenuShortcut(" ", key()), "toggle");
-  assertEquals(resolveMenuShortcut("nonsense", key()), undefined);
+test("TodoMenu: named keys do not fall through to literal dispatch", () => {
+  expect(resolveMenuShortcut("", key({ return: true }))).toEqual(undefined);
+  expect(resolveMenuShortcut("", key({ escape: true }))).toEqual(undefined);
+  expect(resolveMenuShortcut("", key({ delete: true }))).toEqual("delete");
+  expect(resolveMenuShortcut(" ", key())).toEqual("toggle");
+  expect(resolveMenuShortcut("nonsense", key())).toEqual(undefined);
 });

@@ -16,21 +16,24 @@ interface UseModalMouseListOptions {
 export const useModalMouseList = (options: UseModalMouseListOptions) => {
   const windowSize = useWindowSize();
 
-  useMouseInput((event) => {
-    if (!options.isActive) return;
-    if (!event.leftClick && !event.move) return;
-    const terminalSize = getTerminalSize(windowSize, options.terminalSize);
+  useMouseInput(
+    (event) => {
+      if (!options.isActive) return;
+      if (!event.leftClick && !event.move) return;
+      const terminalSize = getTerminalSize(windowSize, options.terminalSize);
 
-    const row = getModalBodyRowFromEvent(event, terminalSize, {
-      modalWidth: options.modalWidth ?? "50%",
-      bodyRows: options.bodyRows,
-    });
-    if (row === undefined) return;
+      const row = getModalBodyRowFromEvent(event, terminalSize, {
+        modalWidth: options.modalWidth ?? "50%",
+        bodyRows: options.bodyRows,
+      });
+      if (row === undefined) return;
 
-    if (event.leftClick) {
-      options.onRowClick(row);
-    } else {
-      options.onRowHover?.(row);
-    }
-  }, { isActive: options.isActive });
+      if (event.leftClick) {
+        options.onRowClick(row);
+      } else {
+        options.onRowHover?.(row);
+      }
+    },
+    { isActive: options.isActive },
+  );
 };

@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals, assertMatch } from "@std/assert";
+
 import { Box } from "ink";
 import { ActionBar } from "../components/ActionBar.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
@@ -11,13 +12,11 @@ import { TestWrapper } from "./test-components.tsx";
 
 const ActionBarTestWrapper = ({ children }: { children: React.ReactNode }) => (
   <TestWrapper>
-    <SearchProvider>
-      {children}
-    </SearchProvider>
+    <SearchProvider>{children}</SearchProvider>
   </TestWrapper>
 );
 
-Deno.test("ActionBar: should render action items", async () => {
+test("ActionBar: should render action items", async () => {
   const { unmount, lastFrame } = render(
     <ActionBarTestWrapper>
       <ActionBar />
@@ -26,17 +25,17 @@ Deno.test("ActionBar: should render action items", async () => {
 
   await waitFor(() => {
     const frame = lastFrame() || "";
-    assertMatch(frame, /Menu/);
-    assertMatch(frame, /Quit/);
-    assertMatch(frame, /New/);
-    assertMatch(frame, /Edit/);
-    assertMatch(frame, /Search/);
+    expect(frame).toMatch(/Menu/);
+    expect(frame).toMatch(/Quit/);
+    expect(frame).toMatch(/New/);
+    expect(frame).toMatch(/Edit/);
+    expect(frame).toMatch(/Search/);
   });
 
   unmount();
 });
 
-Deno.test("ActionBar: should render toaster message", async () => {
+test("ActionBar: should render toaster message", async () => {
   const TestComponent = () => {
     const { showToaster } = useToaster();
     useEffect(() => {
@@ -53,13 +52,13 @@ Deno.test("ActionBar: should render toaster message", async () => {
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Test toast notification/);
+    expect(lastFrame() || "").toMatch(/Test toast notification/);
   });
 
   unmount();
 });
 
-Deno.test("ActionBar: mouse click on 'n New' opens create-todo modal", async () => {
+test("ActionBar: mouse click on 'n New' opens create-todo modal", async () => {
   let activeModalName: string | null = null;
 
   const Observer = () => {
@@ -83,7 +82,7 @@ Deno.test("ActionBar: mouse click on 'n New' opens create-todo modal", async () 
   // " n New  " (start: 21, end: 29) -> x=25, y=24
   stdin.write("\x1b[<0;25;24M");
 
-  await waitFor(() => assertEquals(activeModalName, "create-todo"));
+  await waitFor(() => expect(activeModalName).toEqual("create-todo"));
 
   unmount();
 });

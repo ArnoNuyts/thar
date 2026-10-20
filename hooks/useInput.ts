@@ -135,10 +135,12 @@ type Options = {
   enableMouse?: boolean;
 };
 
-type WritableTerminal = {
-  write: (chunk: string) => unknown;
-  isTTY?: boolean;
-} | undefined;
+type WritableTerminal =
+  | {
+      write: (chunk: string) => unknown;
+      isTTY?: boolean;
+    }
+  | undefined;
 
 let mouseModeRefCount = 0;
 const canToggleMouseMode = (stdout: WritableTerminal) => stdout?.isTTY === true;
@@ -432,7 +434,6 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
           }
         } else if (s.startsWith("\x1b[<")) {
           // SGR mouse mode: \x1b[<Cb;Cx;CyM
-          // deno-lint-ignore no-control-regex -- ESC (\x1b) is required for ANSI SGR mouse sequence parsing.
           const match = /^\x1b\[<(\d+);(\d+);(\d+)([mM])$/.exec(s);
           if (match) {
             const buttonCode = Number(match[1]);
@@ -447,12 +448,16 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
             key.ctrl = (buttonCode & 0b10000) !== 0;
             key.mouseWheelUp = baseCode === 64;
             key.mouseWheelDown = baseCode === 65;
-            key.mouseLeft = eventType === "M" &&
+            key.mouseLeft =
+              eventType === "M" &&
               (baseCode & 0b11) === 0 &&
               (baseCode & 0b100000) === 0 &&
               baseCode < 64;
-            key.mouseMove = eventType === "M" && !key.mouseLeft &&
-              !key.mouseWheelUp && !key.mouseWheelDown;
+            key.mouseMove =
+              eventType === "M" &&
+              !key.mouseLeft &&
+              !key.mouseWheelUp &&
+              !key.mouseWheelDown;
             // Mouse packets are control sequences, never text input.
             input = "";
           }
@@ -519,8 +524,11 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
           key.shift = true;
         }
 
-        const isMouseEvent = key.mouseWheelUp || key.mouseWheelDown ||
-          key.mouseLeft || key.mouseMove;
+        const isMouseEvent =
+          key.mouseWheelUp ||
+          key.mouseWheelDown ||
+          key.mouseLeft ||
+          key.mouseMove;
         if (isMouseEvent && !options.enableMouse) {
           continue;
         }
@@ -564,7 +572,7 @@ const splitInputSequences = (input: string): string[] => {
       }
 
       const knownEscapeSequence = ESCAPE_SEQUENCES.find((sequence) =>
-        input.startsWith(sequence, index)
+        input.startsWith(sequence, index),
       );
       if (knownEscapeSequence) {
         parts.push(knownEscapeSequence);
@@ -589,8 +597,8 @@ const splitInputSequences = (input: string): string[] => {
     }
 
     const chunk = input.slice(index, end);
-    const hasPrintableContent = Array.from(chunk).some((char) =>
-      !SIMPLE_CONTROL_INPUTS.has(char)
+    const hasPrintableContent = Array.from(chunk).some(
+      (char) => !SIMPLE_CONTROL_INPUTS.has(char),
     );
     if (hasPrintableContent) {
       parts.push(chunk);
@@ -604,6 +612,6 @@ const splitInputSequences = (input: string): string[] => {
 };
 
 const SIMPLE_CONTROL_INPUTS = new Set(["\r", "\n", "\t", "\x08", "\x7f"]);
-const ESCAPE_SEQUENCES = Object.keys(keyName).sort((a, b) =>
-  b.length - a.length
+const ESCAPE_SEQUENCES = Object.keys(keyName).sort(
+  (a, b) => b.length - a.length,
 );

@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { IndexEntry } from "../logic/indexes.ts";
 import { getSelectionRangeRows } from "../logic/navigation.ts";
 import { Todo } from "../logic/todo.ts";
@@ -21,73 +22,73 @@ const createIndexesFixture = (todos: Todo[]): IndexEntry[] => [
   ...todos.map((todo, index) => todoEntry(todo, index + 1)),
 ];
 
-Deno.test("getSelectionRangeRows: no range falls back to the cursor row", () => {
+test("getSelectionRangeRows: no range falls back to the cursor row", () => {
   const todos = Array.from({ length: 3 }, (_, i) => new Todo(`Todo ${i}`));
   const indexes = createIndexesFixture(todos);
 
-  assertEquals(getSelectionRangeRows(indexes, new Set(), 2), {
+  expect(getSelectionRangeRows(indexes, new Set(), 2)).toEqual({
     min: 2,
     max: 2,
   });
 });
 
-Deno.test("getSelectionRangeRows: range before the cursor spans from range start to cursor", () => {
+test("getSelectionRangeRows: range before the cursor spans from range start to cursor", () => {
   const todos = Array.from({ length: 5 }, (_, i) => new Todo(`Todo ${i}`));
   const indexes = createIndexesFixture(todos);
   const rangeIds = new Set([todos[0].id, todos[1].id]);
 
   // Todos are at indexes 1 and 2; cursor is at index 4.
-  assertEquals(getSelectionRangeRows(indexes, rangeIds, 4), {
+  expect(getSelectionRangeRows(indexes, rangeIds, 4)).toEqual({
     min: 1,
     max: 4,
   });
 });
 
-Deno.test("getSelectionRangeRows: range after the cursor spans from cursor to range end", () => {
+test("getSelectionRangeRows: range after the cursor spans from cursor to range end", () => {
   const todos = Array.from({ length: 5 }, (_, i) => new Todo(`Todo ${i}`));
   const indexes = createIndexesFixture(todos);
   const rangeIds = new Set([todos[3].id, todos[4].id]);
 
   // Cursor is at index 1; range ends at index 5.
-  assertEquals(getSelectionRangeRows(indexes, rangeIds, 1), {
+  expect(getSelectionRangeRows(indexes, rangeIds, 1)).toEqual({
     min: 1,
     max: 5,
   });
 });
 
-Deno.test("getSelectionRangeRows: range spanning the cursor covers both ends", () => {
+test("getSelectionRangeRows: range spanning the cursor covers both ends", () => {
   const todos = Array.from({ length: 5 }, (_, i) => new Todo(`Todo ${i}`));
   const indexes = createIndexesFixture(todos);
   const rangeIds = new Set([todos[0].id, todos[4].id]);
 
   // Range endpoints at indexes 1 and 5, cursor in the middle at index 3.
-  assertEquals(getSelectionRangeRows(indexes, rangeIds, 3), {
+  expect(getSelectionRangeRows(indexes, rangeIds, 3)).toEqual({
     min: 1,
     max: 5,
   });
 });
 
-Deno.test("getSelectionRangeRows: range with no visible rows falls back to the cursor row", () => {
+test("getSelectionRangeRows: range with no visible rows falls back to the cursor row", () => {
   const todos = Array.from({ length: 3 }, (_, i) => new Todo(`Todo ${i}`));
   const indexes = createIndexesFixture(todos);
   const hiddenTodo = new Todo("Hidden");
 
-  assertEquals(getSelectionRangeRows(indexes, new Set([hiddenTodo.id]), 2), {
+  expect(getSelectionRangeRows(indexes, new Set([hiddenTodo.id]), 2)).toEqual({
     min: 2,
     max: 2,
   });
 });
 
-Deno.test("getSelectionRangeRows: empty indexes fall back to the cursor row", () => {
+test("getSelectionRangeRows: empty indexes fall back to the cursor row", () => {
   const hiddenTodo = new Todo("Hidden");
 
-  assertEquals(getSelectionRangeRows([], new Set([hiddenTodo.id]), 7), {
+  expect(getSelectionRangeRows([], new Set([hiddenTodo.id]), 7)).toEqual({
     min: 7,
     max: 7,
   });
 });
 
-Deno.test("getSelectionRangeRows: context entries are ignored when calculating rows", () => {
+test("getSelectionRangeRows: context entries are ignored when calculating rows", () => {
   const todos = Array.from({ length: 3 }, (_, i) => new Todo(`Todo ${i}`));
   const indexes: IndexEntry[] = [
     contextEntry("A"),
@@ -98,7 +99,7 @@ Deno.test("getSelectionRangeRows: context entries are ignored when calculating r
   ];
   const rangeIds = new Set([todos[0].id, todos[2].id]);
 
-  assertEquals(getSelectionRangeRows(indexes, rangeIds, 3), {
+  expect(getSelectionRangeRows(indexes, rangeIds, 3)).toEqual({
     min: 1,
     max: 4,
   });

@@ -4,9 +4,7 @@ import { CONTEXT_TOKEN_REGEX, PROJECT_TOKEN_REGEX } from "../logic/patterns.ts";
  * Extracts tags and contexts from a search query.
  * Returns them formatted as they should appear in a todo.
  */
-export function extractTagsAndContextsFromSearch(
-  searchQuery: string,
-): string {
+export function extractTagsAndContextsFromSearch(searchQuery: string): string {
   const trimmed = searchQuery.trim();
   if (!trimmed) return "";
 

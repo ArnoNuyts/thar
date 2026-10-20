@@ -36,19 +36,19 @@ type ButtonComponent = ((props: ButtonProps) => ReactElement) & {
   Group: (props: ButtonGroupProps) => ReactElement;
 };
 
-const ButtonBase = (
-  { label, isSelected = false, isHovered = false }: ButtonProps,
-) => (
+const ButtonBase = ({
+  label,
+  isSelected = false,
+  isHovered = false,
+}: ButtonProps) => (
   <Text
     bold={isSelected || isHovered}
-    color={isHovered
-      ? COLORS.warning
-      : isSelected
-      ? COLORS.white
-      : COLORS.muted}
+    color={
+      isHovered ? COLORS.warning : isSelected ? COLORS.white : COLORS.muted
+    }
     dimColor={!isSelected && !isHovered}
   >
-    {(isSelected || isHovered) ? `« ${label} »` : `‹ ${label} ›`}
+    {isSelected || isHovered ? `« ${label} »` : `‹ ${label} ›`}
   </Text>
 );
 
@@ -64,10 +64,9 @@ const ButtonGroup = ({
 }: ButtonGroupProps) => {
   const buttonChildren = useMemo(
     () =>
-      Children.toArray(children).filter((
-        child,
-      ): child is ReactElement<ButtonProps> =>
-        isValidElement<ButtonProps>(child)
+      Children.toArray(children).filter(
+        (child): child is ReactElement<ButtonProps> =>
+          isValidElement<ButtonProps>(child),
       ),
     [children],
   );
@@ -87,12 +86,7 @@ const ButtonGroup = ({
     const next = buttonChildren.length - 1;
     if (!isControlled) setInternalIndex(next);
     onSelectedIndexChange?.(next);
-  }, [
-    activeIndex,
-    buttonChildren.length,
-    isControlled,
-    onSelectedIndexChange,
-  ]);
+  }, [activeIndex, buttonChildren.length, isControlled, onSelectedIndexChange]);
 
   const setIndex = (next: number) => {
     if (buttonChildren.length === 0) return;
@@ -105,8 +99,8 @@ const ButtonGroup = ({
 
   const moveIndex = (delta: number) => {
     if (buttonChildren.length === 0) return;
-    const wrapped = (activeIndex + delta + buttonChildren.length) %
-      buttonChildren.length;
+    const wrapped =
+      (activeIndex + delta + buttonChildren.length) % buttonChildren.length;
     setIndex(wrapped);
   };
 
@@ -115,27 +109,30 @@ const ButtonGroup = ({
     buttonChildren[index].props.onPress?.();
   };
 
-  useInput((input, key) => {
-    if (key.tab) {
-      moveIndex(key.shift ? -1 : 1);
-      return;
-    }
+  useInput(
+    (input, key) => {
+      if (key.tab) {
+        moveIndex(key.shift ? -1 : 1);
+        return;
+      }
 
-    if (key.leftArrow) {
-      moveIndex(-1);
-      return;
-    }
+      if (key.leftArrow) {
+        moveIndex(-1);
+        return;
+      }
 
-    if (key.rightArrow) {
-      moveIndex(1);
-      return;
-    }
+      if (key.rightArrow) {
+        moveIndex(1);
+        return;
+      }
 
-    if (key.return || input === " ") {
-      const candidate = hoveredIndex ?? activeIndexRef.current;
-      activateIndex(candidate);
-    }
-  }, { isActive: isFocused });
+      if (key.return || input === " ") {
+        const candidate = hoveredIndex ?? activeIndexRef.current;
+        activateIndex(candidate);
+      }
+    },
+    { isActive: isFocused },
+  );
 
   return (
     <Box width="100%" justifyContent="center">

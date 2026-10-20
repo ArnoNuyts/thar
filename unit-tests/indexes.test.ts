@@ -1,34 +1,33 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { createIndexes } from "../logic/indexes.ts";
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
 
-Deno.test("createIndexes preserves prior context count before uncategorized todo", () => {
-  const indexes = createIndexes(
-    [
-      new Todo("Context task @home"),
-      new Todo("Plain task"),
-    ],
-  );
+test("createIndexes preserves prior context count before uncategorized todo", () => {
+  const indexes = createIndexes([
+    new Todo("Context task @home"),
+    new Todo("Plain task"),
+  ]);
 
-  assertEquals(indexes.length, 4);
+  expect(indexes.length).toEqual(4);
 
-  assertEquals(indexes[0].type, IndexType.context);
+  expect(indexes[0].type).toEqual(IndexType.context);
   if (indexes[0].type !== IndexType.context) {
     throw new Error("Expected first entry to be a context header");
   }
 
-  assertEquals(indexes[0].contextName, "home");
-  assertEquals(indexes[0].todoCount, 1);
+  expect(indexes[0].contextName).toEqual("home");
+  expect(indexes[0].todoCount).toEqual(1);
 
-  assertEquals(indexes[1].type, IndexType.todo);
-  assertEquals(indexes[2].type, IndexType.context);
+  expect(indexes[1].type).toEqual(IndexType.todo);
+  expect(indexes[2].type).toEqual(IndexType.context);
   if (indexes[2].type !== IndexType.context) {
     throw new Error("Expected uncategorized todo to start a None header");
   }
 
-  assertEquals(indexes[2].contextName, "None");
-  assertEquals(indexes[2].todoCount, 1);
+  expect(indexes[2].contextName).toEqual("None");
+  expect(indexes[2].todoCount).toEqual(1);
 
-  assertEquals(indexes[3].type, IndexType.todo);
+  expect(indexes[3].type).toEqual(IndexType.todo);
 });

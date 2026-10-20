@@ -49,9 +49,13 @@ export const renderTodoText = (
     return (
       <Text
         key={key}
-        color={isHighlighted
-          ? COLORS.textOnHighlight
-          : (isOverdue ? COLORS.danger : undefined)}
+        color={
+          isHighlighted
+            ? COLORS.textOnHighlight
+            : isOverdue
+              ? COLORS.danger
+              : undefined
+        }
       >
         {part}
       </Text>
@@ -69,10 +73,8 @@ const PRIORITY_COLORS: Partial<Record<UpperCaseLetter, string>> = {
 };
 
 /** Highlighted rows use one foreground color for every segment. */
-const highlightedOr = (
-  isHighlighted: boolean,
-  fallback: string | undefined,
-) => (isHighlighted ? COLORS.textOnHighlight : fallback);
+const highlightedOr = (isHighlighted: boolean, fallback: string | undefined) =>
+  isHighlighted ? COLORS.textOnHighlight : fallback;
 
 const getTextColor = (isHighlighted: boolean, isOverdue: boolean) =>
   highlightedOr(isHighlighted, isOverdue ? COLORS.danger : undefined);
@@ -94,12 +96,13 @@ const getPaddedNumber = (number: number, maxDigits: number) =>
   // Pad the number with spaces to align with the maximum number of digits
   number.toString().padStart(maxDigits, " ");
 
-const TodoPriority = (
-  { priority, isHighlighted }: {
-    priority: UpperCaseLetter | undefined;
-    isHighlighted: boolean;
-  },
-) => {
+const TodoPriority = ({
+  priority,
+  isHighlighted,
+}: {
+  priority: UpperCaseLetter | undefined;
+  isHighlighted: boolean;
+}) => {
   if (!priority) return null;
   return (
     <Text color={highlightedOr(isHighlighted, PRIORITY_COLORS[priority])}>
@@ -124,9 +127,13 @@ const getTodoSuffixes = (todo: Todo): TodoSuffix[] => {
   return suffixes;
 };
 
-const TodoSuffixes = (
-  { todo, isHighlighted }: { todo: Todo; isHighlighted: boolean },
-) => (
+const TodoSuffixes = ({
+  todo,
+  isHighlighted,
+}: {
+  todo: Todo;
+  isHighlighted: boolean;
+}) => (
   <>
     {getTodoSuffixes(todo).map((suffix) => (
       <Text
@@ -139,16 +146,20 @@ const TodoSuffixes = (
   </>
 );
 
-const TodoItem = (
-  { todo, isFocused, isSelectedInRange, number, maxDigits }: {
-    todo: Todo;
-    isFocused: boolean;
-    isSelectedInRange: boolean;
-    number: number;
-    maxDigits: number;
-    key?: React.Key;
-  },
-) => {
+const TodoItem = ({
+  todo,
+  isFocused,
+  isSelectedInRange,
+  number,
+  maxDigits,
+}: {
+  todo: Todo;
+  isFocused: boolean;
+  isSelectedInRange: boolean;
+  number: number;
+  maxDigits: number;
+  key?: React.Key;
+}) => {
   const isOverdue = todo.isOverdue();
   const isHighlighted = isFocused || isSelectedInRange;
   const textColor = getTextColor(isHighlighted, isOverdue);
@@ -165,13 +176,8 @@ const TodoItem = (
         <Text dimColor color={textColor}>
           {` ${getPaddedNumber(number, maxDigits)} `}
         </Text>
-        <Text color={textColor}>
-          {`${getCheckbox(todo.isDone())} `}
-        </Text>
-        <TodoPriority
-          priority={todo.priority}
-          isHighlighted={isHighlighted}
-        />
+        <Text color={textColor}>{`${getCheckbox(todo.isDone())} `}</Text>
+        <TodoPriority priority={todo.priority} isHighlighted={isHighlighted} />
         {renderTodoText(todo.text, isHighlighted, isOverdue)}
         <TodoSuffixes todo={todo} isHighlighted={isHighlighted} />
       </Text>
@@ -202,9 +208,7 @@ const WelcomeScreen = () => (
     <Text>
       I love deadlines. I love the whooshing noise they make as they go by.
     </Text>
-    <Text color={COLORS.muted}>
-      - Douglas Adams
-    </Text>
+    <Text color={COLORS.muted}>- Douglas Adams</Text>
     <Newline />
     <Text color={COLORS.muted} dimColor>
       Press &apos;n&apos; to create a new todo.
@@ -259,14 +263,12 @@ export const TodoList = () => {
   const commands = useTodoCommands();
 
   const todo = getSelectedTodo();
-  const lastClickRef = useRef<
-    {
-      id?: symbol;
-      x?: number;
-      y?: number;
-      time: number;
-    } | null
-  >(null);
+  const lastClickRef = useRef<{
+    id?: symbol;
+    x?: number;
+    y?: number;
+    time: number;
+  } | null>(null);
 
   // Derived state for rendering and mouse hit-testing
   const visibleIndexes: IndexEntry[] = useMemo(
@@ -275,164 +277,167 @@ export const TodoList = () => {
   );
 
   const openContextMenu = () => {
-    openModal(
-      selectedTodoIds.size > 0 ? "multi-select-menu" : "todo-menu",
-    );
+    openModal(selectedTodoIds.size > 0 ? "multi-select-menu" : "todo-menu");
   };
 
-  const { isFocused, focus } = useFocusedInput((input, key: ExtendedKey) => {
-    if (key.upArrow && key.ctrl) return navigateContextUp(key.shift);
-    if (key.downArrow && key.ctrl) return navigateContextDown(key.shift);
-    if (key.upArrow) return navigateUp(key.shift);
-    if (key.downArrow) return navigateDown(key.shift);
-    if (key.pageUp) return navigatePageUp(key.shift);
-    if (key.pageDown) return navigatePageDown(key.shift);
-    if (key.home) return navigateHome();
-    if (key.end) return navigateEnd();
-    if (key.return) return openContextMenu();
-    if (key.escape) return clearMultiSelect();
-    if (key.delete) {
-      commands.deleteSelected();
-      return;
-    }
-
-    switch (input) {
-      case "/":
-        focusRef.current?.();
-        break;
-      case "q":
-        exit();
-        break;
-      case " ":
-        commands.toggleSelected();
-        break;
-      case "x":
-        openContextMenu();
-        break;
-      case "n":
-        openModal("create-todo");
-        break;
-      case "z":
-        commands.undo();
-        break;
-      case "Z":
-        commands.redo();
-        break;
-      case "v":
-        commands.pasteTodos();
-        break;
-      case "e":
-        commands.editSelected();
-        break;
-      case "a":
-        commands.archiveSelected();
-        break;
-      case "d":
-        commands.setDueDate();
-        break;
-      case "t":
-        commands.setThresholdDate();
-        break;
-      case "r":
-        commands.setRecurrence();
-        break;
-      case "c":
-        commands.copySelected();
-        break;
-      case "h":
-        commands.toggleSelectedHidden();
-        break;
-      case "H":
-        commands.toggleHiddenView({ notify: true });
-        break;
-      case "+":
-        commands.addProject();
-        break;
-      case "@":
-        commands.addContext();
-        break;
-      default:
-        if (isPriorityInput(input)) {
-          commands.setPriority(input);
-        }
-        break;
-    }
-  }, { autoFocus: true, tag: "todo-list" });
-
-  useMouseInput((event) => {
-    if (activeModal) return;
-    if (event.wheelUp) {
-      if (!isFocused) return;
-      return scrollViewportUp();
-    }
-    if (event.wheelDown) {
-      if (!isFocused) return;
-      return scrollViewportDown();
-    }
-    if (!event.leftClick || event.y === undefined) return;
-    const now = Date.now();
-    const previousClick = lastClickRef.current;
-
-    const searchRows = (isSearchFocused || searchQuery.length > 0) ? 2 : 0;
-    const rowInList = event.y - 1 - searchRows;
-    if (rowInList < 0 || rowInList >= visibleIndexes.length) {
-      lastClickRef.current = { x: event.x, y: event.y, time: now };
-      return;
-    }
-
-    const entry = visibleIndexes[rowInList];
-    if (!entry || entry.type !== IndexType.todo) {
-      lastClickRef.current = { x: event.x, y: event.y, time: now };
-      return;
-    }
-
-    const isDoubleClick = (
-      previousClick?.id === entry.todo.id ||
-      (previousClick?.x === event.x && previousClick?.y === event.y)
-    ) &&
-      now - previousClick.time <= 350;
-
-    focus();
-    setSelectedTodoId(entry.todo.id, event.raw.shift);
-    if (isDoubleClick && !event.raw.shift) {
-      const checkboxStartColumn = 1 + (maxDigits + 2);
-      const checkboxEndColumn = checkboxStartColumn + 2;
-      const clickX = event.x ?? -1;
-      const clickedCheckbox = clickX >= checkboxStartColumn &&
-        clickX <= checkboxEndColumn;
-
-      if (clickedCheckbox) {
-        commands.toggle([entry.todo]);
-      } else {
-        openModal("edit-todo", entry.todo);
+  const { isFocused, focus } = useFocusedInput(
+    (input, key: ExtendedKey) => {
+      if (key.upArrow && key.ctrl) return navigateContextUp(key.shift);
+      if (key.downArrow && key.ctrl) return navigateContextDown(key.shift);
+      if (key.upArrow) return navigateUp(key.shift);
+      if (key.downArrow) return navigateDown(key.shift);
+      if (key.pageUp) return navigatePageUp(key.shift);
+      if (key.pageDown) return navigatePageDown(key.shift);
+      if (key.home) return navigateHome();
+      if (key.end) return navigateEnd();
+      if (key.return) return openContextMenu();
+      if (key.escape) return clearMultiSelect();
+      if (key.delete) {
+        commands.deleteSelected();
+        return;
       }
-    }
 
-    lastClickRef.current = {
-      id: entry.todo.id,
-      x: event.x,
-      y: event.y,
-      time: now,
-    };
-  }, { isActive: true });
+      switch (input) {
+        case "/":
+          focusRef.current?.();
+          break;
+        case "q":
+          exit();
+          break;
+        case " ":
+          commands.toggleSelected();
+          break;
+        case "x":
+          openContextMenu();
+          break;
+        case "n":
+          openModal("create-todo");
+          break;
+        case "z":
+          commands.undo();
+          break;
+        case "Z":
+          commands.redo();
+          break;
+        case "v":
+          commands.pasteTodos();
+          break;
+        case "e":
+          commands.editSelected();
+          break;
+        case "a":
+          commands.archiveSelected();
+          break;
+        case "d":
+          commands.setDueDate();
+          break;
+        case "t":
+          commands.setThresholdDate();
+          break;
+        case "r":
+          commands.setRecurrence();
+          break;
+        case "c":
+          commands.copySelected();
+          break;
+        case "h":
+          commands.toggleSelectedHidden();
+          break;
+        case "H":
+          commands.toggleHiddenView({ notify: true });
+          break;
+        case "+":
+          commands.addProject();
+          break;
+        case "@":
+          commands.addContext();
+          break;
+        default:
+          if (isPriorityInput(input)) {
+            commands.setPriority(input);
+          }
+          break;
+      }
+    },
+    { autoFocus: true, tag: "todo-list" },
+  );
+
+  useMouseInput(
+    (event) => {
+      if (activeModal) return;
+      if (event.wheelUp) {
+        if (!isFocused) return;
+        return scrollViewportUp();
+      }
+      if (event.wheelDown) {
+        if (!isFocused) return;
+        return scrollViewportDown();
+      }
+      if (!event.leftClick || event.y === undefined) return;
+      const now = Date.now();
+      const previousClick = lastClickRef.current;
+
+      const searchRows = isSearchFocused || searchQuery.length > 0 ? 2 : 0;
+      const rowInList = event.y - 1 - searchRows;
+      if (rowInList < 0 || rowInList >= visibleIndexes.length) {
+        lastClickRef.current = { x: event.x, y: event.y, time: now };
+        return;
+      }
+
+      const entry = visibleIndexes[rowInList];
+      if (!entry || entry.type !== IndexType.todo) {
+        lastClickRef.current = { x: event.x, y: event.y, time: now };
+        return;
+      }
+
+      const isDoubleClick =
+        (previousClick?.id === entry.todo.id ||
+          (previousClick?.x === event.x && previousClick?.y === event.y)) &&
+        now - previousClick.time <= 350;
+
+      focus();
+      setSelectedTodoId(entry.todo.id, event.raw.shift);
+      if (isDoubleClick && !event.raw.shift) {
+        const checkboxStartColumn = 1 + (maxDigits + 2);
+        const checkboxEndColumn = checkboxStartColumn + 2;
+        const clickX = event.x ?? -1;
+        const clickedCheckbox =
+          clickX >= checkboxStartColumn && clickX <= checkboxEndColumn;
+
+        if (clickedCheckbox) {
+          commands.toggle([entry.todo]);
+        } else {
+          openModal("edit-todo", entry.todo);
+        }
+      }
+
+      lastClickRef.current = {
+        id: entry.todo.id,
+        x: event.x,
+        y: event.y,
+        time: now,
+      };
+    },
+    { isActive: true },
+  );
 
   // Calculate the maximum number of digits needed for numbering
-  const totalTodoCount =
-    indexes.filter((e) => e.type === IndexType.todo).length;
+  const totalTodoCount = indexes.filter(
+    (e) => e.type === IndexType.todo,
+  ).length;
   const maxDigits = totalTodoCount.toString().length;
 
   return (
-    <Box
-      flexGrow={0}
-      height={listHeight}
-      backgroundColor={COLORS.background}
-    >
+    <Box flexGrow={0} height={listHeight} backgroundColor={COLORS.background}>
       <Box flexDirection="column" flexGrow={1}>
-        {visibleIndexes.length === 0
-          ? (searchQuery.trim()
-            ? <SearchEmptyState query={searchQuery.trim()} />
-            : <WelcomeScreen />)
-          : visibleIndexes.map((entry, index) => {
+        {visibleIndexes.length === 0 ? (
+          searchQuery.trim() ? (
+            <SearchEmptyState query={searchQuery.trim()} />
+          ) : (
+            <WelcomeScreen />
+          )
+        ) : (
+          visibleIndexes.map((entry, index) => {
             const originalIndex = index + offsetRow;
             if (entry.type === IndexType.context) {
               return (
@@ -457,7 +462,8 @@ export const TodoList = () => {
                 maxDigits={maxDigits}
               />
             );
-          })}
+          })
+        )}
       </Box>
       <TodoListScrollbar
         totalRows={indexes.length}

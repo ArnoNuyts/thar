@@ -1,9 +1,12 @@
+import { setTimeout as delay } from "node:timers/promises";
+import { Runtime, type FsEvent } from "../utils/runtime.ts";
+
 export type MockedStdout = {
   rows: number;
 };
 
 export class MockWatcher {
-  private listeners: ((event: Deno.FsEvent | undefined) => void)[] = [];
+  private listeners: ((event: FsEvent | undefined) => void)[] = [];
   private closed = false;
   private nextCalls = 0;
 
@@ -11,7 +14,7 @@ export class MockWatcher {
     return this.nextCalls;
   }
 
-  private nextEvent(): Promise<Deno.FsEvent | undefined> {
+  private nextEvent(): Promise<FsEvent | undefined> {
     this.nextCalls++;
     if (this.closed) return Promise.resolve(undefined);
     return new Promise((resolve) => {
@@ -19,7 +22,7 @@ export class MockWatcher {
     });
   }
 
-  async *[Symbol.asyncIterator](): AsyncIterableIterator<Deno.FsEvent> {
+  async *[Symbol.asyncIterator](): AsyncIterableIterator<FsEvent> {
     const event = await this.nextEvent();
     if (!event) return;
     yield event;
@@ -27,7 +30,7 @@ export class MockWatcher {
   }
 
   emit(kind: "modify" | "any") {
-    const event: Deno.FsEvent = { kind, paths: ["test.txt"], flag: undefined };
+    const event: FsEvent = { kind, paths: ["test.txt"], flag: undefined };
     const listeners = this.listeners;
     this.listeners = [];
     listeners.forEach((l) => l(event));
@@ -41,24 +44,18 @@ export class MockWatcher {
   }
 }
 
-// Mock Deno APIs (Originals)
-export const originalWatchFs = Deno.watchFs;
-export const originalReadTextFile = Deno.readTextFile;
-export const originalWriteTextFile = Deno.writeTextFile;
-export const originalStat = Deno.stat;
+// Originals for tests that patch the runtime adapter.
+export const originalWatchFs = Runtime.watchFs;
+export const originalReadTextFile = Runtime.readTextFile;
+export const originalWriteTextFile = Runtime.writeTextFile;
+export const originalStat = Runtime.stat;
 
-export function restoreDenoMocks() {
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).watchFs = originalWatchFs;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).readTextFile = originalReadTextFile;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).writeTextFile = originalWriteTextFile;
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).stat = originalStat;
+export function restoreRuntimeMocks() {
+  Runtime.watchFs = originalWatchFs;
+  Runtime.readTextFile = originalReadTextFile;
+  Runtime.writeTextFile = originalWriteTextFile;
+  Runtime.stat = originalStat;
 }
-
-import { delay } from "@std/async";
 
 export async function waitFor(
   callback: () => void | Promise<void>,
@@ -80,9 +77,8 @@ export async function waitFor(
     }
   }
 
-  const errorMessage = lastError instanceof Error
-    ? lastError.message
-    : String(lastError);
+  const errorMessage =
+    lastError instanceof Error ? lastError.message : String(lastError);
   throw new Error(`Timed out after ${timeout}ms. Last error: ${errorMessage}`);
 }
 
@@ -93,9 +89,12 @@ export async function waitFor(
  */
 export async function waitPast(ms: number, interval = 10) {
   const start = Date.now();
-  await waitFor(() => {
-    if (Date.now() - start < ms) {
-      throw new Error(`Waiting for ${ms}ms`);
-    }
-  }, { interval });
+  await waitFor(
+    () => {
+      if (Date.now() - start < ms) {
+        throw new Error(`Waiting for ${ms}ms`);
+      }
+    },
+    { interval },
+  );
 }

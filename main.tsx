@@ -18,6 +18,7 @@ import { SuggestionProvider } from "./contexts/suggestion-context.tsx";
 import { SearchProvider } from "./contexts/search-context.tsx";
 import { NavigationProvider } from "./contexts/navigation-context.tsx";
 import { SearchInput } from "./components/SearchInput.tsx";
+import { Runtime } from "./utils/runtime.ts";
 
 const AppContent = () => {
   const { activeModal, modalData } = useModal();
@@ -57,11 +58,7 @@ const AppContent = () => {
 
 const NavigationWrapper = ({ children }: { children: React.ReactNode }) => {
   const { todos } = useTodo();
-  return (
-    <NavigationProvider todos={todos}>
-      {children}
-    </NavigationProvider>
-  );
+  return <NavigationProvider todos={todos}>{children}</NavigationProvider>;
 };
 
 const App = ({ filename }: { filename: string }) => {
@@ -84,14 +81,14 @@ const App = ({ filename }: { filename: string }) => {
   );
 };
 
-const filename = Deno.args[0] || "todo.txt";
+const filename = Runtime.args[0] || "todo.txt";
 
-const isWindows = Deno.build.os === "windows";
+const isWindows = Runtime.platform === "windows";
 let originalChcp: string | null = null;
 
 if (isWindows) {
   try {
-    const command = new Deno.Command("cmd", {
+    const command = new Runtime.Command("cmd", {
       args: ["/c", "chcp"],
     });
     const { stdout } = await command.output();
@@ -101,7 +98,7 @@ if (isWindows) {
       originalChcp = match[0];
     }
 
-    const setUtf8 = new Deno.Command("cmd", {
+    const setUtf8 = new Runtime.Command("cmd", {
       args: ["/c", "chcp", "65001"],
     });
     await setUtf8.output();
@@ -120,7 +117,7 @@ await instance.waitUntilExit();
 
 if (isWindows && originalChcp) {
   try {
-    const restore = new Deno.Command("cmd", {
+    const restore = new Runtime.Command("cmd", {
       args: ["/c", "chcp", originalChcp],
     });
     await restore.output();

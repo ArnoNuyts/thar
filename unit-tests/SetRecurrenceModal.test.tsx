@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals, assertMatch } from "@std/assert";
+
 import { useEffect } from "react";
 import { Box } from "ink";
 
@@ -9,7 +10,7 @@ import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
 import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
-Deno.test("SetRecurrenceModal: should render and set focus", async () => {
+test("SetRecurrenceModal: should render and set focus", async () => {
   let focusedTag: string | undefined;
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Test Todo");
@@ -25,7 +26,7 @@ Deno.test("SetRecurrenceModal: should render and set focus", async () => {
     return (
       <Box flexDirection="column" height={20}>
         {activeModal === "set-recurrence" && <SetRecurrenceModal />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -44,8 +45,8 @@ Deno.test("SetRecurrenceModal: should render and set focus", async () => {
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Set Recurrence Base/);
-    assertEquals(focusedTag, "set-recurrence-modal");
+    expect(lastFrame() || "").toMatch(/Set Recurrence Base/);
+    expect(focusedTag).toEqual("set-recurrence-modal");
   });
 
   // Options are Daily, Weekly, Monthly, Yearly
@@ -53,20 +54,20 @@ Deno.test("SetRecurrenceModal: should render and set focus", async () => {
   stdin.write("\r");
 
   await waitFor(() =>
-    assertMatch(lastFrame() || "", /Set Recurrence Interval \(Daily\)/)
+    expect(lastFrame() || "").toMatch(/Set Recurrence Interval \(Daily\)/),
   );
 
   // Initial amount is "1"
   stdin.write("\r"); // Confirm 1d
 
   await waitFor(() => {
-    assertEquals(updatedTodo?.tags.rec, "1d");
+    expect(updatedTodo?.tags.rec).toEqual("1d");
   });
 
   unmount();
 });
 
-Deno.test("SetRecurrenceModal: should update multiple todos", async () => {
+test("SetRecurrenceModal: should update multiple todos", async () => {
   let focusedTag: string | undefined;
   let updatedTodos: Todo[] = [];
   const todo1 = new Todo("Todo 1");
@@ -81,7 +82,7 @@ Deno.test("SetRecurrenceModal: should update multiple todos", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "set-recurrence" && <SetRecurrenceModal />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -103,29 +104,29 @@ Deno.test("SetRecurrenceModal: should update multiple todos", async () => {
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Set Recurrence Base/);
-    assertEquals(focusedTag, "set-recurrence-modal");
+    expect(lastFrame() || "").toMatch(/Set Recurrence Base/);
+    expect(focusedTag).toEqual("set-recurrence-modal");
   });
 
   // Daily
   stdin.write("\r");
   await waitFor(() =>
-    assertMatch(lastFrame() || "", /Set Recurrence Interval \(Daily\)/)
+    expect(lastFrame() || "").toMatch(/Set Recurrence Interval \(Daily\)/),
   );
 
   // 1
   stdin.write("\r");
 
   await waitFor(() => {
-    assertEquals(updatedTodos.length, 2);
-    assertEquals(updatedTodos[0].tags.rec, "1d");
-    assertEquals(updatedTodos[1].tags.rec, "1d");
+    expect(updatedTodos.length).toEqual(2);
+    expect(updatedTodos[0].tags.rec).toEqual("1d");
+    expect(updatedTodos[1].tags.rec).toEqual("1d");
   });
 
   unmount();
 });
 
-Deno.test("SetRecurrenceModal: mouse click should select recurrence base", async () => {
+test("SetRecurrenceModal: mouse click should select recurrence base", async () => {
   const todo = new Todo("Mouse Todo");
 
   const TestComponent = () => {
@@ -147,17 +148,19 @@ Deno.test("SetRecurrenceModal: mouse click should select recurrence base", async
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Set Recurrence Base/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Recurrence Base/));
 
   // rows=20, columns=80, width=40, bodyRows=4 => first body row at y=10, x in [21..60]
   stdin.write("\x1b[<0;40;10M");
   await waitFor(() =>
-    assertEquals((lastFrame() || "").includes("Set Recurrence Interval"), true)
+    expect((lastFrame() || "").includes("Set Recurrence Interval")).toEqual(
+      true,
+    ),
   );
   unmount();
 });
 
-Deno.test("SetRecurrenceModal: amount should only keep digits", async () => {
+test("SetRecurrenceModal: amount should only keep digits", async () => {
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Digits only todo");
 
@@ -187,10 +190,10 @@ Deno.test("SetRecurrenceModal: amount should only keep digits", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Set Recurrence Base/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Recurrence Base/));
   stdin.write("\r"); // enter amount step with Daily base
   await waitFor(() =>
-    assertMatch(lastFrame() || "", /Set Recurrence Interval \(Daily\)/)
+    expect(lastFrame() || "").toMatch(/Set Recurrence Interval \(Daily\)/),
   );
 
   // Mix text and a mouse packet; only digits should remain.
@@ -199,75 +202,72 @@ Deno.test("SetRecurrenceModal: amount should only keep digits", async () => {
   stdin.write("\r");
 
   await waitFor(() => {
-    assertEquals(updatedTodo?.tags.rec, "12d");
+    expect(updatedTodo?.tags.rec).toEqual("12d");
   });
 
   unmount();
 });
 
-Deno.test(
-  "SetRecurrenceModal: first typed digit replaces the default amount and resets between bases",
-  async () => {
-    let updatedTodo: Todo | undefined;
-    const todo = new Todo("Amount editing todo");
+test("SetRecurrenceModal: first typed digit replaces the default amount and resets between bases", async () => {
+  let updatedTodo: Todo | undefined;
+  const todo = new Todo("Amount editing todo");
 
-    const TestComponent = () => {
-      const { openModal, activeModal } = useModal();
-      useEffect(() => {
-        openModal("set-recurrence");
-      }, [openModal]);
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal("set-recurrence");
+    }, [openModal]);
 
-      return (
-        <Box flexDirection="column" height={20} width={80}>
-          {activeModal === "set-recurrence" && <SetRecurrenceModal />}
-        </Box>
-      );
-    };
-
-    const { unmount, lastFrame, stdin } = render(
-      <TestWrapper
-        navValue={{ getSelectedTodos: () => [todo] }}
-        todoValue={{
-          updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
-            updatedTodo = transform(todos[0]);
-          },
-        }}
-      >
-        <TestComponent />
-      </TestWrapper>,
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "set-recurrence" && <SetRecurrenceModal />}
+      </Box>
     );
+  };
 
-    await waitFor(() => assertMatch(lastFrame() || "", /Set Recurrence Base/));
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ getSelectedTodos: () => [todo] }}
+      todoValue={{
+        updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todos[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
 
-    stdin.write("\r"); // Daily
-    await waitFor(() =>
-      assertMatch(lastFrame() || "", /Set Recurrence Interval \(Daily\)/)
-    );
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Recurrence Base/));
 
-    // Edit the amount (a paste replaces the default "1" then keeps digits),
-    // then back out to the base list.
-    stdin.write("23");
-    await waitFor(() => assertMatch(lastFrame() || "", /Every23/));
-    stdin.write("\x1b"); // Esc: back to base list
+  stdin.write("\r"); // Daily
+  await waitFor(() =>
+    expect(lastFrame() || "").toMatch(/Set Recurrence Interval \(Daily\)/),
+  );
 
-    await waitFor(() => assertMatch(lastFrame() || "", /Set Recurrence Base/));
+  // Edit the amount (a paste replaces the default "1" then keeps digits),
+  // then back out to the base list.
+  stdin.write("23");
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Every23/));
+  stdin.write("\x1b"); // Esc: back to base list
 
-    stdin.write("\u001B[B"); // Down: Weekly
-    stdin.write("\r");
-    await waitFor(() =>
-      assertMatch(lastFrame() || "", /Set Recurrence Interval \(Weekly\)/)
-    );
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Recurrence Base/));
 
-    // Choosing a new base resets the amount to "1", so "45" replaces it.
-    await waitFor(() => assertMatch(lastFrame() || "", /Every1/));
-    stdin.write("45");
-    await waitFor(() => assertMatch(lastFrame() || "", /Every45/));
-    stdin.write("\r");
+  stdin.write("\u001B[B"); // Down: Weekly
+  stdin.write("\r");
+  await waitFor(() =>
+    expect(lastFrame() || "").toMatch(/Set Recurrence Interval \(Weekly\)/),
+  );
 
-    await waitFor(() => {
-      assertEquals(updatedTodo?.tags.rec, "45w");
-    });
+  // Choosing a new base resets the amount to "1", so "45" replaces it.
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Every1/));
+  stdin.write("45");
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Every45/));
+  stdin.write("\r");
 
-    unmount();
-  },
-);
+  await waitFor(() => {
+    expect(updatedTodo?.tags.rec).toEqual("45w");
+  });
+
+  unmount();
+});

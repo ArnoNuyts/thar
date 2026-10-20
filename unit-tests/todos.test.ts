@@ -1,8 +1,9 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { Todo } from "../logic/todo.ts"; // Adjust the path as needed
 import { filterHidden, sortByImportance } from "../logic/Todos.ts";
 
-Deno.test("sortByImportance - should sort correctly", () => {
+test("sortByImportance - should sort correctly", () => {
   const testCases = [
     {
       text: "Completion",
@@ -44,15 +45,14 @@ Deno.test("sortByImportance - should sort correctly", () => {
   for (const { todos, expected, text } of testCases) {
     const sorted = sortByImportance(todos.map((x) => new Todo(x)));
 
-    assertEquals(
+    expect(
       sorted.map((x) => x.toString()),
-      expected,
       text,
-    );
+    ).toEqual(expected);
   }
 });
 
-Deno.test("filterHidden - should hide correct todos", () => {
+test("filterHidden - should hide correct todos", () => {
   const testCases = [
     {
       text: "Hidden",
@@ -69,25 +69,24 @@ Deno.test("filterHidden - should hide correct todos", () => {
   for (const { todos, expected, text } of testCases) {
     const sorted = filterHidden(todos.map((x) => new Todo(x)));
 
-    assertEquals(
+    expect(
       sorted.map((x) => x.toString()),
-      expected,
       text,
-    );
+    ).toEqual(expected);
   }
 });
 
-Deno.test("removeDue and removeThreshold - should remove tags", () => {
+test("removeDue and removeThreshold - should remove tags", () => {
   let todo = new Todo("Test todo due:2023-01-01 t:2023-01-01");
 
-  assertEquals(todo.tags.due, "2023-01-01");
-  assertEquals(todo.tags.t, "2023-01-01");
+  expect(todo.tags.due).toEqual("2023-01-01");
+  expect(todo.tags.t).toEqual("2023-01-01");
 
   todo = todo.removeDue();
-  assertEquals(todo.tags.due, undefined);
-  assertEquals(todo.tags.t, "2023-01-01");
+  expect(todo.tags.due).toEqual(undefined);
+  expect(todo.tags.t).toEqual("2023-01-01");
 
   todo = todo.removeThreshold();
-  assertEquals(todo.tags.due, undefined);
-  assertEquals(todo.tags.t, undefined);
+  expect(todo.tags.due).toEqual(undefined);
+  expect(todo.tags.t).toEqual(undefined);
 });
