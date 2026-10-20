@@ -3,6 +3,7 @@ import {
   MutableRefObject,
   ReactNode,
   useContext,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -22,16 +23,25 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const focusRef = useRef<(() => void) | null>(null);
 
+  const value = useMemo(
+    () => ({
+      searchQuery,
+      setSearchQuery,
+      focusRef,
+      isSearchFocused,
+      setIsSearchFocused,
+    }),
+    [
+      searchQuery,
+      setSearchQuery,
+      focusRef,
+      isSearchFocused,
+      setIsSearchFocused,
+    ],
+  );
+
   return (
-    <SearchContext.Provider
-      value={{
-        searchQuery,
-        setSearchQuery,
-        focusRef,
-        isSearchFocused,
-        setIsSearchFocused,
-      }}
-    >
+    <SearchContext.Provider value={value}>
       {children}
     </SearchContext.Provider>
   );

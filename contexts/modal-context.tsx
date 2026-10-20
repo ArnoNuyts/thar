@@ -3,6 +3,7 @@ import {
   ReactNode,
   useCallback,
   useContext,
+  useMemo,
   useState,
 } from "react";
 import { Todo } from "../logic/todo.ts";
@@ -64,10 +65,13 @@ export const ModalProvider = ({ children }: { children?: ReactNode }) => {
     setModalData(null);
   }, []);
 
+  const value = useMemo(
+    () => ({ activeModal, modalData, openModal, closeModal }),
+    [activeModal, modalData, openModal, closeModal],
+  );
+
   return (
-    <ModalContext.Provider
-      value={{ activeModal, modalData, openModal, closeModal }}
-    >
+    <ModalContext.Provider value={value}>
       {children}
     </ModalContext.Provider>
   );
