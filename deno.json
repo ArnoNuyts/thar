@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "start": "deno run --allow-sys --allow-env --allow-ffi --allow-read --allow-write main.tsx",
+    "start": "deno run --allow-sys --allow-env --allow-read --allow-write main.tsx",
     "fmt": "deno fmt",
     "test": "deno test -A --parallel",
     "test:serial": "deno test -A",

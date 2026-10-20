@@ -18,10 +18,14 @@ export async function readTodosFromFile(filename: string) {
     .map((x) => new Todo(x));
 }
 
+export type WriteOptions = {
+  append?: boolean;
+};
+
 export const writeTodosToFile = async (
   todos: Todo[],
   filename: string,
-  writeOptions: Deno.WriteFileOptions | undefined = undefined,
+  writeOptions: WriteOptions | undefined = undefined,
 ) =>
   await Deno.writeTextFile(
     filename,
