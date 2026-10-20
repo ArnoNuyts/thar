@@ -55,7 +55,7 @@ Deno.test(
         focusRef.current = () => {
           focusCalled = true;
         };
-        setTimeout(() => focusRef.current?.(), 50);
+        focusRef.current();
       }, [focusRef]);
       return null;
     };

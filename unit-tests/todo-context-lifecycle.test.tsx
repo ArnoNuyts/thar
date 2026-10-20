@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { render } from "ink-testing-library";
 import { Text } from "ink";
 import { assertEquals } from "@std/assert";
-import { delay } from "@std/async";
 import { join } from "@std/path";
 import {
   TodoContextType,
@@ -15,6 +14,7 @@ import {
   originalReadTextFile,
   restoreDenoMocks,
   waitFor,
+  waitPast,
 } from "./test-utils.ts";
 
 let mockWatcher: MockWatcher;
@@ -138,7 +138,13 @@ Deno.test({
       // reload debounce before unmounting the provider.
       await Deno.writeTextFile(filename, "Changed\n");
       mockWatcher.emit("modify");
-      await delay(20);
+      // Wait until the watcher loop has consumed the event and scheduled the
+      // 500ms reload debounce before we unmount.
+      await waitFor(() => {
+        if (mockWatcher.nextCallCount < 2) {
+          throw new Error("Watcher has not processed the event yet");
+        }
+      });
 
       // The ToasterProvider stays mounted so a late reload is observable.
       rerender(
@@ -150,18 +156,22 @@ Deno.test({
         />,
       );
 
-      await delay(700);
-
-      assertEquals(
-        readCount,
-        1,
-        "A pending reload must not read the file after unmount",
-      );
-      assertEquals(
-        messages.includes("File reloaded"),
-        false,
-        "A pending reload must not toast after unmount",
-      );
+      const unmountedAt = Date.now();
+      await waitFor(() => {
+        assertEquals(
+          readCount,
+          1,
+          "A pending reload must not read the file after unmount",
+        );
+        assertEquals(
+          messages.includes("File reloaded"),
+          false,
+          "A pending reload must not toast after unmount",
+        );
+        if (Date.now() - unmountedAt < 700) {
+          throw new Error("reload debounce window still open");
+        }
+      }, { timeout: 1000, interval: 25 });
     });
   },
 });
@@ -175,15 +185,18 @@ Deno.test({
     await withTempFile("Existing todo\n", async (filename) => {
       setupWatcherMock();
       let readCount = 0;
+      let releaseRead!: () => void;
+      const readGate = new Promise<void>((resolve) => {
+        releaseRead = resolve;
+      });
 
-      // Simulate a slow disk / busy startup: the initial read takes longer
-      // than the save debounce (50ms), which used to write the empty initial
+      // Simulate a slow disk / busy startup: the initial read stays pending
+      // past the 50ms save debounce, which used to write the empty startup
       // state over the real file.
       // deno-lint-ignore no-explicit-any
-      (Deno as any).readTextFile = async (path: string | URL) => {
-        await delay(250);
+      (Deno as any).readTextFile = (path: string | URL) => {
         readCount++;
-        return await originalReadTextFile(path);
+        return readGate.then(() => originalReadTextFile(path));
       };
 
       let currentApi: TodoContextType | undefined;
@@ -200,20 +213,30 @@ Deno.test({
         />,
       );
 
+      // Hold the read open past the debounce and check the file was not
+      // truncated by the empty startup state.
+      const renderStartedAt = Date.now();
       await waitFor(() => {
-        if (readCount === 0) throw new Error("File not loaded yet");
+        if (readCount === 0) throw new Error("File read did not start");
+        if (Date.now() - renderStartedAt < 60) {
+          throw new Error("The initial save debounce has not fired yet");
+        }
+      }, { interval: 10 });
+
+      assertEquals(
+        await originalReadTextFile(filename),
+        "Existing todo\n",
+        "The startup empty state must not truncate the todo file",
+      );
+
+      releaseRead();
+      await waitFor(() => {
         if (!currentApi || currentApi.todos.length !== 1) {
           throw new Error("Initial todos not loaded yet");
         }
       });
 
-      assertEquals(
-        await Deno.readTextFile(filename),
-        "Existing todo\n",
-        "The startup empty state must not truncate the todo file",
-      );
       assertEquals(currentApi?.todos[0].text, "Existing todo");
-
       unmount();
     });
   },
@@ -248,7 +271,7 @@ Deno.test({
 
       // Let the initial load's debounced save run so it consumes the
       // just-read flag and cannot mask the save triggered below.
-      await delay(100);
+      await waitPast(60);
 
       const before = await Deno.readTextFile(filename);
       currentApi?.addTodos("New todo");
@@ -260,13 +283,17 @@ Deno.test({
 
       // The save is scheduled but its 50ms timer has not fired yet.
       unmount();
-      await delay(150);
-
-      assertEquals(
-        await Deno.readTextFile(filename),
-        before,
-        "A pending save must not write the file after unmount",
-      );
+      const unmountedAt = Date.now();
+      await waitFor(async () => {
+        assertEquals(
+          await Deno.readTextFile(filename),
+          before,
+          "A pending save must not write the file after unmount",
+        );
+        if (Date.now() - unmountedAt < 100) {
+          throw new Error("save debounce window still open");
+        }
+      }, { timeout: 1000, interval: 10 });
     });
   },
 });

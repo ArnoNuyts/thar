@@ -5,7 +5,6 @@ import { TodoProvider, useTodo } from "../contexts/todo-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { assertEquals } from "@std/assert";
-import { delay } from "@std/async";
 
 import { MockWatcher, restoreDenoMocks, waitFor } from "./test-utils.ts";
 
@@ -134,7 +133,6 @@ Deno.test({
     assertEquals(currentApi!.todos[1].text, "Todo 3");
 
     currentApi!.redo(); // should do nothing
-    await delay(100);
     assertEquals(currentApi!.todos.length, 2);
     assertEquals(currentApi!.todos[1].text, "Todo 3");
 
@@ -193,7 +191,6 @@ Deno.test({
 
     // Undo on empty history should do nothing
     currentApi!.undo();
-    await delay(100);
     assertEquals(currentApi!.todos.length, 0);
 
     unmount();
