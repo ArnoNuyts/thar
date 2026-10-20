@@ -2,13 +2,14 @@ import { assertEquals } from "@std/assert";
 import { MockWatcher } from "./test-utils.ts";
 
 const withTimeout = async <T>(promise: Promise<T>): Promise<T> => {
-  let timer: number | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
+    const id = setTimeout(
       () => reject(new Error("MockWatcher iteration hung")),
       1000,
     );
-    Deno.unrefTimer(timer);
+    timer = id;
+    Deno.unrefTimer(id);
   });
 
   try {
