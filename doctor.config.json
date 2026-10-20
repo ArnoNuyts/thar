@@ -1,0 +1,14 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  // These components are commit-phase observers used only by tests. They copy
+  // committed context values into local test variables; there is no parent
+  // React state to update, so no-pass-data-to-parent does not apply.
+  "ignore": {
+    "overrides": [
+      {
+        "files": ["unit-tests/test-components.tsx"],
+        "rules": ["react-doctor/no-pass-data-to-parent"]
+      }
+    ]
+  }
+}
