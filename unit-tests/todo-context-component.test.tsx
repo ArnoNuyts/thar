@@ -4,9 +4,13 @@ import { Text } from "ink";
 import { TodoProvider, useTodo } from "../contexts/todo-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
 import { assertEquals } from "@std/assert";
-import { delay } from "@std/async";
 
-import { MockWatcher, restoreDenoMocks, waitFor } from "./test-utils.ts";
+import {
+  MockWatcher,
+  restoreDenoMocks,
+  waitFor,
+  waitPast,
+} from "./test-utils.ts";
 
 // Mock setup
 let mockWatcher: MockWatcher;
@@ -30,10 +34,10 @@ function setupMocks() {
   // deno-lint-ignore no-explicit-any
   (Deno as any).writeTextFile = () => {
     writeCount++;
-    // Simulate FS event after write
-    setTimeout(() => {
+    // Simulate FS event after write without a fixed sleep.
+    queueMicrotask(() => {
       mockWatcher.emit("modify");
-    }, 10);
+    });
     return Promise.resolve();
   };
 }
@@ -71,8 +75,8 @@ Deno.test({
     // Wait for initial load
     await waitFor(() => assertEquals(readCount, 1));
 
-    // Allow the initial save (which is a no-op) to complete
-    await delay(100);
+    // Allow the initial save (which is a no-op) to finish its debounce.
+    await waitPast(60);
 
     readCount = 0; // Reset for test
 

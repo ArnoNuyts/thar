@@ -54,14 +54,24 @@ const NavigationWrapper = ({ children }: { children: React.ReactNode }) => {
 const SearchFocusRequester = () => {
   const { focusRef } = useSearch();
   useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
     const tryFocus = () => {
+      if (cancelled) return;
       if (focusRef.current) {
         focusRef.current();
         return;
       }
-      setTimeout(tryFocus, 0);
+      timer = setTimeout(tryFocus, 0);
     };
+
     tryFocus();
+
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+    };
   }, [focusRef]);
   return null;
 };
