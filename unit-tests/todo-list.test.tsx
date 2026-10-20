@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
 
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { SearchInput } from "../components/SearchInput.tsx";
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
 import { restoreDenoMocks, waitFor } from "./test-utils.ts";
@@ -13,7 +13,8 @@ import { ConfirmModal } from "../components/ConfirmModal.tsx";
 import { HiddenIndicator } from "../components/HiddenIndicator.tsx";
 import { SetDateModal } from "../components/SetDateModal.tsx";
 import { SetRecurrenceModal } from "../components/SetRecurrenceModal.tsx";
-import { TodoList } from "../components/TodoList.tsx";
+import { renderTodoText, TodoList } from "../components/TodoList.tsx";
+import { COLORS } from "../theme/colors.ts";
 
 import { FocusProvider } from "../contexts/focus-context.tsx";
 import {
@@ -83,7 +84,7 @@ import {
 } from "./test-components.tsx";
 
 // Mock App Content for TodoList tests
-const AppContentMock = ({ todos = new Todos() }: { todos?: Todos }) => {
+const AppContentMock = ({ todos = [] }: { todos?: Todos }) => {
   const { activeModal, modalData } = useModal();
   return (
     <Box flexDirection="column" position="relative" height={25}>
@@ -210,6 +211,38 @@ function setupCaptureClipboardMock(onCapture: (text: string) => void) {
   };
 }
 
+// Clipboard mock that makes the copy command fail
+function setupFailingClipboardMock(message: string) {
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class {
+    command: string;
+    // deno-lint-ignore no-explicit-any
+    constructor(command: string, _options: any) {
+      this.command = command;
+    }
+    // deno-lint-ignore no-explicit-any
+    spawn(): any {
+      return {
+        stdin: {
+          getWriter() {
+            return {
+              write: () => Promise.reject(new Error(message)),
+              close: () => Promise.resolve(),
+            };
+          },
+        },
+        status: Promise.resolve({ success: false, code: 1 }),
+      };
+    }
+  };
+  return () => {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+    restoreDenoMocks();
+  };
+}
+
 // --- Tests ---
 
 Deno.test({
@@ -227,7 +260,7 @@ Deno.test({
       <TestWrapper
         initialTodos={initialTodos}
       >
-        <AppContentMock todos={new Todos(...initialTodos)} />
+        <AppContentMock todos={[...initialTodos]} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -280,7 +313,7 @@ Deno.test({
         initialTodos={initialTodos}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(...initialTodos)} />
+        <AppContentMock todos={[...initialTodos]} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -341,7 +374,7 @@ Deno.test({
         initialTodos={initialTodos}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(...initialTodos)} />
+        <AppContentMock todos={[...initialTodos]} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -389,7 +422,7 @@ Deno.test({
         <SelectionObserver
           onSelectionIdChange={(id) => (currentSelectionId = id)}
         />
-        <AppContentMock todos={new Todos(...initialTodos)} />
+        <AppContentMock todos={[...initialTodos]} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -436,7 +469,7 @@ Deno.test({
         initialTodos={initialTodos}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(...initialTodos)} />
+        <AppContentMock todos={[...initialTodos]} />
         <FocusObserver onFocused={() => focusCount++} />
       </TestWrapper>,
     );
@@ -494,7 +527,7 @@ Deno.test({
 
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper initialTodos={initialTodos}>
-        <AppContentMock todos={new Todos(...initialTodos)} />
+        <AppContentMock todos={[...initialTodos]} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -536,7 +569,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(todo1, todo2)} />
+        <AppContentMock todos={[todo1, todo2]} />
         <FocusObserver
           onFocused={() => {
             focused = true;
@@ -614,7 +647,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(todo1, todo2)} />
+        <AppContentMock todos={[todo1, todo2]} />
         <FocusObserver onFocused={() => focused = true} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -682,7 +715,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(todo1, todo2)} />
+        <AppContentMock todos={[todo1, todo2]} />
         <FocusObserver onFocused={() => focused = true} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -759,7 +792,7 @@ Deno.test({
         initialTodos={[todo1, todo2, todo3]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(todo1, todo2, todo3)} />
+        <AppContentMock todos={[todo1, todo2, todo3]} />
         <FocusObserver onFocused={() => focused = true} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -806,7 +839,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(todo1, todo2)} />
+        <AppContentMock todos={[todo1, todo2]} />
         <FocusObserver onFocused={() => focusCount++} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -851,7 +884,7 @@ Deno.test({
         initialTodos={[todo1, todo2]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(todo1, todo2)} />
+        <AppContentMock todos={[todo1, todo2]} />
         <FocusObserver onFocused={() => focusCount++} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -898,7 +931,7 @@ Deno.test({
 
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper initialTodos={[todo1, todo2]}>
-        <AppContentMock todos={new Todos(todo1, todo2)} />
+        <AppContentMock todos={[todo1, todo2]} />
         <FocusObserver onFocused={() => focusCount++} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -932,7 +965,7 @@ Deno.test({
     let isFocused = false;
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper initialTodos={[new Todo("Test")]}>
-        <AppContentMock todos={new Todos(new Todo("Test"))} />
+        <AppContentMock todos={[new Todo("Test")]} />
         <FocusObserver onFocused={() => isFocused = true} />
       </TestWrapper>,
     );
@@ -970,7 +1003,7 @@ Deno.test({
       <TestWrapper
         initialTodos={[todo1, todo2]}
       >
-        <AppContentMock todos={new Todos(todo1, todo2)} />
+        <AppContentMock todos={[todo1, todo2]} />
         <FocusObserver onFocused={() => focused = true} />
         <SelectionStateObserver
           onSelectionChange={(s) => selectedCount = s.rangeIds.size}
@@ -1032,6 +1065,40 @@ Deno.test({
     await waitFor(() => {
       assertEquals(capturedText.trim(), "Todo 1");
     });
+
+    unmount();
+    restore();
+  },
+});
+
+Deno.test({
+  name: "TodoList: 'c' should show failure toast when clipboard copy fails",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const restore = setupFailingClipboardMock("clipboard unavailable");
+
+    const todo1 = new Todo("Todo 1");
+    let focused = false;
+
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper initialTodos={[todo1]}>
+        <AppContentMock />
+        <FocusObserver onFocused={() => focused = true} />
+      </TestWrapper>,
+    );
+
+    await waitFor(() => assertEquals(focused, true));
+
+    stdin.write("c");
+
+    await waitFor(() => {
+      assertEquals(
+        lastFrame()?.includes("Copy failed: clipboard unavailable"),
+        true,
+      );
+    });
+    assertEquals(lastFrame()?.includes("Todo copied"), false);
 
     unmount();
     restore();
@@ -1162,7 +1229,7 @@ Deno.test({
         initialTodos={[todo]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(todo)} />
+        <AppContentMock todos={[todo]} />
       </TestWrapper>,
     );
 
@@ -1192,7 +1259,7 @@ Deno.test({
         initialTodos={[todo]}
         onTodosChange={(todos) => capturedTodos = todos}
       >
-        <AppContentMock todos={new Todos(todo)} />
+        <AppContentMock todos={[todo]} />
       </TestWrapper>,
     );
 
@@ -1224,7 +1291,7 @@ Deno.test({
     let focusedTag: string | undefined;
     const { unmount, lastFrame, stdin } = render(
       <TestWrapper initialTodos={todos}>
-        <AppContentMock todos={new Todos(...todos)} />
+        <AppContentMock todos={[...todos]} />
         <NavController onNav={(n) => nav = n} />
         <FocusObserver onFocused={(tag) => focusedTag = tag} />
       </TestWrapper>,
@@ -1289,5 +1356,70 @@ Deno.test({
     }, { timeout: 10000 });
 
     unmount();
+  },
+});
+
+Deno.test("TodoList: repeated tags get unique content-offset keys and colors", () => {
+  const text = "first @home second @home +work +work";
+  const parts = renderTodoText(text, false, false);
+
+  assertEquals(parts.length, 9);
+
+  const keys = parts.map((part) => String(part.key));
+  assertEquals(new Set(keys).size, parts.length);
+  keys.forEach((key, index) => {
+    assertEquals(key === String(index), false);
+  });
+
+  assertEquals(parts[1].props.color, COLORS.tagContext);
+  assertEquals(parts[3].props.color, COLORS.tagContext);
+  assertEquals(parts[5].props.color, COLORS.tagProject);
+  assertEquals(parts[7].props.color, COLORS.tagProject);
+  assertEquals(parts[0].props.color, undefined);
+
+  const highlighted = renderTodoText(text, true, false);
+  highlighted.forEach((part) => {
+    assertEquals(part.props.color, COLORS.textOnHighlight);
+  });
+
+  const overdue = renderTodoText("late @home +work", false, true);
+  assertEquals(overdue[0].props.color, COLORS.danger);
+  assertEquals(overdue[1].props.color, COLORS.tagContext);
+  assertEquals(overdue[2].props.color, COLORS.danger);
+  assertEquals(overdue[3].props.color, COLORS.tagProject);
+});
+
+Deno.test({
+  name: "TodoList: repeated tag text renders without duplicate-key warnings",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const text = "review @home then @home again +work and +work";
+    const todo = new Todo(text);
+    const originalError = console.error;
+    const errors: string[] = [];
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map((arg) => String(arg)).join(" "));
+    };
+
+    const { lastFrame, unmount } = render(
+      <TestWrapper initialTodos={[todo]}>
+        <AppContentMock todos={[todo]} />
+      </TestWrapper>,
+    );
+
+    try {
+      await waitFor(() => {
+        assertEquals(lastFrame()?.includes(text), true);
+      });
+
+      assertEquals(
+        errors.some((message) => message.includes("same key")),
+        false,
+      );
+    } finally {
+      unmount();
+      console.error = originalError;
+    }
   },
 });

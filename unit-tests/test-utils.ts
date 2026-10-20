@@ -3,17 +3,21 @@ export type MockedStdout = {
 };
 
 export class MockWatcher {
-  private listeners: ((event: Deno.FsEvent) => void)[] = [];
+  private listeners: ((event: Deno.FsEvent | undefined) => void)[] = [];
   private closed = false;
 
+  private nextEvent(): Promise<Deno.FsEvent | undefined> {
+    if (this.closed) return Promise.resolve(undefined);
+    return new Promise((resolve) => {
+      this.listeners.push(resolve);
+    });
+  }
+
   async *[Symbol.asyncIterator](): AsyncIterableIterator<Deno.FsEvent> {
-    while (!this.closed) {
-      const event = await new Promise<Deno.FsEvent>((resolve) => {
-        this.listeners.push(resolve);
-      });
-      if (this.closed) break;
-      yield event;
-    }
+    const event = await this.nextEvent();
+    if (!event) return;
+    yield event;
+    yield* this[Symbol.asyncIterator]();
   }
 
   emit(kind: "modify" | "any") {
@@ -25,10 +29,9 @@ export class MockWatcher {
 
   close() {
     this.closed = true;
-    this.listeners.forEach((l) =>
-      l({ kind: "any", paths: [], flag: undefined })
-    );
+    const listeners = this.listeners;
     this.listeners = [];
+    listeners.forEach((l) => l(undefined));
   }
 }
 
@@ -56,7 +59,7 @@ export async function waitFor(
   options?: { timeout?: number; interval?: number },
 ) {
   const timeout = options?.timeout ?? 5000;
-  const interval = options?.interval ?? 10;
+  const interval = options?.interval ?? 1;
 
   const start = Date.now();
   let lastError: unknown;

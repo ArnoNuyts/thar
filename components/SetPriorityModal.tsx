@@ -1,70 +1,44 @@
 import { useState } from "react";
-import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useListSelection } from "../hooks/useListSelection.ts";
 import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
+import { SelectList } from "./SelectList.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
-import { UpperCaseLetter } from "../types/types.ts";
-import { SECONDARY_COLOR } from "../constants.ts";
-
-const PRIORITIES: (UpperCaseLetter | "Unset")[] = [
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-];
+import { getPriorityOptions, priorityValue } from "../logic/priority.ts";
 
 export const SetPriorityModal = () => {
   const { closeModal } = useModal();
   const { updateTodos } = useTodo();
-  const { useSelectedTodos } = useNavigation();
-  const selectedTodos = useSelectedTodos();
+  const { getSelectedTodos } = useNavigation();
+  const selectedTodos = getSelectedTodos();
   const todo = selectedTodos[0]; // Reference todo for initial values
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [layoutSize, setLayoutSize] = useState<
     { rows?: number; columns?: number }
   >({});
 
-  const options = [...PRIORITIES];
-  if (todo?.priority) {
-    options.push("Unset");
-  }
+  const options = getPriorityOptions(Boolean(todo?.priority));
+
+  const applyPriority = (index: number) => {
+    if (selectedTodos.length === 0) return;
+
+    updateTodos(
+      selectedTodos,
+      (t) => t.setPriority(priorityValue(options[index])),
+    );
+    closeModal();
+  };
+
+  const selection = useListSelection({
+    itemCount: options.length,
+    onSelect: applyPriority,
+    onCancel: closeModal,
+  });
 
   const { isFocused } = useFocusedInput((_input, key) => {
-    if (key.escape) {
-      closeModal();
-      return;
-    }
-
-    if (key.return) {
-      if (selectedTodos.length === 0) return;
-
-      const selected = options[selectedIndex];
-      const newPriority = selected === "Unset"
-        ? undefined
-        : selected as UpperCaseLetter;
-      updateTodos(selectedTodos, (t) => t.setPriority(newPriority));
-      closeModal();
-      return;
-    }
-
-    if (key.upArrow) {
-      setSelectedIndex((
-        prev: number,
-      ) => (prev > 0 ? prev - 1 : options.length - 1));
-      return;
-    }
-
-    if (key.downArrow) {
-      setSelectedIndex((
-        prev: number,
-      ) => (prev < options.length - 1 ? prev + 1 : 0));
-      return;
-    }
+    selection.handleKey(key);
   }, { autoFocus: true, tag: "set-priority-modal" });
 
   useModalMouseList({
@@ -72,36 +46,20 @@ export const SetPriorityModal = () => {
     modalWidth: 30,
     bodyRows: options.length,
     terminalSize: layoutSize,
-    onRowClick: (rowInItems) => {
-      setSelectedIndex(rowInItems);
-      if (selectedTodos.length === 0) return;
-      const selected = options[rowInItems];
-      const newPriority = selected === "Unset"
-        ? undefined
-        : selected as UpperCaseLetter;
-      updateTodos(selectedTodos, (t) => t.setPriority(newPriority));
-      closeModal();
-    },
+    onRowClick: selection.selectAt,
+    onRowHover: selection.setSelectedIndex,
   });
 
   return (
     <Modal
-      isFocused={isFocused}
       title="Set Priority"
       width={30}
       onLayoutSizeChange={setLayoutSize}
     >
-      <Box flexDirection="column" paddingX={1}>
-        {options.map((option, index) => {
-          const isSelected = index === selectedIndex;
-          return (
-            <Box key={option}>
-              <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
-              <Text wrap="truncate">{option}</Text>
-            </Box>
-          );
-        })}
-      </Box>
+      <SelectList
+        items={options.map((option) => ({ key: option, label: option }))}
+        selectedIndex={selection.selectedIndex}
+      />
     </Modal>
   );
 };

@@ -6,7 +6,7 @@ import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
-import { SECONDARY_COLOR } from "../constants.ts";
+import { COLORS } from "../theme/colors.ts";
 
 interface AddTagContextModalProps {
   type: "project" | "context";
@@ -23,8 +23,8 @@ interface TagItem {
 export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
   const { closeModal } = useModal();
   const { updateTodos, todos } = useTodo();
-  const { useSelectedTodos } = useNavigation();
-  const selectedTodos = useSelectedTodos();
+  const { getSelectedTodos } = useNavigation();
+  const selectedTodos = getSelectedTodos();
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [customInput, setCustomInput] = useState("");
@@ -251,7 +251,6 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
 
   return (
     <Modal
-      isFocused={isFocused}
       title={title}
       width={40}
       onLayoutSizeChange={setLayoutSize}
@@ -259,7 +258,7 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
       <Box flexDirection="column" paddingX={1}>
         {/* Custom input option */}
         <Box>
-          <Text color={SECONDARY_COLOR}>{isCustomSelected ? "» " : "  "}</Text>
+          <Text color={COLORS.secondary}>{isCustomSelected ? "» " : "  "}</Text>
           <Text>New:</Text>
           <Text color="cyan">{prefix}</Text>
           <Text inverse={isCustomSelected}>{customInput || " "}</Text>
@@ -277,7 +276,7 @@ export const AddTagContextModal = ({ type }: AddTagContextModalProps) => {
           const isSelected = selectedIndex === index + 1;
           return (
             <Box key={item.name}>
-              <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
+              <Text color={COLORS.secondary}>{isSelected ? "» " : "  "}</Text>
               <Text color={getColor(item)} wrap="truncate">
                 {getCheckbox(item)} {item.name}
               </Text>

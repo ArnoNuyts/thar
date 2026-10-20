@@ -1,11 +1,9 @@
 import { Box, measureElement, Text } from "ink";
 import { ReactNode, useLayoutEffect, useRef } from "react";
-import { PRIMARY_COLOR } from "../constants.ts";
 import { COLORS } from "../theme/colors.ts";
 
 interface ModalProps {
   children?: ReactNode;
-  isFocused?: boolean;
   title?: string;
   width?: number | string;
   onLayoutSizeChange?: (size: { columns: number; rows: number }) => void;
@@ -50,7 +48,7 @@ export const Modal = (
         {title && (
           <Box
             borderStyle="bold"
-            borderColor={PRIMARY_COLOR}
+            borderColor={COLORS.primary}
             borderLeft
             borderRight={false}
             borderBottom={false}
@@ -58,7 +56,7 @@ export const Modal = (
           >
             <Text
               color={COLORS.inverseForeground}
-              backgroundColor={PRIMARY_COLOR}
+              backgroundColor={COLORS.primary}
             >
               {` ${title} `}
             </Text>
@@ -66,7 +64,7 @@ export const Modal = (
         )}
         <Box
           borderStyle="bold"
-          borderColor={PRIMARY_COLOR}
+          borderColor={COLORS.primary}
           borderLeft
           borderRight={false}
           borderBottom={false}

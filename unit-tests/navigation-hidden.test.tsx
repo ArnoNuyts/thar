@@ -8,7 +8,7 @@ import {
 } from "../contexts/navigation-context.tsx";
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { Todo } from "../logic/todo.ts";
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 import { IndexType } from "../types/enums.ts";
 
@@ -42,7 +42,7 @@ Deno.test(
   async () => {
     const todoVisible = new Todo("visible todo");
     const todoHidden = new Todo("h:1 hidden todo");
-    const todos = new Todos(todoVisible, todoHidden);
+    const todos = [todoVisible, todoHidden];
     // deno-lint-ignore no-explicit-any
     let navContext: any;
 
@@ -74,7 +74,7 @@ Deno.test(
   async () => {
     const todoVisible = new Todo("visible todo");
     const todoHidden = new Todo("h:1 hidden todo");
-    const todos = new Todos(todoVisible, todoHidden);
+    const todos = [todoVisible, todoHidden];
     // deno-lint-ignore no-explicit-any
     let navContext: any;
 
@@ -107,7 +107,7 @@ Deno.test(
   async () => {
     const todoVisible = new Todo("visible todo");
     const todoHidden = new Todo("h:1 hidden todo");
-    const todos = new Todos(todoVisible, todoHidden);
+    const todos = [todoVisible, todoHidden];
     // deno-lint-ignore no-explicit-any
     let navContext: any;
 

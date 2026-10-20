@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, measureElement } from "ink";
-import { useInput } from "../hooks/useInput.ts";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
+import { useSuggestionInput } from "../hooks/useSuggestionInput.ts";
+import { useTagSources } from "../hooks/useTagSources.ts";
 
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 
 interface SuggestionInputProps {
   value: string;
@@ -36,33 +37,30 @@ export const SuggestionInput = ({
   const [cursorPos, setCursorPos] = useState(
     initialCursorPos !== undefined ? initialCursorPos : value.length,
   );
-  const [wordStartIndex, setWordStartIndex] = useState(0);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const ref = useRef(null);
 
-  const {
-    suggestions,
-    setSuggestions,
-    selectedIndex,
-    setSelectedIndex,
-    type: suggestionType,
-    setType: setSuggestionType,
-    setPosition,
-    clearSuggestions,
-  } = useSuggestion();
+  const { setPosition } = useSuggestion();
+  const tagSources = useTagSources(todos);
 
-  const { allProjects, allContexts } = (() => {
-    const projects = new Set<string>();
-    const contexts = new Set<string>();
-    todos.forEach((todo) => {
-      todo.projects.forEach((p) => projects.add(p));
-      todo.contexts.forEach((c) => contexts.add(c));
-    });
-    return {
-      allProjects: Array.from(projects).sort(),
-      allContexts: Array.from(contexts).sort(),
-    };
-  })();
+  const { suggestions, wordStartIndex, updateSuggestions } = useSuggestionInput(
+    {
+      value,
+      cursor: cursorPos,
+      source: tagSources,
+      onApply: (newValue, newCursor) => {
+        onChange(newValue);
+        setCursorPos(newCursor);
+        onCursorChange(newCursor, newValue);
+      },
+      isActive: isFocused,
+      onUnhandledKey: (_input, key) => {
+        if (key.escape) {
+          onCancel();
+        }
+      },
+    },
+  );
 
   useEffect(() => {
     onSuggestionsStateChange?.(suggestions.length > 0);
@@ -79,27 +77,6 @@ export const SuggestionInput = ({
       }
     }
   }, [value]);
-  /*
-  useEffect(() => {
-  if (suggestions.length === 0) return;
-
-  const textUpToCursor = value.slice(0, wordStartIndex);
-  const charsPerLine = dimensions.width; // terminal columns
-  const cursorCol = wordStartIndex % charsPerLine;
-  const cursorLine = Math.floor(textUpToCursor.length / charsPerLine);
-
-  setPosition({
-    left: left + cursorCol,
-    top: top + cursorLine + 1,
-  });
-}, [wordStartIndex, value, dimensions.width, suggestions.length, left, top]);
-
-  useEffect(() => {
-    if (!isFocused) {
-      clearSuggestions();
-    }
-  }, [isFocused]);
-  */
 
   useEffect(() => {
     if (suggestions.length === 0) return;
@@ -138,36 +115,6 @@ export const SuggestionInput = ({
     });
   }, [wordStartIndex, value, dimensions.width, suggestions.length, left, top]);
 
-  const updateSuggestions = (text: string, cursor: number) => {
-    const leftPart = text.slice(0, cursor);
-
-    const wordStartMatch = leftPart.match(/[\s]([\+@][\w\.\_\-]*)$/) ||
-      leftPart.match(/^([\+@][\w\.\_\-]*)$/);
-
-    if (wordStartMatch) {
-      const fullWordStart = wordStartMatch[1];
-      const startIdx = leftPart.lastIndexOf(fullWordStart);
-
-      const type = fullWordStart.startsWith("+") ? "project" : "context";
-      const searchTerm = fullWordStart.substring(1);
-
-      const source = type === "project" ? allProjects : allContexts;
-      const matches = source.filter((item) =>
-        item.toLowerCase().startsWith(searchTerm.toLowerCase())
-      );
-
-      if (matches.length > 0) {
-        setSuggestions(matches);
-        setSuggestionType(type);
-        setSelectedIndex(0);
-        setWordStartIndex(startIdx);
-        return;
-      }
-    }
-
-    clearSuggestions();
-  };
-
   const handleChange = (newValue: string) => {
     onChange(newValue);
   };
@@ -177,62 +124,6 @@ export const SuggestionInput = ({
     updateSuggestions(newValue, newCursor);
     onCursorChange(newCursor, newValue);
   };
-
-  useInput((_input, key) => {
-    if (!isFocused) return;
-
-    const hasSuggestions = suggestions.length > 0;
-
-    switch (true) {
-      case key.upArrow && hasSuggestions:
-        setSelectedIndex((
-          prev,
-        ) => (prev > 0 ? prev - 1 : suggestions.length - 1));
-        break;
-
-      case key.downArrow && hasSuggestions:
-        setSelectedIndex((
-          prev,
-        ) => (prev < suggestions.length - 1 ? prev + 1 : 0));
-        break;
-
-      case (key.return || key.tab) && hasSuggestions: {
-        const suggestion = suggestions[selectedIndex];
-        const prefix = suggestionType === "project" ? "+" : "@";
-
-        const leftPart = value.slice(0, cursorPos);
-        const rightPart = value.slice(cursorPos);
-
-        const wordStartMatch = leftPart.match(/[\s]([\+@][\w\.\_\-]*)$/) ||
-          leftPart.match(/^([\+@][\w\.\_\-]*)$/);
-
-        if (wordStartMatch) {
-          const word = wordStartMatch[1];
-          const wordStart = leftPart.lastIndexOf(word);
-
-          const newLeft = value.slice(0, wordStart) + prefix + suggestion + " ";
-          const newValue = newLeft + rightPart;
-
-          onChange(newValue);
-          setCursorPos(newLeft.length);
-          clearSuggestions();
-          onCursorChange(newLeft.length, newValue);
-        }
-        break;
-      }
-
-      case key.escape:
-        if (hasSuggestions) {
-          clearSuggestions();
-        } else {
-          onCancel();
-        }
-        break;
-
-      default:
-        break;
-    }
-  });
 
   return (
     <Box flexGrow={1} ref={ref}>

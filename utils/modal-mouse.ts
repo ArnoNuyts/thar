@@ -1,8 +1,8 @@
 import { MouseEvent } from "../hooks/useMouseInput.ts";
-import { getTerminalSize as getResolvedTerminalSize } from "./terminal-size.ts";
+import { TerminalSize } from "./terminal-size.ts";
 
-const MODAL_TOP_CHROME_ROWS = 3;
-const MODAL_BOTTOM_CHROME_ROWS = 2;
+export const MODAL_TOP_CHROME_ROWS = 3;
+export const MODAL_BOTTOM_CHROME_ROWS = 2;
 
 export const resolveModalWidth = (
   columns: number,
@@ -26,22 +26,17 @@ export interface ModalBodyCell {
   modalWidth: number;
 }
 
-export const getTerminalSize = (
-  stdout: { rows?: number; columns?: number } | undefined,
-  measured?: { rows?: number; columns?: number },
-) => getResolvedTerminalSize(stdout, measured);
-
-export const getModalBodyCellFromClick = (
+export const getModalBodyCellAtPosition = (
   event: MouseEvent,
-  stdout: { rows?: number; columns?: number },
+  terminal: TerminalSize,
   options: { modalWidth?: number | string; bodyRows: number },
 ): ModalBodyCell | undefined => {
-  if (!event.leftClick || event.x === undefined || event.y === undefined) {
+  if (event.x === undefined || event.y === undefined) {
     return undefined;
   }
 
-  const rows = stdout.rows;
-  const columns = stdout.columns;
+  const rows = terminal.rows;
+  const columns = terminal.columns;
   if (!rows || !columns) return undefined;
 
   const modalWidth = resolveModalWidth(columns, options.modalWidth);
@@ -64,10 +59,27 @@ export const getModalBodyCellFromClick = (
   };
 };
 
-export const getModalBodyRowFromClick = (
+export const getModalBodyCellFromClick = (
   event: MouseEvent,
-  stdout: { rows?: number; columns?: number },
+  terminal: TerminalSize,
+  options: { modalWidth?: number | string; bodyRows: number },
+): ModalBodyCell | undefined => {
+  if (!event.leftClick) return undefined;
+  return getModalBodyCellAtPosition(event, terminal, options);
+};
+
+export const getModalBodyRowFromEvent = (
+  event: MouseEvent,
+  terminal: TerminalSize,
   options: { modalWidth?: number | string; bodyRows: number },
 ): number | undefined => {
-  return getModalBodyCellFromClick(event, stdout, options)?.row;
+  return getModalBodyCellAtPosition(event, terminal, options)?.row;
+};
+
+export const getModalBodyRowFromClick = (
+  event: MouseEvent,
+  terminal: TerminalSize,
+  options: { modalWidth?: number | string; bodyRows: number },
+): number | undefined => {
+  return getModalBodyCellFromClick(event, terminal, options)?.row;
 };
