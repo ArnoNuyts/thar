@@ -11,12 +11,14 @@ import {
 } from "date-fns";
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
+import { formatDateTag, parseDateTag } from "./dates.ts";
+import { CONTEXT_REGEX, PROJECT_REGEX } from "./patterns.ts";
 
 const TODO_REGEX =
   /^((?<done>[x])\s){0,1}(\((?<prio>[A-Z])\)\s){0,1}((?<completionDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}((?<creationDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}(?<rest>[^\n\r]+)\s*$/;
-const PROJECT_REGEX = /(^|\s)\+(?<name>[\w.\_\-]+)/g;
-const CONTEXT_REGEX = /(^|\s)\@(?<name>[\w.\_\-]+)/g;
 const TAG_REGEX = /(^|\s)(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
+
+let nextTodoId = 0;
 
 export class Todo {
   readonly id: symbol;
@@ -55,22 +57,43 @@ export class Todo {
   }
 
   constructor(text: string) {
-    this.id = Symbol();
+    this.id = Symbol(String(nextTodoId++));
     const match = text.match(TODO_REGEX);
     if (match?.groups) {
-      this._completionDate =
-        match.groups.creationDate && match.groups.completionDate
+      if (match.groups.done) {
+        // For completed todos, the first date is the completion date and an
+        // optional second date is the creation date.
+        this._completionDate = match.groups.completionDate
           ? parseISO(match.groups.completionDate)
           : undefined;
-      this._creationDate =
-        match.groups.creationDate || match.groups.completionDate
-          ? parseISO(match.groups.creationDate || match.groups.completionDate)
+        this._creationDate = match.groups.creationDate
+          ? parseISO(match.groups.creationDate)
           : undefined;
+      } else {
+        // Without the `x` marker the first date is a creation date.
+        this._completionDate = undefined;
+        this._creationDate =
+          match.groups.creationDate || match.groups.completionDate
+            ? parseISO(match.groups.creationDate || match.groups.completionDate)
+            : undefined;
+      }
       this._priority = match.groups.prio as UpperCaseLetter;
       text = match.groups.rest as string;
       this._state = match.groups.done ? TodoStateEnum.done : TodoStateEnum.todo;
     }
     this.internalParseText(text);
+  }
+
+  /**
+   * Returns an independent copy of this todo with `mutate` applied to it.
+   * All setters go through this helper, so callers always get a new todo with
+   * its own projects, contexts, and tags (including array-valued tags), and
+   * the receiver is never modified.
+   */
+  private with(mutate: (next: Todo) => void): Todo {
+    const next = this.clone();
+    mutate(next);
+    return next;
   }
 
   private clone(): Todo {
@@ -88,16 +111,17 @@ export class Todo {
   }
 
   toggleState(): { updated: Todo; recurring?: Todo } {
-    const next = this.clone();
-    next._state = next._state == TodoStateEnum.todo
-      ? TodoStateEnum.done
-      : TodoStateEnum.todo;
-    if (next._state === TodoStateEnum.done && next._creationDate) {
-      next._completionDate = new Date();
-    }
-    if (next._state === TodoStateEnum.todo && next._completionDate) {
-      next._completionDate = undefined;
-    }
+    const next = this.with((next) => {
+      next._state = next._state == TodoStateEnum.todo
+        ? TodoStateEnum.done
+        : TodoStateEnum.todo;
+      if (next._state === TodoStateEnum.done && next._creationDate) {
+        next._completionDate = new Date();
+      }
+      if (next._state === TodoStateEnum.todo && next._completionDate) {
+        next._completionDate = undefined;
+      }
+    });
 
     if (next._state === TodoStateEnum.done && next._tags.rec) {
       const recurrence = next._tags.rec as string;
@@ -111,9 +135,6 @@ export class Todo {
         const amount = parseInt(match[1]);
         const unit = match[2];
         let newDueDate = new Date();
-        /*if (this._tags.due) {
-          newDueDate = parseISO(this._tags.due as string);
-        }*/
 
         switch (unit) {
           case "d":
@@ -151,27 +172,27 @@ export class Todo {
       (Object.keys(this._tags).map((k) => k + ":" + this._tags[k]).join(" "));
   }
   setPriority(key?: UpperCaseLetter): Todo {
-    const next = this.clone();
-    next._priority = key;
-    return next;
+    return this.with((next) => {
+      next._priority = key;
+    });
   }
 
   setCreationDate(date: Date): Todo {
-    const next = this.clone();
-    next._creationDate = date;
-    return next;
+    return this.with((next) => {
+      next._creationDate = date;
+    });
   }
 
   setCompletionDate(date: Date | undefined): Todo {
-    const next = this.clone();
-    next._completionDate = date;
-    return next;
+    return this.with((next) => {
+      next._completionDate = date;
+    });
   }
 
   setState(state: TodoStateEnum): Todo {
-    const next = this.clone();
-    next._state = state;
-    return next;
+    return this.with((next) => {
+      next._state = state;
+    });
   }
 
   isDone() {
@@ -187,27 +208,29 @@ export class Todo {
   }
 
   isOverdue() {
-    if (typeof this._tags.due !== "string") return false;
-    const dueDate = startOfDay(parseISO(this._tags.due));
+    const dueDate = parseDateTag(this._tags.due);
+    // A missing or malformed due tag means the todo is not overdue.
+    if (!dueDate) return false;
     const today = startOfDay(new Date());
     // isOverdue returns true if today >= dueDate
     return isSameDay(today, dueDate) || isBefore(dueDate, today);
   }
 
   isPassedThreshold() {
-    if (typeof this._tags.t !== "string") return true;
-    const thresholdDate = startOfDay(parseISO(this._tags.t));
+    const thresholdDate = parseDateTag(this._tags.t);
+    // A missing or malformed threshold tag does not hide the todo.
+    if (!thresholdDate) return true;
     const today = startOfDay(new Date());
     return isSameDay(today, thresholdDate) || isBefore(thresholdDate, today);
   }
 
-  setText(text: string): Todo {
-    const next = this.clone();
-    next.internalParseText(text);
-    return next;
+  setText(text: string, options: { preserveTags?: boolean } = {}): Todo {
+    return this.with((next) => {
+      next.internalParseText(text, options.preserveTags);
+    });
   }
 
-  private internalParseText(text: string) {
+  private internalParseText(text: string, preserveTags = false) {
     this._projects.clear();
 
     const matchProjects = text.matchAll(PROJECT_REGEX);
@@ -221,80 +244,79 @@ export class Todo {
       this._contexts.add(context.groups!.name);
     }
 
+    const parsedTags: { [key: string]: string | string[] } = {};
     const matchTags = text.matchAll(TAG_REGEX);
     for (const tag of matchTags) {
-      switch (typeof this._tags[tag.groups!.key]) {
-        case "object":
-          this._tags[tag.groups!.key] = [
-            ...(this._tags[tag.groups!.key] as string[]),
-            tag.groups!.value,
-          ];
-          break;
-        case "string":
-          this._tags[tag.groups!.key] = [
-            this._tags[tag.groups!.key] as string,
-            tag.groups!.value,
-          ];
-          break;
-        default:
-          this._tags[tag.groups!.key] = tag.groups!.value;
+      const key = tag.groups!.key;
+      const value = tag.groups!.value;
+      const current = parsedTags[key];
+      if (Array.isArray(current)) {
+        current.push(value);
+      } else if (typeof current === "string") {
+        parsedTags[key] = [current, value];
+      } else {
+        parsedTags[key] = value;
       }
       text = text.replace(tag[0], "");
     }
+    // Tags in the supplied text are authoritative unless the caller explicitly
+    // preserves programmatic metadata (project/context edits re-parse text
+    // that has had its tags stripped).
+    this._tags = preserveTags ? { ...this._tags, ...parsedTags } : parsedTags;
     this._text = text.trim();
   }
 
   setRecurrence(recurrence: string): Todo {
-    const next = this.clone();
-    next._tags.rec = recurrence;
-    return next;
+    return this.with((next) => {
+      next._tags.rec = recurrence;
+    });
   }
 
   removeRecurrence(): Todo {
-    const next = this.clone();
-    delete next._tags.rec;
-    return next;
+    return this.with((next) => {
+      delete next._tags.rec;
+    });
   }
 
   setDue(date: Date): Todo {
-    const next = this.clone();
-    next._tags.due = format(date, "yyyy-MM-dd");
-    return next;
+    return this.with((next) => {
+      next._tags.due = formatDateTag(date);
+    });
   }
 
   setThreshold(date: Date): Todo {
-    const next = this.clone();
-    next._tags.t = format(date, "yyyy-MM-dd");
-    return next;
+    return this.with((next) => {
+      next._tags.t = formatDateTag(date);
+    });
   }
 
   removeDue(): Todo {
-    const next = this.clone();
-    delete next._tags.due;
-    return next;
+    return this.with((next) => {
+      delete next._tags.due;
+    });
   }
 
   removeThreshold(): Todo {
-    const next = this.clone();
-    delete next._tags.t;
-    return next;
+    return this.with((next) => {
+      delete next._tags.t;
+    });
   }
 
   toggleHidden(): Todo {
-    const next = this.clone();
-    if (next._tags.h && next._tags.h !== "0") {
-      delete next._tags.h;
-    } else {
-      next._tags.h = "1";
-    }
-    return next;
+    return this.with((next) => {
+      if (next._tags.h && next._tags.h !== "0") {
+        delete next._tags.h;
+      } else {
+        next._tags.h = "1";
+      }
+    });
   }
 
   addContext(context: string): Todo {
     if (this._contexts.has(context)) {
       return this;
     }
-    return this.setText(`${this._text} @${context}`);
+    return this.setText(`${this._text} @${context}`, { preserveTags: true });
   }
 
   removeContext(context: string): Todo {
@@ -303,14 +325,16 @@ export class Todo {
     }
     // Remove @context from text (with optional leading space)
     const regex = new RegExp(`\\s*@${context}(?=\\s|$)`, "g");
-    return this.setText(this._text.replace(regex, "").trim());
+    return this.setText(this._text.replace(regex, "").trim(), {
+      preserveTags: true,
+    });
   }
 
   addProject(project: string): Todo {
     if (this._projects.has(project)) {
       return this;
     }
-    return this.setText(`${this._text} +${project}`);
+    return this.setText(`${this._text} +${project}`, { preserveTags: true });
   }
 
   removeProject(project: string): Todo {
@@ -319,7 +343,9 @@ export class Todo {
     }
     // Remove +project from text (with optional leading space)
     const regex = new RegExp(`\\s*\\+${project}(?=\\s|$)`, "g");
-    return this.setText(this._text.replace(regex, "").trim());
+    return this.setText(this._text.replace(regex, "").trim(), {
+      preserveTags: true,
+    });
   }
 
   getHash(): string {

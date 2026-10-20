@@ -1,15 +1,14 @@
 import { useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useListSelection } from "../hooks/useListSelection.ts";
 import { useModalMouseList } from "../hooks/useModalMouseList.ts";
+import { useTodoCommands } from "../hooks/useTodoCommands.ts";
+import { Key } from "../hooks/useInput.ts";
 import { Modal } from "./Modal.tsx";
+import { SELECTED_MARKER, UNSELECTED_MARKER } from "./SelectList.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
-import { useTodo } from "../contexts/todo-context.tsx";
-import { useToaster } from "../contexts/toaster-context.tsx";
-import { useNavigation } from "../contexts/navigation-context.tsx";
-import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
-import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
-import { Todo } from "../logic/todo.ts";
+import { COLORS } from "../theme/colors.ts";
 
 export type MenuAction =
   | "edit"
@@ -29,13 +28,13 @@ export type MenuAction =
   | "add-project"
   | "add-context";
 
-interface MenuItem {
+export interface MenuItem {
   label: string;
   shortcut: string;
   action: MenuAction;
 }
 
-const MENU_ITEMS: MenuItem[] = [
+export const MENU_ITEMS: MenuItem[] = [
   { label: "Edit", shortcut: "e", action: "edit" },
   { label: "Delete", shortcut: "del", action: "delete" },
   { label: "Toggle Complete", shortcut: "space", action: "toggle" },
@@ -54,27 +53,42 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Paste", shortcut: "v", action: "paste" },
 ];
 
+// Display shortcuts that describe a named key rather than a typed character.
+// Keeping the canonical names here means dispatch reads the same MENU_ITEMS
+// data that the menu renders.
+const NAMED_SHORTCUTS: Record<string, string> = {
+  del: "delete",
+  delete: "delete",
+  space: "space",
+  return: "return",
+  escape: "escape",
+};
+
+const MENU_SHORTCUT_ACTIONS = new Map<string, MenuAction>(
+  MENU_ITEMS.map((item) => [
+    NAMED_SHORTCUTS[item.shortcut] ?? item.shortcut,
+    item.action,
+  ]),
+);
+
+const normalizeInput = (input: string, key: Key): string => {
+  if (key.delete) return "delete";
+  if (key.return) return "return";
+  if (key.escape) return "escape";
+  if (input === " ") return "space";
+  return input;
+};
+
+export const resolveMenuShortcut = (
+  input: string,
+  key: Key,
+): MenuAction | undefined => {
+  return MENU_SHORTCUT_ACTIONS.get(normalizeInput(input, key));
+};
+
 export const TodoMenu = () => {
-  const { closeModal, openModal } = useModal();
-  const {
-    deleteTodos,
-    toggleTodos,
-    toggleHidden,
-    archiveCompletedTodos,
-    undo,
-    redo,
-    addTodos,
-  } = useTodo();
-  const {
-    useSelectedTodo,
-    useSelectedTodos,
-    setSelectedTodoId,
-    toggleShowHidden,
-  } = useNavigation();
-  const { showToaster } = useToaster();
-  const todo = useSelectedTodo();
-  const selectedTodos = useSelectedTodos();
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const { closeModal } = useModal();
+  const commands = useTodoCommands();
   const [layoutSize, setLayoutSize] = useState<
     { rows?: number; columns?: number }
   >({});
@@ -82,221 +96,69 @@ export const TodoMenu = () => {
   const handleAction = async (action: MenuAction) => {
     switch (action) {
       case "edit":
-        if (todo) openModal("edit-todo", todo);
+        commands.editSelected();
         break;
       case "delete":
-        if (selectedTodos.length > 0) {
-          openModal("confirm-modal", {
-            title: selectedTodos.length > 1 ? "Delete Todos" : "Delete Todo",
-            message: selectedTodos.length > 1
-              ? `Are you sure you want to delete ${selectedTodos.length} todos?`
-              : "Are you sure you want to delete this todo?",
-            onConfirm: () => {
-              deleteTodos(selectedTodos);
-            },
-          });
-        }
+        commands.deleteSelected();
         break;
       case "toggle":
-        if (selectedTodos.length > 0) {
-          toggleTodos(selectedTodos);
-          closeModal();
-        }
+        commands.toggleSelected({ onComplete: closeModal });
         break;
       case "due":
-        openModal("set-due-date");
+        commands.setDueDate();
         break;
       case "threshold":
-        openModal("set-threshold-date");
+        commands.setThresholdDate();
         break;
       case "recurrence":
-        openModal("set-recurrence");
+        commands.setRecurrence();
         break;
       case "priority":
-        openModal("set-priority");
+        commands.openPriorityModal();
         break;
       case "add-project":
-        openModal("add-project");
+        commands.addProject();
         break;
       case "add-context":
-        openModal("add-context");
+        commands.addContext();
         break;
       case "toggle-hidden":
-        if (selectedTodos.length > 0) {
-          toggleHidden(selectedTodos);
-          closeModal();
-        }
+        commands.toggleSelectedHidden({ onComplete: closeModal });
         break;
       case "toggle-view-hidden":
-        toggleShowHidden();
-        closeModal();
+        commands.toggleHiddenView({ onComplete: closeModal });
         break;
       case "archive":
-        openModal("confirm-modal", {
-          title: "Archive Completed",
-          message: "Archive all completed todos to done.txt?",
-          onConfirm: async () => {
-            await archiveCompletedTodos();
-          },
-        });
+        commands.archiveSelected();
         break;
       case "copy":
-        if (selectedTodos.length > 0) {
-          try {
-            await copyToClipboard(
-              selectedTodos.map((t: Todo) => t.toString()).join("\n"),
-            );
-            showToaster(
-              selectedTodos.length > 1
-                ? `${selectedTodos.length} todos copied`
-                : "Todo copied",
-            );
-          } catch (e) {
-            showToaster(
-              `Copy failed: ${e instanceof Error ? e.message : String(e)}`,
-            );
-          }
-          closeModal();
-        }
+        await commands.copySelected({ onComplete: closeModal });
         break;
       case "undo":
-        undo();
-        closeModal();
+        commands.undo({ onComplete: closeModal });
         break;
       case "redo":
-        redo();
-        closeModal();
+        commands.redo({ onComplete: closeModal });
         break;
-      case "paste": {
-        try {
-          const text = await readFromClipboard();
-          const lines = text
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line.length > 0);
-          if (lines.length === 0) {
-            closeModal();
-            return;
-          }
-
-          const doPaste = () => {
-            const added = addTodos(...lines);
-            if (added.length > 0) {
-              setSelectedTodoId(added[added.length - 1].id);
-            }
-            showToaster(`Pasted ${lines.length} todo(s)`);
-            closeModal();
-          };
-
-          if (lines.length > 10) {
-            openModal("confirm-modal", {
-              title: "Paste Multiple Todos",
-              message: `Are you sure you want to paste ${lines.length} todos?`,
-              onConfirm: doPaste,
-            });
-          } else {
-            doPaste();
-          }
-        } catch (e) {
-          showToaster(
-            `Paste failed: ${e instanceof Error ? e.message : String(e)}`,
-          );
-          closeModal();
-        }
+      case "paste":
+        await commands.pasteTodos({ onComplete: closeModal });
         break;
-      }
     }
   };
 
+  const selection = useListSelection({
+    itemCount: MENU_ITEMS.length,
+    onSelect: (index) => handleAction(MENU_ITEMS[index].action),
+    onCancel: closeModal,
+  });
+
   const { isFocused } = useFocusedInput(
     (input, key) => {
-      if (key.escape) {
-        closeModal();
-        return;
-      }
+      if (selection.handleKey(key)) return;
 
-      if (key.return) {
-        handleAction(MENU_ITEMS[selectedIndex].action);
-        return;
-      }
-
-      if (key.upArrow) {
-        setSelectedIndex((prev: number) =>
-          prev > 0 ? prev - 1 : MENU_ITEMS.length - 1
-        );
-        return;
-      }
-
-      if (key.downArrow) {
-        setSelectedIndex((prev: number) =>
-          prev < MENU_ITEMS.length - 1 ? prev + 1 : 0
-        );
-        return;
-      }
-
-      // Shortcut handling
-      if (input === "e") {
-        handleAction("edit");
-      }
-
-      if (input === "d") {
-        handleAction("due");
-      }
-
-      if (key.delete) {
-        handleAction("delete");
-      }
-
-      if (input === " ") {
-        handleAction("toggle");
-      }
-
-      if (input === "t") {
-        handleAction("threshold");
-      }
-
-      if (input === "r") {
-        handleAction("recurrence");
-      }
-
-      if (input === "p") {
-        handleAction("priority");
-      }
-
-      if (input === "h") {
-        handleAction("toggle-hidden");
-      }
-
-      if (input === "H") {
-        handleAction("toggle-view-hidden");
-      }
-
-      if (input === "a") {
-        handleAction("archive");
-      }
-
-      if (input === "c") {
-        handleAction("copy");
-      }
-
-      if (input === "z") {
-        handleAction("undo");
-      }
-
-      if (input === "Z") {
-        handleAction("redo");
-      }
-
-      if (input === "v") {
-        handleAction("paste");
-      }
-
-      if (input === "+") {
-        handleAction("add-project");
-      }
-
-      if (input === "@") {
-        handleAction("add-context");
+      const action = resolveMenuShortcut(input, key);
+      if (action) {
+        handleAction(action);
       }
     },
     { autoFocus: true },
@@ -307,22 +169,19 @@ export const TodoMenu = () => {
     modalWidth: "50%",
     bodyRows: MENU_ITEMS.length,
     terminalSize: layoutSize,
-    onRowClick: (rowInItems) => {
-      setSelectedIndex(rowInItems);
-      handleAction(MENU_ITEMS[rowInItems].action);
-    },
+    onRowClick: selection.selectAt,
+    onRowHover: selection.setSelectedIndex,
   });
 
   return (
     // @ts-ignore: children prop issue
     <Modal
-      isFocused={isFocused}
       title="Todo menu"
       onLayoutSizeChange={setLayoutSize}
     >
       <Box flexDirection="column">
         {MENU_ITEMS.map((item, index) => {
-          const isSelected = index === selectedIndex;
+          const isSelected = index === selection.selectedIndex;
           return (
             <Box
               key={item.action}
@@ -330,11 +189,13 @@ export const TodoMenu = () => {
               paddingRight={1}
             >
               <Box>
-                <Text color={SECONDARY_COLOR}>{isSelected ? "» " : "  "}</Text>
+                <Text color={COLORS.secondary}>
+                  {isSelected ? SELECTED_MARKER : UNSELECTED_MARKER}
+                </Text>
                 <Text wrap="truncate">{item.label}</Text>
               </Box>
               <Box>
-                <Text color={PRIMARY_COLOR}>{item.shortcut}</Text>
+                <Text color={COLORS.primary}>{item.shortcut}</Text>
               </Box>
             </Box>
           );

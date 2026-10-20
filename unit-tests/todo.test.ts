@@ -94,7 +94,10 @@ Deno.test("Todo constructor - sets completionDate correctly", () => {
       input: "x 2024-06-02 2024-06-01 Happy path",
       expected: new Date("2024-06-02T00:00:00.000Z"),
     },
-    { input: "x 2024-06-02 No completion date", expected: undefined },
+    {
+      input: "x 2024-06-02 completion without creation date",
+      expected: new Date("2024-06-02T00:00:00.000Z"),
+    },
     {
       input: "2024-06-02 No completion date, not completed",
       expected: undefined,
@@ -116,35 +119,66 @@ Deno.test("Todo constructor - sets completionDate correctly", () => {
   }
 });
 
-// Test for `completionDate`
-Deno.test("Todo constructor - sets completionDate correctly", () => {
+Deno.test("Todo constructor - parses completion date without a creation date", () => {
   const testCases = [
     {
-      input: "x 2024-06-02 2024-06-01 Buy groceries",
-      expected: new Date("2024-06-02T00:00:00.000Z"),
+      input: "x 2024-01-01 buy milk",
+      expectedCompletionDate: "2024-01-01",
+      expectedCreationDate: undefined,
+      expectedState: TodoStateEnum.done,
     },
-    { input: "x 2024-06-02 Buy groceries", expected: undefined },
+    {
+      input: "x 2024-01-02 2024-01-01 buy milk",
+      expectedCompletionDate: "2024-01-02",
+      expectedCreationDate: "2024-01-01",
+      expectedState: TodoStateEnum.done,
+    },
+    {
+      input: "2024-01-01 buy milk",
+      expectedCompletionDate: undefined,
+      expectedCreationDate: "2024-01-01",
+      expectedState: TodoStateEnum.todo,
+    },
   ];
 
-  for (const { input, expected } of testCases) {
+  for (
+    const {
+      input,
+      expectedCompletionDate,
+      expectedCreationDate,
+      expectedState,
+    } of testCases
+  ) {
     const todo = new Todo(input);
 
     assertEquals(
       todo.completionDate
         ? format(todo.completionDate, "yyyy-MM-dd")
         : undefined,
-      expected ? format(expected, "yyyy-MM-dd") : undefined,
-      `Input "${input}" should have exactly the date: ${
-        expected ? format(expected, "yyyy-MM-dd") : "undefined"
-      }`,
+      expectedCompletionDate,
+      `Input "${input}" should have completion date: ${expectedCompletionDate}`,
+    );
+    assertEquals(
+      todo.creationDate ? format(todo.creationDate, "yyyy-MM-dd") : undefined,
+      expectedCreationDate,
+      `Input "${input}" should have creation date: ${expectedCreationDate}`,
+    );
+    assertEquals(
+      todo.state,
+      expectedState,
+      `Input "${input}" should have state: ${expectedState}`,
     );
   }
 });
 
-Deno.test("Todo constructor - keeps completion date empty", () => {
+Deno.test("Todo constructor - keeps creation date empty with completion date only", () => {
   const input = "x 2024-06-01 Buy groceries";
   const todo = new Todo(input);
-  assertEquals(todo.completionDate, undefined);
+  assertEquals(
+    todo.completionDate ? format(todo.completionDate, "yyyy-MM-dd") : undefined,
+    "2024-06-01",
+  );
+  assertEquals(todo.creationDate, undefined);
 });
 
 Deno.test("Todo constructor - sets creationDate correctly", () => {
@@ -243,6 +277,51 @@ Deno.test("Todo constructor - extracts tags correctly", () => {
   }
 });
 
+Deno.test("Todo constructor - parses multiple distinct tags", () => {
+  const todo = new Todo("a rec:1d due:2024-01-01");
+
+  assertEquals(todo.tags, { rec: "1d", due: "2024-01-01" });
+});
+
+Deno.test("Todo setText - is idempotent when reparsing the same tags", () => {
+  const todo = new Todo("a rec:1d").setText("a rec:1d");
+
+  assertEquals(todo.tags, { rec: "1d" });
+  assertEquals(todo.text, "a");
+});
+
+Deno.test("Todo setText - replaces tags with those in the supplied text", () => {
+  const todo = new Todo("a rec:1d").setText("a");
+
+  assertEquals(todo.tags, {});
+  assertEquals(todo.text, "a");
+});
+
+Deno.test("Todo project and context edits preserve programmatic tags", () => {
+  const withProject = new Todo("a").setRecurrence("1d").addProject("p");
+  assertEquals(withProject.tags.rec, "1d");
+  assertEquals(Array.from(withProject.projects), ["p"]);
+
+  const withContext = new Todo("a").setRecurrence("1d").addContext("c");
+  assertEquals(withContext.tags.rec, "1d");
+  assertEquals(Array.from(withContext.contexts), ["c"]);
+
+  const withoutProject = new Todo("a +p").setRecurrence("1d").removeProject(
+    "p",
+  );
+  assertEquals(withoutProject.tags.rec, "1d");
+  assertEquals(Array.from(withoutProject.projects), []);
+
+  const withoutContext = new Todo("a @c").setRecurrence("1d").removeContext(
+    "c",
+  );
+  assertEquals(withoutContext.tags.rec, "1d");
+  assertEquals(Array.from(withoutContext.contexts), []);
+
+  const withDue = new Todo("a").setDue(new Date("2024-01-01")).addProject("p");
+  assertEquals(withDue.tags.due, "2024-01-01");
+});
+
 Deno.test("isDone - returns correctly", () => {
   const testCases = [
     { input: "x Done", expected: true },
@@ -295,6 +374,7 @@ Deno.test("isOverdue - returns correctly", () => {
       expected: true,
     },
     { input: "No due date", expected: false },
+    { input: "Malformed due:not-a-date", expected: false },
   ];
 
   for (const { input, expected } of testCases) {
@@ -321,6 +401,7 @@ Deno.test("isPassedThreshold - returns correctly", () => {
       expected: true,
     },
     { input: "No threshold date", expected: true },
+    { input: "Malformed t:not-a-date", expected: true },
   ];
 
   for (const { input, expected } of testCases) {

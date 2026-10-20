@@ -61,8 +61,8 @@ Deno.test("TodoMenu: should call toggleTodos for all selected items (Mocked)", a
     <TestWrapper
       todoValue={{ toggleTodos: (todos: Todo[]) => toggledTodos = todos }}
       navValue={{
-        useSelectedTodos: () => [todo1, todo2],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1, todo2],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -95,8 +95,8 @@ Deno.test("TodoMenu: should call deleteTodos after real confirmation (Mocked)", 
     <TestWrapper
       todoValue={{ deleteTodos: (todos: Todo[]) => deletedTodos = todos }}
       navValue={{
-        useSelectedTodos: () => [todo1, todo2],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1, todo2],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -177,8 +177,8 @@ Deno.test("TodoMenu: should call toggleHidden (Mocked)", async () => {
     <TestWrapper
       todoValue={{ toggleHidden: (todos: Todo[]) => toggledHidden = todos }}
       navValue={{
-        useSelectedTodos: () => [todo1],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -205,8 +205,8 @@ Deno.test("TodoMenu: should open edit-todo modal", async () => {
   const { unmount, stdin, lastFrame } = render(
     <TestWrapper
       navValue={{
-        useSelectedTodos: () => [todo1],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -230,8 +230,8 @@ Deno.test("TodoMenu: single mouse click should trigger menu item action", async 
   const { unmount, stdin, lastFrame } = render(
     <TestWrapper
       navValue={{
-        useSelectedTodos: () => [todo1],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1],
+        getSelectedTodo: () => todo1,
       }}
     >
       <AppContentMock />
@@ -407,8 +407,8 @@ Deno.test({
     const { unmount, stdin, lastFrame } = render(
       <TestWrapper
         navValue={{
-          useSelectedTodos: () => [todo1],
-          useSelectedTodo: () => todo1,
+          getSelectedTodos: () => [todo1],
+          getSelectedTodo: () => todo1,
         }}
       >
         <AppContentMock />
@@ -431,7 +431,66 @@ Deno.test({
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
-    await new Promise((r) => setTimeout(r, 200)); // Let things settle
+  }
+  testUnmount?.();
+});
+
+Deno.test({
+  name: "TodoMenu: should show failure toast when clipboard copy fails",
+  sanitizeResources: false,
+  sanitizeOps: false,
+}, async () => {
+  // deno-lint-ignore no-explicit-any
+  const originalCommand = (Deno as any).Command;
+  let testUnmount: (() => void) | undefined;
+  try {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = class {
+      constructor() {}
+      spawn() {
+        return {
+          stdin: {
+            getWriter: () => ({
+              write: () => Promise.reject(new Error("clipboard unavailable")),
+              close: () => Promise.resolve(),
+              releaseLock: () => {},
+            }),
+          },
+          status: Promise.resolve({ success: false, code: 1 }),
+        };
+      }
+    };
+
+    const todo1 = new Todo("Todo 1");
+    let focusCount = 0;
+    const { unmount, stdin, lastFrame } = render(
+      <TestWrapper
+        navValue={{
+          getSelectedTodos: () => [todo1],
+          getSelectedTodo: () => todo1,
+        }}
+      >
+        <AppContentMock />
+        <ModalTrigger />
+        <FocusObserver onFocused={() => focusCount++} />
+      </TestWrapper>,
+    );
+    testUnmount = unmount;
+
+    await waitFor(() => assertEquals(focusCount >= 1, true));
+    stdin.write("c");
+
+    await waitFor(() =>
+      assertEquals(
+        lastFrame()?.includes("Copy failed: clipboard unavailable"),
+        true,
+      )
+    );
+    assertEquals(lastFrame()?.includes("Todo copied"), false);
+    assertEquals(lastFrame()?.includes("Todo menu"), false);
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
   }
   testUnmount?.();
 });
@@ -491,7 +550,6 @@ Deno.test({
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
-    await new Promise((r) => setTimeout(r, 200)); // Let things settle
   }
   testUnmount?.();
 });

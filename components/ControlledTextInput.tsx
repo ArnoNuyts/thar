@@ -14,6 +14,51 @@ interface ControlledTextInputProps {
   cursorOffset?: number; // New: Allow parent to control cursor position
 }
 
+/** Move to the start of the word before `offset`, skipping leading spaces. */
+function moveWordLeft(value: string, offset: number): number {
+  let newOffset = offset;
+
+  while (newOffset > 0 && value[newOffset - 1] === " ") {
+    newOffset--;
+  }
+  while (newOffset > 0 && value[newOffset - 1] !== " ") {
+    newOffset--;
+  }
+
+  return newOffset;
+}
+
+/**
+ * Move right over the word at `offset`, then past any following spaces.
+ *
+ * With `spaceFirst`, spaces at `offset` are skipped before the next word is
+ * consumed, and trailing spaces after that word are left in place. This is the
+ * behavior Ctrl+Delete needs when the cursor starts on whitespace.
+ */
+function moveWordRight(
+  value: string,
+  offset: number,
+  spaceFirst = false,
+): number {
+  let newOffset = offset;
+
+  if (spaceFirst) {
+    while (newOffset < value.length && value[newOffset] === " ") {
+      newOffset++;
+    }
+  }
+  while (newOffset < value.length && value[newOffset] !== " ") {
+    newOffset++;
+  }
+  if (!spaceFirst) {
+    while (newOffset < value.length && value[newOffset] === " ") {
+      newOffset++;
+    }
+  }
+
+  return newOffset;
+}
+
 export function ControlledTextInput({
   value: originalValue,
   placeholder = "",
@@ -42,9 +87,6 @@ export function ControlledTextInput({
   useEffect(() => {
     cursorOffsetRef.current = cursorOffset;
   }, [cursorOffset]);
-
-  // Listen to raw stdin to capture actual key sequences
-  // DELETED: Raw data listener is now handled in custom useInput
 
   // Sync cursor when controlled offset changes
   useEffect(() => {
@@ -117,16 +159,10 @@ export function ControlledTextInput({
         case key.leftArrow:
           if (showCursor) {
             if (key.ctrl) {
-              let newPos = currentCursorOffset;
-              // Skip preceding whitespace
-              while (newPos > 0 && currentOriginalValue[newPos - 1] === " ") {
-                newPos--;
-              }
-              // Skip preceding non-whitespace
-              while (newPos > 0 && currentOriginalValue[newPos - 1] !== " ") {
-                newPos--;
-              }
-              nextCursorOffset = newPos;
+              nextCursorOffset = moveWordLeft(
+                currentOriginalValue,
+                currentCursorOffset,
+              );
             } else {
               nextCursorOffset = Math.max(0, currentCursorOffset - 1);
             }
@@ -136,22 +172,10 @@ export function ControlledTextInput({
         case key.rightArrow:
           if (showCursor) {
             if (key.ctrl) {
-              let newPos = currentCursorOffset;
-              // Skip current non-whitespace
-              while (
-                newPos < currentOriginalValue.length &&
-                currentOriginalValue[newPos] !== " "
-              ) {
-                newPos++;
-              }
-              // Skip following whitespace
-              while (
-                newPos < currentOriginalValue.length &&
-                currentOriginalValue[newPos] === " "
-              ) {
-                newPos++;
-              }
-              nextCursorOffset = newPos;
+              nextCursorOffset = moveWordRight(
+                currentOriginalValue,
+                currentCursorOffset,
+              );
             } else {
               nextCursorOffset = Math.min(
                 currentOriginalValue.length,
@@ -177,15 +201,10 @@ export function ControlledTextInput({
           if (currentCursorOffset > 0) {
             if (key.ctrl || key.meta) {
               // Ctrl+Backspace: delete word before cursor
-              let newPos = currentCursorOffset;
-              // Skip preceding whitespace
-              while (newPos > 0 && currentOriginalValue[newPos - 1] === " ") {
-                newPos--;
-              }
-              // Skip preceding non-whitespace
-              while (newPos > 0 && currentOriginalValue[newPos - 1] !== " ") {
-                newPos--;
-              }
+              const newPos = moveWordLeft(
+                currentOriginalValue,
+                currentCursorOffset,
+              );
 
               nextValue = currentOriginalValue.slice(0, newPos) +
                 currentOriginalValue.slice(
@@ -210,42 +229,13 @@ export function ControlledTextInput({
           if (currentCursorOffset < currentOriginalValue.length) {
             if (key.ctrl || key.meta) {
               // Ctrl+Delete: delete word after cursor
-              let newPos = currentCursorOffset;
-
               const startOnSpace =
                 currentOriginalValue[currentCursorOffset] === " ";
-
-              if (startOnSpace) {
-                // Skip current whitespace
-                while (
-                  newPos < currentOriginalValue.length &&
-                  currentOriginalValue[newPos] === " "
-                ) {
-                  newPos++;
-                }
-                // Skip following word
-                while (
-                  newPos < currentOriginalValue.length &&
-                  currentOriginalValue[newPos] !== " "
-                ) {
-                  newPos++;
-                }
-              } else {
-                // Skip current word
-                while (
-                  newPos < currentOriginalValue.length &&
-                  currentOriginalValue[newPos] !== " "
-                ) {
-                  newPos++;
-                }
-                // Skip following whitespace
-                while (
-                  newPos < currentOriginalValue.length &&
-                  currentOriginalValue[newPos] === " "
-                ) {
-                  newPos++;
-                }
-              }
+              const newPos = moveWordRight(
+                currentOriginalValue,
+                currentCursorOffset,
+                startOnSpace,
+              );
 
               nextValue = currentOriginalValue.slice(0, currentCursorOffset) +
                 currentOriginalValue.slice(newPos, currentOriginalValue.length);

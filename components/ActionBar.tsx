@@ -1,13 +1,11 @@
-import { Box, Text, useApp, useStdout } from "ink";
+import { Box, Text, useApp, useWindowSize } from "ink";
 import { Fragment, memo } from "react";
-import { PRIMARY_COLOR, SECONDARY_COLOR } from "../constants.ts";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
 import { navigationSelectedTodoRef } from "../contexts/navigation-context.tsx";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { COLORS } from "../theme/colors.ts";
-import { getTerminalRows } from "../utils/terminal-size.ts";
 
 const ACTION_ITEMS = [
   { key: "x", text: "Menu" },
@@ -19,7 +17,7 @@ const ACTION_ITEMS = [
 
 export const ActionBar = memo(() => {
   const { exit } = useApp();
-  const { stdout } = useStdout();
+  const { rows } = useWindowSize();
   const { toasterMessage } = useToaster();
   const { openModal, activeModal } = useModal();
   const { focusRef } = useSearch();
@@ -30,7 +28,7 @@ export const ActionBar = memo(() => {
     }
     if (activeModal) return;
 
-    const contentRow = getTerminalRows(stdout);
+    const contentRow = rows;
     if (event.y !== contentRow) return;
 
     let x = 1;
@@ -80,7 +78,7 @@ export const ActionBar = memo(() => {
         {ACTION_ITEMS.map((item) => {
           return (
             <Fragment key={item.key}>
-              <Text color={PRIMARY_COLOR}>{` ${item.key}`}</Text>
+              <Text color={COLORS.primary}>{` ${item.key}`}</Text>
               <Text>{` ${item.text}  `}</Text>
             </Fragment>
           );
@@ -88,7 +86,7 @@ export const ActionBar = memo(() => {
       </Box>
       {toasterMessage && (
         <Box padding={0}>
-          <Text color={SECONDARY_COLOR}>{toasterMessage}</Text>
+          <Text color={COLORS.secondary}>{toasterMessage}</Text>
         </Box>
       )}
     </Box>

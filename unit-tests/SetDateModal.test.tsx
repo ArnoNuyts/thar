@@ -2,7 +2,7 @@ import { render } from "ink-testing-library";
 import { assertEquals, assertMatch } from "@std/assert";
 import { useEffect } from "react";
 import { Box } from "ink";
-import { format } from "date-fns";
+import { addDays, addMonths, format, startOfDay } from "date-fns";
 
 import { SetDateModal } from "../components/SetDateModal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
@@ -33,7 +33,7 @@ Deno.test("SetDateModal: should render due and set focus", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -84,7 +84,7 @@ Deno.test("SetDateModal: should render threshold and set focus", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -133,8 +133,8 @@ Deno.test("SetDateModal: should update multiple todos", async () => {
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
       navValue={{
-        useSelectedTodos: () => [todo1, todo2],
-        useSelectedTodo: () => todo1,
+        getSelectedTodos: () => [todo1, todo2],
+        getSelectedTodo: () => todo1,
       }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
@@ -183,7 +183,7 @@ Deno.test("SetDateModal: mouse click should select an option", async () => {
 
   const { unmount, lastFrame, stdin } = render(
     <TestWrapper
-      navValue={{ useSelectedTodos: () => [todo] }}
+      navValue={{ getSelectedTodos: () => [todo] }}
       todoValue={{
         updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
           updatedTodo = transform(todos[0]);
@@ -199,5 +199,216 @@ Deno.test("SetDateModal: mouse click should select an option", async () => {
   // rows=20, columns=80, width=40, bodyRows=5 => first body row at y=9, x in [21..60]
   stdin.write("\x1b[<0;40;9M");
   await waitFor(() => assertEquals(typeof updatedTodo?.tags.due, "string"));
+  unmount();
+});
+
+const renderDateModal = (type: "due" | "threshold", todos: Todo[]) => {
+  let updatedTodos: Todo[] = [];
+  const modalName = type === "due" ? "set-due-date" : "set-threshold-date";
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    useEffect(() => {
+      openModal(modalName);
+    }, [openModal]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === modalName && <SetDateModal type={type} />}
+      </Box>
+    );
+  };
+
+  const rendered = render(
+    <TestWrapper
+      navValue={{ getSelectedTodos: () => todos }}
+      todoValue={{
+        updateTodos: (selected: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodos = selected.map(transform);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  return { ...rendered, getUpdatedTodos: () => updatedTodos };
+};
+
+type DateModalHarness = ReturnType<typeof renderDateModal>;
+
+/** Press down once and wait until `label` is the highlighted row. */
+const pressDownTo = async (harness: DateModalHarness, label: string) => {
+  harness.stdin.write("\x1b[B");
+  await waitFor(() =>
+    assertEquals((harness.lastFrame() || "").includes(`» ${label}`), true)
+  );
+};
+
+const moveToCustom = async (harness: DateModalHarness) => {
+  await pressDownTo(harness, "Tomorrow");
+  await pressDownTo(harness, "Next Week");
+  await pressDownTo(harness, "Next Month");
+  await pressDownTo(harness, "Custom");
+  // Confirm the row to open the calendar step.
+  harness.stdin.write("\r");
+  await waitFor(() =>
+    assertEquals((harness.lastFrame() || "").includes("Selected:"), true)
+  );
+};
+
+Deno.test("SetDateModal: custom calendar starts on the due tag date", async () => {
+  const todo = new Todo("Task due:2024-05-06");
+  const harness = renderDateModal("due", [todo]);
+  const { unmount, lastFrame } = harness;
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Due Date/));
+  await moveToCustom(harness);
+
+  await waitFor(() =>
+    assertEquals(
+      (lastFrame() || "").includes("Selected: 2024-05-06"),
+      true,
+    )
+  );
+
+  unmount();
+});
+
+Deno.test("SetDateModal: custom calendar starts on the threshold tag date", async () => {
+  const todo = new Todo("Task t:2024-02-29");
+  const harness = renderDateModal("threshold", [todo]);
+  const { unmount, lastFrame } = harness;
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Threshold Date/));
+  await moveToCustom(harness);
+
+  await waitFor(() =>
+    assertEquals(
+      (lastFrame() || "").includes("Selected: 2024-02-29"),
+      true,
+    )
+  );
+
+  unmount();
+});
+
+Deno.test("SetDateModal: invalid custom date tag falls back to today", async () => {
+  // The old manual split/Date construction rendered "Invalid Date" here.
+  const todo = new Todo("Task due:not-a-date");
+  const harness = renderDateModal("due", [todo]);
+  const { unmount, lastFrame } = harness;
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Due Date/));
+  await moveToCustom(harness);
+
+  const today = format(new Date(), "yyyy-MM-dd");
+  await waitFor(() =>
+    assertEquals((lastFrame() || "").includes(`Selected: ${today}`), true)
+  );
+
+  unmount();
+});
+
+Deno.test("SetDateModal: due option writes the due tag only", async () => {
+  const todo = new Todo("Task");
+  const harness = renderDateModal("due", [todo]);
+  const { unmount, stdin, lastFrame } = harness;
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Due Date/));
+  await pressDownTo(harness, "Tomorrow");
+  stdin.write("\r");
+
+  const tomorrow = format(addDays(startOfDay(new Date()), 1), "yyyy-MM-dd");
+  await waitFor(() => {
+    const updated = harness.getUpdatedTodos()[0];
+    assertEquals(updated.tags.due, tomorrow);
+    assertEquals(updated.tags.t, undefined);
+  });
+
+  unmount();
+});
+
+Deno.test("SetDateModal: threshold option writes the threshold tag only", async () => {
+  const todo = new Todo("Task due:2024-05-06");
+  const harness = renderDateModal("threshold", [todo]);
+  const { unmount, stdin, lastFrame } = harness;
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Threshold Date/));
+  await pressDownTo(harness, "Tomorrow");
+  stdin.write("\r");
+
+  const tomorrow = format(addDays(startOfDay(new Date()), 1), "yyyy-MM-dd");
+  await waitFor(() => {
+    const updated = harness.getUpdatedTodos()[0];
+    assertEquals(updated.tags.t, tomorrow);
+    assertEquals(updated.tags.due, "2024-05-06");
+  });
+
+  unmount();
+});
+
+Deno.test("SetDateModal: reset removes the due tag only", async () => {
+  const todo = new Todo("Task due:2024-05-06 t:2024-05-07");
+  const harness = renderDateModal("due", [todo]);
+  const { unmount, stdin, lastFrame } = harness;
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Due Date/));
+  // Up from Today wraps to the appended Reset row.
+  stdin.write("\x1b[A");
+  await waitFor(() =>
+    assertEquals((lastFrame() || "").includes("» Reset"), true)
+  );
+  stdin.write("\r");
+
+  await waitFor(() => {
+    const updated = harness.getUpdatedTodos()[0];
+    assertEquals(updated.tags.due, undefined);
+    assertEquals(updated.tags.t, "2024-05-07");
+  });
+
+  unmount();
+});
+
+Deno.test("SetDateModal: reset removes the threshold tag only", async () => {
+  const todo = new Todo("Task due:2024-05-06 t:2024-05-07");
+  const harness = renderDateModal("threshold", [todo]);
+  const { unmount, stdin, lastFrame } = harness;
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Threshold Date/));
+  stdin.write("\x1b[A");
+  await waitFor(() =>
+    assertEquals((lastFrame() || "").includes("» Reset"), true)
+  );
+  stdin.write("\r");
+
+  await waitFor(() => {
+    const updated = harness.getUpdatedTodos()[0];
+    assertEquals(updated.tags.t, undefined);
+    assertEquals(updated.tags.due, "2024-05-06");
+  });
+
+  unmount();
+});
+
+Deno.test("SetDateModal: Next Month uses addMonths semantics", async () => {
+  const todo = new Todo("Task");
+  const harness = renderDateModal("due", [todo]);
+  const { unmount, stdin, lastFrame } = harness;
+
+  await waitFor(() => assertMatch(lastFrame() || "", /Set Due Date/));
+  await pressDownTo(harness, "Tomorrow");
+  await pressDownTo(harness, "Next Week");
+  await pressDownTo(harness, "Next Month");
+  stdin.write("\r");
+
+  const nextMonth = format(
+    addMonths(startOfDay(new Date()), 1),
+    "yyyy-MM-dd",
+  );
+  await waitFor(() =>
+    assertEquals(harness.getUpdatedTodos()[0].tags.due, nextMonth)
+  );
+
   unmount();
 });

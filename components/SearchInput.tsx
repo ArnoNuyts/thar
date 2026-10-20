@@ -1,31 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Text } from "ink";
-import { useInput } from "../hooks/useInput.ts";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
-import { useFocusable } from "../hooks/useFocusable.ts";
+import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useNavigation } from "../contexts/navigation-context.tsx";
-import { SECONDARY_COLOR } from "../constants.ts";
+import { useSuggestionInput } from "../hooks/useSuggestionInput.ts";
+import { useTagSources } from "../hooks/useTagSources.ts";
 import { COLORS } from "../theme/colors.ts";
 
-import { Todos } from "../logic/Todos.ts";
+import type { Todos } from "../logic/Todos.ts";
 
 export const SearchInput = ({ todos }: { todos: Todos }) => {
   const { searchQuery, setSearchQuery, focusRef, setIsSearchFocused } =
     useSearch();
-  const {
-    suggestions,
-    setSuggestions,
-    selectedIndex,
-    setSelectedIndex,
-    type: suggestionType,
-    setType: setSuggestionType,
-    setPosition,
-    clearSuggestions,
-  } = useSuggestion();
+  const { setPosition, clearSuggestions, suggestions } = useSuggestion();
 
-  const { isFocused, focus, blur } = useFocusable({ tag: "search-input" });
   // Get navigation functions
   const {
     navigateUp,
@@ -36,132 +26,17 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
     navigateEnd,
   } = useNavigation();
   const [cursorPos, setCursorPos] = useState(searchQuery.length);
-  const [wordStartIndex, setWordStartIndex] = useState(0);
+  const tagSources = useTagSources(todos);
 
-  // Register focus function with context ref (no useEffect to avoid re-render loop)
-  focusRef.current = focus;
-
-  // Clear suggestions when losing focus
-  useEffect(() => {
-    if (!isFocused) {
-      clearSuggestions();
-    }
-    // Sync focus state with context
-    setIsSearchFocused(isFocused);
-  }, [isFocused, clearSuggestions, setIsSearchFocused]);
-
-  // Extract all unique projects and contexts
-  const { allProjects, allContexts } = useMemo(() => {
-    const projects = new Set<string>();
-    const contexts = new Set<string>();
-    todos.forEach((todo) => {
-      todo.projects.forEach((p) => projects.add(p));
-      todo.contexts.forEach((c) => contexts.add(c));
-    });
-    return {
-      allProjects: Array.from(projects).sort(),
-      allContexts: Array.from(contexts).sort(),
-    };
-  }, [todos]);
-
-  // Calculate dropdown position
-  useEffect(() => {
-    if (suggestions.length === 0) return;
-
-    // Position dropdown below the input (fixed position at top of screen)
-    setPosition({
-      left: 3 + wordStartIndex,
-      top: 1,
-    });
-  }, [wordStartIndex, suggestions.length, setPosition]);
-
-  const updateSuggestions = (text: string, cursor: number) => {
-    const leftPart = text.slice(0, cursor);
-
-    const wordStartMatch = leftPart.match(/[\s]([\+@][\w\.\_\-]*)$/) ||
-      leftPart.match(/^([\+@][\w\.\_\-]*)$/);
-
-    if (wordStartMatch) {
-      const fullWordStart = wordStartMatch[1];
-      const startIdx = leftPart.lastIndexOf(fullWordStart);
-
-      const type = fullWordStart.startsWith("+") ? "project" : "context";
-      const searchTerm = fullWordStart.substring(1);
-
-      const source = type === "project" ? allProjects : allContexts;
-      const matches = source.filter((item) =>
-        item.toLowerCase().startsWith(searchTerm.toLowerCase())
-      );
-
-      if (matches.length > 0) {
-        setSuggestions(matches);
-        setSuggestionType(type);
-        setSelectedIndex(0);
-        setWordStartIndex(startIdx);
-        return;
-      }
+  const { isFocused, focus, blur } = useFocusedInput((_input, key) => {
+    // While suggestions are open they own the arrow keys, Enter and Escape.
+    if (
+      suggestions.length > 0 &&
+      (key.upArrow || key.downArrow || key.return || key.escape)
+    ) {
+      return;
     }
 
-    clearSuggestions();
-  };
-
-  const handleChange = (newValue: string) => {
-    setSearchQuery(newValue);
-  };
-
-  const handleCursorChange = (newCursor: number, newValue: string) => {
-    setCursorPos(newCursor);
-    updateSuggestions(newValue, newCursor);
-  };
-
-  useInput((_input, key) => {
-    if (!isFocused) return;
-
-    if (suggestions.length > 0) {
-      if (key.upArrow) {
-        setSelectedIndex((prev) =>
-          prev > 0 ? prev - 1 : suggestions.length - 1
-        );
-        return;
-      }
-      if (key.downArrow) {
-        setSelectedIndex((prev) =>
-          prev < suggestions.length - 1 ? prev + 1 : 0
-        );
-        return;
-      }
-      if (key.return || key.tab) {
-        // Apply suggestion
-        const suggestion = suggestions[selectedIndex];
-        const prefix = suggestionType === "project" ? "+" : "@";
-
-        const leftPart = searchQuery.slice(0, cursorPos);
-        const rightPart = searchQuery.slice(cursorPos);
-
-        const wordStartMatch = leftPart.match(/[\s]([\+@][\w\.\_\-]*)$/) ||
-          leftPart.match(/^([\+@][\w\.\_\-]*)$/);
-
-        if (wordStartMatch) {
-          const word = wordStartMatch[1];
-          const wordStart = leftPart.lastIndexOf(word);
-
-          const newLeft = searchQuery.slice(0, wordStart) + prefix +
-            suggestion + " ";
-          const newValue = newLeft + rightPart;
-
-          setSearchQuery(newValue);
-          setCursorPos(newLeft.length);
-          clearSuggestions();
-        }
-        return;
-      }
-      if (key.escape) {
-        clearSuggestions();
-        return;
-      }
-    }
-
-    // Navigation fallback when no suggestions
     if (key.upArrow) {
       navigateUp(key.shift);
       return;
@@ -200,7 +75,55 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
       blur();
       return;
     }
-  });
+  }, { tag: "search-input" });
+
+  // Register focus function with context ref after commit so we never write to
+  // the ref during render.
+  useEffect(() => {
+    focusRef.current = focus;
+  }, [focusRef, focus]);
+
+  // Clear suggestions when losing focus
+  useEffect(() => {
+    if (!isFocused) {
+      clearSuggestions();
+    }
+    // Sync focus state with context
+    setIsSearchFocused(isFocused);
+  }, [isFocused, clearSuggestions, setIsSearchFocused]);
+
+  const { wordStartIndex, updateSuggestions } = useSuggestionInput(
+    {
+      value: searchQuery,
+      cursor: cursorPos,
+      source: tagSources,
+      onApply: (newValue, newCursor) => {
+        setSearchQuery(newValue);
+        setCursorPos(newCursor);
+      },
+      isActive: isFocused,
+    },
+  );
+
+  // Calculate dropdown position
+  useEffect(() => {
+    if (suggestions.length === 0) return;
+
+    // Position dropdown below the input (fixed position at top of screen)
+    setPosition({
+      left: 3 + wordStartIndex,
+      top: 1,
+    });
+  }, [wordStartIndex, suggestions.length, setPosition]);
+
+  const handleChange = (newValue: string) => {
+    setSearchQuery(newValue);
+  };
+
+  const handleCursorChange = (newCursor: number, newValue: string) => {
+    setCursorPos(newCursor);
+    updateSuggestions(newValue, newCursor);
+  };
 
   // Hide search bar when unfocused and empty
   const isVisible = isFocused || searchQuery.length > 0;
@@ -218,7 +141,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
       borderRight={false}
       borderBottom
     >
-      <Text color={isFocused ? SECONDARY_COLOR : COLORS.muted}>{` / `}</Text>
+      <Text color={isFocused ? COLORS.secondary : COLORS.muted}>{` / `}</Text>
       <Box flexGrow={1}>
         {isFocused
           ? (
@@ -236,7 +159,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
             </Text>
           )}
       </Box>
-      <Text color={isFocused ? SECONDARY_COLOR : COLORS.muted}>{` / `}</Text>
+      <Text color={isFocused ? COLORS.secondary : COLORS.muted}>{` / `}</Text>
     </Box>
   );
 };

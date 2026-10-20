@@ -88,6 +88,32 @@ const SelectionObserver = ({
   return null;
 };
 
+const QueryObserver = ({
+  onQuery,
+}: {
+  onQuery: (query: string) => void;
+}) => {
+  const { searchQuery } = useSearch();
+
+  useEffect(() => {
+    onQuery(searchQuery);
+  }, [searchQuery, onQuery]);
+
+  return null;
+};
+
+const FocusWhen = ({ when }: { when: boolean }) => {
+  const { focusRef } = useSearch();
+
+  useEffect(() => {
+    if (when) {
+      focusRef.current?.();
+    }
+  }, [when, focusRef]);
+
+  return null;
+};
+
 const MultiSelectionObserver = ({
   onSelectionChange,
 }: {
@@ -348,6 +374,53 @@ Deno.test(
 
     await waitFor(() => {
       assertEquals(selectedIds.size, 2);
+    });
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "SearchInput: ignores keys until focused",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
+    let selectedText = "";
+    let query = "";
+    let focusedTag: string | undefined;
+
+    const tree = (focus: boolean) => (
+      <TestWrapper initialTodos={todos}>
+        <SearchQuerySetter query="Task" />
+        <ConnectedSearchInput />
+        <FocusWhen when={focus} />
+        <SelectionObserver onSelectionChange={(text) => selectedText = text} />
+        <QueryObserver onQuery={(next) => query = next} />
+        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+      </TestWrapper>
+    );
+
+    const { unmount, stdin, rerender } = render(tree(false));
+
+    // While unfocused both navigation and typing are ignored.
+    await stdin.write("\u001B[B");
+    await stdin.write("z");
+
+    rerender(tree(true));
+
+    await waitFor(() => {
+      assertEquals(focusedTag, "search-input");
+    });
+
+    assertEquals(query, "Task");
+    await waitFor(() => assertEquals(selectedText, "Task A"));
+
+    // Once focused, the same key navigates the list.
+    await stdin.write("\u001B[B");
+
+    await waitFor(() => {
+      assertEquals(selectedText, "Task B");
+      assertEquals(query, "Task");
     });
 
     unmount();

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Text } from "ink";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
+import { useListSelection } from "../hooks/useListSelection.ts";
 import { useModalMouseList } from "../hooks/useModalMouseList.ts";
 import { Modal } from "./Modal.tsx";
+import { SelectList } from "./SelectList.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
-import { SECONDARY_COLOR } from "../constants.ts";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 
 const BASE_OPTIONS = [
@@ -21,15 +22,14 @@ const RESET_OPTION = { label: "Reset", value: "reset", unit: "" };
 export const SetRecurrenceModal = () => {
   const { closeModal } = useModal();
   const { updateTodos } = useTodo();
-  const { useSelectedTodos } = useNavigation();
-  const selectedTodos = useSelectedTodos();
+  const { getSelectedTodos } = useNavigation();
+  const selectedTodos = getSelectedTodos();
   const todo = selectedTodos[0]; // Reference todo for initial values
   const hasRecurrence = todo?.tags.rec !== undefined;
   const options = hasRecurrence
     ? [...BASE_OPTIONS, RESET_OPTION]
     : BASE_OPTIONS;
   const [step, setStep] = useState<"base" | "amount">("base");
-  const [selectedBaseIndex, setSelectedBaseIndex] = useState(0);
   const [amount, setAmount] = useState("1");
   const [hasEditedAmount, setHasEditedAmount] = useState(false);
   const [layoutSize, setLayoutSize] = useState<
@@ -70,35 +70,24 @@ export const SetRecurrenceModal = () => {
     setStep("amount");
   };
 
+  const selection = useListSelection({
+    itemCount: options.length,
+    isActive: step === "base",
+    onSelect: selectBaseOption,
+    // Escape returns to the base list first, then closes the modal.
+    onCancel: () => (step === "amount" ? setStep("base") : closeModal()),
+  });
+
   const { isFocused } = useFocusedInput((_input, key) => {
-    switch (true) {
-      case key.escape && step === "amount":
-        setStep("base");
-        break;
-      case key.escape:
+    if (selection.handleKey(key)) return;
+
+    if (step === "amount" && key.return) {
+      if (selectedTodos.length > 0 && amountRef.current.trim().length > 0) {
+        const base = options[selection.selectedIndex].value;
+        const recurrenceString = `${amountRef.current}${base}`;
+        updateTodos(selectedTodos, (t) => t.setRecurrence(recurrenceString));
         closeModal();
-        break;
-      case step === "base" && key.return:
-        selectBaseOption(selectedBaseIndex);
-        break;
-      case step === "base" && key.upArrow:
-        setSelectedBaseIndex((
-          prev: number,
-        ) => (prev > 0 ? prev - 1 : options.length - 1));
-        break;
-      case step === "base" && key.downArrow:
-        setSelectedBaseIndex((
-          prev: number,
-        ) => (prev < options.length - 1 ? prev + 1 : 0));
-        break;
-      case step === "amount" && key.return:
-        if (selectedTodos.length > 0 && amountRef.current.trim().length > 0) {
-          const base = options[selectedBaseIndex].value;
-          const recurrenceString = `${amountRef.current}${base}`;
-          updateTodos(selectedTodos, (t) => t.setRecurrence(recurrenceString));
-          closeModal();
-        }
-        break;
+      }
     }
   }, { autoFocus: true, tag: "set-recurrence-modal" });
 
@@ -107,40 +96,31 @@ export const SetRecurrenceModal = () => {
     modalWidth: "50%",
     bodyRows: options.length,
     terminalSize: layoutSize,
-    onRowClick: (rowInItems) => {
-      setSelectedBaseIndex(rowInItems);
-      selectBaseOption(rowInItems);
-    },
+    onRowClick: selection.selectAt,
+    onRowHover: selection.setSelectedIndex,
   });
 
   const getTitle = () => {
     if (step === "base") return "Set Recurrence Base";
-    const baseLabel = BASE_OPTIONS[selectedBaseIndex].label;
+    const baseLabel = BASE_OPTIONS[selection.selectedIndex].label;
     return `Set Recurrence Interval (${baseLabel})`;
   };
 
   return (
     // @ts-ignore: children prop issue
     <Modal
-      isFocused={isFocused}
       title={getTitle()}
       onLayoutSizeChange={setLayoutSize}
     >
       {step === "base"
         ? (
-          <Box flexDirection="column" paddingX={1}>
-            {options.map((option, index) => {
-              const isSelected = index === selectedBaseIndex;
-              return (
-                <Box key={option.value}>
-                  <Text color={SECONDARY_COLOR}>
-                    {isSelected ? "» " : "  "}
-                  </Text>
-                  <Text wrap="truncate">{option.label}</Text>
-                </Box>
-              );
-            })}
-          </Box>
+          <SelectList
+            items={options.map((option) => ({
+              key: option.value,
+              label: option.label,
+            }))}
+            selectedIndex={selection.selectedIndex}
+          />
         )
         : (
           <Box flexDirection="column" paddingX={1}>
@@ -152,7 +132,7 @@ export const SetRecurrenceModal = () => {
                 onChange={handleAmountChange}
                 showCursor
               />
-              <Text>{BASE_OPTIONS[selectedBaseIndex].unit}</Text>
+              <Text>{BASE_OPTIONS[selection.selectedIndex].unit}</Text>
             </Box>
             <Text dimColor>Enter = save, Esc = back</Text>
           </Box>

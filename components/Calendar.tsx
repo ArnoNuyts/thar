@@ -31,14 +31,7 @@ export const Calendar: React.FC<CalendarProps> = (
 ) => {
   const [viewDate, setViewDate] = useState(startOfMonth(value));
 
-  // Ensure viewDate tracks value if value changes externally and is far from viewDate
-  // But we generally want to keep viewDate stable if user is just navigating days
-  // So maybe only sync if value is completely different?
-  // For now, let's just initialize viewDate from value.
-
   useInput((_input, key) => {
-    if (!isFocused) return;
-
     switch (true) {
       case key.upArrow:
         onChange(subWeeks(value, 1));
@@ -64,14 +57,14 @@ export const Calendar: React.FC<CalendarProps> = (
         onSubmit(value);
         break;
     }
-  });
+  }, { isActive: isFocused });
 
   // Keep viewDate in sync with value if value moves out of view
   useEffect(() => {
     if (!isSameMonth(value, viewDate)) {
       setViewDate(startOfMonth(value));
     }
-  }, [value]);
+  }, [value, viewDate]);
 
   const monthStart = startOfMonth(viewDate);
   const monthEnd = endOfMonth(monthStart);
@@ -84,8 +77,8 @@ export const Calendar: React.FC<CalendarProps> = (
   });
 
   // Group days into weeks
-  const weeks = [];
-  let currentWeek = [];
+  const weeks: Date[][] = [];
+  let currentWeek: Date[] = [];
   for (const day of days) {
     currentWeek.push(day);
     if (currentWeek.length === 7) {
