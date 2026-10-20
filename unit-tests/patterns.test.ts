@@ -10,17 +10,19 @@ import {
 } from "../logic/patterns.ts";
 
 Deno.test("patterns: extracts project names", () => {
-  assertEquals(
-    matchProjects("Fix +work +home.project @home +work"),
-    ["work", "home.project", "work"],
-  );
+  assertEquals(matchProjects("Fix +work +home.project @home +work"), [
+    "work",
+    "home.project",
+    "work",
+  ]);
 });
 
 Deno.test("patterns: extracts context names", () => {
-  assertEquals(
-    matchContexts("Fix +work @home @home_office @home"),
-    ["home", "home_office", "home"],
-  );
+  assertEquals(matchContexts("Fix +work @home @home_office @home"), [
+    "home",
+    "home_office",
+    "home",
+  ]);
 });
 
 Deno.test("patterns: matchAll does not mutate global regex state", () => {

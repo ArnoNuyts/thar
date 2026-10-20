@@ -51,7 +51,9 @@ const createTodos = (count: number): Todo[] => {
       `todo ${index}`,
       context ? `@${context}` : "",
       due ? `due:${due}` : "",
-    ].filter(Boolean).join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
     return new Todo(text);
   });
 };
@@ -62,7 +64,10 @@ Deno.test("sortByImportance matches the reference four-sort algorithm", () => {
   const actual = sortByImportance(todos);
   const expected = referenceSortByImportance(todos);
 
-  assertEquals(actual.map((todo) => todo.id), expected.map((todo) => todo.id));
+  assertEquals(
+    actual.map((todo) => todo.id),
+    expected.map((todo) => todo.id),
+  );
 
   // Sort input must not be mutated.
   assertEquals(
@@ -80,7 +85,10 @@ Deno.test("sortByImportance is stable for equal keys", () => {
 
   const sorted = sortByImportance(shuffled);
 
-  assertEquals(sorted.map((todo) => todo.id), shuffled.map((todo) => todo.id));
+  assertEquals(
+    sorted.map((todo) => todo.id),
+    shuffled.map((todo) => todo.id),
+  );
   assertEquals(
     sortByImportance(todos).map((todo) => todo.id),
     todos.map((todo) => todo.id),

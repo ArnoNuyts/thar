@@ -12,13 +12,14 @@ import type { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 import { IndexType } from "../types/enums.ts";
 
-const TestWrapper = (
-  { todos, onContext }: {
-    todos: Todos;
-    // deno-lint-ignore no-explicit-any
-    onContext: (ctx: any) => void;
-  },
-) => (
+const TestWrapper = ({
+  todos,
+  onContext,
+}: {
+  todos: Todos;
+  // deno-lint-ignore no-explicit-any
+  onContext: (ctx: any) => void;
+}) => (
   <SearchProvider>
     <NavigationProvider todos={todos}>
       <NavigationTester onContext={onContext} />
@@ -47,7 +48,7 @@ Deno.test(
     let navContext: any;
 
     const { unmount } = render(
-      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
+      <TestWrapper todos={todos} onContext={(ctx) => (navContext = ctx)} />,
     );
 
     await waitFor(() => {
@@ -57,10 +58,12 @@ Deno.test(
     });
 
     // Check visible todos
-    const visibleTodos = navContext.indexes.filter((
-      // deno-lint-ignore no-explicit-any
-      i: any,
-    ) => i.type === IndexType.todo);
+    const visibleTodos = navContext.indexes.filter(
+      (
+        // deno-lint-ignore no-explicit-any
+        i: any,
+      ) => i.type === IndexType.todo,
+    );
     assertEquals(visibleTodos.length, 1);
     assertEquals(visibleTodos[0].todo.text, "visible todo");
 
@@ -79,7 +82,7 @@ Deno.test(
     let navContext: any;
 
     const { unmount } = render(
-      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
+      <TestWrapper todos={todos} onContext={(ctx) => (navContext = ctx)} />,
     );
 
     await waitFor(() => {
@@ -90,10 +93,12 @@ Deno.test(
 
     await waitFor(() => {
       assertEquals(navContext.showHidden, true);
-      const allTodos = navContext.indexes.filter((
-        // deno-lint-ignore no-explicit-any
-        i: any,
-      ) => i.type === IndexType.todo);
+      const allTodos = navContext.indexes.filter(
+        (
+          // deno-lint-ignore no-explicit-any
+          i: any,
+        ) => i.type === IndexType.todo,
+      );
       assertEquals(allTodos.length, 2);
     });
 
@@ -112,7 +117,7 @@ Deno.test(
     let navContext: any;
 
     const { unmount } = render(
-      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
+      <TestWrapper todos={todos} onContext={(ctx) => (navContext = ctx)} />,
     );
 
     // First toggle
@@ -127,10 +132,12 @@ Deno.test(
     navContext.toggleShowHidden();
     await waitFor(() => assertEquals(navContext.showHidden, false));
 
-    const visibleTodos = navContext.indexes.filter((
-      // deno-lint-ignore no-explicit-any
-      i: any,
-    ) => i.type === IndexType.todo);
+    const visibleTodos = navContext.indexes.filter(
+      (
+        // deno-lint-ignore no-explicit-any
+        i: any,
+      ) => i.type === IndexType.todo,
+    );
     assertEquals(visibleTodos.length, 1);
     assertEquals(visibleTodos[0].todo.text, "visible todo");
 

@@ -26,7 +26,7 @@ Deno.test("SetDateModal: should render due and set focus", async () => {
     return (
       <Box flexDirection="column" height={20}>
         {activeModal === "set-due-date" && <SetDateModal type="due" />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -77,7 +77,7 @@ Deno.test("SetDateModal: should render threshold and set focus", async () => {
         {activeModal === "set-threshold-date" && (
           <SetDateModal type="threshold" />
         )}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -125,7 +125,7 @@ Deno.test("SetDateModal: should update multiple todos", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "set-due-date" && <SetDateModal type="due" />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -241,7 +241,7 @@ type DateModalHarness = ReturnType<typeof renderDateModal>;
 const pressDownTo = async (harness: DateModalHarness, label: string) => {
   harness.stdin.write("\x1b[B");
   await waitFor(() =>
-    assertEquals((harness.lastFrame() || "").includes(`» ${label}`), true)
+    assertEquals((harness.lastFrame() || "").includes(`» ${label}`), true),
   );
 };
 
@@ -253,7 +253,7 @@ const moveToCustom = async (harness: DateModalHarness) => {
   // Confirm the row to open the calendar step.
   harness.stdin.write("\r");
   await waitFor(() =>
-    assertEquals((harness.lastFrame() || "").includes("Selected:"), true)
+    assertEquals((harness.lastFrame() || "").includes("Selected:"), true),
   );
 };
 
@@ -266,10 +266,7 @@ Deno.test("SetDateModal: custom calendar starts on the due tag date", async () =
   await moveToCustom(harness);
 
   await waitFor(() =>
-    assertEquals(
-      (lastFrame() || "").includes("Selected: 2024-05-06"),
-      true,
-    )
+    assertEquals((lastFrame() || "").includes("Selected: 2024-05-06"), true),
   );
 
   unmount();
@@ -284,10 +281,7 @@ Deno.test("SetDateModal: custom calendar starts on the threshold tag date", asyn
   await moveToCustom(harness);
 
   await waitFor(() =>
-    assertEquals(
-      (lastFrame() || "").includes("Selected: 2024-02-29"),
-      true,
-    )
+    assertEquals((lastFrame() || "").includes("Selected: 2024-02-29"), true),
   );
 
   unmount();
@@ -304,7 +298,7 @@ Deno.test("SetDateModal: invalid custom date tag falls back to today", async () 
 
   const today = format(new Date(), "yyyy-MM-dd");
   await waitFor(() =>
-    assertEquals((lastFrame() || "").includes(`Selected: ${today}`), true)
+    assertEquals((lastFrame() || "").includes(`Selected: ${today}`), true),
   );
 
   unmount();
@@ -357,7 +351,7 @@ Deno.test("SetDateModal: reset removes the due tag only", async () => {
   // Up from Today wraps to the appended Reset row.
   stdin.write("\x1b[A");
   await waitFor(() =>
-    assertEquals((lastFrame() || "").includes("» Reset"), true)
+    assertEquals((lastFrame() || "").includes("» Reset"), true),
   );
   stdin.write("\r");
 
@@ -378,7 +372,7 @@ Deno.test("SetDateModal: reset removes the threshold tag only", async () => {
   await waitFor(() => assertMatch(lastFrame() || "", /Set Threshold Date/));
   stdin.write("\x1b[A");
   await waitFor(() =>
-    assertEquals((lastFrame() || "").includes("» Reset"), true)
+    assertEquals((lastFrame() || "").includes("» Reset"), true),
   );
   stdin.write("\r");
 
@@ -402,12 +396,9 @@ Deno.test("SetDateModal: Next Month uses addMonths semantics", async () => {
   await pressDownTo(harness, "Next Month");
   stdin.write("\r");
 
-  const nextMonth = format(
-    addMonths(startOfDay(new Date()), 1),
-    "yyyy-MM-dd",
-  );
+  const nextMonth = format(addMonths(startOfDay(new Date()), 1), "yyyy-MM-dd");
   await waitFor(() =>
-    assertEquals(harness.getUpdatedTodos()[0].tags.due, nextMonth)
+    assertEquals(harness.getUpdatedTodos()[0].tags.due, nextMonth),
   );
 
   unmount();

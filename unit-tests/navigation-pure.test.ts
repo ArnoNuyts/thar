@@ -42,11 +42,7 @@ Deno.test("getNavigableRow: skips context headers in the direction of travel", (
 
 Deno.test("getNavigableRow: stays on first todo when a leading header is crossed", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
-  const indexes = [
-    contextEntry("A"),
-    todoEntry(todo1, 1),
-    todoEntry(todo2, 2),
-  ];
+  const indexes = [contextEntry("A"), todoEntry(todo1, 1), todoEntry(todo2, 2)];
 
   assertEquals(getNavigableRow(indexes, 1, -1), 1);
   assertEquals(getNavigableRow(indexes, 1, -5), 1);
@@ -67,11 +63,7 @@ Deno.test("getNavigableRow: stays on last todo when a trailing header is crossed
 
 Deno.test("getNavigableRow: clamps without wrapping past the list bounds", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
-  const indexes = [
-    contextEntry("A"),
-    todoEntry(todo1, 1),
-    todoEntry(todo2, 2),
-  ];
+  const indexes = [contextEntry("A"), todoEntry(todo1, 1), todoEntry(todo2, 2)];
 
   assertEquals(getNavigableRow(indexes, 1, -3), 1);
   assertEquals(getNavigableRow(indexes, 2, 3), 2);
@@ -135,12 +127,7 @@ Deno.test("guesstimateSelection: does not guesstimate when every todo is new (re
   const indexes = indexesFor(reloadedTodos);
 
   assertEquals(
-    guesstimateSelection(
-      reloadedTodos,
-      prevTodos,
-      indexes,
-      prevTodos[0].id,
-    ),
+    guesstimateSelection(reloadedTodos, prevTodos, indexes, prevTodos[0].id),
     undefined,
   );
 });
@@ -233,57 +220,33 @@ Deno.test("validateSelection: returns undefined when there are no todo entries",
 });
 
 Deno.test("calculateScrollOffset: keeps the offset when the range fits", () => {
-  assertEquals(
-    calculateScrollOffset(5, { min: 5, max: 5 }, 0, 10, 30),
-    0,
-  );
+  assertEquals(calculateScrollOffset(5, { min: 5, max: 5 }, 0, 10, 30), 0);
 });
 
 Deno.test("calculateScrollOffset: scrolls to show a range larger than the viewport", () => {
-  assertEquals(
-    calculateScrollOffset(10, { min: 1, max: 20 }, 0, 10, 30),
-    2,
-  );
+  assertEquals(calculateScrollOffset(10, { min: 1, max: 20 }, 0, 10, 30), 2);
 });
 
 Deno.test("calculateScrollOffset: scrolls up when the cursor is above the viewport", () => {
-  assertEquals(
-    calculateScrollOffset(2, { min: 2, max: 2 }, 10, 10, 30),
-    1,
-  );
+  assertEquals(calculateScrollOffset(2, { min: 2, max: 2 }, 10, 10, 30), 1);
 });
 
 Deno.test("calculateScrollOffset: scrolls down when the cursor is below the viewport", () => {
-  assertEquals(
-    calculateScrollOffset(25, { min: 25, max: 25 }, 0, 10, 30),
-    17,
-  );
+  assertEquals(calculateScrollOffset(25, { min: 25, max: 25 }, 0, 10, 30), 17);
 });
 
 Deno.test("calculateScrollOffset: clamps at the start of the list", () => {
-  assertEquals(
-    calculateScrollOffset(0, { min: 0, max: 0 }, 5, 10, 30),
-    0,
-  );
+  assertEquals(calculateScrollOffset(0, { min: 0, max: 0 }, 5, 10, 30), 0);
 });
 
 Deno.test("calculateScrollOffset: clamps at the end of the list", () => {
-  assertEquals(
-    calculateScrollOffset(29, { min: 29, max: 29 }, 0, 10, 30),
-    20,
-  );
+  assertEquals(calculateScrollOffset(29, { min: 29, max: 29 }, 0, 10, 30), 20);
 });
 
 Deno.test("calculateScrollOffset: clamps to keep the whole range visible", () => {
-  assertEquals(
-    calculateScrollOffset(5, { min: 1, max: 5 }, 5, 10, 20),
-    1,
-  );
+  assertEquals(calculateScrollOffset(5, { min: 1, max: 5 }, 5, 10, 20), 1);
 });
 
 Deno.test("calculateScrollOffset: handles a list shorter than the viewport", () => {
-  assertEquals(
-    calculateScrollOffset(2, { min: 2, max: 2 }, 0, 10, 3),
-    0,
-  );
+  assertEquals(calculateScrollOffset(2, { min: 2, max: 2 }, 0, 10, 3), 0);
 });

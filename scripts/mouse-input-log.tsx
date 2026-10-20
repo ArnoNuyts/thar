@@ -2,13 +2,13 @@ import { Box, render, Text, useApp } from "ink";
 import { useEffect, useRef, useState } from "react";
 import { useInput } from "../hooks/useInput.ts";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
+import { Runtime } from "../utils/runtime.ts";
 
-const outputPath = Deno.args[0] ?? "mouse-input.log";
+const outputPath = Runtime.args[0] ?? "mouse-input.log";
 
 const formatEvent = (
-  event: Parameters<typeof useMouseInput>[0] extends (
-    e: infer E,
-  ) => void ? E
+  event: Parameters<typeof useMouseInput>[0] extends (e: infer E) => void
+    ? E
     : never,
 ) => {
   const timestamp = new Date().toISOString();
@@ -33,7 +33,7 @@ const MouseInputLogger = () => {
   const writeQueue = useRef(Promise.resolve());
 
   useEffect(() => {
-    writeQueue.current = Deno.writeTextFile(
+    writeQueue.current = Runtime.writeTextFile(
       outputPath,
       [
         "# Mouse Input Log",
@@ -44,20 +44,26 @@ const MouseInputLogger = () => {
     );
   }, []);
 
-  useMouseInput((event) => {
-    const line = formatEvent(event);
-    setEventCount((value) => value + 1);
-    setLastLine(line);
-    writeQueue.current = writeQueue.current.then(() =>
-      Deno.writeTextFile(outputPath, `${line}\n`, { append: true })
-    );
-  }, { isActive: true });
+  useMouseInput(
+    (event) => {
+      const line = formatEvent(event);
+      setEventCount((value) => value + 1);
+      setLastLine(line);
+      writeQueue.current = writeQueue.current.then(() =>
+        Runtime.writeTextFile(outputPath, `${line}\n`, { append: true }),
+      );
+    },
+    { isActive: true },
+  );
 
-  useInput((input, key) => {
-    if (key.escape || input === "q") {
-      app.exit();
-    }
-  }, { isActive: true });
+  useInput(
+    (input, key) => {
+      if (key.escape || input === "q") {
+        app.exit();
+      }
+    },
+    { isActive: true },
+  );
 
   return (
     <Box flexDirection="column">

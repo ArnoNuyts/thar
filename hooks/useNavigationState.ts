@@ -48,8 +48,8 @@ export const useNavigationState = (
 
   // Search bar takes 2 rows (content + border) when visible
   const searchBarVisible = isSearchFocused || searchQuery.length > 0;
-  const listHeight = listHeightForTest ??
-    (windowRows - 2 - (searchBarVisible ? 2 : 0));
+  const listHeight =
+    listHeightForTest ?? windowRows - 2 - (searchBarVisible ? 2 : 0);
 
   const indexes: IndexEntry[] = useMemo(() => {
     let filteredTodos = sortByImportance(todos);
@@ -67,9 +67,8 @@ export const useNavigationState = (
         const projects = Array.from(todo.projects).map((p) => p.toLowerCase());
 
         return terms.every((term) => {
-          const normalized = term.startsWith("@") || term.startsWith("+")
-            ? term.slice(1)
-            : term;
+          const normalized =
+            term.startsWith("@") || term.startsWith("+") ? term.slice(1) : term;
 
           return (
             text.includes(term) ||
@@ -96,15 +95,15 @@ export const useNavigationState = (
 
     // Only commit if state has not changed since this reconciliation, so a
     // newer update from an event handler is never clobbered.
-    setState((prev) => prev === state ? activeState : prev);
+    setState((prev) => (prev === state ? activeState : prev));
   }, [activeState, state]);
 
   const setSelectedTodoId = useCallback(
     (id: symbol | undefined, shift = false) => {
       setState((prev) => {
         if (id !== undefined && shift) {
-          const targetRow = indexes.findIndex((e) =>
-            e.type === IndexType.todo && e.todo.id === id
+          const targetRow = indexes.findIndex(
+            (e) => e.type === IndexType.todo && e.todo.id === id,
           );
           if (targetRow === -1) return prev;
 
@@ -114,8 +113,8 @@ export const useNavigationState = (
             newAnchor = prev.selection.cursorId ?? id;
           }
 
-          const anchorIndex = indexes.findIndex((e) =>
-            e.type === IndexType.todo && e.todo.id === newAnchor
+          const anchorIndex = indexes.findIndex(
+            (e) => e.type === IndexType.todo && e.todo.id === newAnchor,
           );
           if (anchorIndex !== -1) {
             const start = Math.min(anchorIndex, targetRow);
@@ -142,9 +141,10 @@ export const useNavigationState = (
             indexes.length,
           );
           const targetEntry = indexes[targetRow];
-          const newLastHash = targetEntry?.type === IndexType.todo
-            ? targetEntry.todo.getHash()
-            : prev.lastHash;
+          const newLastHash =
+            targetEntry?.type === IndexType.todo
+              ? targetEntry.todo.getHash()
+              : prev.lastHash;
 
           return {
             ...prev,
@@ -167,9 +167,9 @@ export const useNavigationState = (
         };
 
         const newRow = id
-          ? indexes.findIndex((e) =>
-            e.type === IndexType.todo && e.todo.id === id
-          )
+          ? indexes.findIndex(
+              (e) => e.type === IndexType.todo && e.todo.id === id,
+            )
           : 0;
 
         const newOffset = calculateScrollOffset(
@@ -214,11 +214,7 @@ export const useNavigationState = (
   }, [indexes]);
 
   const applySelectionChange = useCallback(
-    (
-      prev: NavState,
-      newSelectedRow: number,
-      shift: boolean,
-    ): NavState => {
+    (prev: NavState, newSelectedRow: number, shift: boolean): NavState => {
       if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
         return prev;
       }
@@ -237,11 +233,11 @@ export const useNavigationState = (
           newAnchor = prev.selection.cursorId ?? newId;
         }
 
-        const anchorIndex = indexes.findIndex((e) =>
-          e.type === IndexType.todo && e.todo.id === newAnchor
+        const anchorIndex = indexes.findIndex(
+          (e) => e.type === IndexType.todo && e.todo.id === newAnchor,
         );
-        const newIndex = indexes.findIndex((e) =>
-          e.type === IndexType.todo && e.todo.id === newId
+        const newIndex = indexes.findIndex(
+          (e) => e.type === IndexType.todo && e.todo.id === newId,
         );
 
         if (anchorIndex !== -1 && newIndex !== -1) {
@@ -274,10 +270,12 @@ export const useNavigationState = (
 
       const newLastHash = selectedEntry.todo.getHash();
 
-      const selectionUnchanged = prev.selection.cursorId === newId &&
+      const selectionUnchanged =
+        prev.selection.cursorId === newId &&
         prev.selection.anchorId === newAnchor &&
         areSetsEqual(prev.selection.rangeIds, newRange);
-      const metadataUnchanged = prev.offsetRow === newOffsetRow &&
+      const metadataUnchanged =
+        prev.offsetRow === newOffsetRow &&
         prev.lastIndex === newSelectedRow &&
         prev.lastHash === newLastHash &&
         prev.prevIndexes === indexes;
@@ -302,19 +300,22 @@ export const useNavigationState = (
     [indexes, listHeight],
   );
 
-  const doNavigate = useCallback((step: number, shift: boolean = false) => {
-    setState((prev) => {
-      const todoIndex = indexes.findIndex(
-        (entry) =>
-          entry.type === IndexType.todo &&
-          entry.todo.id === prev.selection.cursorId,
-      );
-      const currentRow = todoIndex === -1 ? 0 : todoIndex;
-      const newSelectedRow = getNavigableRow(indexes, currentRow, step);
+  const doNavigate = useCallback(
+    (step: number, shift: boolean = false) => {
+      setState((prev) => {
+        const todoIndex = indexes.findIndex(
+          (entry) =>
+            entry.type === IndexType.todo &&
+            entry.todo.id === prev.selection.cursorId,
+        );
+        const currentRow = todoIndex === -1 ? 0 : todoIndex;
+        const newSelectedRow = getNavigableRow(indexes, currentRow, step);
 
-      return applySelectionChange(prev, newSelectedRow, shift);
-    });
-  }, [applySelectionChange, indexes]);
+        return applySelectionChange(prev, newSelectedRow, shift);
+      });
+    },
+    [applySelectionChange, indexes],
+  );
 
   const doNavigateContext = useCallback(
     (direction: -1 | 1, shift: boolean = false) => {
@@ -358,11 +359,7 @@ export const useNavigationState = (
         if (targetHeaderIndex === -1) return prev;
 
         let targetRow = -1;
-        for (
-          let i = targetHeaderIndex + 1;
-          i < indexes.length;
-          i++
-        ) {
+        for (let i = targetHeaderIndex + 1; i < indexes.length; i++) {
           const entry = indexes[i];
           if (entry.type === IndexType.todo) {
             targetRow = i;
@@ -381,12 +378,14 @@ export const useNavigationState = (
     [applySelectionChange, indexes],
   );
 
-  const navigateUp = useCallback((shift?: boolean) => doNavigate(-1, shift), [
-    doNavigate,
-  ]);
-  const navigateDown = useCallback((shift?: boolean) => doNavigate(1, shift), [
-    doNavigate,
-  ]);
+  const navigateUp = useCallback(
+    (shift?: boolean) => doNavigate(-1, shift),
+    [doNavigate],
+  );
+  const navigateDown = useCallback(
+    (shift?: boolean) => doNavigate(1, shift),
+    [doNavigate],
+  );
   const scrollViewportUp = useCallback(() => {
     setState((prev) => ({
       ...prev,
@@ -427,8 +426,8 @@ export const useNavigationState = (
   );
 
   const navigateHome = useCallback(() => {
-    const firstTodoIndex = indexes.findIndex((entry) =>
-      entry.type === IndexType.todo
+    const firstTodoIndex = indexes.findIndex(
+      (entry) => entry.type === IndexType.todo,
     );
     if (firstTodoIndex !== -1) {
       const entry = indexes[firstTodoIndex];
@@ -439,8 +438,8 @@ export const useNavigationState = (
   }, [indexes, setSelectedTodoId]);
 
   const navigateEnd = useCallback(() => {
-    const lastTodoIndex = indexes.findLastIndex((entry) =>
-      entry.type === IndexType.todo
+    const lastTodoIndex = indexes.findLastIndex(
+      (entry) => entry.type === IndexType.todo,
     );
     if (lastTodoIndex !== -1) {
       const entry = indexes[lastTodoIndex];
@@ -462,8 +461,8 @@ export const useNavigationState = (
     return todo ? [todo] : [];
   }, [todos, activeState.selection.rangeIds, activeState.selection.cursorId]);
 
-  const selectedTodo = todos.find((t) =>
-    t.id === activeState.selection.cursorId
+  const selectedTodo = todos.find(
+    (t) => t.id === activeState.selection.cursorId,
   );
 
   const value = useMemo(

@@ -32,19 +32,17 @@ function teardownMocks() {
   restoreDenoMocks();
 }
 
-const PastingTestApp = (
-  { onUpdate }: {
-    onUpdate: (
-      api: {
-        addTodos: (...texts: string[]) => void;
-        undo: () => void;
-        redo: () => void;
-        // deno-lint-ignore no-explicit-any
-        todos: any[];
-      },
-    ) => void;
-  },
-) => {
+const PastingTestApp = ({
+  onUpdate,
+}: {
+  onUpdate: (api: {
+    addTodos: (...texts: string[]) => void;
+    undo: () => void;
+    redo: () => void;
+    // deno-lint-ignore no-explicit-any
+    todos: any[];
+  }) => void;
+}) => {
   const { addTodos, undo, redo, todos } = useTodo();
   useEffect(() => {
     onUpdate({
@@ -64,13 +62,15 @@ Deno.test({
   async fn() {
     setupMocks();
 
-    let currentApi: {
-      addTodos: (...texts: string[]) => void;
-      undo: () => void;
-      redo: () => void;
-      // deno-lint-ignore no-explicit-any
-      todos: any[];
-    } | undefined;
+    let currentApi:
+      | {
+          addTodos: (...texts: string[]) => void;
+          undo: () => void;
+          redo: () => void;
+          // deno-lint-ignore no-explicit-any
+          todos: any[];
+        }
+      | undefined;
 
     const { unmount } = render(
       <ToasterProvider>

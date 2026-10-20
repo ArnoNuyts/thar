@@ -205,7 +205,7 @@ type RenderedInput = {
 const renderSearch = (todos: Todos): RenderedInput => {
   let snapshot = emptySnapshot();
   const result = render(
-    <SearchHarness todos={todos} onSnapshot={(next) => snapshot = next} />,
+    <SearchHarness todos={todos} onSnapshot={(next) => (snapshot = next)} />,
   );
   return {
     stdin: result.stdin,
@@ -221,7 +221,7 @@ const renderSuggestionInput = (todos: Todos): RenderedInput => {
   const result = render(
     <SuggestionHarness
       todos={todos}
-      onSnapshot={(next) => snapshot = next}
+      onSnapshot={(next) => (snapshot = next)}
       onCancel={() => cancelCount++}
     />,
   );
@@ -456,7 +456,7 @@ Deno.test(
     const harness = (isFocused: boolean) => (
       <SuggestionHarness
         todos={todos}
-        onSnapshot={(next) => snapshot = next}
+        onSnapshot={(next) => (snapshot = next)}
         onCancel={() => cancelCount++}
         isFocused={isFocused}
       />

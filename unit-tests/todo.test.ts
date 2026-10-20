@@ -141,14 +141,12 @@ Deno.test("Todo constructor - parses completion date without a creation date", (
     },
   ];
 
-  for (
-    const {
-      input,
-      expectedCompletionDate,
-      expectedCreationDate,
-      expectedState,
-    } of testCases
-  ) {
+  for (const {
+    input,
+    expectedCompletionDate,
+    expectedCreationDate,
+    expectedState,
+  } of testCases) {
     const todo = new Todo(input);
 
     assertEquals(
@@ -210,9 +208,9 @@ Deno.test("Todo constructor - extracts projects correctly", () => {
     assertEquals(
       Array.from(todo.contexts),
       expected,
-      `Input "${input}" should have exactly the contexts: ${
-        expected.join(", ")
-      }`,
+      `Input "${input}" should have exactly the contexts: ${expected.join(
+        ", ",
+      )}`,
     );
   }
 });
@@ -237,9 +235,9 @@ Deno.test("Todo constructor - extracts contexts correctly", () => {
     assertEquals(
       Array.from(todo.projects),
       expected,
-      `Input "${input}" should have exactly the contexts: ${
-        expected.join(", ")
-      }`,
+      `Input "${input}" should have exactly the contexts: ${expected.join(
+        ", ",
+      )}`,
     );
   }
 });
@@ -270,9 +268,9 @@ Deno.test("Todo constructor - extracts tags correctly", () => {
     assertEquals(
       todo.tags,
       expected as unknown,
-      `Input "${input}" should have exactly the tags: ${
-        JSON.stringify(expected)
-      }`,
+      `Input "${input}" should have exactly the tags: ${JSON.stringify(
+        expected,
+      )}`,
     );
   }
 });
@@ -306,15 +304,15 @@ Deno.test("Todo project and context edits preserve programmatic tags", () => {
   assertEquals(withContext.tags.rec, "1d");
   assertEquals(Array.from(withContext.contexts), ["c"]);
 
-  const withoutProject = new Todo("a +p").setRecurrence("1d").removeProject(
-    "p",
-  );
+  const withoutProject = new Todo("a +p")
+    .setRecurrence("1d")
+    .removeProject("p");
   assertEquals(withoutProject.tags.rec, "1d");
   assertEquals(Array.from(withoutProject.projects), []);
 
-  const withoutContext = new Todo("a @c").setRecurrence("1d").removeContext(
-    "c",
-  );
+  const withoutContext = new Todo("a @c")
+    .setRecurrence("1d")
+    .removeContext("c");
   assertEquals(withoutContext.tags.rec, "1d");
   assertEquals(Array.from(withoutContext.contexts), []);
 
@@ -331,10 +329,7 @@ Deno.test("isDone - returns correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
-      todo.isDone(),
-      expected,
-    );
+    assertEquals(todo.isDone(), expected);
   }
 });
 
@@ -349,11 +344,7 @@ Deno.test("isHidden - returns correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
-      todo.isHidden(),
-      expected,
-      input,
-    );
+    assertEquals(todo.isHidden(), expected, input);
   }
 });
 
@@ -380,11 +371,7 @@ Deno.test("isOverdue - returns correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
-      todo.isOverdue(),
-      expected,
-      input,
-    );
+    assertEquals(todo.isOverdue(), expected, input);
   }
 });
 
@@ -407,11 +394,7 @@ Deno.test("isPassedThreshold - returns correctly", () => {
   for (const { input, expected } of testCases) {
     const todo = new Todo(input);
 
-    assertEquals(
-      todo.isPassedThreshold(),
-      expected,
-      input,
-    );
+    assertEquals(todo.isPassedThreshold(), expected, input);
   }
 });
 

@@ -11,9 +11,7 @@ import { TestWrapper } from "./test-components.tsx";
 
 const ActionBarTestWrapper = ({ children }: { children: React.ReactNode }) => (
   <TestWrapper>
-    <SearchProvider>
-      {children}
-    </SearchProvider>
+    <SearchProvider>{children}</SearchProvider>
   </TestWrapper>
 );
 

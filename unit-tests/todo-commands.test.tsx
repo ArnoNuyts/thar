@@ -42,7 +42,7 @@ Deno.test("useTodoCommands: archiveCompleted waits for the write to finish", asy
 
   let settled = false;
   const archive = commands!.archiveCompleted();
-  archive.then(() => settled = true);
+  archive.then(() => (settled = true));
 
   await waitFor(() => assertEquals(started, true));
   await Promise.resolve();

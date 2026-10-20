@@ -27,11 +27,7 @@ function setupWatcherMock() {
   (Deno as any).watchFs = () => mockWatcher;
 }
 
-const ApiGrabber = ({
-  onApi,
-}: {
-  onApi: (api: TodoContextType) => void;
-}) => {
+const ApiGrabber = ({ onApi }: { onApi: (api: TodoContextType) => void }) => {
   const api = useTodo();
   useEffect(() => {
     onApi(api);
@@ -64,13 +60,11 @@ const LifecycleApp = ({
 }) => (
   <ToasterProvider>
     <ToasterProbe onMessage={onMessage} />
-    {showTodoProvider
-      ? (
-        <TodoProvider filename={filename}>
-          <ApiGrabber onApi={onApi} />
-        </TodoProvider>
-      )
-      : null}
+    {showTodoProvider ? (
+      <TodoProvider filename={filename}>
+        <ApiGrabber onApi={onApi} />
+      </TodoProvider>
+    ) : null}
   </ToasterProvider>
 );
 
@@ -95,8 +89,7 @@ async function withTempFile(
 }
 
 Deno.test({
-  name:
-    "TodoContext: unmount cancels the pending reload debounce (no read, no toaster)",
+  name: "TodoContext: unmount cancels the pending reload debounce (no read, no toaster)",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
@@ -157,28 +150,30 @@ Deno.test({
       );
 
       const unmountedAt = Date.now();
-      await waitFor(() => {
-        assertEquals(
-          readCount,
-          1,
-          "A pending reload must not read the file after unmount",
-        );
-        assertEquals(
-          messages.includes("File reloaded"),
-          false,
-          "A pending reload must not toast after unmount",
-        );
-        if (Date.now() - unmountedAt < 700) {
-          throw new Error("reload debounce window still open");
-        }
-      }, { timeout: 1000, interval: 25 });
+      await waitFor(
+        () => {
+          assertEquals(
+            readCount,
+            1,
+            "A pending reload must not read the file after unmount",
+          );
+          assertEquals(
+            messages.includes("File reloaded"),
+            false,
+            "A pending reload must not toast after unmount",
+          );
+          if (Date.now() - unmountedAt < 700) {
+            throw new Error("reload debounce window still open");
+          }
+        },
+        { timeout: 1000, interval: 25 },
+      );
     });
   },
 });
 
 Deno.test({
-  name:
-    "TodoContext: slow initial read does not overwrite the file with the empty startup state",
+  name: "TodoContext: slow initial read does not overwrite the file with the empty startup state",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
@@ -216,12 +211,15 @@ Deno.test({
       // Hold the read open past the debounce and check the file was not
       // truncated by the empty startup state.
       const renderStartedAt = Date.now();
-      await waitFor(() => {
-        if (readCount === 0) throw new Error("File read did not start");
-        if (Date.now() - renderStartedAt < 60) {
-          throw new Error("The initial save debounce has not fired yet");
-        }
-      }, { interval: 10 });
+      await waitFor(
+        () => {
+          if (readCount === 0) throw new Error("File read did not start");
+          if (Date.now() - renderStartedAt < 60) {
+            throw new Error("The initial save debounce has not fired yet");
+          }
+        },
+        { interval: 10 },
+      );
 
       assertEquals(
         await originalReadTextFile(filename),
@@ -284,16 +282,19 @@ Deno.test({
       // The save is scheduled but its 50ms timer has not fired yet.
       unmount();
       const unmountedAt = Date.now();
-      await waitFor(async () => {
-        assertEquals(
-          await Deno.readTextFile(filename),
-          before,
-          "A pending save must not write the file after unmount",
-        );
-        if (Date.now() - unmountedAt < 100) {
-          throw new Error("save debounce window still open");
-        }
-      }, { timeout: 1000, interval: 10 });
+      await waitFor(
+        async () => {
+          assertEquals(
+            await Deno.readTextFile(filename),
+            before,
+            "A pending save must not write the file after unmount",
+          );
+          if (Date.now() - unmountedAt < 100) {
+            throw new Error("save debounce window still open");
+          }
+        },
+        { timeout: 1000, interval: 10 },
+      );
     });
   },
 });

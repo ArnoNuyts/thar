@@ -9,9 +9,12 @@ interface ModalProps {
   onLayoutSizeChange?: (size: { columns: number; rows: number }) => void;
 }
 
-export const Modal = (
-  { children, title, width = "50%", onLayoutSizeChange }: ModalProps,
-) => {
+export const Modal = ({
+  children,
+  title,
+  width = "50%",
+  onLayoutSizeChange,
+}: ModalProps) => {
   const containerRef = useRef(null);
   const lastLayoutRef = useRef<{ width: number; height: number } | null>(null);
 

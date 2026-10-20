@@ -46,9 +46,11 @@ function teardownMocks() {
   restoreDenoMocks();
 }
 
-const App = (
-  { onMount }: { onMount: (add: (...texts: string[]) => void) => void },
-) => {
+const App = ({
+  onMount,
+}: {
+  onMount: (add: (...texts: string[]) => void) => void;
+}) => {
   const { addTodos } = useTodo();
   useEffect(() => {
     onMount(addTodos);
@@ -88,12 +90,15 @@ Deno.test({
 
     // Wait past the read-back debounce (500ms) while asserting no read happens.
     const writeCompletedAt = Date.now();
-    await waitFor(() => {
-      assertEquals(readCount, 0, "Should NOT have read back");
-      if (Date.now() - writeCompletedAt < 600) {
-        throw new Error("read-back debounce window still open");
-      }
-    }, { interval: 25 });
+    await waitFor(
+      () => {
+        assertEquals(readCount, 0, "Should NOT have read back");
+        if (Date.now() - writeCompletedAt < 600) {
+          throw new Error("read-back debounce window still open");
+        }
+      },
+      { interval: 25 },
+    );
 
     unmount();
     mockWatcher.close();

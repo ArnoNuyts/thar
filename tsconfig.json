@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "@std/assert": ["./test/assert.ts"],
+      "@std/async": ["./test/std-async.ts"],
+      "@std/path": ["./test/std-path.ts"]
+    }
+  },
+  "include": [
+    "main.tsx",
+    "components/**/*.tsx",
+    "contexts/**/*.tsx",
+    "hooks/**/*.ts",
+    "logic/**/*.ts",
+    "theme/**/*.ts",
+    "types/**/*.ts",
+    "utils/**/*.ts",
+    "scripts/**/*.ts",
+    "scripts/**/*.tsx",
+    "test/**/*.ts",
+    "unit-tests/**/*.ts",
+    "unit-tests/**/*.tsx",
+    "vite.config.ts",
+    "vite.sea.config.ts"
+  ]
+}

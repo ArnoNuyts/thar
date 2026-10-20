@@ -55,11 +55,7 @@ const ConnectedSearchInput = () => {
   return <SearchInput todos={todos} />;
 };
 
-const SearchQuerySetter = ({
-  query,
-}: {
-  query: string;
-}) => {
+const SearchQuerySetter = ({ query }: { query: string }) => {
   const { setSearchQuery } = useSearch();
   useEffect(() => {
     setSearchQuery(query);
@@ -88,11 +84,7 @@ const SelectionObserver = ({
   return null;
 };
 
-const QueryObserver = ({
-  onQuery,
-}: {
-  onQuery: (query: string) => void;
-}) => {
+const QueryObserver = ({ onQuery }: { onQuery: (query: string) => void }) => {
   const { searchQuery } = useSearch();
 
   useEffect(() => {
@@ -212,8 +204,10 @@ Deno.test(
       <TestWrapper initialTodos={todos}>
         <FocusRequester />
         <ConnectedSearchInput />
-        <SelectionObserver onSelectionChange={(text) => selectedText = text} />
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <SelectionObserver
+          onSelectionChange={(text) => (selectedText = text)}
+        />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </TestWrapper>,
     );
 
@@ -256,7 +250,9 @@ Deno.test(
     const { unmount } = render(
       <TestWrapper initialTodos={todos}>
         <ConnectedSearchInput />
-        <SelectionObserver onSelectionChange={(text) => selectedText = text} />
+        <SelectionObserver
+          onSelectionChange={(text) => (selectedText = text)}
+        />
         <SearchQuerySetter query="" />
       </TestWrapper>,
     );
@@ -281,8 +277,10 @@ Deno.test(
       <TestWrapper initialTodos={todos}>
         <FocusRequester />
         <ConnectedSearchInput />
-        <SelectionObserver onSelectionChange={(text) => selectedText = text} />
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <SelectionObserver
+          onSelectionChange={(text) => (selectedText = text)}
+        />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </TestWrapper>,
     );
 
@@ -323,9 +321,9 @@ Deno.test(
         <FocusRequester />
         <ConnectedSearchInput />
         <MultiSelectionObserver
-          onSelectionChange={(ids) => selectedIds = ids}
+          onSelectionChange={(ids) => (selectedIds = ids)}
         />
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </TestWrapper>,
     );
 
@@ -368,9 +366,9 @@ Deno.test(
         <FocusRequester />
         <ConnectedSearchInput />
         <MultiSelectionObserver
-          onSelectionChange={(ids) => selectedIds = ids}
+          onSelectionChange={(ids) => (selectedIds = ids)}
         />
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </TestWrapper>,
     );
 
@@ -408,9 +406,11 @@ Deno.test(
         <SearchQuerySetter query="Task" />
         <ConnectedSearchInput />
         <FocusWhen when={focus} />
-        <SelectionObserver onSelectionChange={(text) => selectedText = text} />
-        <QueryObserver onQuery={(next) => query = next} />
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <SelectionObserver
+          onSelectionChange={(text) => (selectedText = text)}
+        />
+        <QueryObserver onQuery={(next) => (query = next)} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </TestWrapper>
     );
 

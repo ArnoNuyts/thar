@@ -29,20 +29,14 @@ Deno.test("readTodosFromFile - creates a missing file and returns empty Todos", 
 Deno.test("readTodosFromFile - throws on unreadable paths instead of exiting", async () => {
   await withTempDir(async (dir) => {
     // Reading a directory fails with an error other than NotFound.
-    await assertRejects(
-      () => readTodosFromFile(dir),
-      Deno.errors.IsADirectory,
-    );
+    await assertRejects(() => readTodosFromFile(dir), /EISDIR/);
   });
 });
 
 Deno.test("readTodosFromFile - parses existing file lines", async () => {
   await withTempDir(async (dir) => {
     const filename = join(dir, "todos.txt");
-    await Deno.writeTextFile(
-      filename,
-      "(A) First task\n\n(B) Second task\n",
-    );
+    await Deno.writeTextFile(filename, "(A) First task\n\n(B) Second task\n");
 
     const todos = await readTodosFromFile(filename);
 

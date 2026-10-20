@@ -70,7 +70,7 @@ Deno.test("AddTagContextModal: should toggle existing project", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "add-project" && <AddTagContextModal type="project" />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -145,7 +145,7 @@ Deno.test("AddTagContextModal: should add custom project", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "add-project" && <AddTagContextModal type="project" />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -211,7 +211,7 @@ Deno.test("AddTagContextModal: should cycle through 3 states for 'some' state", 
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "add-project" && <AddTagContextModal type="project" />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };

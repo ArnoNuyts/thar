@@ -15,16 +15,14 @@ import {
 } from "../logic/todo-file-helpers.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
+import { Runtime, type FsWatcher } from "../utils/runtime.ts";
 import { useToaster } from "./toaster-context.tsx";
 
 export interface TodoContextType {
   todos: Todos;
   setTodos: (todos: Todos) => void;
   addTodos: (...texts: string[]) => Todo[];
-  updateTodos: (
-    todosToUpdate: Todo[],
-    transform: (todo: Todo) => Todo,
-  ) => void;
+  updateTodos: (todosToUpdate: Todo[], transform: (todo: Todo) => Todo) => void;
   deleteTodos: (todosToDelete: Todo[]) => void;
   toggleTodos: (todosToToggle: Todo[]) => void;
   toggleHidden: (todosToToggle: Todo[]) => void;
@@ -207,9 +205,9 @@ export const TodoProvider = ({
   // Watcher effect
   useEffect(() => {
     let cancelled = false;
-    let watcher: Deno.FsWatcher | undefined;
+    let watcher: FsWatcher | undefined;
     try {
-      watcher = Deno.watchFs(filename);
+      watcher = Runtime.watchFs(filename);
     } catch (error) {
       console.error("Failed to watch file:", error);
     }
@@ -233,7 +231,10 @@ export const TodoProvider = ({
       try {
         for await (const event of watcher) {
           if (cancelled) break;
-          if (event.kind === "modify") {
+          // Ignore startup events (for example creating a missing todo file)
+          // until the initial load has settled.
+          if (!hasLoadedFileRef.current) continue;
+          if (event.kind === "modify" || event.kind === "rename") {
             // Prevent write-read loop
             if (Date.now() - lastWriteTimeRef.current < 1000) {
               continue;
@@ -284,7 +285,7 @@ export const TodoProvider = ({
   const addTodos = useCallback((...texts: string[]): Todo[] => {
     if (texts.length === 0) return [];
     const newTodos = texts.map((text) =>
-      new Todo(text).setCreationDate(new Date())
+      new Todo(text).setCreationDate(new Date()),
     );
     dispatch({
       type: "mutate",
@@ -293,18 +294,18 @@ export const TodoProvider = ({
     return newTodos;
   }, []);
 
-  const updateTodos = useCallback((
-    todosToUpdate: Todo[],
-    transform: (todo: Todo) => Todo,
-  ) => {
-    const idsToUpdate = new Set(todosToUpdate.map((t) => t.id));
-    dispatch({
-      type: "mutate",
-      updater: (prev) => [
-        ...prev.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t)),
-      ],
-    });
-  }, []);
+  const updateTodos = useCallback(
+    (todosToUpdate: Todo[], transform: (todo: Todo) => Todo) => {
+      const idsToUpdate = new Set(todosToUpdate.map((t) => t.id));
+      dispatch({
+        type: "mutate",
+        updater: (prev) => [
+          ...prev.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t)),
+        ],
+      });
+    },
+    [],
+  );
 
   const deleteTodos = useCallback((todosToDelete: Todo[]) => {
     const idsToDelete = new Set(todosToDelete.map((t) => t.id));
@@ -314,27 +315,33 @@ export const TodoProvider = ({
     });
   }, []);
 
-  const toggleTodos = useCallback((todosToToggle: Todo[]) => {
-    const idsToToggle = new Set(todosToToggle.map((t) => t.id));
-    // Compute the toast count from the current state; the reducer updater
-    // stays pure so StrictMode's double invocation cannot duplicate instances.
-    const { recurringCount } = buildToggledTodos(todos, idsToToggle);
+  const toggleTodos = useCallback(
+    (todosToToggle: Todo[]) => {
+      const idsToToggle = new Set(todosToToggle.map((t) => t.id));
+      // Compute the toast count from the current state; the reducer updater
+      // stays pure so StrictMode's double invocation cannot duplicate instances.
+      const { recurringCount } = buildToggledTodos(todos, idsToToggle);
 
-    dispatch({
-      type: "mutate",
-      updater: (prev) => buildToggledTodos(prev, idsToToggle).todos,
-    });
+      dispatch({
+        type: "mutate",
+        updater: (prev) => buildToggledTodos(prev, idsToToggle).todos,
+      });
 
-    if (recurringCount === 1) {
-      showToaster("Recurring todo created");
-    } else if (recurringCount > 1) {
-      showToaster(`${recurringCount} recurring todos created`);
-    }
-  }, [todos, showToaster]);
+      if (recurringCount === 1) {
+        showToaster("Recurring todo created");
+      } else if (recurringCount > 1) {
+        showToaster(`${recurringCount} recurring todos created`);
+      }
+    },
+    [todos, showToaster],
+  );
 
-  const toggleHidden = useCallback((todosToToggle: Todo[]) => {
-    updateTodos(todosToToggle, (t) => t.toggleHidden());
-  }, [updateTodos]);
+  const toggleHidden = useCallback(
+    (todosToToggle: Todo[]) => {
+      updateTodos(todosToToggle, (t) => t.toggleHidden());
+    },
+    [updateTodos],
+  );
 
   const archiveCompletedTodos = useCallback(async () => {
     const completedTodos = todos.filter((t: Todo) => t.isDone());
@@ -383,9 +390,5 @@ export const TodoProvider = ({
     ],
   );
 
-  return (
-    <TodoContext.Provider value={value}>
-      {children}
-    </TodoContext.Provider>
-  );
+  return <TodoContext.Provider value={value}>{children}</TodoContext.Provider>;
 };

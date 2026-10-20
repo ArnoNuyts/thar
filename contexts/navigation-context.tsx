@@ -36,17 +36,17 @@ export interface NavigationContextType {
 
 export const NavigationContext = createContext<
   NavigationContextType | undefined
->(
-  undefined,
-);
+>(undefined);
 
-export const NavigationProvider = (
-  { children, todos, listHeightForTest }: {
-    children: ReactNode;
-    todos: Todos;
-    listHeightForTest?: number;
-  },
-) => {
+export const NavigationProvider = ({
+  children,
+  todos,
+  listHeightForTest,
+}: {
+  children: ReactNode;
+  todos: Todos;
+  listHeightForTest?: number;
+}) => {
   const { value, selectedTodo } = useNavigationState(todos, listHeightForTest);
 
   // Keep the imperative ref in sync during render, as before the extraction.

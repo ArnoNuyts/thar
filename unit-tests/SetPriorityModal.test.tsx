@@ -25,7 +25,7 @@ Deno.test("SetPriorityModal: should render and set focus", async () => {
     return (
       <Box flexDirection="column" height={20}>
         {activeModal === "set-priority" && <SetPriorityModal />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -74,7 +74,7 @@ Deno.test("SetPriorityModal: should update multiple todos", async () => {
     return (
       <Box flexDirection="column" height={20}>
         {activeModal === "set-priority" && <SetPriorityModal />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };

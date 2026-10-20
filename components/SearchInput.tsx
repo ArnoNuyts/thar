@@ -28,54 +28,57 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
   const [cursorPos, setCursorPos] = useState(searchQuery.length);
   const tagSources = useTagSources(todos);
 
-  const { isFocused, focus, blur } = useFocusedInput((_input, key) => {
-    // While suggestions are open they own the arrow keys, Enter and Escape.
-    if (
-      suggestions.length > 0 &&
-      (key.upArrow || key.downArrow || key.return || key.escape)
-    ) {
-      return;
-    }
+  const { isFocused, focus, blur } = useFocusedInput(
+    (_input, key) => {
+      // While suggestions are open they own the arrow keys, Enter and Escape.
+      if (
+        suggestions.length > 0 &&
+        (key.upArrow || key.downArrow || key.return || key.escape)
+      ) {
+        return;
+      }
 
-    if (key.upArrow) {
-      navigateUp(key.shift);
-      return;
-    }
-    if (key.downArrow) {
-      navigateDown(key.shift);
-      return;
-    }
-    if (key.pageUp) {
-      navigatePageUp(key.shift);
-      return;
-    }
-    if (key.pageDown) {
-      navigatePageDown(key.shift);
-      return;
-    }
-    if (key.home) {
-      navigateHome();
-      return;
-    }
-    if (key.end) {
-      navigateEnd();
-      return;
-    }
+      if (key.upArrow) {
+        navigateUp(key.shift);
+        return;
+      }
+      if (key.downArrow) {
+        navigateDown(key.shift);
+        return;
+      }
+      if (key.pageUp) {
+        navigatePageUp(key.shift);
+        return;
+      }
+      if (key.pageDown) {
+        navigatePageDown(key.shift);
+        return;
+      }
+      if (key.home) {
+        navigateHome();
+        return;
+      }
+      if (key.end) {
+        navigateEnd();
+        return;
+      }
 
-    if (key.return) {
-      // Unfocus but keep filter active
-      blur();
-      return;
-    }
+      if (key.return) {
+        // Unfocus but keep filter active
+        blur();
+        return;
+      }
 
-    if (key.escape) {
-      // Clear filter and unfocus
-      setSearchQuery("");
-      setCursorPos(0);
-      blur();
-      return;
-    }
-  }, { tag: "search-input" });
+      if (key.escape) {
+        // Clear filter and unfocus
+        setSearchQuery("");
+        setCursorPos(0);
+        blur();
+        return;
+      }
+    },
+    { tag: "search-input" },
+  );
 
   // Register focus function with context ref after commit so we never write to
   // the ref during render.
@@ -92,18 +95,16 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
     setIsSearchFocused(isFocused);
   }, [isFocused, clearSuggestions, setIsSearchFocused]);
 
-  const { wordStartIndex, updateSuggestions } = useSuggestionInput(
-    {
-      value: searchQuery,
-      cursor: cursorPos,
-      source: tagSources,
-      onApply: (newValue, newCursor) => {
-        setSearchQuery(newValue);
-        setCursorPos(newCursor);
-      },
-      isActive: isFocused,
+  const { wordStartIndex, updateSuggestions } = useSuggestionInput({
+    value: searchQuery,
+    cursor: cursorPos,
+    source: tagSources,
+    onApply: (newValue, newCursor) => {
+      setSearchQuery(newValue);
+      setCursorPos(newCursor);
     },
-  );
+    isActive: isFocused,
+  });
 
   // Calculate dropdown position
   useEffect(() => {
@@ -143,21 +144,17 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
     >
       <Text color={isFocused ? COLORS.secondary : COLORS.muted}>{` / `}</Text>
       <Box flexGrow={1}>
-        {isFocused
-          ? (
-            <ControlledTextInput
-              focus={isFocused}
-              value={searchQuery}
-              onChange={handleChange}
-              onCursorChange={handleCursorChange}
-              cursorOffset={cursorPos}
-            />
-          )
-          : (
-            <Text color={COLORS.foreground}>
-              {searchQuery}
-            </Text>
-          )}
+        {isFocused ? (
+          <ControlledTextInput
+            focus={isFocused}
+            value={searchQuery}
+            onChange={handleChange}
+            onCursorChange={handleCursorChange}
+            cursorOffset={cursorPos}
+          />
+        ) : (
+          <Text color={COLORS.foreground}>{searchQuery}</Text>
+        )}
       </Box>
       <Text color={isFocused ? COLORS.secondary : COLORS.muted}>{` / `}</Text>
     </Box>

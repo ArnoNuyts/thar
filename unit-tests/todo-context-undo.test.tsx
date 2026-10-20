@@ -33,23 +33,21 @@ function teardownMocks() {
   restoreDenoMocks();
 }
 
-const UndoTestApp = (
-  { onUpdate }: {
-    onUpdate: (
-      api: {
-        addTodos: (...texts: string[]) => void;
-        updateTodos: (
-          todosToUpdate: Todo[],
-          transform: (todo: Todo) => Todo,
-        ) => void;
-        undo: () => void;
-        redo: () => void;
-        // deno-lint-ignore no-explicit-any
-        todos: any[];
-      },
+const UndoTestApp = ({
+  onUpdate,
+}: {
+  onUpdate: (api: {
+    addTodos: (...texts: string[]) => void;
+    updateTodos: (
+      todosToUpdate: Todo[],
+      transform: (todo: Todo) => Todo,
     ) => void;
-  },
-) => {
+    undo: () => void;
+    redo: () => void;
+    // deno-lint-ignore no-explicit-any
+    todos: any[];
+  }) => void;
+}) => {
   const { addTodos, updateTodos, undo, redo, todos } = useTodo();
   useEffect(() => {
     onUpdate({
@@ -70,13 +68,15 @@ Deno.test({
   async fn() {
     setupMocks();
 
-    let currentApi: {
-      addTodos: (...texts: string[]) => void;
-      undo: () => void;
-      redo: () => void;
-      // deno-lint-ignore no-explicit-any
-      todos: any[];
-    } | undefined;
+    let currentApi:
+      | {
+          addTodos: (...texts: string[]) => void;
+          undo: () => void;
+          redo: () => void;
+          // deno-lint-ignore no-explicit-any
+          todos: any[];
+        }
+      | undefined;
 
     const { unmount } = render(
       <ToasterProvider>
@@ -149,12 +149,14 @@ Deno.test({
   async fn() {
     setupMocks();
 
-    let currentApi: {
-      addTodos: (...texts: string[]) => void;
-      undo: () => void;
-      // deno-lint-ignore no-explicit-any
-      todos: any[];
-    } | undefined;
+    let currentApi:
+      | {
+          addTodos: (...texts: string[]) => void;
+          undo: () => void;
+          // deno-lint-ignore no-explicit-any
+          todos: any[];
+        }
+      | undefined;
 
     const { unmount } = render(
       <ToasterProvider>
@@ -206,16 +208,18 @@ Deno.test({
   async fn() {
     setupMocks();
 
-    let currentApi: {
-      addTodos: (...texts: string[]) => void;
-      updateTodos: (
-        todosToUpdate: Todo[],
-        transform: (todo: Todo) => Todo,
-      ) => void;
-      undo: () => void;
-      // deno-lint-ignore no-explicit-any
-      todos: any[];
-    } | undefined;
+    let currentApi:
+      | {
+          addTodos: (...texts: string[]) => void;
+          updateTodos: (
+            todosToUpdate: Todo[],
+            transform: (todo: Todo) => Todo,
+          ) => void;
+          undo: () => void;
+          // deno-lint-ignore no-explicit-any
+          todos: any[];
+        }
+      | undefined;
 
     const { unmount } = render(
       <ToasterProvider>
@@ -240,20 +244,20 @@ Deno.test({
     // 2. Update todo (First Edit)
     currentApi!.updateTodos([todoV1], (t) => t.setText("Todo 1 Updated"));
     await waitFor(() =>
-      assertEquals(currentApi!.todos[0].text, "Todo 1 Updated")
+      assertEquals(currentApi!.todos[0].text, "Todo 1 Updated"),
     );
     const todoV2 = currentApi!.todos[0];
 
     // 3. Update todo (Second Edit)
     currentApi!.updateTodos([todoV2], (t) => t.setText("Todo 1 Updated Again"));
     await waitFor(() =>
-      assertEquals(currentApi!.todos[0].text, "Todo 1 Updated Again")
+      assertEquals(currentApi!.todos[0].text, "Todo 1 Updated Again"),
     );
 
     // 4. Undo Second Edit -> Should be "Todo 1 Updated"
     currentApi!.undo();
     await waitFor(() =>
-      assertEquals(currentApi!.todos[0].text, "Todo 1 Updated")
+      assertEquals(currentApi!.todos[0].text, "Todo 1 Updated"),
     );
 
     // 5. Undo First Edit -> Should be "Todo 1"

@@ -161,8 +161,9 @@ Deno.test(
 const FocusableProbe = ({ tag }: { tag: string }) => {
   const { id, isFocused } = useFocusable({ autoFocus: true, tag });
 
-  return <Text>{`${isFocused ? "focused" : "blurred"}:${id.description}`}
-  </Text>;
+  return (
+    <Text>{`${isFocused ? "focused" : "blurred"}:${id.description}`}</Text>
+  );
 };
 
 Deno.test(

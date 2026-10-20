@@ -41,9 +41,7 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
   );
 
   return (
-    <SearchContext.Provider value={value}>
-      {children}
-    </SearchContext.Provider>
+    <SearchContext.Provider value={value}>{children}</SearchContext.Provider>
   );
 };
 

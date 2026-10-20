@@ -13,9 +13,13 @@ import { Todo } from "../logic/todo.ts";
 import { MockTodoProvider } from "./mock-todo-provider.tsx";
 import { waitFor } from "./test-utils.ts";
 
-const Wrapper = (
-  { todos, listHeight = 10 }: { todos: Todos; listHeight?: number },
-) => (
+const Wrapper = ({
+  todos,
+  listHeight = 10,
+}: {
+  todos: Todos;
+  listHeight?: number;
+}) => (
   <ToasterProvider>
     <MockTodoProvider initialTodos={todos}>
       <FocusProvider>

@@ -34,9 +34,7 @@ const TestWrapper = ({
 }) => {
   return (
     <ToasterProvider>
-      <MockTodoProvider
-        initialTodos={initialTodos}
-      >
+      <MockTodoProvider initialTodos={initialTodos}>
         <FocusProvider>
           <SuggestionProvider>
             <SearchProvider>
@@ -54,9 +52,10 @@ const TestWrapper = ({
 const SelectionObserver = ({
   onSelectionChange,
 }: {
-  onSelectionChange: (
-    state: { cursorId: symbol | undefined; rangeIds: Set<symbol> },
-  ) => void;
+  onSelectionChange: (state: {
+    cursorId: symbol | undefined;
+    rangeIds: Set<symbol>;
+  }) => void;
 }) => {
   const { selectedTodoId, selectedTodoIds } = useNavigation();
 
@@ -70,9 +69,11 @@ const SelectionObserver = ({
   return null;
 };
 
-const ActionTrigger = (
-  { onTrigger }: { onTrigger: (trigger: () => void) => void },
-) => {
+const ActionTrigger = ({
+  onTrigger,
+}: {
+  onTrigger: (trigger: () => void) => void;
+}) => {
   const { updateTodos, todos } = useTodo();
   const { selectedTodoIds } = useNavigation();
 
@@ -110,8 +111,8 @@ Deno.test({
 
     const { unmount } = render(
       <TestWrapper initialTodos={initialTodos}>
-        <SelectionObserver onSelectionChange={(s) => selection = s} />
-        <ActionTrigger onTrigger={(t) => trigger = t} />
+        <SelectionObserver onSelectionChange={(s) => (selection = s)} />
+        <ActionTrigger onTrigger={(t) => (trigger = t)} />
         <NavGetter />
       </TestWrapper>,
     );

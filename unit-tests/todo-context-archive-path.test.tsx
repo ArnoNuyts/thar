@@ -18,11 +18,7 @@ import {
 
 let mockWatcher: MockWatcher;
 
-const ApiGrabber = ({
-  onApi,
-}: {
-  onApi: (api: TodoContextType) => void;
-}) => {
+const ApiGrabber = ({ onApi }: { onApi: (api: TodoContextType) => void }) => {
   const api = useTodo();
   useEffect(() => {
     onApi(api);
@@ -31,8 +27,7 @@ const ApiGrabber = ({
 };
 
 Deno.test({
-  name:
-    "TodoContext: archive writes done.txt next to a todo file in a subdirectory",
+  name: "TodoContext: archive writes done.txt next to a todo file in a subdirectory",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
@@ -92,9 +87,9 @@ Deno.test({
       const donePath = join(subdir, "done.txt");
       assert(
         writes.includes(donePath),
-        `Expected archive to write "${donePath}", got ${
-          JSON.stringify(writes)
-        }`,
+        `Expected archive to write "${donePath}", got ${JSON.stringify(
+          writes,
+        )}`,
       );
       assert(
         donePath.includes(`${SEPARATOR}done.txt`),

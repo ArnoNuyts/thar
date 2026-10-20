@@ -19,8 +19,8 @@ export const getHoveredButtonIndex = (
 ): number | null => {
   if (x === undefined || y === undefined) return null;
 
-  const modalHeight = MODAL_TOP_CHROME_ROWS + opts.bodyRows +
-    MODAL_BOTTOM_CHROME_ROWS;
+  const modalHeight =
+    MODAL_TOP_CHROME_ROWS + opts.bodyRows + MODAL_BOTTOM_CHROME_ROWS;
   const modalLeft = Math.floor((opts.columns - opts.modalWidth) / 2) + 1;
   const modalTop = Math.ceil((opts.rows - modalHeight) / 2) + 1;
   const buttonY = modalTop + MODAL_TOP_CHROME_ROWS + opts.buttonRowIndex;
@@ -38,8 +38,8 @@ export const getHoveredButtonIndex = (
   if (x >= leftStart && x <= leftEnd) return 0;
 
   const rightHalfLeft = modalLeft + leftHalfWidth;
-  const rightStart = rightHalfLeft +
-    Math.floor((rightHalfWidth - rightWidth) / 2);
+  const rightStart =
+    rightHalfLeft + Math.floor((rightHalfWidth - rightWidth) / 2);
   const rightEnd = rightStart + rightWidth - 1;
   if (x >= rightStart && x <= rightEnd) return 1;
 

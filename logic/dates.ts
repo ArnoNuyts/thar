@@ -31,11 +31,7 @@ export const parseDateTag = (value: unknown): Date | undefined => {
 export const formatDateTag = (date: Date): string => format(date, "yyyy-MM-dd");
 
 /** Relative date choices offered by the date modal. */
-export type DateOptionValue =
-  | "today"
-  | "tomorrow"
-  | "next-week"
-  | "next-month";
+export type DateOptionValue = "today" | "tomorrow" | "next-week" | "next-month";
 
 /**
  * Resolve a relative date option against `now`, normalized to the start of the

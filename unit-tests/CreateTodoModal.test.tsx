@@ -26,7 +26,7 @@ Deno.test("CreateTodoModal: should render and handle input", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "create-todo" && <CreateTodoModal />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
@@ -263,7 +263,7 @@ Deno.test("CreateTodoModal: Tab should toggle buttons without blurring the input
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "create-todo" && <CreateTodoModal />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };
