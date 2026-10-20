@@ -80,9 +80,8 @@ export async function waitFor(
     }
   }
 
-  const errorMessage = lastError instanceof Error
-    ? lastError.message
-    : String(lastError);
+  const errorMessage =
+    lastError instanceof Error ? lastError.message : String(lastError);
   throw new Error(`Timed out after ${timeout}ms. Last error: ${errorMessage}`);
 }
 
@@ -93,9 +92,12 @@ export async function waitFor(
  */
 export async function waitPast(ms: number, interval = 10) {
   const start = Date.now();
-  await waitFor(() => {
-    if (Date.now() - start < ms) {
-      throw new Error(`Waiting for ${ms}ms`);
-    }
-  }, { interval });
+  await waitFor(
+    () => {
+      if (Date.now() - start < ms) {
+        throw new Error(`Waiting for ${ms}ms`);
+      }
+    },
+    { interval },
+  );
 }

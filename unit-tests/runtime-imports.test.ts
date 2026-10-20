@@ -6,6 +6,7 @@ const RUNTIME_ROOTS = [
   "contexts",
   "hooks",
   "logic",
+  "scripts",
   "theme",
   "types",
   "utils",
@@ -13,6 +14,7 @@ const RUNTIME_ROOTS = [
 
 const NON_PORTABLE_IMPORT =
   /from\s+["'](?:jsr:|@std\/|https?:\/\/deno\.land\/)/;
+const DENO_RUNTIME_REFERENCE = /\bDeno\./;
 
 async function* walk(path: string): AsyncGenerator<string> {
   const stat = await Deno.stat(path);
@@ -26,14 +28,17 @@ async function* walk(path: string): AsyncGenerator<string> {
   }
 }
 
-Deno.test("runtime code does not import JSR or deno.land modules", async () => {
+Deno.test("runtime code is Node-only", async () => {
   const offenders: string[] = [];
 
   for (const root of RUNTIME_ROOTS) {
     for await (const path of walk(root)) {
       if (!/\.(ts|tsx)$/.test(path)) continue;
       const source = await Deno.readTextFile(path);
-      if (NON_PORTABLE_IMPORT.test(source)) {
+      if (
+        NON_PORTABLE_IMPORT.test(source) ||
+        DENO_RUNTIME_REFERENCE.test(source)
+      ) {
         offenders.push(path);
       }
     }
@@ -42,7 +47,6 @@ Deno.test("runtime code does not import JSR or deno.land modules", async () => {
   assertEquals(
     offenders,
     [],
-    "Runtime files must use portable imports (node: or npm:) so the Deno " +
-      "dependency stays out of application code.",
+    "Runtime files must use Node APIs and portable imports (node: or npm:)",
   );
 });

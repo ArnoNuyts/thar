@@ -126,11 +126,7 @@ Deno.test("ControlledTextInput - Pasted text with newlines should be filtered ou
         `Value should not contain newlines. Got: ${JSON.stringify(lastValue)}`,
       );
       assertEquals(submitCalled, false, "Should not trigger submit on paste");
-      assertEquals(
-        lastValue,
-        "helloworld",
-        "Should remove newline characters",
-      );
+      assertEquals(lastValue, "helloworld", "Should remove newline characters");
     });
   });
 
@@ -148,12 +144,7 @@ Deno.test("ControlledTextInput - Pasted text with surrounding spaces should be t
       currentValue = val;
     }, [val]);
 
-    return (
-      <ControlledTextInput
-        value={val}
-        onChange={setVal}
-      />
-    );
+    return <ControlledTextInput value={val} onChange={setVal} />;
   }
 
   const { stdin, unmount } = render(<Wrapper />);
@@ -325,13 +316,15 @@ type WordMotionState = {
   cursor: number;
 };
 
-function WordMotionHarness(
-  { initialValue, initialCursor, state }: {
-    initialValue: string;
-    initialCursor: number;
-    state: WordMotionState;
-  },
-) {
+function WordMotionHarness({
+  initialValue,
+  initialCursor,
+  state,
+}: {
+  initialValue: string;
+  initialCursor: number;
+  state: WordMotionState;
+}) {
   const [value, setValue] = React.useState(initialValue);
   const [cursor, setCursor] = React.useState(initialCursor);
 
@@ -417,9 +410,7 @@ Deno.test("ControlledTextInput - Ctrl+Left word motion handles punctuation and s
     },
   ];
 
-  for (
-    const { name, value, cursor, sequence, expected } of cases
-  ) {
+  for (const { name, value, cursor, sequence, expected } of cases) {
     await t.step(name, async () => {
       await pressWordMotion(value, cursor, sequence, expected);
     });
@@ -464,9 +455,7 @@ Deno.test("ControlledTextInput - Ctrl+Right word motion handles punctuation and 
     },
   ];
 
-  for (
-    const { name, value, cursor, sequence, expected } of cases
-  ) {
+  for (const { name, value, cursor, sequence, expected } of cases) {
     await t.step(name, async () => {
       await pressWordMotion(value, cursor, sequence, expected);
     });

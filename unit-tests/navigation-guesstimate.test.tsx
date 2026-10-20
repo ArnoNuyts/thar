@@ -11,13 +11,14 @@ import { Todo } from "../logic/todo.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { waitFor } from "./test-utils.ts";
 
-const TestWrapper = (
-  { todos, onContext }: {
-    todos: Todos;
-    // deno-lint-ignore no-explicit-any
-    onContext: (ctx: any) => void;
-  },
-) => (
+const TestWrapper = ({
+  todos,
+  onContext,
+}: {
+  todos: Todos;
+  // deno-lint-ignore no-explicit-any
+  onContext: (ctx: any) => void;
+}) => (
   <SearchProvider>
     <NavigationProvider todos={todos}>
       <NavigationTester onContext={onContext} />
@@ -52,13 +53,13 @@ Deno.test(
     const { rerender, unmount } = render(
       <TestWrapper
         todos={initialTodos}
-        onContext={(ctx) => navContext = ctx}
+        onContext={(ctx) => (navContext = ctx)}
       />,
     );
 
     // Currently Todo 1 is selected by default
     await waitFor(() =>
-      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1"),
     );
 
     // Undo delete: Restore Todo 2
@@ -67,13 +68,13 @@ Deno.test(
     rerender(
       <TestWrapper
         todos={restoredTodos}
-        onContext={(ctx) => navContext = ctx}
+        onContext={(ctx) => (navContext = ctx)}
       />,
     );
 
     // Should now select Todo 2 because it was "added" (restored)
     await waitFor(() =>
-      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2"),
     );
 
     unmount();
@@ -96,18 +97,18 @@ Deno.test(
     const { rerender, unmount } = render(
       <TestWrapper
         todos={initialTodos}
-        onContext={(ctx) => navContext = ctx}
+        onContext={(ctx) => (navContext = ctx)}
       />,
     );
 
     await waitFor(() =>
-      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1"),
     );
 
     // Move selection to Todo 2
     navContext.navigateDown();
     await waitFor(() =>
-      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 2"),
     );
 
     // Undo edit on Todo 1 (while Todo 2 is selected)
@@ -115,12 +116,15 @@ Deno.test(
     const undidTodos = [undoEditedTodo1, todo2];
 
     rerender(
-      <TestWrapper todos={undidTodos} onContext={(ctx) => navContext = ctx} />,
+      <TestWrapper
+        todos={undidTodos}
+        onContext={(ctx) => (navContext = ctx)}
+      />,
     );
 
     // Should now jump to Todo 1 because it was modified
     await waitFor(() =>
-      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1 Original")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1 Original"),
     );
 
     unmount();
@@ -140,12 +144,12 @@ Deno.test(
     const { rerender, unmount } = render(
       <TestWrapper
         todos={initialTodos}
-        onContext={(ctx) => navContext = ctx}
+        onContext={(ctx) => (navContext = ctx)}
       />,
     );
 
     await waitFor(() =>
-      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
+      assertEquals(navContext.getSelectedTodo()?.text, "Todo 1"),
     );
 
     // Add new todo
@@ -153,12 +157,12 @@ Deno.test(
     const newTodos = [todo1, todo2];
 
     rerender(
-      <TestWrapper todos={newTodos} onContext={(ctx) => navContext = ctx} />,
+      <TestWrapper todos={newTodos} onContext={(ctx) => (navContext = ctx)} />,
     );
 
     // Should select the new todo
     await waitFor(() =>
-      assertEquals(navContext.getSelectedTodo()?.text, "New Todo")
+      assertEquals(navContext.getSelectedTodo()?.text, "New Todo"),
     );
 
     unmount();
@@ -169,10 +173,7 @@ Deno.test(
   "should select a modified todo in a large list",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
-    const todos = Array.from(
-      { length: 300 },
-      (_, i) => new Todo(`Task ${i}`),
-    );
+    const todos = Array.from({ length: 300 }, (_, i) => new Todo(`Task ${i}`));
     const initialTodos = [...todos];
 
     // deno-lint-ignore no-explicit-any
@@ -181,12 +182,12 @@ Deno.test(
     const { rerender, unmount } = render(
       <TestWrapper
         todos={initialTodos}
-        onContext={(ctx) => navContext = ctx}
+        onContext={(ctx) => (navContext = ctx)}
       />,
     );
 
     await waitFor(() =>
-      assertEquals(navContext.getSelectedTodo()?.text, "Task 0")
+      assertEquals(navContext.getSelectedTodo()?.text, "Task 0"),
     );
 
     // Modify a todo far down the list; guesstimate must find it.
@@ -200,15 +201,12 @@ Deno.test(
     rerender(
       <TestWrapper
         todos={modifiedTodos}
-        onContext={(ctx) => navContext = ctx}
+        onContext={(ctx) => (navContext = ctx)}
       />,
     );
 
     await waitFor(() =>
-      assertEquals(
-        navContext.getSelectedTodo()?.text,
-        "Task 250 modified",
-      )
+      assertEquals(navContext.getSelectedTodo()?.text, "Task 250 modified"),
     );
 
     unmount();

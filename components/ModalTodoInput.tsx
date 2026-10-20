@@ -42,9 +42,10 @@ export const ModalTodoInput = ({
     null,
   );
   const [hasSuggestions, setHasSuggestions] = useState(false);
-  const [layoutSize, setLayoutSize] = useState<
-    { rows?: number; columns?: number }
-  >({});
+  const [layoutSize, setLayoutSize] = useState<{
+    rows?: number;
+    columns?: number;
+  }>({});
 
   const handleSubmit = (val: string) => {
     if (val.trim().length > 0) {
@@ -57,20 +58,23 @@ export const ModalTodoInput = ({
     closeModal();
   };
 
-  const { isFocused } = useFocusedInput((_input, key) => {
-    if (key.escape) {
-      handleCancel();
-      return;
-    }
+  const { isFocused } = useFocusedInput(
+    (_input, key) => {
+      if (key.escape) {
+        handleCancel();
+        return;
+      }
 
-    if (key.tab && !hasSuggestions) {
-      setSelectedButtonIndex((prev) => (prev === 0 ? 1 : 0));
-      return;
-    }
-  }, {
-    autoFocus: true,
-    tag: tag || (mode === "create" ? "create-todo-input" : "edit-todo-input"),
-  });
+      if (key.tab && !hasSuggestions) {
+        setSelectedButtonIndex((prev) => (prev === 0 ? 1 : 0));
+        return;
+      }
+    },
+    {
+      autoFocus: true,
+      tag: tag || (mode === "create" ? "create-todo-input" : "edit-todo-input"),
+    },
+  );
   const windowSize = useWindowSize();
   const { columns: terminalWidth, rows: terminalHeight } = getTerminalSize(
     windowSize,
@@ -118,33 +122,35 @@ export const ModalTodoInput = ({
     setValue(newValue);
   };
 
-  const handleCursorChange = (_cursor: number, _value: string) => {
-  };
+  const handleCursorChange = (_cursor: number, _value: string) => {};
 
-  useMouseInput((event) => {
-    if (!isFocused) return;
-    const hovered = getHoveredButtonIndex(event.x, event.y, {
-      rows: terminalHeight,
-      columns: terminalWidth,
-      modalWidth,
-      bodyRows,
-      buttonRowIndex,
-      labels: ["Save", "Cancel"],
-    });
+  useMouseInput(
+    (event) => {
+      if (!isFocused) return;
+      const hovered = getHoveredButtonIndex(event.x, event.y, {
+        rows: terminalHeight,
+        columns: terminalWidth,
+        modalWidth,
+        bodyRows,
+        buttonRowIndex,
+        labels: ["Save", "Cancel"],
+      });
 
-    if (event.move) {
-      setHoveredButtonIndex(hovered);
-      return;
-    }
+      if (event.move) {
+        setHoveredButtonIndex(hovered);
+        return;
+      }
 
-    if (!event.leftClick || hovered === null) return;
-    setSelectedButtonIndex(hovered);
-    if (hovered === 0) {
-      handleSubmit(value);
-      return;
-    }
-    handleCancel();
-  }, { isActive: isFocused });
+      if (!event.leftClick || hovered === null) return;
+      setSelectedButtonIndex(hovered);
+      if (hovered === 0) {
+        handleSubmit(value);
+        return;
+      }
+      handleCancel();
+    },
+    { isActive: isFocused },
+  );
 
   return (
     <Modal
@@ -183,9 +189,7 @@ export const ModalTodoInput = ({
           </Button.Group>
         </Box>
         <Box marginTop={1}>
-          <Text dimColor>
-            {HELP_TEXT}
-          </Text>
+          <Text dimColor>{HELP_TEXT}</Text>
         </Box>
       </Box>
     </Modal>

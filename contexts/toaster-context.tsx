@@ -23,9 +23,11 @@ export const useToaster = () => {
   return context;
 };
 
-export const ToasterProvider = (
-  { children }: { children: React.ReactNode },
-) => {
+export const ToasterProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const [toasterMessage, setToasterMessage] = useState<string | undefined>(
     undefined,
   );
@@ -58,8 +60,6 @@ export const ToasterProvider = (
   );
 
   return (
-    <ToasterContext.Provider value={value}>
-      {children}
-    </ToasterContext.Provider>
+    <ToasterContext.Provider value={value}>{children}</ToasterContext.Provider>
   );
 };

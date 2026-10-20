@@ -1,13 +1,15 @@
 import { Box, Text } from "ink";
 import { COLORS } from "../theme/colors.ts";
 
-export const TodoListScrollbar = (
-  { totalRows, listHeight, offsetRow }: {
-    totalRows: number;
-    listHeight: number;
-    offsetRow: number;
-  },
-) => {
+export const TodoListScrollbar = ({
+  totalRows,
+  listHeight,
+  offsetRow,
+}: {
+  totalRows: number;
+  listHeight: number;
+  offsetRow: number;
+}) => {
   const isScrollable = totalRows > listHeight && listHeight > 0;
   if (!isScrollable) return null;
 
@@ -19,9 +21,10 @@ export const TodoListScrollbar = (
   );
   const handleTravel = Math.max(0, trackHeight - handleHeight);
   const clampedOffset = Math.max(0, Math.min(offsetRow, maxOffset));
-  const handleTop = maxOffset === 0
-    ? 0
-    : Math.floor((clampedOffset / maxOffset) * handleTravel);
+  const handleTop =
+    maxOffset === 0
+      ? 0
+      : Math.floor((clampedOffset / maxOffset) * handleTravel);
 
   return (
     <Box flexDirection="column">

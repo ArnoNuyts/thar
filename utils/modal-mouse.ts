@@ -40,8 +40,8 @@ export const getModalBodyCellAtPosition = (
   if (!rows || !columns) return undefined;
 
   const modalWidth = resolveModalWidth(columns, options.modalWidth);
-  const modalHeight = MODAL_TOP_CHROME_ROWS + options.bodyRows +
-    MODAL_BOTTOM_CHROME_ROWS;
+  const modalHeight =
+    MODAL_TOP_CHROME_ROWS + options.bodyRows + MODAL_BOTTOM_CHROME_ROWS;
   // Ink/Yoga center alignment places the extra row above when free space is odd.
   const modalLeft = Math.floor((columns - modalWidth) / 2) + 1;
   const modalRight = modalLeft + modalWidth - 1;

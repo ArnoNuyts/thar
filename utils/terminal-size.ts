@@ -1,3 +1,5 @@
+import { Runtime } from "./runtime.ts";
+
 const DEFAULT_TERMINAL_ROWS = 24;
 const DEFAULT_TERMINAL_COLUMNS = 80;
 
@@ -8,7 +10,7 @@ export type TerminalSize = {
 
 const getConsoleSize = (): TerminalSize | undefined => {
   try {
-    return Deno.consoleSize();
+    return Runtime.consoleSize();
   } catch {
     return undefined;
   }
@@ -19,8 +21,9 @@ export const getTerminalRows = (terminal?: TerminalSize): number => {
 };
 
 export const getTerminalColumns = (terminal?: TerminalSize): number => {
-  return terminal?.columns ?? getConsoleSize()?.columns ??
-    DEFAULT_TERMINAL_COLUMNS;
+  return (
+    terminal?.columns ?? getConsoleSize()?.columns ?? DEFAULT_TERMINAL_COLUMNS
+  );
 };
 
 export const getTerminalSize = (

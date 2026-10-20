@@ -4,15 +4,13 @@ import { addMonths, format } from "date-fns";
 import { dateForOption, formatDateTag, parseDateTag } from "../logic/dates.ts";
 
 Deno.test("parseDateTag - parses valid yyyy-MM-dd tags without timezone drift", () => {
-  for (
-    const value of [
-      "2024-01-01",
-      "2024-02-29",
-      "1999-12-31",
-      "3000-01-01",
-      "2024-12-31",
-    ]
-  ) {
+  for (const value of [
+    "2024-01-01",
+    "2024-02-29",
+    "1999-12-31",
+    "3000-01-01",
+    "2024-12-31",
+  ]) {
     const parsed = parseDateTag(value);
     assertEquals(parsed !== undefined, true, `expected ${value} to parse`);
     assertEquals(formatDateTag(parsed!), value);
@@ -85,10 +83,7 @@ Deno.test("dateForOption - month-end clamps instead of rolling into the next mon
   // addMonths semantics: Jan 31 + 1 month = Feb 28/29, never March 2/3.
   const jan31 = new Date(2024, 0, 31, 15, 30);
 
-  assertEquals(
-    formatDateTag(dateForOption("next-month", jan31)),
-    "2024-02-29",
-  );
+  assertEquals(formatDateTag(dateForOption("next-month", jan31)), "2024-02-29");
   assertEquals(
     formatDateTag(dateForOption("next-month", new Date(2023, 0, 31))),
     "2023-02-28",

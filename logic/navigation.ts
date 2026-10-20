@@ -16,11 +16,11 @@ export const getNavigableRow = (
   currentRow: number,
   step: number,
 ): number => {
-  const firstTodoIndex = indexes.findIndex((entry) =>
-    entry.type === IndexType.todo
+  const firstTodoIndex = indexes.findIndex(
+    (entry) => entry.type === IndexType.todo,
   );
-  const lastTodoIndex = indexes.findLastIndex((entry) =>
-    entry.type === IndexType.todo
+  const lastTodoIndex = indexes.findLastIndex(
+    (entry) => entry.type === IndexType.todo,
   );
   const direction = step > 0 ? 1 : -1;
   let newSelectedRow = clamp(currentRow + step, 0, indexes.length - 1);
@@ -124,9 +124,10 @@ export function guesstimateSelection(
       return undefined;
     }
 
-    const firstVisibleAdded = indexes.find((entry) =>
-      entry.type === IndexType.todo &&
-      added.some((a) => a.id === entry.todo.id)
+    const firstVisibleAdded = indexes.find(
+      (entry) =>
+        entry.type === IndexType.todo &&
+        added.some((a) => a.id === entry.todo.id),
     );
     if (firstVisibleAdded?.type === IndexType.todo) {
       return firstVisibleAdded.todo.id;
@@ -142,17 +143,19 @@ export function guesstimateSelection(
 
   if (modified.length > 0) {
     // If cursor is among modified and still visible, keep it
-    const isCursorValid = currentCursorId &&
+    const isCursorValid =
+      currentCursorId &&
       modified.some((m) => m.id === currentCursorId) &&
-      indexes.some((e) =>
-        e.type === IndexType.todo && e.todo.id === currentCursorId
+      indexes.some(
+        (e) => e.type === IndexType.todo && e.todo.id === currentCursorId,
       );
 
     if (isCursorValid) return undefined; // Keep current
 
-    const firstVisibleModified = indexes.find((entry) =>
-      entry.type === IndexType.todo &&
-      modified.some((m) => m.id === entry.todo.id)
+    const firstVisibleModified = indexes.find(
+      (entry) =>
+        entry.type === IndexType.todo &&
+        modified.some((m) => m.id === entry.todo.id),
     );
     if (firstVisibleModified?.type === IndexType.todo) {
       return firstVisibleModified.todo.id;
@@ -174,23 +177,25 @@ export function validateSelection(
 ): symbol | undefined {
   if (indexes.length === 0) return undefined;
 
-  const firstTodoIndex = indexes.findIndex((entry) =>
-    entry.type === IndexType.todo
+  const firstTodoIndex = indexes.findIndex(
+    (entry) => entry.type === IndexType.todo,
   );
   if (firstTodoIndex === -1) return undefined;
 
   // Check if current selection is valid
-  const isValid = cursorId !== undefined &&
-    indexes.some((entry) =>
-      entry.type === IndexType.todo && entry.todo.id === cursorId
+  const isValid =
+    cursorId !== undefined &&
+    indexes.some(
+      (entry) => entry.type === IndexType.todo && entry.todo.id === cursorId,
     );
 
   if (isValid) return cursorId;
 
   // Fallback 1: Match by hash (handle file reload)
   if (lastHash) {
-    const hashMatch = indexes.find((entry) =>
-      entry.type === IndexType.todo && entry.todo.getHash() === lastHash
+    const hashMatch = indexes.find(
+      (entry) =>
+        entry.type === IndexType.todo && entry.todo.getHash() === lastHash,
     );
     if (hashMatch?.type === IndexType.todo) {
       return hashMatch.todo.id;
@@ -311,9 +316,9 @@ export function reconcileNavState(
 
     // Step 3: Scroll & Metadata
     const selectedRow = validatedCursorId
-      ? indexes.findIndex((e) =>
-        e.type === IndexType.todo && e.todo.id === validatedCursorId
-      )
+      ? indexes.findIndex(
+          (e) => e.type === IndexType.todo && e.todo.id === validatedCursorId,
+        )
       : 0;
 
     const selectionRangeRows = getSelectionRangeRows(
@@ -382,9 +387,9 @@ export function reconcileNavState(
 
   if (validatedCursor !== currentCursor || indexesChanged) {
     const selectedRow = validatedCursor
-      ? indexes.findIndex((e) =>
-        e.type === IndexType.todo && e.todo.id === validatedCursor
-      )
+      ? indexes.findIndex(
+          (e) => e.type === IndexType.todo && e.todo.id === validatedCursor,
+        )
       : 0;
 
     const selectionRangeRows = getSelectionRangeRows(

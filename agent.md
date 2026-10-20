@@ -1,15 +1,25 @@
 # Agent Notes
 
-## Deno test execution
+## Toolchain
 
-- Default to `deno task test` (`deno test -A --parallel`), which runs test
-  modules across workers and roughly halves wall-clock time on Linux (~20s ->
-  ~10s on a 4-CPU box).
-- On Windows, if parallel runs hit Deno 2.7.5 pipe panics
-  (`Unexpected client pipe failure`, invalid handle), fall back to
-  `deno task test:serial` (`deno test -A`).
-- Prefer a single full-suite run when verifying integrated behavior.
-- Focused runs are fine, but still run them one at a time.
+- Node is pinned to `26.12.0` via `.nvmrc`. Run `nvm use` before working.
+  On Alpine, nvm's default download is glibc-only; install the unofficial musl
+  build into `~/.nvm/versions/node/v26.12.0` if `nvm install` fails.
+- Package manager: npm (`npm ci` / `npm install`).
+- Runtime/build: Vite 8 (Rolldown + Oxc) with React 19.
+- Typecheck: TypeScript 7 (`npm run typecheck`).
+- Lint: Oxlint (`npm run lint`).
+- Format: Oxfmt (`npm run fmt`, `npm run fmt:check`).
+- Tests: Vitest (`npm test`). Test files still use the Deno test API through the
+  test-only compatibility layer in `test/setup.ts`; runtime code must not use
+  `Deno.*`.
+
+## Test execution
+
+- Prefer a single full-suite run when verifying integrated behavior:
+  `npm test`.
+- Focused runs are fine, but still run the full suite before opening a PR:
+  `npx vitest run unit-tests/foo.test.ts`.
 - Avoid fixed `setTimeout`/`delay` sleeps in tests. Poll for the condition with
   `waitFor` from `unit-tests/test-utils.ts` instead; it returns as soon as the
   assertion passes.
@@ -29,10 +39,10 @@
 
 ## Verification commands
 
-- Use `deno lint` for lint checks.
-- Use `deno check` for type/module checking.
-- Use `deno task test` for the test suite in this repo (`deno task test:serial`
-  if parallel is unavailable).
+- `npm run check` — typecheck, lint, format check.
+- `npm test` — full Vitest suite.
+- `npm run build` — Vite SSR bundle in `dist/`.
+- `npm run build:sea` — Node single executable in `dist/` (current platform).
 - When debugging behavior that depends on row layout, prefer rerunning the full
   suite after targeted fixes because navigation and mouse tests depend on shared
   index semantics.

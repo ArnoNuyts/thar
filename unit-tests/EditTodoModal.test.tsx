@@ -23,7 +23,7 @@ Deno.test("EditTodoModal: should render and set focus", async () => {
     return (
       <Box flexDirection="column" height={20} width={80}>
         {activeModal === "edit-todo" && <EditTodoModal />}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };

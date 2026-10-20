@@ -32,11 +32,12 @@ const key = (overrides: Partial<Key> = {}): Key => ({
 
 Deno.test("TodoMenu: every displayed shortcut resolves to its declared action", () => {
   for (const item of MENU_ITEMS) {
-    const resolved = item.shortcut === "del"
-      ? resolveMenuShortcut("", key({ delete: true }))
-      : item.shortcut === "space"
-      ? resolveMenuShortcut(" ", key())
-      : resolveMenuShortcut(item.shortcut, key());
+    const resolved =
+      item.shortcut === "del"
+        ? resolveMenuShortcut("", key({ delete: true }))
+        : item.shortcut === "space"
+          ? resolveMenuShortcut(" ", key())
+          : resolveMenuShortcut(item.shortcut, key());
 
     assertEquals(
       resolved,
@@ -48,11 +49,16 @@ Deno.test("TodoMenu: every displayed shortcut resolves to its declared action", 
 
 Deno.test("MultiSelectMenu: every displayed shortcut resolves to its action", () => {
   for (const item of MULTI_SELECT_MENU_ITEMS) {
-    const resolved = item.shortcut === "del"
-      ? resolveMenuShortcut("", key({ delete: true }), MULTI_SELECT_MENU_ITEMS)
-      : item.shortcut === "space"
-      ? resolveMenuShortcut(" ", key(), MULTI_SELECT_MENU_ITEMS)
-      : resolveMenuShortcut(item.shortcut, key(), MULTI_SELECT_MENU_ITEMS);
+    const resolved =
+      item.shortcut === "del"
+        ? resolveMenuShortcut(
+            "",
+            key({ delete: true }),
+            MULTI_SELECT_MENU_ITEMS,
+          )
+        : item.shortcut === "space"
+          ? resolveMenuShortcut(" ", key(), MULTI_SELECT_MENU_ITEMS)
+          : resolveMenuShortcut(item.shortcut, key(), MULTI_SELECT_MENU_ITEMS);
 
     assertEquals(
       resolved,
@@ -123,18 +129,9 @@ Deno.test("TodoMenu: menu labels and ordering are unchanged", () => {
 });
 
 Deno.test("TodoMenu: named keys do not fall through to literal dispatch", () => {
-  assertEquals(
-    resolveMenuShortcut("", key({ return: true })),
-    undefined,
-  );
-  assertEquals(
-    resolveMenuShortcut("", key({ escape: true })),
-    undefined,
-  );
-  assertEquals(
-    resolveMenuShortcut("", key({ delete: true })),
-    "delete",
-  );
+  assertEquals(resolveMenuShortcut("", key({ return: true })), undefined);
+  assertEquals(resolveMenuShortcut("", key({ escape: true })), undefined);
+  assertEquals(resolveMenuShortcut("", key({ delete: true })), "delete");
   assertEquals(resolveMenuShortcut(" ", key()), "toggle");
   assertEquals(resolveMenuShortcut("nonsense", key()), undefined);
 });

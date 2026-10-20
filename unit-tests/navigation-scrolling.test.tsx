@@ -21,13 +21,15 @@ const NavigationTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
   return <ink.Text>Tester</ink.Text>;
 };
 
-const TestWrapper = (
-  { children, todos, listHeight }: {
-    children: React.ReactNode;
-    todos: Todos;
-    listHeight: number;
-  },
-) => (
+const TestWrapper = ({
+  children,
+  todos,
+  listHeight,
+}: {
+  children: React.ReactNode;
+  todos: Todos;
+  listHeight: number;
+}) => (
   <SearchProvider>
     <NavigationProvider todos={todos} listHeightForTest={listHeight}>
       {children}
@@ -48,7 +50,7 @@ Deno.test(
 
       const { unmount } = render(
         <TestWrapper todos={todos} listHeight={10}>
-          <NavigationTester onContext={(ctx) => navContext = ctx} />
+          <NavigationTester onContext={(ctx) => (navContext = ctx)} />
         </TestWrapper>,
       );
 
@@ -96,11 +98,11 @@ Deno.test(
 
       const { unmount } = render(
         <TestWrapper todos={todos} listHeight={10}>
-          <NavigationTester onContext={(ctx) => navContext = ctx} />
+          <NavigationTester onContext={(ctx) => (navContext = ctx)} />
         </TestWrapper>,
       );
       await waitFor(() =>
-        assertEquals(navContext.getSelectedTodo()?.text, "Todo 1")
+        assertEquals(navContext.getSelectedTodo()?.text, "Todo 1"),
       );
 
       // Scroll down to row 15 to establish an offset
@@ -151,7 +153,7 @@ Deno.test(
 
       const { unmount } = render(
         <TestWrapper todos={todos} listHeight={10}>
-          <NavigationTester onContext={(ctx) => navContext = ctx} />
+          <NavigationTester onContext={(ctx) => (navContext = ctx)} />
         </TestWrapper>,
       );
 

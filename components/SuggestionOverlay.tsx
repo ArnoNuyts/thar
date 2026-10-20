@@ -27,12 +27,12 @@ export const SuggestionOverlay = () => {
       {suggestions.map((suggestion, index) => (
         <Text
           key={suggestion}
-          color={index === selectedIndex
-            ? COLORS.accentBlue
-            : COLORS.foreground}
-          backgroundColor={index === selectedIndex
-            ? COLORS.inverseBackground
-            : undefined}
+          color={
+            index === selectedIndex ? COLORS.accentBlue : COLORS.foreground
+          }
+          backgroundColor={
+            index === selectedIndex ? COLORS.inverseBackground : undefined
+          }
           wrap="truncate-end"
         >
           {" "}

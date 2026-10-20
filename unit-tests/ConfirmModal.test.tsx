@@ -33,7 +33,7 @@ Deno.test("ConfirmModal: should render and set focus", async () => {
             onConfirm={(modalData as { onConfirm: () => void }).onConfirm}
           />
         )}
-        <FocusObserver onFocused={(tag) => focusedTag = tag} />
+        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
       </Box>
     );
   };

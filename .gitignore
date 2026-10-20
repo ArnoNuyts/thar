@@ -2,3 +2,6 @@
 settings.json
 GEMINI.md
 node_modules/
+dist/
+dist-sea/
+*.log

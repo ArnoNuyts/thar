@@ -26,9 +26,12 @@ interface CalendarProps {
   isFocused: boolean;
 }
 
-export const Calendar: React.FC<CalendarProps> = (
-  { value, onChange, onSubmit, isFocused },
-) => {
+export const Calendar: React.FC<CalendarProps> = ({
+  value,
+  onChange,
+  onSubmit,
+  isFocused,
+}) => {
   const [viewDate, setViewDate] = useState(() => startOfMonth(value));
   const [syncedValue, setSyncedValue] = useState(value);
 
@@ -42,33 +45,36 @@ export const Calendar: React.FC<CalendarProps> = (
     setViewDate(startOfMonth(value));
   }
 
-  useInput((_input, key) => {
-    switch (true) {
-      case key.upArrow:
-        onChange(subWeeks(value, 1));
-        break;
-      case key.downArrow:
-        onChange(addWeeks(value, 1));
-        break;
-      case key.leftArrow:
-        if (key.shift || key.ctrl) {
-          onChange(subMonths(value, 1));
-        } else {
-          onChange(subDays(value, 1));
-        }
-        break;
-      case key.rightArrow:
-        if (key.shift || key.ctrl) {
-          onChange(addMonths(value, 1));
-        } else {
-          onChange(addDays(value, 1));
-        }
-        break;
-      case key.return:
-        onSubmit(value);
-        break;
-    }
-  }, { isActive: isFocused });
+  useInput(
+    (_input, key) => {
+      switch (true) {
+        case key.upArrow:
+          onChange(subWeeks(value, 1));
+          break;
+        case key.downArrow:
+          onChange(addWeeks(value, 1));
+          break;
+        case key.leftArrow:
+          if (key.shift || key.ctrl) {
+            onChange(subMonths(value, 1));
+          } else {
+            onChange(subDays(value, 1));
+          }
+          break;
+        case key.rightArrow:
+          if (key.shift || key.ctrl) {
+            onChange(addMonths(value, 1));
+          } else {
+            onChange(addDays(value, 1));
+          }
+          break;
+        case key.return:
+          onSubmit(value);
+          break;
+      }
+    },
+    { isActive: isFocused },
+  );
 
   const monthStart = startOfMonth(viewDate);
   const monthEnd = endOfMonth(monthStart);
@@ -113,9 +119,13 @@ export const Calendar: React.FC<CalendarProps> = (
               <Box key={day.toISOString()} width={3} justifyContent="center">
                 <Text
                   backgroundColor={isSelected ? COLORS.success : undefined}
-                  color={isSelected
-                    ? COLORS.inverseForeground
-                    : (isCurrentMonth ? COLORS.foreground : COLORS.muted)}
+                  color={
+                    isSelected
+                      ? COLORS.inverseForeground
+                      : isCurrentMonth
+                        ? COLORS.foreground
+                        : COLORS.muted
+                  }
                   dimColor={!isCurrentMonth}
                 >
                   {format(day, "d").padStart(2, " ")}

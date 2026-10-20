@@ -65,11 +65,7 @@ interface EditResult {
 }
 
 /** Apply cursor movement keys, or return null for other keys. */
-function moveCursor(
-  value: string,
-  offset: number,
-  key: Key,
-): number | null {
+function moveCursor(value: string, offset: number, key: Key): number | null {
   if (key.leftArrow) {
     return key.ctrl ? moveWordLeft(value, offset) : Math.max(0, offset - 1);
   }
@@ -178,9 +174,10 @@ function renderText(
     };
   }
 
-  const renderedPlaceholder = placeholder.length > 0
-    ? chalk.inverse(placeholder[0]) + chalk.grey(placeholder.slice(1))
-    : chalk.inverse(" ");
+  const renderedPlaceholder =
+    placeholder.length > 0
+      ? chalk.inverse(placeholder[0]) + chalk.grey(placeholder.slice(1))
+      : chalk.inverse(" ");
 
   let renderedValue = value.length > 0 ? "" : chalk.inverse(" ");
 
@@ -238,8 +235,8 @@ export function ControlledTextInput({
 
   // A controlled offset always wins. In uncontrolled mode, clamp the stored
   // cursor while rendering so a shorter value can never leave it out of range.
-  const cursorOffset = controlledCursorOffset ??
-    Math.min(internalCursorOffset, value.length);
+  const cursorOffset =
+    controlledCursorOffset ?? Math.min(internalCursorOffset, value.length);
 
   // Track latest values in REFs to avoid stale closures in useInput
   const valueRef = useRef(value);
@@ -268,7 +265,9 @@ export function ControlledTextInput({
       const currentCursorOffset = cursorOffsetRef.current;
 
       if (
-        key.upArrow || key.downArrow || key.tab ||
+        key.upArrow ||
+        key.downArrow ||
+        key.tab ||
         (key.ctrl && input === "c")
       ) {
         return;
@@ -311,9 +310,8 @@ export function ControlledTextInput({
     { isActive: focus },
   );
 
-  const display = placeholder && value.length === 0
-    ? renderedPlaceholder
-    : renderedValue;
+  const display =
+    placeholder && value.length === 0 ? renderedPlaceholder : renderedValue;
 
   return <Text>{display}</Text>;
 }

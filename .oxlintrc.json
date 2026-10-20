@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["dist/**", "node_modules/**"],
+  "rules": {
+    "eslint/no-control-regex": "off",
+    "eslint/no-unused-vars": [
+      "warn",
+      {
+        "argsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "unicorn/no-useless-spread": "off"
+  }
+}

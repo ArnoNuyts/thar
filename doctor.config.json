@@ -1,13 +1,24 @@
 {
   "$schema": "https://react.doctor/schema/config.json",
-  // These components are commit-phase observers used only by tests. They copy
-  // committed context values into local test variables; there is no parent
-  // React state to update, so no-pass-data-to-parent does not apply.
+  // Build outputs are generated, not application source.
   "ignore": {
+    "files": ["dist/**", "dist-sea/**"],
     "overrides": [
       {
         "files": ["unit-tests/test-components.tsx"],
         "rules": ["react-doctor/no-pass-data-to-parent"]
+      },
+      {
+        // These modules intentionally expose small helpers, guards and types
+        // alongside their components for tests and sibling modules.
+        "files": [
+          "components/TodoList.tsx",
+          "components/TodoMenu.tsx",
+          "contexts/modal-context.tsx",
+          "contexts/navigation-context.tsx",
+          "contexts/todo-context.tsx"
+        ],
+        "rules": ["react-doctor/only-export-components"]
       }
     ]
   }

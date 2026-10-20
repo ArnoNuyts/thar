@@ -52,9 +52,8 @@ export const SuggestionInput = ({
     const wordStart = matchTagWordStart(text.slice(0, cursor));
     if (!wordStart) return false;
 
-    const items = wordStart.type === "project"
-      ? tagSources.projects
-      : tagSources.contexts;
+    const items =
+      wordStart.type === "project" ? tagSources.projects : tagSources.contexts;
     const searchTerm = wordStart.searchTerm.toLowerCase();
     return items.some((item) => item.toLowerCase().startsWith(searchTerm));
   };
@@ -82,11 +81,14 @@ export const SuggestionInput = ({
 
   // `useSuggestionInput` clears the list itself on Escape, so mirror that
   // transition from the key event rather than re-deriving it in an effect.
-  useInput((_input, key) => {
-    if (key.escape && suggestions.length > 0) {
-      onSuggestionsStateChange?.(false);
-    }
-  }, { isActive: isFocused });
+  useInput(
+    (_input, key) => {
+      if (key.escape && suggestions.length > 0) {
+        onSuggestionsStateChange?.(false);
+      }
+    },
+    { isActive: isFocused },
+  );
 
   useEffect(() => {
     if (ref.current) {

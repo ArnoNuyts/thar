@@ -61,8 +61,7 @@ const assertStableAcrossRerender = async (
 };
 
 Deno.test({
-  name:
-    "TestWrapper: reuses context values when overrides are referentially stable",
+  name: "TestWrapper: reuses context values when overrides are referentially stable",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
@@ -77,8 +76,7 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "TestWrapper: reuses default context values when no overrides are given",
+  name: "TestWrapper: reuses default context values when no overrides are given",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {

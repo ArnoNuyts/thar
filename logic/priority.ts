@@ -8,7 +8,7 @@ import { UpperCaseLetter } from "../types/types.ts";
  */
 export const PRIORITIES = ["A", "B", "C", "D", "E", "F"] as const;
 
-export type Priority = typeof PRIORITIES[number];
+export type Priority = (typeof PRIORITIES)[number];
 
 /** Modal-only label for clearing a todo's priority. */
 export const UNSET_PRIORITY = "Unset" as const;

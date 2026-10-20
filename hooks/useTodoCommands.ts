@@ -83,15 +83,11 @@ export const useTodoCommands = () => {
   const setPriority = (priority: Priority) => {
     if (selectedTodos.length === 0) return;
 
-    const allHaveSamePriority = selectedTodos.every((selected) =>
-      selected.priority === priority
+    const allHaveSamePriority = selectedTodos.every(
+      (selected) => selected.priority === priority,
     );
-    updateTodos(
-      selectedTodos,
-      (selected) =>
-        selected.setPriority(
-          allHaveSamePriority ? undefined : priority,
-        ),
+    updateTodos(selectedTodos, (selected) =>
+      selected.setPriority(allHaveSamePriority ? undefined : priority),
     );
   };
 
@@ -140,9 +136,7 @@ export const useTodoCommands = () => {
           : `${selectedTodos.length} todos copied`,
       );
     } catch (e) {
-      showToaster(
-        `Copy failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      showToaster(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     options.onComplete?.();
   };

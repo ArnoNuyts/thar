@@ -218,7 +218,7 @@ Deno.test("select list: menu wraps and enter runs the highlighted action", async
   stdin.write("\x1b[B");
   stdin.write("\x1b[B");
   await waitFor(() =>
-    assertEquals(hasHighlight(lastFrame(), "Toggle Complete"), true)
+    assertEquals(hasHighlight(lastFrame(), "Toggle Complete"), true),
   );
   stdin.write("\r");
   await waitFor(() => assertEquals(menu.getToggled().length, 1));

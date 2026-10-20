@@ -19,12 +19,15 @@ export const MockTodoProvider = ({
   const [redoStack, setRedoStack] = useState<Todos[]>([]);
   const { showToaster } = useToaster();
 
-  const internalSetTodos = useCallback((newTodos: Todos) => {
-    setTodos(newTodos);
-    if (onTodosChange) {
-      onTodosChange(newTodos);
-    }
-  }, [onTodosChange]);
+  const internalSetTodos = useCallback(
+    (newTodos: Todos) => {
+      setTodos(newTodos);
+      if (onTodosChange) {
+        onTodosChange(newTodos);
+      }
+    },
+    [onTodosChange],
+  );
 
   const pushHistory = useCallback(() => {
     setHistory((prev) => [...prev, todos]);
@@ -47,62 +50,74 @@ export const MockTodoProvider = ({
     internalSetTodos(nextTodos);
   }, [redoStack, todos, internalSetTodos]);
 
-  const addTodos = useCallback((...texts: string[]): Todo[] => {
-    if (texts.length === 0) return [];
-    pushHistory();
-    const newTodos = texts.map((text) =>
-      new Todo(text).setCreationDate(new Date())
-    );
-    internalSetTodos([...todos, ...newTodos]);
-    return newTodos;
-  }, [pushHistory, todos, internalSetTodos]);
+  const addTodos = useCallback(
+    (...texts: string[]): Todo[] => {
+      if (texts.length === 0) return [];
+      pushHistory();
+      const newTodos = texts.map((text) =>
+        new Todo(text).setCreationDate(new Date()),
+      );
+      internalSetTodos([...todos, ...newTodos]);
+      return newTodos;
+    },
+    [pushHistory, todos, internalSetTodos],
+  );
 
-  const deleteTodos = useCallback((todosToDelete: Todo[]) => {
-    pushHistory();
-    const idsToDelete = new Set(todosToDelete.map((t) => t.id));
-    const newTodos = todos.filter((t: Todo) => !idsToDelete.has(t.id));
-    internalSetTodos([...newTodos]);
-  }, [pushHistory, todos, internalSetTodos]);
+  const deleteTodos = useCallback(
+    (todosToDelete: Todo[]) => {
+      pushHistory();
+      const idsToDelete = new Set(todosToDelete.map((t) => t.id));
+      const newTodos = todos.filter((t: Todo) => !idsToDelete.has(t.id));
+      internalSetTodos([...newTodos]);
+    },
+    [pushHistory, todos, internalSetTodos],
+  );
 
-  const toggleTodos = useCallback((todosToToggle: Todo[]) => {
-    pushHistory();
-    const idsToToggle = new Set(todosToToggle.map((t) => t.id));
-    const newInstances: Todo[] = [];
+  const toggleTodos = useCallback(
+    (todosToToggle: Todo[]) => {
+      pushHistory();
+      const idsToToggle = new Set(todosToToggle.map((t) => t.id));
+      const newInstances: Todo[] = [];
 
-    const transformed = todos.map((t) => {
-      if (idsToToggle.has(t.id)) {
-        const { updated, recurring } = t.toggleState();
-        if (recurring) {
-          newInstances.push(recurring);
+      const transformed = todos.map((t) => {
+        if (idsToToggle.has(t.id)) {
+          const { updated, recurring } = t.toggleState();
+          if (recurring) {
+            newInstances.push(recurring);
+          }
+          return updated;
         }
-        return updated;
+        return t;
+      });
+
+      internalSetTodos([...transformed, ...newInstances]);
+
+      if (newInstances.length === 1) {
+        showToaster("Recurring todo created");
+      } else if (newInstances.length > 1) {
+        showToaster(`${newInstances.length} recurring todos created`);
       }
-      return t;
-    });
+    },
+    [pushHistory, todos, internalSetTodos, showToaster],
+  );
 
-    internalSetTodos([...transformed, ...newInstances]);
+  const updateTodos = useCallback(
+    (todosToUpdate: Todo[], transform: (todo: Todo) => Todo) => {
+      pushHistory();
+      const idsToUpdate = new Set(todosToUpdate.map((t) => t.id));
+      internalSetTodos([
+        ...todos.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t)),
+      ]);
+    },
+    [pushHistory, todos, internalSetTodos],
+  );
 
-    if (newInstances.length === 1) {
-      showToaster("Recurring todo created");
-    } else if (newInstances.length > 1) {
-      showToaster(`${newInstances.length} recurring todos created`);
-    }
-  }, [pushHistory, todos, internalSetTodos, showToaster]);
-
-  const updateTodos = useCallback((
-    todosToUpdate: Todo[],
-    transform: (todo: Todo) => Todo,
-  ) => {
-    pushHistory();
-    const idsToUpdate = new Set(todosToUpdate.map((t) => t.id));
-    internalSetTodos(
-      [...todos.map((t) => (idsToUpdate.has(t.id) ? transform(t) : t))],
-    );
-  }, [pushHistory, todos, internalSetTodos]);
-
-  const toggleHidden = useCallback((todosToToggle: Todo[]) => {
-    updateTodos(todosToToggle, (t) => t.toggleHidden());
-  }, [updateTodos]);
+  const toggleHidden = useCallback(
+    (todosToToggle: Todo[]) => {
+      updateTodos(todosToToggle, (t) => t.toggleHidden());
+    },
+    [updateTodos],
+  );
 
   const archiveCompletedTodos = useCallback(() => {
     pushHistory();
@@ -147,8 +162,6 @@ export const MockTodoProvider = ({
   );
 
   return (
-    <TodoContext.Provider value={contextValue}>
-      {children}
-    </TodoContext.Provider>
+    <TodoContext.Provider value={contextValue}>{children}</TodoContext.Provider>
   );
 };

@@ -4,12 +4,10 @@ import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
 
 Deno.test("createIndexes preserves prior context count before uncategorized todo", () => {
-  const indexes = createIndexes(
-    [
-      new Todo("Context task @home"),
-      new Todo("Plain task"),
-    ],
-  );
+  const indexes = createIndexes([
+    new Todo("Context task @home"),
+    new Todo("Plain task"),
+  ]);
 
   assertEquals(indexes.length, 4);
 

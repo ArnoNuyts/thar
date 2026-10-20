@@ -62,9 +62,7 @@ function renderProvider({ strict = false }: { strict?: boolean } = {}) {
     </ToasterProvider>
   );
 
-  const { unmount } = render(
-    strict ? <StrictMode>{app}</StrictMode> : app,
-  );
+  const { unmount } = render(strict ? <StrictMode>{app}</StrictMode> : app);
 
   return {
     getApi: () => {
@@ -83,8 +81,7 @@ async function waitForLoad(getApi: () => TodoContextType) {
 }
 
 Deno.test({
-  name:
-    "TodoContext: synchronous updates keep distinct undo snapshots and do not add no-ops",
+  name: "TodoContext: synchronous updates keep distinct undo snapshots and do not add no-ops",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
@@ -187,8 +184,7 @@ async function runRecurringToggleTest(strict: boolean) {
 }
 
 Deno.test({
-  name:
-    "TodoContext: StrictMode creates exactly one recurring instance when toggling",
+  name: "TodoContext: StrictMode creates exactly one recurring instance when toggling",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
@@ -197,8 +193,7 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "TodoContext: non-StrictMode creates exactly one recurring instance when toggling",
+  name: "TodoContext: non-StrictMode creates exactly one recurring instance when toggling",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
@@ -207,8 +202,7 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "TodoContext: archiving with no completed todos does not create an undo entry",
+  name: "TodoContext: archiving with no completed todos does not create an undo entry",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {

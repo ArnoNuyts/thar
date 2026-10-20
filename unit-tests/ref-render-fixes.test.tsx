@@ -20,10 +20,9 @@ function InputHarness({ onInput }: { onInput: InputHandler }) {
 }
 
 function FocusedInputHarness({ onInput }: { onInput: InputHandler }) {
-  const { isFocused } = useFocusedInput(
-    (input) => onInput(input),
-    { autoFocus: true },
-  );
+  const { isFocused } = useFocusedInput((input) => onInput(input), {
+    autoFocus: true,
+  });
   return <Text>{isFocused ? "focused" : "blurred"}</Text>;
 }
 
@@ -68,9 +67,7 @@ Deno.test("useFocusedInput: rerender uses the latest handler while focused", asy
   const calls: string[] = [];
   const { stdin, rerender, lastFrame, unmount } = render(
     <FocusProvider>
-      <FocusedInputHarness
-        onInput={(input) => calls.push(`first:${input}`)}
-      />
+      <FocusedInputHarness onInput={(input) => calls.push(`first:${input}`)} />
     </FocusProvider>,
   );
 

@@ -88,12 +88,13 @@ const renderHarness = (
                     <TodoList />
                     <ActionBar />
                     <ModalHost />
-                    <NavController onNav={(value) => nav = value} />
+                    <NavController onNav={(value) => (nav = value)} />
                     <SelectionStateObserver
                       onSelectionChange={(state) =>
-                        selectedCount = state.rangeIds.size}
+                        (selectedCount = state.rangeIds.size)
+                      }
                     />
-                    <FocusObserver onFocused={(tag) => focusedTag = tag} />
+                    <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
                   </Box>
                 </ModalProvider>
               </NavigationWrapper>
@@ -112,16 +113,15 @@ const renderHarness = (
   };
 };
 
-const waitForVisibleList = async (
-  lastFrame: () => string | undefined,
-) => {
+const waitForVisibleList = async (lastFrame: () => string | undefined) => {
   await waitFor(() => {
     assertEquals(lastFrame()?.includes("Todo 1"), true);
   });
 };
 
 const todoSignature = (todos: Todos) =>
-  todos.map((todo) => `${todo.text}:${todo.priority ?? "-"}:${todo.isDone()}`)
+  todos
+    .map((todo) => `${todo.text}:${todo.priority ?? "-"}:${todo.isDone()}`)
     .join("|");
 
 Deno.test({
@@ -133,17 +133,17 @@ Deno.test({
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
       let captured = [...initial];
-      const harness = renderHarness(
-        initial,
-        (todos) => captured = todos,
-      );
+      const harness = renderHarness(initial, (todos) => (captured = todos));
       await waitForVisibleList(harness.lastFrame);
       harness.getNav().navigateDown(true);
       await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
 
       harness.stdin.write(" ");
       await waitFor(() => {
-        assertEquals(captured.every((todo) => todo.isDone()), true);
+        assertEquals(
+          captured.every((todo) => todo.isDone()),
+          true,
+        );
       });
       listResult.push(todoSignature(captured));
       harness.unmount();
@@ -152,21 +152,21 @@ Deno.test({
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
       let captured = [...initial];
-      const harness = renderHarness(
-        initial,
-        (todos) => captured = todos,
-      );
+      const harness = renderHarness(initial, (todos) => (captured = todos));
       await waitForVisibleList(harness.lastFrame);
       harness.getNav().navigateDown(true);
       await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
 
       harness.stdin.write("x");
       await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true)
+        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true),
       );
       harness.stdin.write(" ");
       await waitFor(() => {
-        assertEquals(captured.every((todo) => todo.isDone()), true);
+        assertEquals(
+          captured.every((todo) => todo.isDone()),
+          true,
+        );
       });
       listResult.push(todoSignature(captured));
       harness.unmount();
@@ -186,20 +186,14 @@ Deno.test({
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
       let captured = [...initial];
-      const harness = renderHarness(
-        initial,
-        (todos) => captured = todos,
-      );
+      const harness = renderHarness(initial, (todos) => (captured = todos));
       await waitForVisibleList(harness.lastFrame);
       harness.getNav().navigateDown(true);
       await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
 
       harness.stdin.write("\x1b[3~");
       await waitFor(() =>
-        assertEquals(
-          harness.lastFrame()?.includes("Delete Todos"),
-          true,
-        )
+        assertEquals(harness.lastFrame()?.includes("Delete Todos"), true),
       );
       harness.stdin.write("\r");
       await waitFor(() => assertEquals(captured.length, 0));
@@ -210,24 +204,18 @@ Deno.test({
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
       let captured = [...initial];
-      const harness = renderHarness(
-        initial,
-        (todos) => captured = todos,
-      );
+      const harness = renderHarness(initial, (todos) => (captured = todos));
       await waitForVisibleList(harness.lastFrame);
       harness.getNav().navigateDown(true);
       await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
 
       harness.stdin.write("x");
       await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true)
+        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true),
       );
       harness.stdin.write("\x1b[3~");
       await waitFor(() =>
-        assertEquals(
-          harness.lastFrame()?.includes("Delete Todos"),
-          true,
-        )
+        assertEquals(harness.lastFrame()?.includes("Delete Todos"), true),
       );
       harness.stdin.write("\r");
       await waitFor(() => assertEquals(captured.length, 0));
@@ -255,11 +243,11 @@ Deno.test({
       harness.stdin.write("a");
       await waitFor(() =>
         assertEquals(
-          harness.lastFrame()?.includes(
-            "Archive all completed todos to done.txt?",
-          ),
+          harness
+            .lastFrame()
+            ?.includes("Archive all completed todos to done.txt?"),
           true,
-        )
+        ),
       );
       confirmations.push(harness.lastFrame() ?? "");
       harness.unmount();
@@ -272,16 +260,16 @@ Deno.test({
 
       harness.stdin.write("x");
       await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Todo menu"), true)
+        assertEquals(harness.lastFrame()?.includes("Todo menu"), true),
       );
       harness.stdin.write("a");
       await waitFor(() =>
         assertEquals(
-          harness.lastFrame()?.includes(
-            "Archive all completed todos to done.txt?",
-          ),
+          harness
+            .lastFrame()
+            ?.includes("Archive all completed todos to done.txt?"),
           true,
-        )
+        ),
       );
       confirmations.push(harness.lastFrame() ?? "");
       harness.unmount();
@@ -308,10 +296,7 @@ Deno.test({
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
       let captured = [...initial];
-      const harness = renderHarness(
-        initial,
-        (todos) => captured = todos,
-      );
+      const harness = renderHarness(initial, (todos) => (captured = todos));
       await waitForVisibleList(harness.lastFrame);
       harness.getNav().navigateDown(true);
       await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
@@ -330,24 +315,21 @@ Deno.test({
     {
       const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
       let captured = [...initial];
-      const harness = renderHarness(
-        initial,
-        (todos) => captured = todos,
-      );
+      const harness = renderHarness(initial, (todos) => (captured = todos));
       await waitForVisibleList(harness.lastFrame);
       harness.getNav().navigateDown(true);
       await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
 
       harness.stdin.write("x");
       await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true)
+        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true),
       );
       harness.stdin.write("p");
       await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Set Priority"), true)
+        assertEquals(harness.lastFrame()?.includes("Set Priority"), true),
       );
       await waitFor(() =>
-        assertEquals(harness.getFocusedTag(), "set-priority-modal")
+        assertEquals(harness.getFocusedTag(), "set-priority-modal"),
       );
       harness.stdin.write("\r");
       await waitFor(() => {
