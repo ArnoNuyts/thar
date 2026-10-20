@@ -1,4 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { readFile, readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { expect, test } from "vitest";
 
 const RUNTIME_ROOTS = [
   "main.tsx",
@@ -17,24 +19,29 @@ const NON_PORTABLE_IMPORT =
 const DENO_RUNTIME_REFERENCE = /\bDeno\./;
 
 async function* walk(path: string): AsyncGenerator<string> {
-  const stat = await Deno.stat(path);
-  if (stat.isFile) {
+  const info = await stat(path);
+  if (info.isFile()) {
     yield path;
     return;
   }
 
-  for await (const entry of Deno.readDir(path)) {
-    yield* walk(`${path}/${entry.name}`);
+  for (const entry of await readdir(path, { withFileTypes: true })) {
+    const child = join(path, entry.name);
+    if (entry.isDirectory()) {
+      yield* walk(child);
+    } else {
+      yield child;
+    }
   }
 }
 
-Deno.test("runtime code is Node-only", async () => {
+test("runtime code is Node-only", async () => {
   const offenders: string[] = [];
 
   for (const root of RUNTIME_ROOTS) {
     for await (const path of walk(root)) {
       if (!/\.(ts|tsx)$/.test(path)) continue;
-      const source = await Deno.readTextFile(path);
+      const source = await readFile(path, "utf8");
       if (
         NON_PORTABLE_IMPORT.test(source) ||
         DENO_RUNTIME_REFERENCE.test(source)
@@ -44,9 +51,8 @@ Deno.test("runtime code is Node-only", async () => {
     }
   }
 
-  assertEquals(
+  expect(
     offenders,
-    [],
     "Runtime files must use Node APIs and portable imports (node: or npm:)",
-  );
+  ).toEqual([]);
 });

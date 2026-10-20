@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { render } from "ink-testing-library";
 
 import { useTodoCommands } from "../hooks/useTodoCommands.ts";
@@ -7,7 +8,7 @@ import { TestWrapper } from "./test-components.tsx";
 
 type Commands = ReturnType<typeof useTodoCommands>;
 
-Deno.test("useTodoCommands: archiveCompleted waits for the write to finish", async () => {
+test("useTodoCommands: archiveCompleted waits for the write to finish", async () => {
   let commands: Commands | undefined;
   let started = false;
   let finished = false;
@@ -38,23 +39,23 @@ Deno.test("useTodoCommands: archiveCompleted waits for the write to finish", asy
     </TestWrapper>,
   );
 
-  await waitFor(() => assertEquals(commands !== undefined, true));
+  await waitFor(() => expect(commands !== undefined).toEqual(true));
 
   let settled = false;
   const archive = commands!.archiveCompleted();
   archive.then(() => (settled = true));
 
-  await waitFor(() => assertEquals(started, true));
+  await waitFor(() => expect(started).toEqual(true));
   await Promise.resolve();
 
-  assertEquals(finished, false);
-  assertEquals(settled, false);
+  expect(finished).toEqual(false);
+  expect(settled).toEqual(false);
 
   finishWrite();
   await archive;
 
-  assertEquals(finished, true);
-  assertEquals(settled, true);
+  expect(finished).toEqual(true);
+  expect(settled).toEqual(true);
 
   unmount();
 });

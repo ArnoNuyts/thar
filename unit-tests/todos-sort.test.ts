@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { Todo } from "../logic/todo.ts";
 import { sortByImportance } from "../logic/Todos.ts";
 
@@ -58,25 +59,23 @@ const createTodos = (count: number): Todo[] => {
   });
 };
 
-Deno.test("sortByImportance matches the reference four-sort algorithm", () => {
+test("sortByImportance matches the reference four-sort algorithm", () => {
   const todos = createTodos(250);
 
   const actual = sortByImportance(todos);
   const expected = referenceSortByImportance(todos);
 
-  assertEquals(
-    actual.map((todo) => todo.id),
+  expect(actual.map((todo) => todo.id)).toEqual(
     expected.map((todo) => todo.id),
   );
 
   // Sort input must not be mutated.
-  assertEquals(
-    todos.map((todo) => todo.toString()),
+  expect(todos.map((todo) => todo.toString())).toEqual(
     createTodos(250).map((todo) => todo.toString()),
   );
 });
 
-Deno.test("sortByImportance is stable for equal keys", () => {
+test("sortByImportance is stable for equal keys", () => {
   const todos = Array.from(
     { length: 25 },
     (_, index) => new Todo(`same text ${index}`),
@@ -85,12 +84,10 @@ Deno.test("sortByImportance is stable for equal keys", () => {
 
   const sorted = sortByImportance(shuffled);
 
-  assertEquals(
-    sorted.map((todo) => todo.id),
+  expect(sorted.map((todo) => todo.id)).toEqual(
     shuffled.map((todo) => todo.id),
   );
-  assertEquals(
-    sortByImportance(todos).map((todo) => todo.id),
+  expect(sortByImportance(todos).map((todo) => todo.id)).toEqual(
     todos.map((todo) => todo.id),
   );
 });

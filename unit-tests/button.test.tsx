@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { render } from "ink-testing-library";
 
 import { Button } from "../components/Button.tsx";
@@ -18,7 +19,7 @@ const buttonTree = (
   </Button.Group>
 );
 
-Deno.test("Button.Group: ignores keys while unfocused", () => {
+test("Button.Group: ignores keys while unfocused", () => {
   const pressed: string[] = [];
   const indexChanges: number[] = [];
   const { stdin, unmount } = render(
@@ -29,13 +30,13 @@ Deno.test("Button.Group: ignores keys while unfocused", () => {
   stdin.write("\r"); // Enter
   stdin.write(" "); // Space
 
-  assertEquals(indexChanges, []);
-  assertEquals(pressed, []);
+  expect(indexChanges).toEqual([]);
+  expect(pressed).toEqual([]);
 
   unmount();
 });
 
-Deno.test("Button.Group: focused buttons navigate and activate", () => {
+test("Button.Group: focused buttons navigate and activate", () => {
   const pressed: string[] = [];
   const indexChanges: number[] = [];
   const { stdin, unmount } = render(
@@ -45,13 +46,13 @@ Deno.test("Button.Group: focused buttons navigate and activate", () => {
   stdin.write("\u001B[C"); // Right selects the second button
   stdin.write("\r"); // Enter activates it
 
-  assertEquals(indexChanges, [1]);
-  assertEquals(pressed, ["Second"]);
+  expect(indexChanges).toEqual([1]);
+  expect(pressed).toEqual(["Second"]);
 
   unmount();
 });
 
-Deno.test("Button.Group: repeated labels keep unique keys and navigate", () => {
+test("Button.Group: repeated labels keep unique keys and navigate", () => {
   const pressed: string[] = [];
   const indexChanges: number[] = [];
   const originalError = console.error;
@@ -76,10 +77,9 @@ Deno.test("Button.Group: repeated labels keep unique keys and navigate", () => {
     stdin.write("\u001B[C"); // Right selects the second button
     stdin.write("\r"); // Enter activates it
 
-    assertEquals(indexChanges, [1]);
-    assertEquals(pressed, ["second"]);
-    assertEquals(
-      errors.some((message) => message.includes("same key")),
+    expect(indexChanges).toEqual([1]);
+    expect(pressed).toEqual(["second"]);
+    expect(errors.some((message) => message.includes("same key"))).toEqual(
       false,
     );
   } finally {

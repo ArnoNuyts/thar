@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import {
   type ContextIndexEntry,
   createIndexes,
@@ -22,96 +23,80 @@ const todoEntries = (entries: IndexEntry[]): TodoIndexEntry[] =>
     (entry): entry is TodoIndexEntry => entry.type === IndexType.todo,
   );
 
-Deno.test("createIndexes returns no entries for no todos", () => {
-  assertEquals(createIndexes([]), []);
+test("createIndexes returns no entries for no todos", () => {
+  expect(createIndexes([])).toEqual([]);
 });
 
-Deno.test("createIndexes emits one header for a single context", () => {
+test("createIndexes emits one header for a single context", () => {
   const entries = createIndexes(createTodos("one @home", "two @home"));
 
-  assertEquals(entries.length, 3);
+  expect(entries.length).toEqual(3);
   const headers = contextHeaders(entries);
-  assertEquals(headers.length, 1);
-  assertEquals(headers[0].contextName, "home");
-  assertEquals(headers[0].todoCount, 2);
-  assertEquals(
-    todoEntries(entries).map((entry) => entry.number),
-    [1, 2],
-  );
+  expect(headers.length).toEqual(1);
+  expect(headers[0].contextName).toEqual("home");
+  expect(headers[0].todoCount).toEqual(2);
+  expect(todoEntries(entries).map((entry) => entry.number)).toEqual([1, 2]);
 });
 
-Deno.test("createIndexes emits a header per consecutive context group", () => {
+test("createIndexes emits a header per consecutive context group", () => {
   const entries = createIndexes(
     createTodos("one @home", "two @work", "three @work", "four @errand"),
   );
 
   const headers = contextHeaders(entries);
-  assertEquals(
-    headers.map((header) => header.contextName),
-    ["home", "work", "errand"],
-  );
-  assertEquals(
-    headers.map((header) => header.todoCount),
-    [1, 2, 1],
-  );
-  assertEquals(
-    todoEntries(entries).map((entry) => entry.number),
-    [1, 2, 3, 4],
-  );
+  expect(headers.map((header) => header.contextName)).toEqual([
+    "home",
+    "work",
+    "errand",
+  ]);
+  expect(headers.map((header) => header.todoCount)).toEqual([1, 2, 1]);
+  expect(todoEntries(entries).map((entry) => entry.number)).toEqual([
+    1, 2, 3, 4,
+  ]);
 });
 
-Deno.test("createIndexes emits a new header when a context repeats later", () => {
+test("createIndexes emits a new header when a context repeats later", () => {
   const entries = createIndexes(
     createTodos("one @home", "two @work", "three @home"),
   );
 
   const headers = contextHeaders(entries);
-  assertEquals(
-    headers.map((header) => header.contextName),
-    ["home", "work", "home"],
-  );
-  assertEquals(
-    headers.map((header) => header.todoCount),
-    [1, 1, 1],
-  );
-  assertEquals(
-    todoEntries(entries).map((entry) => entry.number),
-    [1, 2, 3],
-  );
+  expect(headers.map((header) => header.contextName)).toEqual([
+    "home",
+    "work",
+    "home",
+  ]);
+  expect(headers.map((header) => header.todoCount)).toEqual([1, 1, 1]);
+  expect(todoEntries(entries).map((entry) => entry.number)).toEqual([1, 2, 3]);
 });
 
-Deno.test("createIndexes groups todos without a context under None", () => {
+test("createIndexes groups todos without a context under None", () => {
   const entries = createIndexes(
     createTodos("plain one", "plain two", "x done"),
   );
 
   const headers = contextHeaders(entries);
-  assertEquals(headers.length, 1);
-  assertEquals(headers[0].contextName, "None");
-  assertEquals(headers[0].todoCount, 3);
-  assertEquals(
-    todoEntries(entries).map((entry) => entry.number),
-    [1, 2, 3],
-  );
+  expect(headers.length).toEqual(1);
+  expect(headers[0].contextName).toEqual("None");
+  expect(headers[0].todoCount).toEqual(3);
+  expect(todoEntries(entries).map((entry) => entry.number)).toEqual([1, 2, 3]);
 });
 
-Deno.test("createIndexes reports the final count for every header", () => {
+test("createIndexes reports the final count for every header", () => {
   const entries = createIndexes(
     createTodos("one @home", "two @home", "three @work", "four", "five"),
   );
 
   const headers = contextHeaders(entries);
-  assertEquals(
-    headers.map((header) => header.contextName),
-    ["home", "work", "None"],
-  );
-  assertEquals(
-    headers.map((header) => header.todoCount),
-    [2, 1, 2],
-  );
+  expect(headers.map((header) => header.contextName)).toEqual([
+    "home",
+    "work",
+    "None",
+  ]);
+  expect(headers.map((header) => header.todoCount)).toEqual([2, 1, 2]);
 });
 
-Deno.test("createIndexes numbers todos consecutively after hidden filtering", () => {
+test("createIndexes numbers todos consecutively after hidden filtering", () => {
   const todos = filterHidden(
     createTodos("one @home", "hidden h:1 @home", "three @work"),
   );
@@ -119,22 +104,18 @@ Deno.test("createIndexes numbers todos consecutively after hidden filtering", ()
   const entries = createIndexes(todos);
   const numbers = todoEntries(entries).map((entry) => entry.number);
 
-  assertEquals(numbers, [1, 2]);
-  assertEquals(
-    contextHeaders(entries).map((header) => header.todoCount),
-    [1, 1],
-  );
+  expect(numbers).toEqual([1, 2]);
+  expect(contextHeaders(entries).map((header) => header.todoCount)).toEqual([
+    1, 1,
+  ]);
 });
 
-Deno.test("identical todos get distinct ids, keys and numbers", () => {
+test("identical todos get distinct ids, keys and numbers", () => {
   const entries = createIndexes(createTodos("Same text", "Same text"));
   const todos = todoEntries(entries);
 
-  assertEquals(todos.length, 2);
-  assertEquals(todos[0].todo.id === todos[1].todo.id, false);
-  assertEquals(String(todos[0].todo.id) === String(todos[1].todo.id), false);
-  assertEquals(
-    todos.map((entry) => entry.number),
-    [1, 2],
-  );
+  expect(todos.length).toEqual(2);
+  expect(todos[0].todo.id === todos[1].todo.id).toEqual(false);
+  expect(String(todos[0].todo.id) === String(todos[1].todo.id)).toEqual(false);
+  expect(todos.map((entry) => entry.number)).toEqual([1, 2]);
 });

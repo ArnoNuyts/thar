@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import {
   countWrappedLines,
   getHoveredButtonIndex,
@@ -22,71 +23,73 @@ const baseOptions = {
 // Modal spans columns 1..40. The left half is 1..20 and the right half is
 // 21..40. "« Save »" is 8 cells, centered at columns 7..14.
 // "« Cancel »" is 10 cells, centered at columns 26..35.
-Deno.test("getHoveredButtonIndex: ignores positions without coordinates", () => {
-  assertEquals(getHoveredButtonIndex(undefined, 13, baseOptions), null);
-  assertEquals(getHoveredButtonIndex(10, undefined, baseOptions), null);
-  assertEquals(getHoveredButtonIndex(undefined, undefined, baseOptions), null);
+test("getHoveredButtonIndex: ignores positions without coordinates", () => {
+  expect(getHoveredButtonIndex(undefined, 13, baseOptions)).toEqual(null);
+  expect(getHoveredButtonIndex(10, undefined, baseOptions)).toEqual(null);
+  expect(getHoveredButtonIndex(undefined, undefined, baseOptions)).toEqual(
+    null,
+  );
 });
 
-Deno.test("getHoveredButtonIndex: maps each button region", () => {
-  assertEquals(getHoveredButtonIndex(10, 13, baseOptions), 0);
-  assertEquals(getHoveredButtonIndex(30, 13, baseOptions), 1);
+test("getHoveredButtonIndex: maps each button region", () => {
+  expect(getHoveredButtonIndex(10, 13, baseOptions)).toEqual(0);
+  expect(getHoveredButtonIndex(30, 13, baseOptions)).toEqual(1);
 });
 
-Deno.test("getHoveredButtonIndex: maps button edges inclusively", () => {
-  assertEquals(getHoveredButtonIndex(7, 13, baseOptions), 0);
-  assertEquals(getHoveredButtonIndex(14, 13, baseOptions), 0);
-  assertEquals(getHoveredButtonIndex(26, 13, baseOptions), 1);
-  assertEquals(getHoveredButtonIndex(35, 13, baseOptions), 1);
+test("getHoveredButtonIndex: maps button edges inclusively", () => {
+  expect(getHoveredButtonIndex(7, 13, baseOptions)).toEqual(0);
+  expect(getHoveredButtonIndex(14, 13, baseOptions)).toEqual(0);
+  expect(getHoveredButtonIndex(26, 13, baseOptions)).toEqual(1);
+  expect(getHoveredButtonIndex(35, 13, baseOptions)).toEqual(1);
 });
 
-Deno.test("getHoveredButtonIndex: ignores divider and padding gaps", () => {
+test("getHoveredButtonIndex: ignores divider and padding gaps", () => {
   // Between the left label (ends at 14) and the right label (starts at 26).
-  assertEquals(getHoveredButtonIndex(15, 13, baseOptions), null);
-  assertEquals(getHoveredButtonIndex(20, 13, baseOptions), null);
-  assertEquals(getHoveredButtonIndex(25, 13, baseOptions), null);
+  expect(getHoveredButtonIndex(15, 13, baseOptions)).toEqual(null);
+  expect(getHoveredButtonIndex(20, 13, baseOptions)).toEqual(null);
+  expect(getHoveredButtonIndex(25, 13, baseOptions)).toEqual(null);
   // Outside the modal and outside the right label.
-  assertEquals(getHoveredButtonIndex(0, 13, baseOptions), null);
-  assertEquals(getHoveredButtonIndex(36, 13, baseOptions), null);
+  expect(getHoveredButtonIndex(0, 13, baseOptions)).toEqual(null);
+  expect(getHoveredButtonIndex(36, 13, baseOptions)).toEqual(null);
 });
 
-Deno.test("getHoveredButtonIndex: ignores rows above and below the buttons", () => {
-  assertEquals(getHoveredButtonIndex(10, 12, baseOptions), null);
-  assertEquals(getHoveredButtonIndex(10, 14, baseOptions), null);
+test("getHoveredButtonIndex: ignores rows above and below the buttons", () => {
+  expect(getHoveredButtonIndex(10, 12, baseOptions)).toEqual(null);
+  expect(getHoveredButtonIndex(10, 14, baseOptions)).toEqual(null);
 });
 
-Deno.test("countWrappedLines: empty string counts as one line", () => {
-  assertEquals(countWrappedLines("", 10), 1);
+test("countWrappedLines: empty string counts as one line", () => {
+  expect(countWrappedLines("", 10)).toEqual(1);
 });
 
-Deno.test("countWrappedLines: single short line", () => {
-  assertEquals(countWrappedLines("hello", 10), 1);
+test("countWrappedLines: single short line", () => {
+  expect(countWrappedLines("hello", 10)).toEqual(1);
 });
 
-Deno.test("countWrappedLines: text exactly the width fits on one line", () => {
-  assertEquals(countWrappedLines("abcdefghij", 10), 1);
+test("countWrappedLines: text exactly the width fits on one line", () => {
+  expect(countWrappedLines("abcdefghij", 10)).toEqual(1);
 });
 
-Deno.test("countWrappedLines: width + 1 characters wraps once", () => {
-  assertEquals(countWrappedLines("abcdefghijk", 10), 2);
+test("countWrappedLines: width + 1 characters wraps once", () => {
+  expect(countWrappedLines("abcdefghijk", 10)).toEqual(2);
 });
 
-Deno.test("countWrappedLines: multiple wraps", () => {
-  assertEquals(countWrappedLines("abcdefghijklmnopqrstuvw", 10), 3);
+test("countWrappedLines: multiple wraps", () => {
+  expect(countWrappedLines("abcdefghijklmnopqrstuvw", 10)).toEqual(3);
 });
 
-Deno.test("countWrappedLines: wraps on word boundaries", () => {
-  assertEquals(countWrappedLines("hello world foo", 10), 2);
+test("countWrappedLines: wraps on word boundaries", () => {
+  expect(countWrappedLines("hello world foo", 10)).toEqual(2);
 });
 
-Deno.test("countWrappedLines: explicit newlines each start a new line", () => {
-  assertEquals(countWrappedLines("a\nb", 10), 2);
-  assertEquals(countWrappedLines("a\nb\nc", 10), 3);
+test("countWrappedLines: explicit newlines each start a new line", () => {
+  expect(countWrappedLines("a\nb", 10)).toEqual(2);
+  expect(countWrappedLines("a\nb\nc", 10)).toEqual(3);
   // An empty paragraph from consecutive newlines still occupies a row.
-  assertEquals(countWrappedLines("a\n\nb", 10), 3);
+  expect(countWrappedLines("a\n\nb", 10)).toEqual(3);
 });
 
-Deno.test("countWrappedLines: non-positive width falls back to one line", () => {
-  assertEquals(countWrappedLines("hello", 0), 1);
-  assertEquals(countWrappedLines("hello", -3), 1);
+test("countWrappedLines: non-positive width falls back to one line", () => {
+  expect(countWrappedLines("hello", 0)).toEqual(1);
+  expect(countWrappedLines("hello", -3)).toEqual(1);
 });

@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { MockWatcher } from "./test-utils.ts";
 
 const withTimeout = async <T>(promise: Promise<T>): Promise<T> => {
@@ -9,7 +10,7 @@ const withTimeout = async <T>(promise: Promise<T>): Promise<T> => {
       1000,
     );
     timer = id;
-    Deno.unrefTimer(id);
+    if (typeof id === "object") id.unref();
   });
 
   try {
@@ -19,30 +20,30 @@ const withTimeout = async <T>(promise: Promise<T>): Promise<T> => {
   }
 };
 
-Deno.test("MockWatcher: yields events then completes after close", async () => {
+test("MockWatcher: yields events then completes after close", async () => {
   const watcher = new MockWatcher();
   const iterator = watcher[Symbol.asyncIterator]();
 
   const firstPending = iterator.next();
   watcher.emit("modify");
   const first = await withTimeout(firstPending);
-  assertEquals(first.done, false);
-  assertEquals(first.value?.kind, "modify");
+  expect(first.done).toEqual(false);
+  expect(first.value?.kind).toEqual("modify");
 
   const secondPending = iterator.next();
   watcher.emit("any");
   const second = await withTimeout(secondPending);
-  assertEquals(second.done, false);
-  assertEquals(second.value?.kind, "any");
+  expect(second.done).toEqual(false);
+  expect(second.value?.kind).toEqual("any");
 
   const closePending = iterator.next();
   watcher.close();
   const end = await withTimeout(closePending);
-  assertEquals(end.done, true);
-  assertEquals(end.value, undefined);
+  expect(end.done).toEqual(true);
+  expect(end.value).toEqual(undefined);
 });
 
-Deno.test("MockWatcher: close resolves a pending wait", async () => {
+test("MockWatcher: close resolves a pending wait", async () => {
   const watcher = new MockWatcher();
   const iterator = watcher[Symbol.asyncIterator]();
 
@@ -50,14 +51,14 @@ Deno.test("MockWatcher: close resolves a pending wait", async () => {
   watcher.close();
 
   const result = await withTimeout(pending);
-  assertEquals(result.done, true);
-  assertEquals(result.value, undefined);
+  expect(result.done).toEqual(true);
+  expect(result.value).toEqual(undefined);
 });
 
-Deno.test("MockWatcher: iterating after close completes immediately", async () => {
+test("MockWatcher: iterating after close completes immediately", async () => {
   const watcher = new MockWatcher();
   watcher.close();
 
   const result = await withTimeout(watcher[Symbol.asyncIterator]().next());
-  assertEquals(result.done, true);
+  expect(result.done).toEqual(true);
 });

@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals, assertMatch } from "@std/assert";
+
 import { useEffect } from "react";
 import { Box } from "ink";
 
@@ -8,7 +9,7 @@ import { useModal } from "../contexts/modal-context.tsx";
 import { waitFor } from "./test-utils.ts";
 import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
-Deno.test("ConfirmModal: should render and set focus", async () => {
+test("ConfirmModal: should render and set focus", async () => {
   let focusedTag: string | undefined;
   let confirmed = false;
 
@@ -45,19 +46,19 @@ Deno.test("ConfirmModal: should render and set focus", async () => {
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Test Title/);
-    assertMatch(lastFrame() || "", /Test Message/);
-    assertEquals(focusedTag, "confirm-modal");
+    expect(lastFrame() || "").toMatch(/Test Title/);
+    expect(lastFrame() || "").toMatch(/Test Message/);
+    expect(focusedTag).toEqual("confirm-modal");
   });
 
   stdin.write("\r"); // Confirm
 
-  await waitFor(() => assertEquals(confirmed, true));
+  await waitFor(() => expect(confirmed).toEqual(true));
 
   unmount();
 });
 
-Deno.test("ConfirmModal: Tab then Enter should cancel", async () => {
+test("ConfirmModal: Tab then Enter should cancel", async () => {
   let cancelled = false;
 
   const TestComponent = () => {
@@ -93,16 +94,16 @@ Deno.test("ConfirmModal: Tab then Enter should cancel", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Tab Cancel/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Tab Cancel/));
 
   stdin.write("\t");
   stdin.write("\r");
 
-  await waitFor(() => assertEquals(cancelled, true));
+  await waitFor(() => expect(cancelled).toEqual(true));
   unmount();
 });
 
-Deno.test("ConfirmModal: Space should activate selected button", async () => {
+test("ConfirmModal: Space should activate selected button", async () => {
   let confirmed = false;
 
   const TestComponent = () => {
@@ -136,15 +137,15 @@ Deno.test("ConfirmModal: Space should activate selected button", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Mouse Confirm/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Mouse Confirm/));
 
   stdin.write(" ");
-  await waitFor(() => assertEquals(confirmed, true));
+  await waitFor(() => expect(confirmed).toEqual(true));
 
   unmount();
 });
 
-Deno.test("ConfirmModal: mouse click left half should confirm", async () => {
+test("ConfirmModal: mouse click left half should confirm", async () => {
   let confirmed = false;
 
   const TestComponent = () => {
@@ -179,17 +180,17 @@ Deno.test("ConfirmModal: mouse click left half should confirm", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Mouse Cancel/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Mouse Cancel/));
 
   // rows=25, columns=101, width=50%, message lines=1 => button row y=15.
   // Left half of modal body activates Confirm.
   stdin.write("\x1b[<0;40;15M");
 
-  await waitFor(() => assertEquals(confirmed, true));
+  await waitFor(() => expect(confirmed).toEqual(true));
   unmount();
 });
 
-Deno.test("ConfirmModal: mouse click right half should cancel", async () => {
+test("ConfirmModal: mouse click right half should cancel", async () => {
   let cancelled = false;
 
   const TestComponent = () => {
@@ -225,12 +226,12 @@ Deno.test("ConfirmModal: mouse click right half should cancel", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Mouse Confirm/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Mouse Confirm/));
 
   // rows=25, columns=101, width=50%, message lines=1 => button row y=15.
   // Right half of modal body activates Cancel.
   stdin.write("\x1b[<0;60;15M");
 
-  await waitFor(() => assertEquals(cancelled, true));
+  await waitFor(() => expect(cancelled).toEqual(true));
   unmount();
 });

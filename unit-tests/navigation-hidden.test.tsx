@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { useEffect } from "react";
@@ -17,7 +18,6 @@ const TestWrapper = ({
   onContext,
 }: {
   todos: Todos;
-  // deno-lint-ignore no-explicit-any
   onContext: (ctx: any) => void;
 }) => (
   <SearchProvider>
@@ -28,7 +28,6 @@ const TestWrapper = ({
 );
 
 // Helper component to interact with NavigationContext
-// deno-lint-ignore no-explicit-any
 const NavigationTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
   const nav = useNavigation();
   useEffect(() => {
@@ -37,110 +36,86 @@ const NavigationTester = ({ onContext }: { onContext: (ctx: any) => void }) => {
   return <Text>Tester</Text>;
 };
 
-Deno.test(
-  "NavigationContext: should initialize with showHidden = false and filter hidden todos",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todoVisible = new Todo("visible todo");
-    const todoHidden = new Todo("h:1 hidden todo");
-    const todos = [todoVisible, todoHidden];
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+test("NavigationContext: should initialize with showHidden = false and filter hidden todos", async () => {
+  const todoVisible = new Todo("visible todo");
+  const todoHidden = new Todo("h:1 hidden todo");
+  const todos = [todoVisible, todoHidden];
+  let navContext: any;
 
-    const { unmount } = render(
-      <TestWrapper todos={todos} onContext={(ctx) => (navContext = ctx)} />,
+  const { unmount } = render(
+    <TestWrapper todos={todos} onContext={(ctx) => (navContext = ctx)} />,
+  );
+
+  await waitFor(() => {
+    expect(navContext?.showHidden).toEqual(false);
+    // Wait for indexes to populate
+    if (!navContext?.indexes) throw new Error("Indexes not ready");
+  });
+
+  // Check visible todos
+  const visibleTodos = navContext.indexes.filter(
+    (i: any) => i.type === IndexType.todo,
+  );
+  expect(visibleTodos.length).toEqual(1);
+  expect(visibleTodos[0].todo.text).toEqual("visible todo");
+
+  unmount();
+});
+
+test("NavigationContext: should toggle showHidden and show all todos", async () => {
+  const todoVisible = new Todo("visible todo");
+  const todoHidden = new Todo("h:1 hidden todo");
+  const todos = [todoVisible, todoHidden];
+  let navContext: any;
+
+  const { unmount } = render(
+    <TestWrapper todos={todos} onContext={(ctx) => (navContext = ctx)} />,
+  );
+
+  await waitFor(() => {
+    expect(navContext?.showHidden).toEqual(false);
+  });
+
+  navContext.toggleShowHidden();
+
+  await waitFor(() => {
+    expect(navContext.showHidden).toEqual(true);
+    const allTodos = navContext.indexes.filter(
+      (i: any) => i.type === IndexType.todo,
     );
+    expect(allTodos.length).toEqual(2);
+  });
 
-    await waitFor(() => {
-      assertEquals(navContext?.showHidden, false);
-      // Wait for indexes to populate
-      if (!navContext?.indexes) throw new Error("Indexes not ready");
-    });
+  unmount();
+});
 
-    // Check visible todos
-    const visibleTodos = navContext.indexes.filter(
-      (
-        // deno-lint-ignore no-explicit-any
-        i: any,
-      ) => i.type === IndexType.todo,
-    );
-    assertEquals(visibleTodos.length, 1);
-    assertEquals(visibleTodos[0].todo.text, "visible todo");
+test("NavigationContext: should toggle back to hidden", async () => {
+  const todoVisible = new Todo("visible todo");
+  const todoHidden = new Todo("h:1 hidden todo");
+  const todos = [todoVisible, todoHidden];
+  let navContext: any;
 
-    unmount();
-  },
-);
+  const { unmount } = render(
+    <TestWrapper todos={todos} onContext={(ctx) => (navContext = ctx)} />,
+  );
 
-Deno.test(
-  "NavigationContext: should toggle showHidden and show all todos",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todoVisible = new Todo("visible todo");
-    const todoHidden = new Todo("h:1 hidden todo");
-    const todos = [todoVisible, todoHidden];
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
+  // First toggle
+  await waitFor(() => {
+    if (!navContext) throw new Error("Context not ready");
+  });
 
-    const { unmount } = render(
-      <TestWrapper todos={todos} onContext={(ctx) => (navContext = ctx)} />,
-    );
+  navContext.toggleShowHidden();
+  await waitFor(() => expect(navContext.showHidden).toEqual(true));
 
-    await waitFor(() => {
-      assertEquals(navContext?.showHidden, false);
-    });
+  // Second toggle
+  navContext.toggleShowHidden();
+  await waitFor(() => expect(navContext.showHidden).toEqual(false));
 
-    navContext.toggleShowHidden();
+  const visibleTodos = navContext.indexes.filter(
+    (i: any) => i.type === IndexType.todo,
+  );
+  expect(visibleTodos.length).toEqual(1);
+  expect(visibleTodos[0].todo.text).toEqual("visible todo");
 
-    await waitFor(() => {
-      assertEquals(navContext.showHidden, true);
-      const allTodos = navContext.indexes.filter(
-        (
-          // deno-lint-ignore no-explicit-any
-          i: any,
-        ) => i.type === IndexType.todo,
-      );
-      assertEquals(allTodos.length, 2);
-    });
-
-    unmount();
-  },
-);
-
-Deno.test(
-  "NavigationContext: should toggle back to hidden",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todoVisible = new Todo("visible todo");
-    const todoHidden = new Todo("h:1 hidden todo");
-    const todos = [todoVisible, todoHidden];
-    // deno-lint-ignore no-explicit-any
-    let navContext: any;
-
-    const { unmount } = render(
-      <TestWrapper todos={todos} onContext={(ctx) => (navContext = ctx)} />,
-    );
-
-    // First toggle
-    await waitFor(() => {
-      if (!navContext) throw new Error("Context not ready");
-    });
-
-    navContext.toggleShowHidden();
-    await waitFor(() => assertEquals(navContext.showHidden, true));
-
-    // Second toggle
-    navContext.toggleShowHidden();
-    await waitFor(() => assertEquals(navContext.showHidden, false));
-
-    const visibleTodos = navContext.indexes.filter(
-      (
-        // deno-lint-ignore no-explicit-any
-        i: any,
-      ) => i.type === IndexType.todo,
-    );
-    assertEquals(visibleTodos.length, 1);
-    assertEquals(visibleTodos[0].todo.text, "visible todo");
-
-    unmount();
-  },
-);
+  unmount();
+});

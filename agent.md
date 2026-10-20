@@ -10,9 +10,8 @@
 - Typecheck: TypeScript 7 (`npm run typecheck`).
 - Lint: Oxlint (`npm run lint`).
 - Format: Oxfmt (`npm run fmt`, `npm run fmt:check`).
-- Tests: Vitest (`npm test`). Test files still use the Deno test API through the
-  test-only compatibility layer in `test/setup.ts`; runtime code must not use
-  `Deno.*`.
+- Tests: Vitest (`npm test`) using native `test`/`expect` imports. Prefer
+  `Runtime` from `utils/runtime.ts` or Node built-ins over Deno APIs in tests.
 
 ## Test execution
 

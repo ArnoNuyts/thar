@@ -1,4 +1,5 @@
-import { assertEquals, assertMatch } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { render } from "ink-testing-library";
 import { Box } from "ink";
 import { modalRegistry } from "../components/modal-registry.tsx";
@@ -18,28 +19,25 @@ const EXPECTED_GENERIC_MODAL_IDS = [
   "add-context",
 ] as const;
 
-Deno.test("modal-registry: keys exactly match the non-confirm modal ids", () => {
-  assertEquals(
-    Object.keys(modalRegistry).sort(),
+test("modal-registry: keys exactly match the non-confirm modal ids", () => {
+  expect(Object.keys(modalRegistry).sort()).toEqual(
     [...EXPECTED_GENERIC_MODAL_IDS].sort(),
   );
 });
 
-Deno.test("modal-registry: every entry maps to a component", () => {
+test("modal-registry: every entry maps to a component", () => {
   for (const id of EXPECTED_GENERIC_MODAL_IDS) {
-    assertEquals(
-      typeof modalRegistry[id],
+    expect(typeof modalRegistry[id], `${id} should map to a component`).toEqual(
       "function",
-      `${id} should map to a component`,
     );
   }
 });
 
-Deno.test("modal-registry: confirm-modal is not in the generic registry", () => {
-  assertEquals("confirm-modal" in modalRegistry, false);
+test("modal-registry: confirm-modal is not in the generic registry", () => {
+  expect("confirm-modal" in modalRegistry).toEqual(false);
 });
 
-Deno.test("modal-registry: a simple entry renders from the registry", async () => {
+test("modal-registry: a simple entry renders from the registry", async () => {
   const SetPriorityModal = modalRegistry["set-priority"];
   const { lastFrame, unmount } = render(
     <TestWrapper>
@@ -50,7 +48,7 @@ Deno.test("modal-registry: a simple entry renders from the registry", async () =
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Set Priority/);
+    expect(lastFrame() || "").toMatch(/Set Priority/);
   });
 
   unmount();

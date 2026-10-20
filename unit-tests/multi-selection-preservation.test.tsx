@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals } from "@std/assert";
+
 import { useEffect } from "react";
 import { Todo } from "../logic/todo.ts";
 import { NavigationContextType } from "../contexts/navigation-context.tsx";
@@ -87,56 +88,51 @@ const ActionTrigger = ({
   return null;
 };
 
-Deno.test({
-  name: "Multi-selection preservation after updateTodos",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todo1 = new Todo("Todo 1");
-    const todo2 = new Todo("Todo 2");
-    const todo3 = new Todo("Todo 3");
-    const initialTodos = [todo1, todo2, todo3];
+test("Multi-selection preservation after updateTodos", async () => {
+  const todo1 = new Todo("Todo 1");
+  const todo2 = new Todo("Todo 2");
+  const todo3 = new Todo("Todo 3");
+  const initialTodos = [todo1, todo2, todo3];
 
-    let selection: { cursorId: symbol | undefined; rangeIds: Set<symbol> } = {
-      cursorId: undefined,
-      rangeIds: new Set(),
-    };
-    let trigger: (() => void) | undefined;
+  let selection: { cursorId: symbol | undefined; rangeIds: Set<symbol> } = {
+    cursorId: undefined,
+    rangeIds: new Set(),
+  };
+  let trigger: (() => void) | undefined;
 
-    let navContext: NavigationContextType = null!;
-    const NavGetter = () => {
-      navContext = useNavigation();
-      return null;
-    };
+  let navContext: NavigationContextType = null!;
+  const NavGetter = () => {
+    navContext = useNavigation();
+    return null;
+  };
 
-    const { unmount } = render(
-      <TestWrapper initialTodos={initialTodos}>
-        <SelectionObserver onSelectionChange={(s) => (selection = s)} />
-        <ActionTrigger onTrigger={(t) => (trigger = t)} />
-        <NavGetter />
-      </TestWrapper>,
-    );
+  const { unmount } = render(
+    <TestWrapper initialTodos={initialTodos}>
+      <SelectionObserver onSelectionChange={(s) => (selection = s)} />
+      <ActionTrigger onTrigger={(t) => (trigger = t)} />
+      <NavGetter />
+    </TestWrapper>,
+  );
 
-    // Initial state
-    await waitFor(() => assertEquals(selection.cursorId, todo1.id));
+  // Initial state
+  await waitFor(() => expect(selection.cursorId).toEqual(todo1.id));
 
-    // Select todo 1 and todo 2
-    navContext.navigateDown(true);
-    await waitFor(() => {
-      assertEquals(selection.cursorId, todo2.id);
-      assertEquals(selection.rangeIds.size, 2);
-    });
+  // Select todo 1 and todo 2
+  navContext.navigateDown(true);
+  await waitFor(() => {
+    expect(selection.cursorId).toEqual(todo2.id);
+    expect(selection.rangeIds.size).toEqual(2);
+  });
 
-    // Trigger updateTodos
-    trigger!();
+  // Trigger updateTodos
+  trigger!();
 
-    // Verify that selection is preserved
-    await waitFor(() => {
-      assertEquals(selection.rangeIds.size, 2);
-      assertEquals(selection.rangeIds.has(initialTodos[0].id), true);
-      assertEquals(selection.rangeIds.has(initialTodos[1].id), true);
-    });
+  // Verify that selection is preserved
+  await waitFor(() => {
+    expect(selection.rangeIds.size).toEqual(2);
+    expect(selection.rangeIds.has(initialTodos[0].id)).toEqual(true);
+    expect(selection.rangeIds.has(initialTodos[1].id)).toEqual(true);
+  });
 
-    unmount();
-  },
+  unmount();
 });

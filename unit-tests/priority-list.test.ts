@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import {
   getPriorityOptions,
   isPriorityInput,
@@ -6,27 +7,27 @@ import {
   priorityValue,
 } from "../logic/priority.ts";
 
-Deno.test("priorities: one ordered A-F list", () => {
-  assertEquals([...PRIORITIES], ["A", "B", "C", "D", "E", "F"]);
+test("priorities: one ordered A-F list", () => {
+  expect([...PRIORITIES]).toEqual(["A", "B", "C", "D", "E", "F"]);
 });
 
-Deno.test("priorities: inline shortcuts accept only the exact A-F letters", () => {
+test("priorities: inline shortcuts accept only the exact A-F letters", () => {
   for (const priority of PRIORITIES) {
-    assertEquals(isPriorityInput(priority), true);
+    expect(isPriorityInput(priority)).toEqual(true);
   }
 
   for (const input of ["a", "G", "Z", "1", "", " A"]) {
-    assertEquals(isPriorityInput(input), false);
+    expect(isPriorityInput(input)).toEqual(false);
   }
 });
 
-Deno.test("priorities: Unset is appended only when a todo has a priority", () => {
-  assertEquals(getPriorityOptions(false), [...PRIORITIES]);
-  assertEquals(getPriorityOptions(true), [...PRIORITIES, "Unset"]);
+test("priorities: Unset is appended only when a todo has a priority", () => {
+  expect(getPriorityOptions(false)).toEqual([...PRIORITIES]);
+  expect(getPriorityOptions(true)).toEqual([...PRIORITIES, "Unset"]);
 });
 
-Deno.test("priorities: Unset maps back to an undefined todo priority", () => {
-  assertEquals(priorityValue("A"), "A");
-  assertEquals(priorityValue("F"), "F");
-  assertEquals(priorityValue("Unset"), undefined);
+test("priorities: Unset maps back to an undefined todo priority", () => {
+  expect(priorityValue("A")).toEqual("A");
+  expect(priorityValue("F")).toEqual("F");
+  expect(priorityValue("Unset")).toEqual(undefined);
 });

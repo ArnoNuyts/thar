@@ -1,83 +1,80 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import {
   extractSearchTerms,
   extractTagsAndContextsFromSearch,
 } from "../utils/search-utils.ts";
 
-Deno.test("extractTagsAndContextsFromSearch: empty string returns empty", () => {
-  assertEquals(extractTagsAndContextsFromSearch(""), "");
+test("extractTagsAndContextsFromSearch: empty string returns empty", () => {
+  expect(extractTagsAndContextsFromSearch("")).toEqual("");
 });
 
-Deno.test("extractTagsAndContextsFromSearch: no tags returns empty", () => {
-  assertEquals(extractTagsAndContextsFromSearch("just some text"), "");
+test("extractTagsAndContextsFromSearch: no tags returns empty", () => {
+  expect(extractTagsAndContextsFromSearch("just some text")).toEqual("");
 });
 
-Deno.test("extractTagsAndContextsFromSearch: extracts single context", () => {
-  assertEquals(extractTagsAndContextsFromSearch("@home"), " @home ");
+test("extractTagsAndContextsFromSearch: extracts single context", () => {
+  expect(extractTagsAndContextsFromSearch("@home")).toEqual(" @home ");
 });
 
-Deno.test("extractTagsAndContextsFromSearch: extracts single project", () => {
-  assertEquals(extractTagsAndContextsFromSearch("+work"), " +work ");
+test("extractTagsAndContextsFromSearch: extracts single project", () => {
+  expect(extractTagsAndContextsFromSearch("+work")).toEqual(" +work ");
 });
 
-Deno.test("extractTagsAndContextsFromSearch: extracts context from mixed text", () => {
-  assertEquals(
+test("extractTagsAndContextsFromSearch: extracts context from mixed text", () => {
+  expect(
     extractTagsAndContextsFromSearch("some text @home other text"),
-    " @home ",
-  );
+  ).toEqual(" @home ");
 });
 
-Deno.test("extractTagsAndContextsFromSearch: extracts project from mixed text", () => {
-  assertEquals(
+test("extractTagsAndContextsFromSearch: extracts project from mixed text", () => {
+  expect(
     extractTagsAndContextsFromSearch("some text +work other text"),
-    " +work ",
-  );
+  ).toEqual(" +work ");
 });
 
-Deno.test("extractTagsAndContextsFromSearch: extracts multiple contexts", () => {
+test("extractTagsAndContextsFromSearch: extracts multiple contexts", () => {
   const result = extractTagsAndContextsFromSearch("@home @office");
-  assertEquals(result, " @home @office ");
+  expect(result).toEqual(" @home @office ");
 });
 
-Deno.test("extractTagsAndContextsFromSearch: extracts multiple projects", () => {
+test("extractTagsAndContextsFromSearch: extracts multiple projects", () => {
   const result = extractTagsAndContextsFromSearch("+work +personal");
-  assertEquals(result, " +work +personal ");
+  expect(result).toEqual(" +work +personal ");
 });
 
-Deno.test("extractTagsAndContextsFromSearch: extracts mixed tags and contexts", () => {
+test("extractTagsAndContextsFromSearch: extracts mixed tags and contexts", () => {
   const result = extractTagsAndContextsFromSearch("+work @home @office +side");
-  assertEquals(result, " +work +side @home @office ");
+  expect(result).toEqual(" +work +side @home @office ");
 });
 
-Deno.test("extractTagsAndContextsFromSearch: handles tags with underscores and dots", () => {
+test("extractTagsAndContextsFromSearch: handles tags with underscores and dots", () => {
   const result = extractTagsAndContextsFromSearch(
     "+work.project_1 @home_office",
   );
-  assertEquals(result, " +work.project_1 @home_office ");
+  expect(result).toEqual(" +work.project_1 @home_office ");
 });
 
-Deno.test("extractSearchTerms: splits by whitespace", () => {
-  assertEquals(extractSearchTerms("buy milk"), ["buy", "milk"]);
+test("extractSearchTerms: splits by whitespace", () => {
+  expect(extractSearchTerms("buy milk")).toEqual(["buy", "milk"]);
 });
 
-Deno.test("extractSearchTerms: preserves context and project prefixes", () => {
-  assertEquals(extractSearchTerms("@work +bug"), ["@work", "+bug"]);
+test("extractSearchTerms: preserves context and project prefixes", () => {
+  expect(extractSearchTerms("@work +bug")).toEqual(["@work", "+bug"]);
 });
 
-Deno.test("extractSearchTerms: strips wrapper punctuation", () => {
-  assertEquals(extractSearchTerms("/@work +bug/"), ["@work", "+bug"]);
+test("extractSearchTerms: strips wrapper punctuation", () => {
+  expect(extractSearchTerms("/@work +bug/")).toEqual(["@work", "+bug"]);
 });
 
-Deno.test("extractTagsAndContextsFromSearch: extracts tags without a preceding space", () => {
-  assertEquals(
-    extractTagsAndContextsFromSearch("foo+bar baz@home"),
+test("extractTagsAndContextsFromSearch: extracts tags without a preceding space", () => {
+  expect(extractTagsAndContextsFromSearch("foo+bar baz@home")).toEqual(
     " +bar @home ",
   );
 });
 
-Deno.test("extractTagsAndContextsFromSearch: preserves backslashes in tag names", () => {
-  assertEquals(
-    extractTagsAndContextsFromSearch("+foo\\bar @home\\office"),
+test("extractTagsAndContextsFromSearch: preserves backslashes in tag names", () => {
+  expect(extractTagsAndContextsFromSearch("+foo\\bar @home\\office")).toEqual(
     " +foo\\bar @home\\office ",
   );
 });

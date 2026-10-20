@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
 import {
   calculateScrollOffset,
@@ -27,7 +28,7 @@ const contextEntry = (contextName: string): IndexEntry => ({
   todoCount: 0,
 });
 
-Deno.test("getNavigableRow: skips context headers in the direction of travel", () => {
+test("getNavigableRow: skips context headers in the direction of travel", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const indexes = [
     contextEntry("A"),
@@ -36,19 +37,19 @@ Deno.test("getNavigableRow: skips context headers in the direction of travel", (
     todoEntry(todo2, 2),
   ];
 
-  assertEquals(getNavigableRow(indexes, 1, 1), 3);
-  assertEquals(getNavigableRow(indexes, 3, -1), 1);
+  expect(getNavigableRow(indexes, 1, 1)).toEqual(3);
+  expect(getNavigableRow(indexes, 3, -1)).toEqual(1);
 });
 
-Deno.test("getNavigableRow: stays on first todo when a leading header is crossed", () => {
+test("getNavigableRow: stays on first todo when a leading header is crossed", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const indexes = [contextEntry("A"), todoEntry(todo1, 1), todoEntry(todo2, 2)];
 
-  assertEquals(getNavigableRow(indexes, 1, -1), 1);
-  assertEquals(getNavigableRow(indexes, 1, -5), 1);
+  expect(getNavigableRow(indexes, 1, -1)).toEqual(1);
+  expect(getNavigableRow(indexes, 1, -5)).toEqual(1);
 });
 
-Deno.test("getNavigableRow: stays on last todo when a trailing header is crossed", () => {
+test("getNavigableRow: stays on last todo when a trailing header is crossed", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const indexes = [
     contextEntry("A"),
@@ -57,135 +58,125 @@ Deno.test("getNavigableRow: stays on last todo when a trailing header is crossed
     contextEntry("B"),
   ];
 
-  assertEquals(getNavigableRow(indexes, 2, 1), 2);
-  assertEquals(getNavigableRow(indexes, 2, 5), 2);
+  expect(getNavigableRow(indexes, 2, 1)).toEqual(2);
+  expect(getNavigableRow(indexes, 2, 5)).toEqual(2);
 });
 
-Deno.test("getNavigableRow: clamps without wrapping past the list bounds", () => {
+test("getNavigableRow: clamps without wrapping past the list bounds", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const indexes = [contextEntry("A"), todoEntry(todo1, 1), todoEntry(todo2, 2)];
 
-  assertEquals(getNavigableRow(indexes, 1, -3), 1);
-  assertEquals(getNavigableRow(indexes, 2, 3), 2);
+  expect(getNavigableRow(indexes, 1, -3)).toEqual(1);
+  expect(getNavigableRow(indexes, 2, 3)).toEqual(2);
 });
 
-Deno.test("guesstimateSelection: selects a newly added todo", () => {
+test("guesstimateSelection: selects a newly added todo", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const added = new Todo("Todo 3");
   const prevTodos = [todo1, todo2];
   const todos = [todo1, todo2, added];
   const indexes = indexesFor(todos);
 
-  assertEquals(
-    guesstimateSelection(todos, prevTodos, indexes, todo1.id),
+  expect(guesstimateSelection(todos, prevTodos, indexes, todo1.id)).toEqual(
     added.id,
   );
 });
 
-Deno.test("guesstimateSelection: keeps an explicit selection of an added todo", () => {
+test("guesstimateSelection: keeps an explicit selection of an added todo", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const added = new Todo("Todo 3");
   const prevTodos = [todo1, todo2];
   const todos = [todo1, todo2, added];
   const indexes = indexesFor(todos);
 
-  assertEquals(
-    guesstimateSelection(todos, prevTodos, indexes, added.id),
+  expect(guesstimateSelection(todos, prevTodos, indexes, added.id)).toEqual(
     undefined,
   );
 });
 
-Deno.test("guesstimateSelection: selects a modified todo when the cursor is elsewhere", () => {
+test("guesstimateSelection: selects a modified todo when the cursor is elsewhere", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const modified = todo1.setText("Todo 1 updated");
   const prevTodos = [todo1, todo2];
   const todos = [modified, todo2];
   const indexes = indexesFor(todos);
 
-  assertEquals(
-    guesstimateSelection(todos, prevTodos, indexes, todo2.id),
+  expect(guesstimateSelection(todos, prevTodos, indexes, todo2.id)).toEqual(
     modified.id,
   );
 });
 
-Deno.test("guesstimateSelection: keeps a cursor that is modified but still visible", () => {
+test("guesstimateSelection: keeps a cursor that is modified but still visible", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const modified = todo1.setText("Todo 1 updated");
   const prevTodos = [todo1, todo2];
   const todos = [modified, todo2];
   const indexes = indexesFor(todos);
 
-  assertEquals(
-    guesstimateSelection(todos, prevTodos, indexes, modified.id),
+  expect(guesstimateSelection(todos, prevTodos, indexes, modified.id)).toEqual(
     undefined,
   );
 });
 
-Deno.test("guesstimateSelection: does not guesstimate when every todo is new (reload)", () => {
+test("guesstimateSelection: does not guesstimate when every todo is new (reload)", () => {
   const prevTodos = todosOf("Todo 1", "Todo 2");
   const reloadedTodos = todosOf("Todo 1", "Todo 2");
   const indexes = indexesFor(reloadedTodos);
 
-  assertEquals(
+  expect(
     guesstimateSelection(reloadedTodos, prevTodos, indexes, prevTodos[0].id),
-    undefined,
-  );
+  ).toEqual(undefined);
 });
 
-Deno.test("guesstimateSelection: returns undefined when nothing changed", () => {
+test("guesstimateSelection: returns undefined when nothing changed", () => {
   const todos = todosOf("Todo 1", "Todo 2");
   const indexes = indexesFor(todos);
 
-  assertEquals(
-    guesstimateSelection(todos, todos, indexes, todos[1].id),
+  expect(guesstimateSelection(todos, todos, indexes, todos[1].id)).toEqual(
     undefined,
   );
 });
 
-Deno.test("guesstimateSelection: returns undefined for a reordered list", () => {
+test("guesstimateSelection: returns undefined for a reordered list", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const prevTodos = [todo1, todo2];
   const todos = [todo2, todo1];
   const indexes = indexesFor(todos);
 
-  assertEquals(
-    guesstimateSelection(todos, prevTodos, indexes, todo2.id),
+  expect(guesstimateSelection(todos, prevTodos, indexes, todo2.id)).toEqual(
     undefined,
   );
 });
 
-Deno.test("validateSelection: keeps a valid cursor", () => {
+test("validateSelection: keeps a valid cursor", () => {
   const todos = todosOf("Todo 1", "Todo 2");
   const indexes = indexesFor(todos);
 
-  assertEquals(
-    validateSelection(todos[1].id, indexes, undefined, 0),
+  expect(validateSelection(todos[1].id, indexes, undefined, 0)).toEqual(
     todos[1].id,
   );
 });
 
-Deno.test("validateSelection: restores the cursor by hash", () => {
+test("validateSelection: restores the cursor by hash", () => {
   const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
   const indexes = indexesFor([todo1, todo2]);
 
-  assertEquals(
-    validateSelection(undefined, indexes, todo2.getHash(), 0),
+  expect(validateSelection(undefined, indexes, todo2.getHash(), 0)).toEqual(
     todo2.id,
   );
 });
 
-Deno.test("validateSelection: falls forward to the next todo from lastIndex", () => {
+test("validateSelection: falls forward to the next todo from lastIndex", () => {
   const todos = todosOf("Todo A @A", "Todo B @B");
   const indexes = indexesFor(todos);
 
   // Row 0 is the first context header, not a todo.
-  assertEquals(
-    validateSelection(undefined, indexes, undefined, 0),
+  expect(validateSelection(undefined, indexes, undefined, 0)).toEqual(
     todos[0].id,
   );
 });
 
-Deno.test("validateSelection: falls backward when no todo follows lastIndex", () => {
+test("validateSelection: falls backward when no todo follows lastIndex", () => {
   const todo1 = new Todo("Todo 1");
   const indexes: IndexEntry[] = [
     contextEntry("None"),
@@ -193,60 +184,62 @@ Deno.test("validateSelection: falls backward when no todo follows lastIndex", ()
     contextEntry("Trailing"),
   ];
 
-  assertEquals(
+  expect(
     validateSelection(undefined, indexes, undefined, indexes.length - 1),
-    todo1.id,
-  );
+  ).toEqual(todo1.id);
 });
 
-Deno.test("validateSelection: clamps an out-of-range lastIndex", () => {
+test("validateSelection: clamps an out-of-range lastIndex", () => {
   const todos = todosOf("Todo 1");
   const indexes = indexesFor(todos);
 
-  assertEquals(
-    validateSelection(undefined, indexes, undefined, 999),
+  expect(validateSelection(undefined, indexes, undefined, 999)).toEqual(
     todos[0].id,
   );
 });
 
-Deno.test("validateSelection: returns undefined for empty indexes", () => {
-  assertEquals(validateSelection(undefined, [], undefined, 0), undefined);
+test("validateSelection: returns undefined for empty indexes", () => {
+  expect(validateSelection(undefined, [], undefined, 0)).toEqual(undefined);
 });
 
-Deno.test("validateSelection: returns undefined when there are no todo entries", () => {
+test("validateSelection: returns undefined when there are no todo entries", () => {
   const indexes = [contextEntry("None"), contextEntry("Other")];
 
-  assertEquals(validateSelection(undefined, indexes, "hash", 1), undefined);
+  expect(validateSelection(undefined, indexes, "hash", 1)).toEqual(undefined);
 });
 
-Deno.test("calculateScrollOffset: keeps the offset when the range fits", () => {
-  assertEquals(calculateScrollOffset(5, { min: 5, max: 5 }, 0, 10, 30), 0);
+test("calculateScrollOffset: keeps the offset when the range fits", () => {
+  expect(calculateScrollOffset(5, { min: 5, max: 5 }, 0, 10, 30)).toEqual(0);
 });
 
-Deno.test("calculateScrollOffset: scrolls to show a range larger than the viewport", () => {
-  assertEquals(calculateScrollOffset(10, { min: 1, max: 20 }, 0, 10, 30), 2);
+test("calculateScrollOffset: scrolls to show a range larger than the viewport", () => {
+  expect(calculateScrollOffset(10, { min: 1, max: 20 }, 0, 10, 30)).toEqual(2);
 });
 
-Deno.test("calculateScrollOffset: scrolls up when the cursor is above the viewport", () => {
-  assertEquals(calculateScrollOffset(2, { min: 2, max: 2 }, 10, 10, 30), 1);
+test("calculateScrollOffset: scrolls up when the cursor is above the viewport", () => {
+  expect(calculateScrollOffset(2, { min: 2, max: 2 }, 10, 10, 30)).toEqual(1);
 });
 
-Deno.test("calculateScrollOffset: scrolls down when the cursor is below the viewport", () => {
-  assertEquals(calculateScrollOffset(25, { min: 25, max: 25 }, 0, 10, 30), 17);
+test("calculateScrollOffset: scrolls down when the cursor is below the viewport", () => {
+  expect(calculateScrollOffset(25, { min: 25, max: 25 }, 0, 10, 30)).toEqual(
+    17,
+  );
 });
 
-Deno.test("calculateScrollOffset: clamps at the start of the list", () => {
-  assertEquals(calculateScrollOffset(0, { min: 0, max: 0 }, 5, 10, 30), 0);
+test("calculateScrollOffset: clamps at the start of the list", () => {
+  expect(calculateScrollOffset(0, { min: 0, max: 0 }, 5, 10, 30)).toEqual(0);
 });
 
-Deno.test("calculateScrollOffset: clamps at the end of the list", () => {
-  assertEquals(calculateScrollOffset(29, { min: 29, max: 29 }, 0, 10, 30), 20);
+test("calculateScrollOffset: clamps at the end of the list", () => {
+  expect(calculateScrollOffset(29, { min: 29, max: 29 }, 0, 10, 30)).toEqual(
+    20,
+  );
 });
 
-Deno.test("calculateScrollOffset: clamps to keep the whole range visible", () => {
-  assertEquals(calculateScrollOffset(5, { min: 1, max: 5 }, 5, 10, 20), 1);
+test("calculateScrollOffset: clamps to keep the whole range visible", () => {
+  expect(calculateScrollOffset(5, { min: 1, max: 5 }, 5, 10, 20)).toEqual(1);
 });
 
-Deno.test("calculateScrollOffset: handles a list shorter than the viewport", () => {
-  assertEquals(calculateScrollOffset(2, { min: 2, max: 2 }, 0, 10, 3), 0);
+test("calculateScrollOffset: handles a list shorter than the viewport", () => {
+  expect(calculateScrollOffset(2, { min: 2, max: 2 }, 0, 10, 3)).toEqual(0);
 });

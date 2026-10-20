@@ -1,60 +1,61 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { Todo } from "../logic/todo.ts";
 
-Deno.test("addContext - adds context to todo without it", () => {
+test("addContext - adds context to todo without it", () => {
   const todo = new Todo("Buy groceries");
   const updated = todo.addContext("home");
-  assertEquals(updated.contexts.has("home"), true);
-  assertEquals(updated.text.includes("@home"), true);
+  expect(updated.contexts.has("home")).toEqual(true);
+  expect(updated.text.includes("@home")).toEqual(true);
 });
 
-Deno.test("addContext - does not duplicate existing context", () => {
+test("addContext - does not duplicate existing context", () => {
   const todo = new Todo("Buy groceries @home");
   const updated = todo.addContext("home");
-  assertEquals(updated === todo, true); // Same reference, no change
-  assertEquals(updated.text, "Buy groceries @home");
+  expect(updated === todo).toEqual(true); // Same reference, no change
+  expect(updated.text).toEqual("Buy groceries @home");
 });
 
-Deno.test("removeContext - removes context from todo", () => {
+test("removeContext - removes context from todo", () => {
   const todo = new Todo("Buy groceries @home @work");
   const updated = todo.removeContext("home");
-  assertEquals(updated.contexts.has("home"), false);
-  assertEquals(updated.contexts.has("work"), true);
-  assertEquals(updated.text.includes("@home"), false);
-  assertEquals(updated.text.includes("@work"), true);
+  expect(updated.contexts.has("home")).toEqual(false);
+  expect(updated.contexts.has("work")).toEqual(true);
+  expect(updated.text.includes("@home")).toEqual(false);
+  expect(updated.text.includes("@work")).toEqual(true);
 });
 
-Deno.test("removeContext - does nothing if context not present", () => {
+test("removeContext - does nothing if context not present", () => {
   const todo = new Todo("Buy groceries @work");
   const updated = todo.removeContext("home");
-  assertEquals(updated === todo, true); // Same reference, no change
+  expect(updated === todo).toEqual(true); // Same reference, no change
 });
 
-Deno.test("addProject - adds project to todo without it", () => {
+test("addProject - adds project to todo without it", () => {
   const todo = new Todo("Fix bug");
   const updated = todo.addProject("work");
-  assertEquals(updated.projects.has("work"), true);
-  assertEquals(updated.text.includes("+work"), true);
+  expect(updated.projects.has("work")).toEqual(true);
+  expect(updated.text.includes("+work")).toEqual(true);
 });
 
-Deno.test("addProject - does not duplicate existing project", () => {
+test("addProject - does not duplicate existing project", () => {
   const todo = new Todo("Fix bug +work");
   const updated = todo.addProject("work");
-  assertEquals(updated === todo, true); // Same reference, no change
-  assertEquals(updated.text, "Fix bug +work");
+  expect(updated === todo).toEqual(true); // Same reference, no change
+  expect(updated.text).toEqual("Fix bug +work");
 });
 
-Deno.test("removeProject - removes project from todo", () => {
+test("removeProject - removes project from todo", () => {
   const todo = new Todo("Fix bug +work +personal");
   const updated = todo.removeProject("work");
-  assertEquals(updated.projects.has("work"), false);
-  assertEquals(updated.projects.has("personal"), true);
-  assertEquals(updated.text.includes("+work"), false);
-  assertEquals(updated.text.includes("+personal"), true);
+  expect(updated.projects.has("work")).toEqual(false);
+  expect(updated.projects.has("personal")).toEqual(true);
+  expect(updated.text.includes("+work")).toEqual(false);
+  expect(updated.text.includes("+personal")).toEqual(true);
 });
 
-Deno.test("removeProject - does nothing if project not present", () => {
+test("removeProject - does nothing if project not present", () => {
   const todo = new Todo("Fix bug +personal");
   const updated = todo.removeProject("work");
-  assertEquals(updated === todo, true); // Same reference, no change
+  expect(updated === todo).toEqual(true); // Same reference, no change
 });

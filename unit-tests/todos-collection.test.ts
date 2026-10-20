@@ -1,24 +1,25 @@
-import { assert, assertEquals, assertFalse } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { Todo } from "../logic/todo.ts";
 import type { Todos } from "../logic/Todos.ts";
 
-Deno.test("todos collections do not leak a Todos subclass", () => {
+test("todos collections do not leak a Todos subclass", () => {
   const todos: Todos = [new Todo("one"), new Todo("two")];
 
   const filtered = todos.filter((todo) => todo.text === "one");
-  assert(Array.isArray(filtered));
-  assertEquals(Object.getPrototypeOf(filtered), Array.prototype);
-  assertFalse("sortByImportance" in filtered);
-  assertFalse("filterHidden" in filtered);
+  expect(Array.isArray(filtered)).toBeTruthy();
+  expect(Object.getPrototypeOf(filtered)).toEqual(Array.prototype);
+  expect("sortByImportance" in filtered).toBe(false);
+  expect("filterHidden" in filtered).toBe(false);
 
   const mapped = todos.map((todo) => todo.text);
-  assert(Array.isArray(mapped));
-  assertEquals(Object.getPrototypeOf(mapped), Array.prototype);
-  assertFalse("sortByImportance" in mapped);
-  assertEquals(mapped, ["one", "two"]);
+  expect(Array.isArray(mapped)).toBeTruthy();
+  expect(Object.getPrototypeOf(mapped)).toEqual(Array.prototype);
+  expect("sortByImportance" in mapped).toBe(false);
+  expect(mapped).toEqual(["one", "two"]);
 
   const sliced = todos.slice(0, 1);
-  assert(Array.isArray(sliced));
-  assertEquals(Object.getPrototypeOf(sliced), Array.prototype);
-  assertFalse("sortByImportance" in sliced);
+  expect(Array.isArray(sliced)).toBeTruthy();
+  expect(Object.getPrototypeOf(sliced)).toEqual(Array.prototype);
+  expect("sortByImportance" in sliced).toBe(false);
 });
