@@ -1,5 +1,5 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals, assertStringIncludes } from "@std/assert";
 
 import { useEffect } from "react";
 import { IndexType } from "../types/enums.ts";
@@ -147,44 +147,36 @@ const FocusRequester = () => {
 
 // --- Tests ---
 
-Deno.test(
-  "SearchInput: should render with placeholder when empty",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const { lastFrame, unmount } = render(
-      <TestWrapper initialTodos={[]}>
-        <ConnectedSearchInput />
-      </TestWrapper>,
-    );
+test("SearchInput: should render with placeholder when empty", async () => {
+  const { lastFrame, unmount } = render(
+    <TestWrapper initialTodos={[]}>
+      <ConnectedSearchInput />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      const output = lastFrame();
-      assertEquals("", output);
-    });
+  await waitFor(() => {
+    const output = lastFrame();
+    expect("").toEqual(output);
+  });
 
-    unmount();
-  },
-);
+  unmount();
+});
 
-Deno.test(
-  "SearchInput: should display search query when set",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const { lastFrame, unmount } = render(
-      <TestWrapper initialTodos={[]}>
-        <SearchQuerySetter query="@Home" />
-        <ConnectedSearchInput />
-      </TestWrapper>,
-    );
+test("SearchInput: should display search query when set", async () => {
+  const { lastFrame, unmount } = render(
+    <TestWrapper initialTodos={[]}>
+      <SearchQuerySetter query="@Home" />
+      <ConnectedSearchInput />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      const output = lastFrame();
-      assertStringIncludes(output || "", "@Home");
-    });
+  await waitFor(() => {
+    const output = lastFrame();
+    expect(output || "").toContain("@Home");
+  });
 
-    unmount();
-  },
-);
+  unmount();
+});
 
 import { FocusObserver } from "./test-components.tsx";
 
@@ -192,251 +184,215 @@ import { FocusObserver } from "./test-components.tsx";
 
 // ... helpers
 
-Deno.test(
-  "SearchInput: should handle navigation keys when search is focused",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
-    let selectedText = "";
-    let focusedTag: string | undefined;
+test("SearchInput: should handle navigation keys when search is focused", async () => {
+  const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
+  let selectedText = "";
+  let focusedTag: string | undefined;
 
-    const { unmount, stdin } = render(
-      <TestWrapper initialTodos={todos}>
-        <FocusRequester />
-        <ConnectedSearchInput />
-        <SelectionObserver
-          onSelectionChange={(text) => (selectedText = text)}
-        />
-        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin } = render(
+    <TestWrapper initialTodos={todos}>
+      <FocusRequester />
+      <ConnectedSearchInput />
+      <SelectionObserver onSelectionChange={(text) => (selectedText = text)} />
+      <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
+    </TestWrapper>,
+  );
 
-    // Wait for search input to be focused
-    await waitFor(() => {
-      assertEquals(focusedTag, "search-input");
-    });
+  // Wait for search input to be focused
+  await waitFor(() => {
+    expect(focusedTag).toEqual("search-input");
+  });
 
-    await waitFor(() => {
-      assertEquals(selectedText, "Task A");
-    });
+  await waitFor(() => {
+    expect(selectedText).toEqual("Task A");
+  });
 
-    stdin.write("\u001B[B"); // Down
+  stdin.write("\u001B[B"); // Down
 
-    await waitFor(() => {
-      assertEquals(selectedText, "Task B");
-    });
+  await waitFor(() => {
+    expect(selectedText).toEqual("Task B");
+  });
 
-    stdin.write("\u001B[A"); // Up
+  stdin.write("\u001B[A"); // Up
 
-    await waitFor(() => {
-      assertEquals(selectedText, "Task A");
-    });
+  await waitFor(() => {
+    expect(selectedText).toEqual("Task A");
+  });
 
-    unmount();
-  },
-);
+  unmount();
+});
 
-Deno.test(
-  "SearchInput: should auto-select first item when current selection is filtered out",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todos = [
-      new Todo("Apples"),
-      new Todo("Bananas"),
-      new Todo("Cherries"),
-    ];
-    let selectedText = "";
+test("SearchInput: should auto-select first item when current selection is filtered out", async () => {
+  const todos = [new Todo("Apples"), new Todo("Bananas"), new Todo("Cherries")];
+  let selectedText = "";
 
-    const { unmount } = render(
-      <TestWrapper initialTodos={todos}>
-        <ConnectedSearchInput />
-        <SelectionObserver
-          onSelectionChange={(text) => (selectedText = text)}
-        />
-        <SearchQuerySetter query="" />
-      </TestWrapper>,
-    );
+  const { unmount } = render(
+    <TestWrapper initialTodos={todos}>
+      <ConnectedSearchInput />
+      <SelectionObserver onSelectionChange={(text) => (selectedText = text)} />
+      <SearchQuerySetter query="" />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      assertEquals(selectedText, "Apples");
-    });
+  await waitFor(() => {
+    expect(selectedText).toEqual("Apples");
+  });
 
-    unmount();
-  },
-);
+  unmount();
+});
 
-Deno.test(
-  "SearchInput: should handle home/end keys when search is focused",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
-    let selectedText = "";
-    let focusedTag: string | undefined;
+test("SearchInput: should handle home/end keys when search is focused", async () => {
+  const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
+  let selectedText = "";
+  let focusedTag: string | undefined;
 
-    const { unmount, stdin } = render(
-      <TestWrapper initialTodos={todos}>
-        <FocusRequester />
-        <ConnectedSearchInput />
-        <SelectionObserver
-          onSelectionChange={(text) => (selectedText = text)}
-        />
-        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin } = render(
+    <TestWrapper initialTodos={todos}>
+      <FocusRequester />
+      <ConnectedSearchInput />
+      <SelectionObserver onSelectionChange={(text) => (selectedText = text)} />
+      <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
+    </TestWrapper>,
+  );
 
-    await waitFor(() => {
-      assertEquals(focusedTag, "search-input");
-    });
+  await waitFor(() => {
+    expect(focusedTag).toEqual("search-input");
+  });
 
-    await waitFor(() => {
-      assertEquals(selectedText, "Task A");
-    });
+  await waitFor(() => {
+    expect(selectedText).toEqual("Task A");
+  });
 
-    stdin.write("\u001B[F"); // End
+  stdin.write("\u001B[F"); // End
 
-    await waitFor(() => {
-      assertEquals(selectedText, "Task C");
-    });
+  await waitFor(() => {
+    expect(selectedText).toEqual("Task C");
+  });
 
-    stdin.write("\u001B[H"); // Home
+  stdin.write("\u001B[H"); // Home
 
-    await waitFor(() => {
-      assertEquals(selectedText, "Task A");
-    });
+  await waitFor(() => {
+    expect(selectedText).toEqual("Task A");
+  });
 
-    unmount();
-  },
-);
+  unmount();
+});
 
-Deno.test(
-  "SearchInput: should handle multi-selection with Shift+Arrow keys when focused",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
-    let selectedIds = new Set<symbol>();
-    let focusedTag: string | undefined;
+test("SearchInput: should handle multi-selection with Shift+Arrow keys when focused", async () => {
+  const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
+  let selectedIds = new Set<symbol>();
+  let focusedTag: string | undefined;
 
-    const { unmount, stdin } = render(
-      <TestWrapper initialTodos={todos}>
-        <FocusRequester />
-        <ConnectedSearchInput />
-        <MultiSelectionObserver
-          onSelectionChange={(ids) => (selectedIds = ids)}
-        />
-        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin } = render(
+    <TestWrapper initialTodos={todos}>
+      <FocusRequester />
+      <ConnectedSearchInput />
+      <MultiSelectionObserver
+        onSelectionChange={(ids) => (selectedIds = ids)}
+      />
+      <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
+    </TestWrapper>,
+  );
 
-    // Initial state
-    await waitFor(() => {
-      assertEquals(focusedTag, "search-input");
-    });
+  // Initial state
+  await waitFor(() => {
+    expect(focusedTag).toEqual("search-input");
+  });
 
-    await waitFor(() => {
-      assertEquals(selectedIds.size, 0);
-    });
+  await waitFor(() => {
+    expect(selectedIds.size).toEqual(0);
+  });
 
-    // Press Shift+Down
-    stdin.write("\u001B[1;2B");
+  // Press Shift+Down
+  stdin.write("\u001B[1;2B");
 
-    await waitFor(() => {
-      assertEquals(selectedIds.size, 2);
-    });
+  await waitFor(() => {
+    expect(selectedIds.size).toEqual(2);
+  });
 
-    unmount();
-  },
-);
+  unmount();
+});
 
-Deno.test(
-  "SearchInput: should handle multi-selection with Shift+Arrow keys when filtered",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todos = [
-      new Todo("Apple"),
-      new Todo("Banana"),
-      new Todo("Apricot"),
-      new Todo("Cherry"),
-    ];
-    let selectedIds = new Set<symbol>();
-    let focusedTag: string | undefined;
+test("SearchInput: should handle multi-selection with Shift+Arrow keys when filtered", async () => {
+  const todos = [
+    new Todo("Apple"),
+    new Todo("Banana"),
+    new Todo("Apricot"),
+    new Todo("Cherry"),
+  ];
+  let selectedIds = new Set<symbol>();
+  let focusedTag: string | undefined;
 
-    const { unmount, stdin } = render(
-      <TestWrapper initialTodos={todos}>
-        <SearchQuerySetter query="Ap" />
-        <FocusRequester />
-        <ConnectedSearchInput />
-        <MultiSelectionObserver
-          onSelectionChange={(ids) => (selectedIds = ids)}
-        />
-        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
-      </TestWrapper>,
-    );
+  const { unmount, stdin } = render(
+    <TestWrapper initialTodos={todos}>
+      <SearchQuerySetter query="Ap" />
+      <FocusRequester />
+      <ConnectedSearchInput />
+      <MultiSelectionObserver
+        onSelectionChange={(ids) => (selectedIds = ids)}
+      />
+      <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
+    </TestWrapper>,
+  );
 
-    // Initial state
-    await waitFor(() => {
-      assertEquals(focusedTag, "search-input");
-    });
+  // Initial state
+  await waitFor(() => {
+    expect(focusedTag).toEqual("search-input");
+  });
 
-    await waitFor(() => {
-      assertEquals(selectedIds.size, 0);
-    });
+  await waitFor(() => {
+    expect(selectedIds.size).toEqual(0);
+  });
 
-    // Press Shift+Down
-    stdin.write("\u001B[1;2B");
+  // Press Shift+Down
+  stdin.write("\u001B[1;2B");
 
-    await waitFor(() => {
-      assertEquals(selectedIds.size, 2);
-    });
+  await waitFor(() => {
+    expect(selectedIds.size).toEqual(2);
+  });
 
-    unmount();
-  },
-);
+  unmount();
+});
 
-Deno.test(
-  "SearchInput: ignores keys until focused",
-  { sanitizeResources: false, sanitizeOps: false },
-  async () => {
-    const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
-    let selectedText = "";
-    let query = "";
-    let focusedTag: string | undefined;
+test("SearchInput: ignores keys until focused", async () => {
+  const todos = [new Todo("Task A"), new Todo("Task B"), new Todo("Task C")];
+  let selectedText = "";
+  let query = "";
+  let focusedTag: string | undefined;
 
-    const tree = (focus: boolean) => (
-      <TestWrapper initialTodos={todos}>
-        <SearchQuerySetter query="Task" />
-        <ConnectedSearchInput />
-        <FocusWhen when={focus} />
-        <SelectionObserver
-          onSelectionChange={(text) => (selectedText = text)}
-        />
-        <QueryObserver onQuery={(next) => (query = next)} />
-        <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
-      </TestWrapper>
-    );
+  const tree = (focus: boolean) => (
+    <TestWrapper initialTodos={todos}>
+      <SearchQuerySetter query="Task" />
+      <ConnectedSearchInput />
+      <FocusWhen when={focus} />
+      <SelectionObserver onSelectionChange={(text) => (selectedText = text)} />
+      <QueryObserver onQuery={(next) => (query = next)} />
+      <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
+    </TestWrapper>
+  );
 
-    const { unmount, stdin, rerender } = render(tree(false));
+  const { unmount, stdin, rerender } = render(tree(false));
 
-    // While unfocused both navigation and typing are ignored.
-    await stdin.write("\u001B[B");
-    await stdin.write("z");
+  // While unfocused both navigation and typing are ignored.
+  await stdin.write("\u001B[B");
+  await stdin.write("z");
 
-    rerender(tree(true));
+  rerender(tree(true));
 
-    await waitFor(() => {
-      assertEquals(focusedTag, "search-input");
-    });
+  await waitFor(() => {
+    expect(focusedTag).toEqual("search-input");
+  });
 
-    assertEquals(query, "Task");
-    await waitFor(() => assertEquals(selectedText, "Task A"));
+  expect(query).toEqual("Task");
+  await waitFor(() => expect(selectedText).toEqual("Task A"));
 
-    // Once focused, the same key navigates the list.
-    await stdin.write("\u001B[B");
+  // Once focused, the same key navigates the list.
+  await stdin.write("\u001B[B");
 
-    await waitFor(() => {
-      assertEquals(selectedText, "Task B");
-      assertEquals(query, "Task");
-    });
+  await waitFor(() => {
+    expect(selectedText).toEqual("Task B");
+    expect(query).toEqual("Task");
+  });
 
-    unmount();
-  },
-);
+  unmount();
+});

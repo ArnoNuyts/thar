@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { format } from "date-fns";
-import { assertEquals, assertNotStrictEquals } from "@std/assert";
+
 import { Todo } from "../logic/todo.ts";
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
@@ -41,144 +42,144 @@ const setterCases: SetterCase[] = [
     apply: (todo) =>
       todo.setText("renamed +project @context", { preserveTags: true }),
     verify: (updated) => {
-      assertEquals(updated.text, "renamed +project @context");
+      expect(updated.text).toEqual("renamed +project @context");
     },
   },
   {
     name: "setPriority",
     apply: (todo) => todo.setPriority("A" as UpperCaseLetter),
-    verify: (updated) => assertEquals(updated.priority, "A"),
+    verify: (updated) => expect(updated.priority).toEqual("A"),
   },
   {
     name: "setCreationDate",
     apply: (todo) => todo.setCreationDate(date),
-    verify: (updated) => assertEquals(updated.creationDate, date),
+    verify: (updated) => expect(updated.creationDate).toEqual(date),
   },
   {
     name: "setCompletionDate",
     apply: (todo) => todo.setCompletionDate(date),
-    verify: (updated) => assertEquals(updated.completionDate, date),
+    verify: (updated) => expect(updated.completionDate).toEqual(date),
   },
   {
     name: "setState",
     apply: (todo) => todo.setState(TodoStateEnum.done),
-    verify: (updated) => assertEquals(updated.state, TodoStateEnum.done),
+    verify: (updated) => expect(updated.state).toEqual(TodoStateEnum.done),
   },
   {
     name: "setRecurrence",
     apply: (todo) => todo.setRecurrence("2w"),
-    verify: (updated) => assertEquals(updated.tags.rec, "2w"),
+    verify: (updated) => expect(updated.tags.rec).toEqual("2w"),
   },
   {
     name: "removeRecurrence",
     apply: (todo) => todo.removeRecurrence(),
-    verify: (updated) => assertEquals(updated.tags.rec, undefined),
+    verify: (updated) => expect(updated.tags.rec).toEqual(undefined),
   },
   {
     name: "setDue",
     apply: (todo) => todo.setDue(date),
     verify: (updated) =>
-      assertEquals(updated.tags.due, format(date, "yyyy-MM-dd")),
+      expect(updated.tags.due).toEqual(format(date, "yyyy-MM-dd")),
   },
   {
     name: "removeDue",
     apply: (todo) => todo.removeDue(),
-    verify: (updated) => assertEquals(updated.tags.due, undefined),
+    verify: (updated) => expect(updated.tags.due).toEqual(undefined),
   },
   {
     name: "setThreshold",
     apply: (todo) => todo.setThreshold(date),
     verify: (updated) =>
-      assertEquals(updated.tags.t, format(date, "yyyy-MM-dd")),
+      expect(updated.tags.t).toEqual(format(date, "yyyy-MM-dd")),
   },
   {
     name: "removeThreshold",
     apply: (todo) => todo.removeThreshold(),
-    verify: (updated) => assertEquals(updated.tags.t, undefined),
+    verify: (updated) => expect(updated.tags.t).toEqual(undefined),
   },
   {
     name: "toggleHidden",
     apply: (todo) => todo.toggleHidden(),
-    verify: (updated) => assertEquals(updated.isHidden(), false),
+    verify: (updated) => expect(updated.isHidden()).toEqual(false),
   },
 ];
 
 for (const { name, apply, verify } of setterCases) {
-  Deno.test(`${name} - returns a new todo, preserves id, and leaves the original untouched`, () => {
+  test(`${name} - returns a new todo, preserves id, and leaves the original untouched`, () => {
     const original = makeTodo();
     const before = snapshot(original);
 
     const updated = apply(original);
 
-    assertNotStrictEquals(updated, original);
-    assertEquals(updated.id, original.id);
-    assertEquals(snapshot(original), before);
+    expect(updated).not.toBe(original);
+    expect(updated.id).toEqual(original.id);
+    expect(snapshot(original)).toEqual(before);
     verify(updated);
   });
 
-  Deno.test(`${name} - returned todo has independent mutable collections`, () => {
+  test(`${name} - returned todo has independent mutable collections`, () => {
     const original = makeTodo();
     const updated = apply(original);
 
-    assertNotStrictEquals(updated.projects, original.projects);
-    assertNotStrictEquals(updated.contexts, original.contexts);
-    assertNotStrictEquals(updated.tags, original.tags);
-    assertNotStrictEquals(updated.tags.multi, original.tags.multi);
+    expect(updated.projects).not.toBe(original.projects);
+    expect(updated.contexts).not.toBe(original.contexts);
+    expect(updated.tags).not.toBe(original.tags);
+    expect(updated.tags.multi).not.toBe(original.tags.multi);
 
     // Mutating the receiver after a setter must not leak into the result.
     original.projects.add("original-only");
     original.contexts.add("original-only");
     (original.tags.multi as string[]).push("original-only");
 
-    assertEquals([...updated.projects], ["project"]);
-    assertEquals([...updated.contexts], ["context"]);
-    assertEquals(updated.tags.multi, ["one", "two"]);
+    expect([...updated.projects]).toEqual(["project"]);
+    expect([...updated.contexts]).toEqual(["context"]);
+    expect(updated.tags.multi).toEqual(["one", "two"]);
 
     // Mutating the result must not leak back into the receiver.
     updated.projects.add("updated-only");
     updated.contexts.add("updated-only");
     (updated.tags.multi as string[]).push("updated-only");
 
-    assertEquals([...original.projects], ["project", "original-only"]);
-    assertEquals([...original.contexts], ["context", "original-only"]);
-    assertEquals(original.tags.multi, ["one", "two", "original-only"]);
+    expect([...original.projects]).toEqual(["project", "original-only"]);
+    expect([...original.contexts]).toEqual(["context", "original-only"]);
+    expect(original.tags.multi).toEqual(["one", "two", "original-only"]);
   });
 }
 
-Deno.test("chained setters do not share mutable collections", () => {
+test("chained setters do not share mutable collections", () => {
   const base = makeTodo();
   const first = base.setPriority("A" as UpperCaseLetter);
   const second = first.setRecurrence("2w");
 
-  assertNotStrictEquals(first.projects, second.projects);
-  assertNotStrictEquals(first.contexts, second.contexts);
-  assertNotStrictEquals(first.tags, second.tags);
-  assertNotStrictEquals(first.tags.multi, second.tags.multi);
+  expect(first.projects).not.toBe(second.projects);
+  expect(first.contexts).not.toBe(second.contexts);
+  expect(first.tags).not.toBe(second.tags);
+  expect(first.tags.multi).not.toBe(second.tags.multi);
 
   first.projects.add("first-only");
   first.contexts.add("first-only");
   (first.tags.multi as string[]).push("first-only");
 
-  assertEquals([...second.projects], ["project"]);
-  assertEquals([...second.contexts], ["context"]);
-  assertEquals(second.tags.multi, ["one", "two"]);
+  expect([...second.projects]).toEqual(["project"]);
+  expect([...second.contexts]).toEqual(["context"]);
+  expect(second.tags.multi).toEqual(["one", "two"]);
 
   second.projects.add("second-only");
   second.contexts.add("second-only");
   (second.tags.multi as string[]).push("second-only");
 
-  assertEquals([...first.projects], ["project", "first-only"]);
-  assertEquals([...first.contexts], ["context", "first-only"]);
-  assertEquals(first.tags.multi, ["one", "two", "first-only"]);
+  expect([...first.projects]).toEqual(["project", "first-only"]);
+  expect([...first.contexts]).toEqual(["context", "first-only"]);
+  expect(first.tags.multi).toEqual(["one", "two", "first-only"]);
 
-  assertEquals([...base.projects], ["project"]);
-  assertEquals([...base.contexts], ["context"]);
-  assertEquals(base.tags.multi, ["one", "two"]);
+  expect([...base.projects]).toEqual(["project"]);
+  expect([...base.contexts]).toEqual(["context"]);
+  expect(base.tags.multi).toEqual(["one", "two"]);
 });
 
-Deno.test("addProject and addContext still return this when already present", () => {
+test("addProject and addContext still return this when already present", () => {
   const todo = new Todo("task +project @context");
 
-  assertEquals(todo.addProject("project"), todo);
-  assertEquals(todo.addContext("context"), todo);
+  expect(todo.addProject("project")).toEqual(todo);
+  expect(todo.addContext("context")).toEqual(todo);
 });

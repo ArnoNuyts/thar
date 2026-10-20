@@ -1,4 +1,5 @@
-import { assertStrictEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { render } from "ink-testing-library";
 import { type ReactElement, useContext, useEffect } from "react";
 
@@ -42,63 +43,48 @@ const assertStableAcrossRerender = async (
 
   try {
     await waitFor(() => {
-      assertStrictEquals(committedValues.length >= 1, true);
+      expect(committedValues.length >= 1).toBe(true);
     });
     const baseline = committedValues[committedValues.length - 1];
 
     rerender(tree());
 
     await waitFor(() => {
-      assertStrictEquals(committedValues.length >= 2, true);
+      expect(committedValues.length >= 2).toBe(true);
     });
     const latest = committedValues[committedValues.length - 1];
 
-    assertStrictEquals(latest.todo, baseline.todo);
-    assertStrictEquals(latest.nav, baseline.nav);
+    expect(latest.todo).toBe(baseline.todo);
+    expect(latest.nav).toBe(baseline.nav);
   } finally {
     unmount();
   }
 };
 
-Deno.test({
-  name: "TestWrapper: reuses context values when overrides are referentially stable",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const todoValue: Partial<TodoContextType> = {};
-    const navValue: Partial<NavigationContextType> = {};
-    await assertStableAcrossRerender(() => (
-      <TestWrapper todoValue={todoValue} navValue={navValue}>
-        <Probe />
-      </TestWrapper>
-    ));
-  },
+test("TestWrapper: reuses context values when overrides are referentially stable", async () => {
+  const todoValue: Partial<TodoContextType> = {};
+  const navValue: Partial<NavigationContextType> = {};
+  await assertStableAcrossRerender(() => (
+    <TestWrapper todoValue={todoValue} navValue={navValue}>
+      <Probe />
+    </TestWrapper>
+  ));
 });
 
-Deno.test({
-  name: "TestWrapper: reuses default context values when no overrides are given",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    await assertStableAcrossRerender(() => (
-      <TestWrapper>
-        <Probe />
-      </TestWrapper>
-    ));
-  },
+test("TestWrapper: reuses default context values when no overrides are given", async () => {
+  await assertStableAcrossRerender(() => (
+    <TestWrapper>
+      <Probe />
+    </TestWrapper>
+  ));
 });
 
-Deno.test({
-  name: "MockTodoProvider: reuses its context value when state is unchanged",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    await assertStableAcrossRerender(() => (
-      <ToasterProvider>
-        <MockTodoProvider>
-          <Probe />
-        </MockTodoProvider>
-      </ToasterProvider>
-    ));
-  },
+test("MockTodoProvider: reuses its context value when state is unchanged", async () => {
+  await assertStableAcrossRerender(() => (
+    <ToasterProvider>
+      <MockTodoProvider>
+        <Probe />
+      </MockTodoProvider>
+    </ToasterProvider>
+  ));
 });

@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
 
@@ -115,7 +116,7 @@ const renderHarness = (
 
 const waitForVisibleList = async (lastFrame: () => string | undefined) => {
   await waitFor(() => {
-    assertEquals(lastFrame()?.includes("Todo 1"), true);
+    expect(lastFrame()?.includes("Todo 1")).toEqual(true);
   });
 };
 
@@ -124,225 +125,189 @@ const todoSignature = (todos: Todos) =>
     .map((todo) => `${todo.text}:${todo.priority ?? "-"}:${todo.isDone()}`)
     .join("|");
 
-Deno.test({
-  name: "Todo commands: list and menu toggle the same selection",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const listResult: string[] = [];
-    {
-      const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = [...initial];
-      const harness = renderHarness(initial, (todos) => (captured = todos));
-      await waitForVisibleList(harness.lastFrame);
-      harness.getNav().navigateDown(true);
-      await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
+test("Todo commands: list and menu toggle the same selection", async () => {
+  const listResult: string[] = [];
+  {
+    const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
+    let captured = [...initial];
+    const harness = renderHarness(initial, (todos) => (captured = todos));
+    await waitForVisibleList(harness.lastFrame);
+    harness.getNav().navigateDown(true);
+    await waitFor(() => expect(harness.getSelectedCount()).toEqual(2));
 
-      harness.stdin.write(" ");
-      await waitFor(() => {
-        assertEquals(
-          captured.every((todo) => todo.isDone()),
-          true,
-        );
-      });
-      listResult.push(todoSignature(captured));
-      harness.unmount();
-    }
+    harness.stdin.write(" ");
+    await waitFor(() => {
+      expect(captured.every((todo) => todo.isDone())).toEqual(true);
+    });
+    listResult.push(todoSignature(captured));
+    harness.unmount();
+  }
 
-    {
-      const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = [...initial];
-      const harness = renderHarness(initial, (todos) => (captured = todos));
-      await waitForVisibleList(harness.lastFrame);
-      harness.getNav().navigateDown(true);
-      await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
+  {
+    const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
+    let captured = [...initial];
+    const harness = renderHarness(initial, (todos) => (captured = todos));
+    await waitForVisibleList(harness.lastFrame);
+    harness.getNav().navigateDown(true);
+    await waitFor(() => expect(harness.getSelectedCount()).toEqual(2));
 
-      harness.stdin.write("x");
-      await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true),
-      );
-      harness.stdin.write(" ");
-      await waitFor(() => {
-        assertEquals(
-          captured.every((todo) => todo.isDone()),
-          true,
-        );
-      });
-      listResult.push(todoSignature(captured));
-      harness.unmount();
-    }
-
-    assertEquals(listResult.length, 2);
-    assertEquals(listResult[0], listResult[1]);
-  },
-});
-
-Deno.test({
-  name: "Todo commands: list and menu delete the same selection",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const listResult: string[] = [];
-    {
-      const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = [...initial];
-      const harness = renderHarness(initial, (todos) => (captured = todos));
-      await waitForVisibleList(harness.lastFrame);
-      harness.getNav().navigateDown(true);
-      await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
-
-      harness.stdin.write("\x1b[3~");
-      await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Delete Todos"), true),
-      );
-      harness.stdin.write("\r");
-      await waitFor(() => assertEquals(captured.length, 0));
-      listResult.push(todoSignature(captured));
-      harness.unmount();
-    }
-
-    {
-      const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = [...initial];
-      const harness = renderHarness(initial, (todos) => (captured = todos));
-      await waitForVisibleList(harness.lastFrame);
-      harness.getNav().navigateDown(true);
-      await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
-
-      harness.stdin.write("x");
-      await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true),
-      );
-      harness.stdin.write("\x1b[3~");
-      await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Delete Todos"), true),
-      );
-      harness.stdin.write("\r");
-      await waitFor(() => assertEquals(captured.length, 0));
-      listResult.push(todoSignature(captured));
-      harness.unmount();
-    }
-
-    assertEquals(listResult.length, 2);
-    assertEquals(listResult[0], listResult[1]);
-  },
-});
-
-Deno.test({
-  name: "Todo commands: list and menu archive through the same confirmation",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const confirmations: string[] = [];
-
-    {
-      const initial = [new Todo("Todo 1")];
-      const harness = renderHarness(initial, () => {});
-      await waitForVisibleList(harness.lastFrame);
-
-      harness.stdin.write("a");
-      await waitFor(() =>
-        assertEquals(
-          harness
-            .lastFrame()
-            ?.includes("Archive all completed todos to done.txt?"),
-          true,
-        ),
-      );
-      confirmations.push(harness.lastFrame() ?? "");
-      harness.unmount();
-    }
-
-    {
-      const initial = [new Todo("Todo 1")];
-      const harness = renderHarness(initial, () => {});
-      await waitForVisibleList(harness.lastFrame);
-
-      harness.stdin.write("x");
-      await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Todo menu"), true),
-      );
-      harness.stdin.write("a");
-      await waitFor(() =>
-        assertEquals(
-          harness
-            .lastFrame()
-            ?.includes("Archive all completed todos to done.txt?"),
-          true,
-        ),
-      );
-      confirmations.push(harness.lastFrame() ?? "");
-      harness.unmount();
-    }
-
-    assertEquals(confirmations.length, 2);
-    assertEquals(
-      confirmations[0].includes("Archive all completed todos to done.txt?"),
-      true,
+    harness.stdin.write("x");
+    await waitFor(() =>
+      expect(harness.lastFrame()?.includes("Multi-select menu")).toEqual(true),
     );
-    assertEquals(
-      confirmations[1].includes("Archive all completed todos to done.txt?"),
-      true,
-    );
-  },
+    harness.stdin.write(" ");
+    await waitFor(() => {
+      expect(captured.every((todo) => todo.isDone())).toEqual(true);
+    });
+    listResult.push(todoSignature(captured));
+    harness.unmount();
+  }
+
+  expect(listResult.length).toEqual(2);
+  expect(listResult[0]).toEqual(listResult[1]);
 });
 
-Deno.test({
-  name: "Todo commands: list and menu set the same priority on a selection",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  async fn() {
-    const listResult: string[] = [];
-    {
-      const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = [...initial];
-      const harness = renderHarness(initial, (todos) => (captured = todos));
-      await waitForVisibleList(harness.lastFrame);
-      harness.getNav().navigateDown(true);
-      await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
+test("Todo commands: list and menu delete the same selection", async () => {
+  const listResult: string[] = [];
+  {
+    const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
+    let captured = [...initial];
+    const harness = renderHarness(initial, (todos) => (captured = todos));
+    await waitForVisibleList(harness.lastFrame);
+    harness.getNav().navigateDown(true);
+    await waitFor(() => expect(harness.getSelectedCount()).toEqual(2));
 
-      harness.stdin.write("A");
-      await waitFor(() => {
-        assertEquals(
-          captured.every((todo) => todo.priority === "A"),
-          true,
-        );
-      });
-      listResult.push(todoSignature(captured));
-      harness.unmount();
-    }
+    harness.stdin.write("\x1b[3~");
+    await waitFor(() =>
+      expect(harness.lastFrame()?.includes("Delete Todos")).toEqual(true),
+    );
+    harness.stdin.write("\r");
+    await waitFor(() => expect(captured.length).toEqual(0));
+    listResult.push(todoSignature(captured));
+    harness.unmount();
+  }
 
-    {
-      const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
-      let captured = [...initial];
-      const harness = renderHarness(initial, (todos) => (captured = todos));
-      await waitForVisibleList(harness.lastFrame);
-      harness.getNav().navigateDown(true);
-      await waitFor(() => assertEquals(harness.getSelectedCount(), 2));
+  {
+    const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
+    let captured = [...initial];
+    const harness = renderHarness(initial, (todos) => (captured = todos));
+    await waitForVisibleList(harness.lastFrame);
+    harness.getNav().navigateDown(true);
+    await waitFor(() => expect(harness.getSelectedCount()).toEqual(2));
 
-      harness.stdin.write("x");
-      await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true),
-      );
-      harness.stdin.write("p");
-      await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Set Priority"), true),
-      );
-      await waitFor(() =>
-        assertEquals(harness.getFocusedTag(), "set-priority-modal"),
-      );
-      harness.stdin.write("\r");
-      await waitFor(() => {
-        assertEquals(
-          captured.every((todo) => todo.priority === "A"),
-          true,
-        );
-      });
-      listResult.push(todoSignature(captured));
-      harness.unmount();
-    }
+    harness.stdin.write("x");
+    await waitFor(() =>
+      expect(harness.lastFrame()?.includes("Multi-select menu")).toEqual(true),
+    );
+    harness.stdin.write("\x1b[3~");
+    await waitFor(() =>
+      expect(harness.lastFrame()?.includes("Delete Todos")).toEqual(true),
+    );
+    harness.stdin.write("\r");
+    await waitFor(() => expect(captured.length).toEqual(0));
+    listResult.push(todoSignature(captured));
+    harness.unmount();
+  }
 
-    assertEquals(listResult.length, 2);
-    assertEquals(listResult[0], listResult[1]);
-  },
+  expect(listResult.length).toEqual(2);
+  expect(listResult[0]).toEqual(listResult[1]);
+});
+
+test("Todo commands: list and menu archive through the same confirmation", async () => {
+  const confirmations: string[] = [];
+
+  {
+    const initial = [new Todo("Todo 1")];
+    const harness = renderHarness(initial, () => {});
+    await waitForVisibleList(harness.lastFrame);
+
+    harness.stdin.write("a");
+    await waitFor(() =>
+      expect(
+        harness
+          .lastFrame()
+          ?.includes("Archive all completed todos to done.txt?"),
+      ).toEqual(true),
+    );
+    confirmations.push(harness.lastFrame() ?? "");
+    harness.unmount();
+  }
+
+  {
+    const initial = [new Todo("Todo 1")];
+    const harness = renderHarness(initial, () => {});
+    await waitForVisibleList(harness.lastFrame);
+
+    harness.stdin.write("x");
+    await waitFor(() =>
+      expect(harness.lastFrame()?.includes("Todo menu")).toEqual(true),
+    );
+    harness.stdin.write("a");
+    await waitFor(() =>
+      expect(
+        harness
+          .lastFrame()
+          ?.includes("Archive all completed todos to done.txt?"),
+      ).toEqual(true),
+    );
+    confirmations.push(harness.lastFrame() ?? "");
+    harness.unmount();
+  }
+
+  expect(confirmations.length).toEqual(2);
+  expect(
+    confirmations[0].includes("Archive all completed todos to done.txt?"),
+  ).toEqual(true);
+  expect(
+    confirmations[1].includes("Archive all completed todos to done.txt?"),
+  ).toEqual(true);
+});
+
+test("Todo commands: list and menu set the same priority on a selection", async () => {
+  const listResult: string[] = [];
+  {
+    const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
+    let captured = [...initial];
+    const harness = renderHarness(initial, (todos) => (captured = todos));
+    await waitForVisibleList(harness.lastFrame);
+    harness.getNav().navigateDown(true);
+    await waitFor(() => expect(harness.getSelectedCount()).toEqual(2));
+
+    harness.stdin.write("A");
+    await waitFor(() => {
+      expect(captured.every((todo) => todo.priority === "A")).toEqual(true);
+    });
+    listResult.push(todoSignature(captured));
+    harness.unmount();
+  }
+
+  {
+    const initial = [new Todo("Todo 1"), new Todo("Todo 2")];
+    let captured = [...initial];
+    const harness = renderHarness(initial, (todos) => (captured = todos));
+    await waitForVisibleList(harness.lastFrame);
+    harness.getNav().navigateDown(true);
+    await waitFor(() => expect(harness.getSelectedCount()).toEqual(2));
+
+    harness.stdin.write("x");
+    await waitFor(() =>
+      expect(harness.lastFrame()?.includes("Multi-select menu")).toEqual(true),
+    );
+    harness.stdin.write("p");
+    await waitFor(() =>
+      expect(harness.lastFrame()?.includes("Set Priority")).toEqual(true),
+    );
+    await waitFor(() =>
+      expect(harness.getFocusedTag()).toEqual("set-priority-modal"),
+    );
+    harness.stdin.write("\r");
+    await waitFor(() => {
+      expect(captured.every((todo) => todo.priority === "A")).toEqual(true);
+    });
+    listResult.push(todoSignature(captured));
+    harness.unmount();
+  }
+
+  expect(listResult.length).toEqual(2);
+  expect(listResult[0]).toEqual(listResult[1]);
 });

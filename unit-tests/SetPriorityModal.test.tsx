@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals, assertMatch } from "@std/assert";
+
 import { useEffect } from "react";
 import { Box } from "ink";
 
@@ -9,7 +10,7 @@ import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
 import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
-Deno.test("SetPriorityModal: should render and set focus", async () => {
+test("SetPriorityModal: should render and set focus", async () => {
   let focusedTag: string | undefined;
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Test Todo");
@@ -44,8 +45,8 @@ Deno.test("SetPriorityModal: should render and set focus", async () => {
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Set Priority/);
-    assertEquals(focusedTag, "set-priority-modal");
+    expect(lastFrame() || "").toMatch(/Set Priority/);
+    expect(focusedTag).toEqual("set-priority-modal");
   });
 
   // Options are A, B, C, D, E, F
@@ -53,13 +54,13 @@ Deno.test("SetPriorityModal: should render and set focus", async () => {
   stdin.write("\r"); // Select A
 
   await waitFor(() => {
-    assertEquals(updatedTodo?.priority, "A");
+    expect(updatedTodo?.priority).toEqual("A");
   });
 
   unmount();
 });
 
-Deno.test("SetPriorityModal: should update multiple todos", async () => {
+test("SetPriorityModal: should update multiple todos", async () => {
   let focusedTag: string | undefined;
   let updatedTodos: Todo[] = [];
   const todo1 = new Todo("Todo 1");
@@ -96,23 +97,23 @@ Deno.test("SetPriorityModal: should update multiple todos", async () => {
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Set Priority/);
-    assertEquals(focusedTag, "set-priority-modal");
+    expect(lastFrame() || "").toMatch(/Set Priority/);
+    expect(focusedTag).toEqual("set-priority-modal");
   });
 
   // Default is 'A', press Enter
   stdin.write("\r");
 
   await waitFor(() => {
-    assertEquals(updatedTodos.length, 2);
-    assertEquals(updatedTodos[0].priority, "A");
-    assertEquals(updatedTodos[1].priority, "A");
+    expect(updatedTodos.length).toEqual(2);
+    expect(updatedTodos[0].priority).toEqual("A");
+    expect(updatedTodos[1].priority).toEqual("A");
   });
 
   unmount();
 });
 
-Deno.test("SetPriorityModal: mouse click should select priority", async () => {
+test("SetPriorityModal: mouse click should select priority", async () => {
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Mouse Todo");
 
@@ -142,15 +143,15 @@ Deno.test("SetPriorityModal: mouse click should select priority", async () => {
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Priority/));
 
   // rows=20, columns=80, width=30, bodyRows=6 => first body row at y=9, x in [26..55]
   stdin.write("\x1b[<0;40;9M");
-  await waitFor(() => assertEquals(updatedTodo?.priority, "A"));
+  await waitFor(() => expect(updatedTodo?.priority).toEqual("A"));
   unmount();
 });
 
-Deno.test("SetPriorityModal: integration click maps first row on odd height", async () => {
+test("SetPriorityModal: integration click maps first row on odd height", async () => {
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Odd Rows Todo A");
 
@@ -180,19 +181,19 @@ Deno.test("SetPriorityModal: integration click maps first row on odd height", as
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Priority/));
 
   // rows=25, columns=101, width=30, bodyRows=6 => first body row at y=11, x in [36..65]
   stdin.write("\x1b[<0;36;11M");
 
   await waitFor(() => {
-    assertEquals(updatedTodo?.priority, "A");
+    expect(updatedTodo?.priority).toEqual("A");
   });
 
   unmount();
 });
 
-Deno.test("SetPriorityModal: integration click maps last row on odd height", async () => {
+test("SetPriorityModal: integration click maps last row on odd height", async () => {
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Odd Rows Todo F");
 
@@ -222,19 +223,19 @@ Deno.test("SetPriorityModal: integration click maps last row on odd height", asy
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Priority/));
 
   // rows=25, columns=101, width=30, bodyRows=6 => last body row at y=16 (index 5 => F)
   stdin.write("\x1b[<0;36;16M");
 
   await waitFor(() => {
-    assertEquals(updatedTodo?.priority, "F");
+    expect(updatedTodo?.priority).toEqual("F");
   });
 
   unmount();
 });
 
-Deno.test("SetPriorityModal: integration click maps first row on even height", async () => {
+test("SetPriorityModal: integration click maps first row on even height", async () => {
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Even Rows Todo A");
 
@@ -264,19 +265,19 @@ Deno.test("SetPriorityModal: integration click maps first row on even height", a
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Priority/));
 
   // rows=24, columns=101, width=30, bodyRows=6 => first body row at y=11
   stdin.write("\x1b[<0;36;11M");
 
   await waitFor(() => {
-    assertEquals(updatedTodo?.priority, "A");
+    expect(updatedTodo?.priority).toEqual("A");
   });
 
   unmount();
 });
 
-Deno.test("SetPriorityModal: integration click maps last row on even height", async () => {
+test("SetPriorityModal: integration click maps last row on even height", async () => {
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Even Rows Todo F");
 
@@ -306,13 +307,13 @@ Deno.test("SetPriorityModal: integration click maps last row on even height", as
     </TestWrapper>,
   );
 
-  await waitFor(() => assertMatch(lastFrame() || "", /Set Priority/));
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Priority/));
 
   // rows=24, columns=101, width=30, bodyRows=6 => last body row at y=16
   stdin.write("\x1b[<0;36;16M");
 
   await waitFor(() => {
-    assertEquals(updatedTodo?.priority, "F");
+    expect(updatedTodo?.priority).toEqual("F");
   });
 
   unmount();

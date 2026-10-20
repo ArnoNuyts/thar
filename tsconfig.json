@@ -14,12 +14,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node"],
-    "paths": {
-      "@std/assert": ["./test/assert.ts"],
-      "@std/async": ["./test/std-async.ts"],
-      "@std/path": ["./test/std-path.ts"]
-    }
+    "types": ["node"]
   },
   "include": [
     "main.tsx",
@@ -32,7 +27,6 @@
     "utils/**/*.ts",
     "scripts/**/*.ts",
     "scripts/**/*.tsx",
-    "test/**/*.ts",
     "unit-tests/**/*.ts",
     "unit-tests/**/*.tsx",
     "vite.config.ts",

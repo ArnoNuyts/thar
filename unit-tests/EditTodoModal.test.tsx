@@ -1,5 +1,6 @@
+import { expect, test } from "vitest";
 import { render } from "ink-testing-library";
-import { assertEquals, assertMatch } from "@std/assert";
+
 import { useEffect } from "react";
 import { Box } from "ink";
 
@@ -9,7 +10,7 @@ import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
 import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
-Deno.test("EditTodoModal: should render and set focus", async () => {
+test("EditTodoModal: should render and set focus", async () => {
   let focusedTag: string | undefined;
   let updatedText = "";
   const todo = new Todo("Initial Text");
@@ -43,26 +44,26 @@ Deno.test("EditTodoModal: should render and set focus", async () => {
   );
 
   await waitFor(() => {
-    assertEquals(focusedTag, "edit-todo-input");
-    assertMatch(lastFrame() || "", /Initial Text/);
+    expect(focusedTag).toEqual("edit-todo-input");
+    expect(lastFrame() || "").toMatch(/Initial Text/);
   });
 
   stdin.write(" ");
   stdin.write("Updated");
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Initial Text Updated/);
+    expect(lastFrame() || "").toMatch(/Initial Text Updated/);
   });
 
   stdin.write("\r");
   await waitFor(() => {
-    assertEquals(updatedText, "Initial Text Updated");
+    expect(updatedText).toEqual("Initial Text Updated");
   });
 
   unmount();
 });
 
-Deno.test("EditTodoModal: preserves tags when editing text", async () => {
+test("EditTodoModal: preserves tags when editing text", async () => {
   let updatedTodo: Todo | undefined;
   // todo.text has its tags stripped, which is what the modal starts with.
   const todo = new Todo("Initial Text rec:1d due:2026-10-25 t:2026-10-22 h:1");
@@ -94,20 +95,20 @@ Deno.test("EditTodoModal: preserves tags when editing text", async () => {
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Initial Text/);
+    expect(lastFrame() || "").toMatch(/Initial Text/);
   });
 
   stdin.write(" ");
   stdin.write("Updated");
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Initial Text Updated/);
+    expect(lastFrame() || "").toMatch(/Initial Text Updated/);
   });
 
   stdin.write("\r");
   await waitFor(() => {
-    assertEquals(updatedTodo?.text, "Initial Text Updated");
-    assertEquals(updatedTodo?.tags, {
+    expect(updatedTodo?.text).toEqual("Initial Text Updated");
+    expect(updatedTodo?.tags).toEqual({
       rec: "1d",
       due: "2026-10-25",
       t: "2026-10-22",
@@ -118,7 +119,7 @@ Deno.test("EditTodoModal: preserves tags when editing text", async () => {
   unmount();
 });
 
-Deno.test("EditTodoModal: tags typed in the modal override preserved tags", async () => {
+test("EditTodoModal: tags typed in the modal override preserved tags", async () => {
   let updatedTodo: Todo | undefined;
   const todo = new Todo("Initial Text rec:1d due:2026-10-25");
 
@@ -149,20 +150,20 @@ Deno.test("EditTodoModal: tags typed in the modal override preserved tags", asyn
   );
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Initial Text/);
+    expect(lastFrame() || "").toMatch(/Initial Text/);
   });
 
   stdin.write(" ");
   stdin.write("rec:2d");
 
   await waitFor(() => {
-    assertMatch(lastFrame() || "", /Initial Text rec:2d/);
+    expect(lastFrame() || "").toMatch(/Initial Text rec:2d/);
   });
 
   stdin.write("\r");
   await waitFor(() => {
-    assertEquals(updatedTodo?.text, "Initial Text");
-    assertEquals(updatedTodo?.tags, {
+    expect(updatedTodo?.text).toEqual("Initial Text");
+    expect(updatedTodo?.tags).toEqual({
       rec: "2d",
       due: "2026-10-25",
     });

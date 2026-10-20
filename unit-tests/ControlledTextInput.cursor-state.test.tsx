@@ -1,9 +1,10 @@
-import { assertEquals } from "@std/assert";
+import { expect, test } from "vitest";
+
 import { render } from "ink-testing-library";
 import { ControlledTextInput } from "../components/ControlledTextInput.tsx";
 import { waitFor } from "./test-utils.ts";
 
-Deno.test("ControlledTextInput - a changed controlled cursor moves the insertion point", async () => {
+test("ControlledTextInput - a changed controlled cursor moves the insertion point", async () => {
   const changes: string[] = [];
   const cursorEvents: Array<{ offset: number; value: string }> = [];
 
@@ -24,15 +25,15 @@ Deno.test("ControlledTextInput - a changed controlled cursor moves the insertion
     await stdin.write("X");
 
     await waitFor(() => {
-      assertEquals(changes, ["heXllo"]);
-      assertEquals(cursorEvents.at(-1), { offset: 3, value: "heXllo" });
+      expect(changes).toEqual(["heXllo"]);
+      expect(cursorEvents.at(-1)).toEqual({ offset: 3, value: "heXllo" });
     });
   } finally {
     unmount();
   }
 });
 
-Deno.test("ControlledTextInput - the initial controlled cursor is used by the first keypress", async () => {
+test("ControlledTextInput - the initial controlled cursor is used by the first keypress", async () => {
   let value = "hello";
 
   const { stdin, unmount } = render(
@@ -49,14 +50,14 @@ Deno.test("ControlledTextInput - the initial controlled cursor is used by the fi
     await stdin.write("X");
 
     await waitFor(() => {
-      assertEquals(value, "heXllo");
+      expect(value).toEqual("heXllo");
     });
   } finally {
     unmount();
   }
 });
 
-Deno.test("ControlledTextInput - uncontrolled cursor is clamped when the value shrinks", async () => {
+test("ControlledTextInput - uncontrolled cursor is clamped when the value shrinks", async () => {
   let value = "hello world";
 
   const tree = (nextValue: string) => (
@@ -77,14 +78,14 @@ Deno.test("ControlledTextInput - uncontrolled cursor is clamped when the value s
     await stdin.write("X");
 
     await waitFor(() => {
-      assertEquals(value, "hellXo");
+      expect(value).toEqual("hellXo");
     });
   } finally {
     unmount();
   }
 });
 
-Deno.test("ControlledTextInput - uncontrolled cursor follows arrow keys before typing", async () => {
+test("ControlledTextInput - uncontrolled cursor follows arrow keys before typing", async () => {
   let value = "hello";
 
   const { stdin, unmount } = render(
@@ -102,7 +103,7 @@ Deno.test("ControlledTextInput - uncontrolled cursor follows arrow keys before t
     await stdin.write("X");
 
     await waitFor(() => {
-      assertEquals(value, "hellXo");
+      expect(value).toEqual("hellXo");
     });
   } finally {
     unmount();
