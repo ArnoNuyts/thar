@@ -53,9 +53,28 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: "Paste", shortcut: "v", action: "paste" },
 ];
 
+/**
+ * Actions that operate on every todo in the current selection.
+ *
+ * Edit only accepts one todo, while archive, show/hide hidden, undo, redo and
+ * paste are global commands. Those stay in the single-todo menu.
+ */
+export const MULTI_SELECT_MENU_ITEMS: MenuItem[] = [
+  { label: "Delete", shortcut: "del", action: "delete" },
+  { label: "Toggle Complete", shortcut: "space", action: "toggle" },
+  { label: "Set Due Date", shortcut: "d", action: "due" },
+  { label: "Set Threshold Date", shortcut: "t", action: "threshold" },
+  { label: "Set Recurrence", shortcut: "r", action: "recurrence" },
+  { label: "Set Priority", shortcut: "p", action: "priority" },
+  { label: "Modify Projects", shortcut: "+", action: "add-project" },
+  { label: "Modify Contexts", shortcut: "@", action: "add-context" },
+  { label: "Toggle Hidden", shortcut: "h", action: "toggle-hidden" },
+  { label: "Copy", shortcut: "c", action: "copy" },
+];
+
 // Display shortcuts that describe a named key rather than a typed character.
-// Keeping the canonical names here means dispatch reads the same MENU_ITEMS
-// data that the menu renders.
+// Keeping the canonical names here means dispatch reads the same item data
+// that the menu renders.
 const NAMED_SHORTCUTS: Record<string, string> = {
   del: "delete",
   delete: "delete",
@@ -64,12 +83,15 @@ const NAMED_SHORTCUTS: Record<string, string> = {
   escape: "escape",
 };
 
-const MENU_SHORTCUT_ACTIONS = new Map<string, MenuAction>(
-  MENU_ITEMS.map((item) => [
-    NAMED_SHORTCUTS[item.shortcut] ?? item.shortcut,
-    item.action,
-  ]),
-);
+const buildShortcutActions = (items: MenuItem[]) =>
+  new Map<string, MenuAction>(
+    items.map((item) => [
+      NAMED_SHORTCUTS[item.shortcut] ?? item.shortcut,
+      item.action,
+    ]),
+  );
+
+const MENU_SHORTCUT_ACTIONS = buildShortcutActions(MENU_ITEMS);
 
 const normalizeInput = (input: string, key: Key): string => {
   if (key.delete) return "delete";
@@ -82,11 +104,17 @@ const normalizeInput = (input: string, key: Key): string => {
 export const resolveMenuShortcut = (
   input: string,
   key: Key,
+  items: MenuItem[] = MENU_ITEMS,
 ): MenuAction | undefined => {
-  return MENU_SHORTCUT_ACTIONS.get(normalizeInput(input, key));
+  const actions = items === MENU_ITEMS
+    ? MENU_SHORTCUT_ACTIONS
+    : buildShortcutActions(items);
+  return actions.get(normalizeInput(input, key));
 };
 
-export const TodoMenu = () => {
+const TodoMenuView = (
+  { items, title }: { items: MenuItem[]; title: string },
+) => {
   const { closeModal } = useModal();
   const commands = useTodoCommands();
   const [layoutSize, setLayoutSize] = useState<
@@ -147,8 +175,8 @@ export const TodoMenu = () => {
   };
 
   const selection = useListSelection({
-    itemCount: MENU_ITEMS.length,
-    onSelect: (index) => handleAction(MENU_ITEMS[index].action),
+    itemCount: items.length,
+    onSelect: (index) => handleAction(items[index].action),
     onCancel: closeModal,
   });
 
@@ -156,7 +184,7 @@ export const TodoMenu = () => {
     (input, key) => {
       if (selection.handleKey(key)) return;
 
-      const action = resolveMenuShortcut(input, key);
+      const action = resolveMenuShortcut(input, key, items);
       if (action) {
         handleAction(action);
       }
@@ -167,7 +195,7 @@ export const TodoMenu = () => {
   useModalMouseList({
     isActive: isFocused,
     modalWidth: "50%",
-    bodyRows: MENU_ITEMS.length,
+    bodyRows: items.length,
     terminalSize: layoutSize,
     onRowClick: selection.selectAt,
     onRowHover: selection.setSelectedIndex,
@@ -176,11 +204,11 @@ export const TodoMenu = () => {
   return (
     // @ts-ignore: children prop issue
     <Modal
-      title="Todo menu"
+      title={title}
       onLayoutSizeChange={setLayoutSize}
     >
       <Box flexDirection="column">
-        {MENU_ITEMS.map((item, index) => {
+        {items.map((item, index) => {
           const isSelected = index === selection.selectedIndex;
           return (
             <Box
@@ -204,3 +232,11 @@ export const TodoMenu = () => {
     </Modal>
   );
 };
+
+export const TodoMenu = () => (
+  <TodoMenuView items={MENU_ITEMS} title="Todo menu" />
+);
+
+export const MultiSelectMenu = () => (
+  <TodoMenuView items={MULTI_SELECT_MENU_ITEMS} title="Multi-select menu" />
+);

@@ -16,7 +16,7 @@ import { ActionBar } from "../components/ActionBar.tsx";
 import { ConfirmModal } from "../components/ConfirmModal.tsx";
 import { SetPriorityModal } from "../components/SetPriorityModal.tsx";
 import { TodoList } from "../components/TodoList.tsx";
-import { TodoMenu } from "../components/TodoMenu.tsx";
+import { MultiSelectMenu, TodoMenu } from "../components/TodoMenu.tsx";
 
 import { FocusProvider } from "../contexts/focus-context.tsx";
 import {
@@ -55,6 +55,7 @@ const ModalHost = () => {
         />
       )}
       {activeModal === "todo-menu" && <TodoMenu />}
+      {activeModal === "multi-select-menu" && <MultiSelectMenu />}
       {activeModal === "set-priority" && <SetPriorityModal />}
       {activeModal === "set-due-date" && <Text>Set Due Date Modal</Text>}
       {activeModal === "set-threshold-date" && (
@@ -161,7 +162,7 @@ Deno.test({
 
       harness.stdin.write("x");
       await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Todo menu"), true)
+        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true)
       );
       harness.stdin.write(" ");
       await waitFor(() => {
@@ -219,7 +220,7 @@ Deno.test({
 
       harness.stdin.write("x");
       await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Todo menu"), true)
+        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true)
       );
       harness.stdin.write("\x1b[3~");
       await waitFor(() =>
@@ -339,7 +340,7 @@ Deno.test({
 
       harness.stdin.write("x");
       await waitFor(() =>
-        assertEquals(harness.lastFrame()?.includes("Todo menu"), true)
+        assertEquals(harness.lastFrame()?.includes("Multi-select menu"), true)
       );
       harness.stdin.write("p");
       await waitFor(() =>
