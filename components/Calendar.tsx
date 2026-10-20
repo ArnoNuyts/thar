@@ -16,7 +16,7 @@ import {
 } from "date-fns";
 import { Box, Text } from "ink";
 import { useInput } from "../hooks/useInput.ts";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { COLORS } from "../theme/colors.ts";
 
 interface CalendarProps {
@@ -29,7 +29,18 @@ interface CalendarProps {
 export const Calendar: React.FC<CalendarProps> = (
   { value, onChange, onSubmit, isFocused },
 ) => {
-  const [viewDate, setViewDate] = useState(startOfMonth(value));
+  const [viewDate, setViewDate] = useState(() => startOfMonth(value));
+  const [syncedValue, setSyncedValue] = useState(value);
+
+  // When the selected value moves to a different month (month navigation or a
+  // parent update), adjust the visible month during render. Doing this during
+  // render instead of in an effect avoids committing a frame with the stale
+  // month. Tracking the value that was last synced keeps `viewDate` free to be
+  // paged independently within its month.
+  if (!isSameMonth(value, syncedValue)) {
+    setSyncedValue(value);
+    setViewDate(startOfMonth(value));
+  }
 
   useInput((_input, key) => {
     switch (true) {
@@ -58,13 +69,6 @@ export const Calendar: React.FC<CalendarProps> = (
         break;
     }
   }, { isActive: isFocused });
-
-  // Keep viewDate in sync with value if value moves out of view
-  useEffect(() => {
-    if (!isSameMonth(value, viewDate)) {
-      setViewDate(startOfMonth(value));
-    }
-  }, [value, viewDate]);
 
   const monthStart = startOfMonth(viewDate);
   const monthEnd = endOfMonth(monthStart);

@@ -9,6 +9,7 @@ import { useTodoCommands } from "../hooks/useTodoCommands.ts";
 import { IndexEntry } from "../logic/indexes.ts";
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
+import type { UpperCaseLetter } from "../types/types.ts";
 import { isPriorityInput } from "../logic/priority.ts";
 import { TodoListScrollbar } from "./TodoListScrollbar.tsx";
 import { COLORS } from "../theme/colors.ts";
@@ -58,6 +59,86 @@ export const renderTodoText = (
   });
 };
 
+const PRIORITY_COLORS: Partial<Record<UpperCaseLetter, string>> = {
+  A: COLORS.priorityA,
+  B: COLORS.priorityB,
+  C: COLORS.priorityC,
+  D: COLORS.priorityD,
+  E: COLORS.priorityE,
+  F: COLORS.priorityF,
+};
+
+/** Highlighted rows use one foreground color for every segment. */
+const highlightedOr = (
+  isHighlighted: boolean,
+  fallback: string | undefined,
+) => (isHighlighted ? COLORS.textOnHighlight : fallback);
+
+const getTextColor = (isHighlighted: boolean, isOverdue: boolean) =>
+  highlightedOr(isHighlighted, isOverdue ? COLORS.danger : undefined);
+
+const getBackgroundColor = (
+  isFocused: boolean,
+  isSelectedInRange: boolean,
+  isOverdue: boolean,
+) => {
+  if (isFocused) {
+    return isOverdue ? COLORS.focusBackgroundOverdue : COLORS.focusBackground;
+  }
+  return isSelectedInRange ? COLORS.selectionBackground : undefined;
+};
+
+const getCheckbox = (isDone: boolean) => (isDone ? "[x]" : "[ ]");
+
+const getPaddedNumber = (number: number, maxDigits: number) =>
+  // Pad the number with spaces to align with the maximum number of digits
+  number.toString().padStart(maxDigits, " ");
+
+const TodoPriority = (
+  { priority, isHighlighted }: {
+    priority: UpperCaseLetter | undefined;
+    isHighlighted: boolean;
+  },
+) => {
+  if (!priority) return null;
+  return (
+    <Text color={highlightedOr(isHighlighted, PRIORITY_COLORS[priority])}>
+      {`(${priority}) `}
+    </Text>
+  );
+};
+
+type TodoSuffix = { text: string; color: string };
+
+const getTodoSuffixes = (todo: Todo): TodoSuffix[] => {
+  const suffixes: TodoSuffix[] = [];
+  if (todo.tags.due) {
+    suffixes.push({ text: `due:${todo.tags.due}`, color: COLORS.danger });
+  }
+  if (todo.tags.t) {
+    suffixes.push({ text: `t:${todo.tags.t}`, color: COLORS.success });
+  }
+  if (todo.tags.rec) {
+    suffixes.push({ text: `rec:${todo.tags.rec}`, color: COLORS.info });
+  }
+  return suffixes;
+};
+
+const TodoSuffixes = (
+  { todo, isHighlighted }: { todo: Todo; isHighlighted: boolean },
+) => (
+  <>
+    {getTodoSuffixes(todo).map((suffix) => (
+      <Text
+        key={suffix.text}
+        color={highlightedOr(isHighlighted, suffix.color)}
+      >
+        {` ${suffix.text}`}
+      </Text>
+    ))}
+  </>
+);
+
 const TodoItem = (
   { todo, isFocused, isSelectedInRange, number, maxDigits }: {
     todo: Todo;
@@ -68,78 +149,31 @@ const TodoItem = (
     key?: React.Key;
   },
 ) => {
-  const checkbox = todo.isDone() ? "[x]" : "[ ]";
-  const priority = todo.priority ? `(${todo.priority})` : "";
-  const dueDate = todo.tags.due ? `due:${todo.tags.due}` : "";
-  const threshold = todo.tags.t ? `t:${todo.tags.t}` : "";
-  const recurrence = todo.tags.rec ? `rec:${todo.tags.rec}` : "";
   const isOverdue = todo.isOverdue();
-
-  // Pad the number with spaces to align with the maximum number of digits
-  const paddedNumber = number.toString().padStart(maxDigits, " ");
-
   const isHighlighted = isFocused || isSelectedInRange;
-  const backgroundColor = isFocused
-    ? (isOverdue ? COLORS.focusBackgroundOverdue : COLORS.focusBackground)
-    : (isSelectedInRange ? COLORS.selectionBackground : undefined);
+  const textColor = getTextColor(isHighlighted, isOverdue);
 
   return (
     <Box
-      backgroundColor={backgroundColor}
+      backgroundColor={getBackgroundColor(
+        isFocused,
+        isSelectedInRange,
+        isOverdue,
+      )}
     >
       <Text wrap="truncate">
-        <Text
-          dimColor
-          color={isHighlighted
-            ? COLORS.textOnHighlight
-            : (isOverdue ? COLORS.danger : undefined)}
-        >
-          {` ${paddedNumber} `}
+        <Text dimColor color={textColor}>
+          {` ${getPaddedNumber(number, maxDigits)} `}
         </Text>
-        <Text
-          color={isHighlighted
-            ? COLORS.textOnHighlight
-            : (isOverdue ? COLORS.danger : undefined)}
-        >
-          {`${checkbox} `}
+        <Text color={textColor}>
+          {`${getCheckbox(todo.isDone())} `}
         </Text>
-        {priority && (
-          <Text
-            color={isHighlighted
-              ? COLORS.textOnHighlight
-              : todo.priority === "A"
-              ? COLORS.priorityA
-              : todo.priority === "B"
-              ? COLORS.priorityB
-              : todo.priority === "C"
-              ? COLORS.priorityC
-              : todo.priority === "D"
-              ? COLORS.priorityD
-              : todo.priority === "E"
-              ? COLORS.priorityE
-              : todo.priority === "F"
-              ? COLORS.priorityF
-              : undefined}
-          >
-            {`${priority} `}
-          </Text>
-        )}
+        <TodoPriority
+          priority={todo.priority}
+          isHighlighted={isHighlighted}
+        />
         {renderTodoText(todo.text, isHighlighted, isOverdue)}
-        {dueDate && (
-          <Text color={isHighlighted ? COLORS.textOnHighlight : COLORS.danger}>
-            {` ${dueDate}`}
-          </Text>
-        )}
-        {threshold && (
-          <Text color={isHighlighted ? COLORS.textOnHighlight : COLORS.success}>
-            {` ${threshold}`}
-          </Text>
-        )}
-        {recurrence && (
-          <Text color={isHighlighted ? COLORS.textOnHighlight : COLORS.info}>
-            {` ${recurrence}`}
-          </Text>
-        )}
+        <TodoSuffixes todo={todo} isHighlighted={isHighlighted} />
       </Text>
     </Box>
   );

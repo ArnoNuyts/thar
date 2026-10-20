@@ -3,6 +3,7 @@ import {
   ReactNode,
   useCallback,
   useContext,
+  useMemo,
   useState,
 } from "react";
 
@@ -27,8 +28,13 @@ export const FocusProvider = ({ children }: { children?: ReactNode }) => {
 
   const activeId = stack[stack.length - 1] || null;
 
+  const value = useMemo(
+    () => ({ activeId, requestFocus, releaseFocus }),
+    [activeId, requestFocus, releaseFocus],
+  );
+
   return (
-    <FocusContext.Provider value={{ activeId, requestFocus, releaseFocus }}>
+    <FocusContext.Provider value={value}>
       {children}
     </FocusContext.Provider>
   );

@@ -6,6 +6,7 @@ import {
   ReactElement,
   ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -75,7 +76,10 @@ const ButtonGroup = ({
   const isControlled = selectedIndex !== undefined;
   const activeIndex = isControlled ? selectedIndex : internalIndex;
   const activeIndexRef = useRef(activeIndex);
-  activeIndexRef.current = activeIndex;
+
+  useLayoutEffect(() => {
+    activeIndexRef.current = activeIndex;
+  });
 
   useEffect(() => {
     if (buttonChildren.length === 0) return;

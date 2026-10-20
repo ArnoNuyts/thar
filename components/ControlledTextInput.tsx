@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Text } from "ink";
 import chalk from "chalk";
-import { useInput } from "../hooks/useInput.ts";
+import { type Key, useInput } from "../hooks/useInput.ts";
 
 interface ControlledTextInputProps {
   value: string;
@@ -59,6 +59,168 @@ function moveWordRight(
   return newOffset;
 }
 
+interface EditResult {
+  value: string;
+  cursorOffset: number;
+}
+
+/** Apply cursor movement keys, or return null for other keys. */
+function moveCursor(
+  value: string,
+  offset: number,
+  key: Key,
+): number | null {
+  if (key.leftArrow) {
+    return key.ctrl ? moveWordLeft(value, offset) : Math.max(0, offset - 1);
+  }
+  if (key.rightArrow) {
+    return key.ctrl
+      ? moveWordRight(value, offset)
+      : Math.min(value.length, offset + 1);
+  }
+  if (key.home) {
+    return 0;
+  }
+  if (key.end) {
+    return value.length;
+  }
+
+  return null;
+}
+
+/** Apply Backspace/Delete, or return null for other keys. */
+function deleteAtCursor(
+  value: string,
+  offset: number,
+  key: Key,
+): EditResult | null {
+  if (key.backspace) {
+    if (offset === 0) {
+      return { value, cursorOffset: offset };
+    }
+
+    if (key.ctrl || key.meta) {
+      const start = moveWordLeft(value, offset);
+      return {
+        value: value.slice(0, start) + value.slice(offset),
+        cursorOffset: start,
+      };
+    }
+
+    return {
+      value: value.slice(0, offset - 1) + value.slice(offset),
+      cursorOffset: offset - 1,
+    };
+  }
+
+  if (key.delete) {
+    if (offset >= value.length) {
+      return { value, cursorOffset: offset };
+    }
+
+    if (key.ctrl || key.meta) {
+      const end = moveWordRight(value, offset, value[offset] === " ");
+      return {
+        value: value.slice(0, offset) + value.slice(end),
+        cursorOffset: offset,
+      };
+    }
+
+    return {
+      value: value.slice(0, offset) + value.slice(offset + 1),
+      cursorOffset: offset,
+    };
+  }
+
+  return null;
+}
+
+/** Apply typed or pasted text, or return null when there is nothing to insert. */
+function insertAtCursor(
+  value: string,
+  offset: number,
+  input: string,
+): EditResult | null {
+  // Filter out newlines (e.g. from pasted text).
+  let text = input.replace(/[\r\n]+/g, "");
+  if (text.length === 0) {
+    return null;
+  }
+
+  // Multi-character input is treated as a paste; trim surrounding spaces.
+  if (text.length > 1) {
+    text = text.trim();
+  }
+
+  return {
+    value: value.slice(0, offset) + text + value.slice(offset),
+    cursorOffset: offset + text.length,
+  };
+}
+
+interface RenderedText {
+  renderedValue: string;
+  renderedPlaceholder: string | undefined;
+}
+
+/** Render the value with an inverse-video cursor at `cursorOffset`. */
+function renderText(
+  value: string,
+  cursorOffset: number,
+  placeholder: string,
+  showCursor: boolean,
+  focus: boolean,
+): RenderedText {
+  if (!showCursor || !focus) {
+    return {
+      renderedValue: value,
+      renderedPlaceholder: placeholder ? chalk.grey(placeholder) : undefined,
+    };
+  }
+
+  const renderedPlaceholder = placeholder.length > 0
+    ? chalk.inverse(placeholder[0]) + chalk.grey(placeholder.slice(1))
+    : chalk.inverse(" ");
+
+  let renderedValue = value.length > 0 ? "" : chalk.inverse(" ");
+
+  let i = 0;
+  for (const char of value) {
+    renderedValue += i === cursorOffset ? chalk.inverse(char) : char;
+    i++;
+  }
+
+  if (value.length > 0 && cursorOffset === value.length) {
+    renderedValue += chalk.inverse(" ");
+  }
+
+  return { renderedValue, renderedPlaceholder };
+}
+
+/** Resolve a key press into the next value and cursor offset. */
+function resolveEdit(
+  value: string,
+  offset: number,
+  input: string,
+  key: Key,
+  showCursor: boolean,
+): EditResult | null {
+  if (key.leftArrow || key.rightArrow || key.home || key.end) {
+    const nextOffset = showCursor ? moveCursor(value, offset, key) : offset;
+    return { value, cursorOffset: nextOffset ?? offset };
+  }
+
+  if (key.backspace || key.delete) {
+    return deleteAtCursor(value, offset, key);
+  }
+
+  if (input.length > 0 && !key.ctrl && !key.meta) {
+    return insertAtCursor(value, offset, input);
+  }
+
+  return null;
+}
+
 export function ControlledTextInput({
   value: originalValue,
   placeholder = "",
@@ -69,240 +231,89 @@ export function ControlledTextInput({
   onSubmit,
   onCursorChange,
 }: ControlledTextInputProps) {
+  const value = originalValue;
   const [internalCursorOffset, setInternalCursorOffset] = useState(
-    (originalValue || "").length,
+    value.length,
   );
 
-  // Use controlled cursor offset if provided, otherwise use internal state
-  const cursorOffset = controlledCursorOffset ?? internalCursorOffset;
+  // A controlled offset always wins. In uncontrolled mode, clamp the stored
+  // cursor while rendering so a shorter value can never leave it out of range.
+  const cursorOffset = controlledCursorOffset ??
+    Math.min(internalCursorOffset, value.length);
 
   // Track latest values in REFs to avoid stale closures in useInput
-  const valueRef = useRef(originalValue);
+  const valueRef = useRef(value);
   const cursorOffsetRef = useRef(cursorOffset);
 
   useEffect(() => {
-    valueRef.current = originalValue;
-  }, [originalValue]);
+    valueRef.current = value;
+  }, [value]);
 
   useEffect(() => {
     cursorOffsetRef.current = cursorOffset;
   }, [cursorOffset]);
 
-  // Sync cursor when controlled offset changes
-  useEffect(() => {
-    if (controlledCursorOffset !== undefined) {
-      setInternalCursorOffset(controlledCursorOffset);
-    }
-  }, [controlledCursorOffset]);
-
-  // Adjust cursor if it goes beyond value length
-  useEffect(() => {
-    if (!focus || !showCursor) {
-      return;
-    }
-
-    const newValue = originalValue || "";
-
-    if (internalCursorOffset > newValue.length) {
-      setInternalCursorOffset(newValue.length);
-      onCursorChange?.(newValue.length, newValue);
-    }
-  }, [originalValue, focus, showCursor, internalCursorOffset, onCursorChange]);
-
-  const value = originalValue;
-  let renderedValue = value;
-  let renderedPlaceholder = placeholder ? chalk.grey(placeholder) : undefined;
-
-  // Render cursor
-  if (showCursor && focus) {
-    renderedPlaceholder = placeholder.length > 0
-      ? chalk.inverse(placeholder[0]) + chalk.grey(placeholder.slice(1))
-      : chalk.inverse(" ");
-
-    renderedValue = value.length > 0 ? "" : chalk.inverse(" ");
-
-    let i = 0;
-    for (const char of value) {
-      renderedValue += i === cursorOffset ? chalk.inverse(char) : char;
-      i++;
-    }
-
-    if (value.length > 0 && cursorOffset === value.length) {
-      renderedValue += chalk.inverse(" ");
-    }
-  }
+  const { renderedValue, renderedPlaceholder } = renderText(
+    value,
+    cursorOffset,
+    placeholder,
+    showCursor,
+    focus,
+  );
 
   useInput(
     (input, key) => {
       // Use REFs for latest state
-      const currentOriginalValue = valueRef.current;
+      const currentValue = valueRef.current;
       const currentCursorOffset = cursorOffsetRef.current;
 
-      let nextCursorOffset = currentCursorOffset;
-      let nextValue = currentOriginalValue;
-
-      switch (true) {
-        case key.upArrow:
-        case key.downArrow:
-        case key.tab:
-        case key.ctrl && input === "c":
-          return;
-
-        case key.return:
-          onSubmit?.(currentOriginalValue);
-          return;
-
-        case key.escape:
-          // Don't handle escape here, let parent handle it
-          return;
-
-        case key.leftArrow:
-          if (showCursor) {
-            if (key.ctrl) {
-              nextCursorOffset = moveWordLeft(
-                currentOriginalValue,
-                currentCursorOffset,
-              );
-            } else {
-              nextCursorOffset = Math.max(0, currentCursorOffset - 1);
-            }
-          }
-          break;
-
-        case key.rightArrow:
-          if (showCursor) {
-            if (key.ctrl) {
-              nextCursorOffset = moveWordRight(
-                currentOriginalValue,
-                currentCursorOffset,
-              );
-            } else {
-              nextCursorOffset = Math.min(
-                currentOriginalValue.length,
-                currentCursorOffset + 1,
-              );
-            }
-          }
-          break;
-
-        case key.home:
-          if (showCursor) {
-            nextCursorOffset = 0;
-          }
-          break;
-
-        case key.end:
-          if (showCursor) {
-            nextCursorOffset = currentOriginalValue.length;
-          }
-          break;
-
-        case key.backspace:
-          if (currentCursorOffset > 0) {
-            if (key.ctrl || key.meta) {
-              // Ctrl+Backspace: delete word before cursor
-              const newPos = moveWordLeft(
-                currentOriginalValue,
-                currentCursorOffset,
-              );
-
-              nextValue = currentOriginalValue.slice(0, newPos) +
-                currentOriginalValue.slice(
-                  currentCursorOffset,
-                  currentOriginalValue.length,
-                );
-              nextCursorOffset = newPos;
-            } else {
-              // Backspace: delete character before cursor
-              nextValue =
-                currentOriginalValue.slice(0, currentCursorOffset - 1) +
-                currentOriginalValue.slice(
-                  currentCursorOffset,
-                  currentOriginalValue.length,
-                );
-              nextCursorOffset = currentCursorOffset - 1;
-            }
-          }
-          break;
-
-        case key.delete:
-          if (currentCursorOffset < currentOriginalValue.length) {
-            if (key.ctrl || key.meta) {
-              // Ctrl+Delete: delete word after cursor
-              const startOnSpace =
-                currentOriginalValue[currentCursorOffset] === " ";
-              const newPos = moveWordRight(
-                currentOriginalValue,
-                currentCursorOffset,
-                startOnSpace,
-              );
-
-              nextValue = currentOriginalValue.slice(0, currentCursorOffset) +
-                currentOriginalValue.slice(newPos, currentOriginalValue.length);
-              nextCursorOffset = currentCursorOffset;
-            } else {
-              // Delete: delete character at cursor
-              nextValue = currentOriginalValue.slice(0, currentCursorOffset) +
-                currentOriginalValue.slice(
-                  currentCursorOffset + 1,
-                  currentOriginalValue.length,
-                );
-              nextCursorOffset = currentCursorOffset;
-            }
-          }
-          break;
-
-        default:
-          if (input.length > 0 && !key.ctrl && !key.meta) {
-            // Filter out newlines (e.g. from pasted text)
-            let cleanInput = input.replace(/[\r\n]+/g, "");
-            if (cleanInput.length === 0) return;
-
-            // If input is longer than 1 character, assume it's a paste and trim surrounding spaces
-            if (cleanInput.length > 1) {
-              cleanInput = cleanInput.trim();
-            }
-
-            nextValue = currentOriginalValue.slice(0, currentCursorOffset) +
-              cleanInput +
-              currentOriginalValue.slice(
-                currentCursorOffset,
-                currentOriginalValue.length,
-              );
-            nextCursorOffset = currentCursorOffset + cleanInput.length;
-          } else {
-            // No relevant key or text input, return early
-            return;
-          }
-          break;
+      if (
+        key.upArrow || key.downArrow || key.tab ||
+        (key.ctrl && input === "c")
+      ) {
+        return;
       }
 
-      // Bounds check
-      if (nextCursorOffset < 0) {
-        nextCursorOffset = 0;
+      if (key.return) {
+        onSubmit?.(currentValue);
+        return;
       }
-      if (nextCursorOffset > nextValue.length) {
-        nextCursorOffset = nextValue.length;
+
+      if (key.escape) {
+        // Don't handle escape here, let parent handle it
+        return;
       }
+
+      const edit = resolveEdit(
+        currentValue,
+        currentCursorOffset,
+        input,
+        key,
+        showCursor,
+      );
+      if (!edit) return;
+
+      const nextCursorOffset = Math.max(
+        0,
+        Math.min(edit.cursorOffset, edit.value.length),
+      );
 
       setInternalCursorOffset(nextCursorOffset);
       cursorOffsetRef.current = nextCursorOffset; // Update REF immediately for next potential sync event
 
-      onCursorChange?.(nextCursorOffset, nextValue);
+      onCursorChange?.(nextCursorOffset, edit.value);
 
-      if (nextValue !== currentOriginalValue) {
-        valueRef.current = nextValue; // Update REF immediately!
-        onChange(nextValue);
+      if (edit.value !== currentValue) {
+        valueRef.current = edit.value; // Update REF immediately!
+        onChange(edit.value);
       }
     },
     { isActive: focus },
   );
 
-  return (
-    <Text>
-      {placeholder
-        ? value.length > 0 ? renderedValue : renderedPlaceholder
-        : renderedValue}
-    </Text>
-  );
+  const display = placeholder && value.length === 0
+    ? renderedPlaceholder
+    : renderedValue;
+
+  return <Text>{display}</Text>;
 }
