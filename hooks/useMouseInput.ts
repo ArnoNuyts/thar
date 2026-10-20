@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { Key, useInput } from "./useInput.ts";
 
 export type MouseEvent = {
@@ -20,7 +20,10 @@ export const useMouseInput = (
   options: Options = {},
 ) => {
   const handlerRef = useRef(handler);
-  handlerRef.current = handler;
+
+  useLayoutEffect(() => {
+    handlerRef.current = handler;
+  });
 
   useInput((_input, key) => {
     const hasMouseEvent = key.mouseWheelUp || key.mouseWheelDown ||
