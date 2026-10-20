@@ -18,8 +18,9 @@
 | **RD**        | Reported by `react-doctor` (see appendix).                |
 | **DISPROVEN** | Checked and found not to be a bug. Kept for the record.   |
 
-React Doctor scored the repo **70 / 100 ("Needs work")** with **9 warnings, 0
-errors**. It reported `reactDetected: false` / `framework: "unknown"`, so
+React Doctor originally scored the repo **70 / 100 ("Needs work")** with **9
+warnings, 0 errors**. After all fixes it scores **100 / 100 ("Great")** with **0
+issues**. It reported `reactDetected: false` / `framework: "unknown"`, so
 React-specific hook rules were gated off. Absence of hook findings from that
 tool is **not** evidence that those issues are absent.
 
@@ -89,11 +90,13 @@ then the fix, then `deno lint`, `deno check main.tsx`, and the full suite.
 | P3 #19 — 1000-line navigation module            | ✅ FIXED | `ba99a30`            | `unit-tests/navigation-pure.test.ts`                           |
 | P3 #21 — hook-named plain selectors             | ✅ FIXED | `ba99a30`            | `unit-tests/navigation-*.test.tsx`                             |
 | P4 #40 — `constants.ts` pass-through            | ✅ FIXED | `a0fcc8e`            | `deno check` + component suites                                |
+| RD — react-doctor (4 rules / 9 warnings)        | ✅ FIXED | `aeb9c96`            | react-doctor **100/100, 0 issues**                             |
 
-Current suite: **371 passed, 0 failed**.
+Current suite: **383 passed, 0 failed**.
 
-All 45 items are fixed. The sections below remain the original findings (line
-numbers refer to the reviewed snapshot); the table above is the current status.
+All 45 numbered items are fixed, and react-doctor now reports 0 issues. The
+sections below remain the original findings (line numbers refer to the reviewed
+snapshot); the table above is the current status.
 
 ---
 
@@ -618,6 +621,23 @@ Interpretation notes:
   hot path.
 - `unit-tests/test-utils.ts:11` is an intentional polling loop; this one is
   test-only noise.
+
+### Post-fix result (2026-10-20)
+
+All findings above were fixed without config or suppression comments:
+
+- text-segment keys now use content offsets; button keys use the child key
+- `getNavigableRow` precomputes first/last todo rows outside the header loop
+- `MockWatcher` uses a recursive async generator instead of `await` in a loop
+
+```text
+✔ Scanned 117 files
+
+React Doctor — todotui
+Score: 100 / 100 Great
+
+✔ No issues found!
+```
 
 ---
 
