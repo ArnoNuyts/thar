@@ -50,3 +50,40 @@ Deno.test("Button.Group: focused buttons navigate and activate", () => {
 
   unmount();
 });
+
+Deno.test("Button.Group: repeated labels keep unique keys and navigate", () => {
+  const pressed: string[] = [];
+  const indexChanges: number[] = [];
+  const originalError = console.error;
+  const errors: string[] = [];
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map((arg) => String(arg)).join(" "));
+  };
+
+  const { stdin, unmount } = render(
+    <Button.Group
+      isFocused
+      selectedIndex={0}
+      onSelectedIndexChange={(index) => indexChanges.push(index)}
+    >
+      <Button label="Same" onPress={() => pressed.push("first")} />
+      <Button label="Same" onPress={() => pressed.push("second")} />
+      <Button label="Same" onPress={() => pressed.push("third")} />
+    </Button.Group>,
+  );
+
+  try {
+    stdin.write("\u001B[C"); // Right selects the second button
+    stdin.write("\r"); // Enter activates it
+
+    assertEquals(indexChanges, [1]);
+    assertEquals(pressed, ["second"]);
+    assertEquals(
+      errors.some((message) => message.includes("same key")),
+      false,
+    );
+  } finally {
+    unmount();
+    console.error = originalError;
+  }
+});

@@ -6,6 +6,41 @@ import { IndexType } from "../types/enums.ts";
 export const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+/**
+ * Row reached by moving `step` rows from `currentRow`, skipping context
+ * headers. When the move crosses a list boundary, fall back to the first or
+ * last todo so the selection never lands on a header.
+ */
+export const getNavigableRow = (
+  indexes: IndexEntry[],
+  currentRow: number,
+  step: number,
+): number => {
+  const firstTodoIndex = indexes.findIndex((entry) =>
+    entry.type === IndexType.todo
+  );
+  const lastTodoIndex = indexes.findLastIndex((entry) =>
+    entry.type === IndexType.todo
+  );
+  const direction = step > 0 ? 1 : -1;
+  let newSelectedRow = clamp(currentRow + step, 0, indexes.length - 1);
+
+  // Skip context headers
+  while (indexes[newSelectedRow]?.type === IndexType.context) {
+    newSelectedRow += direction;
+    if (newSelectedRow < 0 || newSelectedRow >= indexes.length) {
+      if (direction === -1) {
+        newSelectedRow = firstTodoIndex !== -1 ? firstTodoIndex : currentRow;
+      } else {
+        newSelectedRow = lastTodoIndex !== -1 ? lastTodoIndex : currentRow;
+      }
+      break;
+    }
+  }
+
+  return newSelectedRow;
+};
+
 export const areSetsEqual = (a: Set<symbol>, b: Set<symbol>) => {
   if (a === b) return true;
   if (a.size !== b.size) return false;
