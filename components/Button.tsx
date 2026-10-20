@@ -137,7 +137,7 @@ const ButtonGroup = ({
     <Box width="100%" justifyContent="center">
       {buttonChildren.map((button, index) => (
         <Box
-          key={`${button.props.label}-${index}`}
+          key={button.key ?? button.props.label}
           marginRight={index < buttonChildren.length - 1 ? spacing : 0}
           flexGrow={equalWidth ? 1 : 0}
           justifyContent={equalWidth ? "center" : undefined}

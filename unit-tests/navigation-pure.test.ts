@@ -2,6 +2,7 @@ import { assertEquals } from "@std/assert";
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
 import {
   calculateScrollOffset,
+  getNavigableRow,
   guesstimateSelection,
   validateSelection,
 } from "../logic/navigation.ts";
@@ -24,6 +25,56 @@ const contextEntry = (contextName: string): IndexEntry => ({
   type: IndexType.context,
   contextName,
   todoCount: 0,
+});
+
+Deno.test("getNavigableRow: skips context headers in the direction of travel", () => {
+  const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
+  const indexes = [
+    contextEntry("A"),
+    todoEntry(todo1, 1),
+    contextEntry("B"),
+    todoEntry(todo2, 2),
+  ];
+
+  assertEquals(getNavigableRow(indexes, 1, 1), 3);
+  assertEquals(getNavigableRow(indexes, 3, -1), 1);
+});
+
+Deno.test("getNavigableRow: stays on first todo when a leading header is crossed", () => {
+  const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
+  const indexes = [
+    contextEntry("A"),
+    todoEntry(todo1, 1),
+    todoEntry(todo2, 2),
+  ];
+
+  assertEquals(getNavigableRow(indexes, 1, -1), 1);
+  assertEquals(getNavigableRow(indexes, 1, -5), 1);
+});
+
+Deno.test("getNavigableRow: stays on last todo when a trailing header is crossed", () => {
+  const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
+  const indexes = [
+    contextEntry("A"),
+    todoEntry(todo1, 1),
+    todoEntry(todo2, 2),
+    contextEntry("B"),
+  ];
+
+  assertEquals(getNavigableRow(indexes, 2, 1), 2);
+  assertEquals(getNavigableRow(indexes, 2, 5), 2);
+});
+
+Deno.test("getNavigableRow: clamps without wrapping past the list bounds", () => {
+  const [todo1, todo2] = todosOf("Todo 1", "Todo 2");
+  const indexes = [
+    contextEntry("A"),
+    todoEntry(todo1, 1),
+    todoEntry(todo2, 2),
+  ];
+
+  assertEquals(getNavigableRow(indexes, 1, -3), 1);
+  assertEquals(getNavigableRow(indexes, 2, 3), 2);
 });
 
 Deno.test("guesstimateSelection: selects a newly added todo", () => {
