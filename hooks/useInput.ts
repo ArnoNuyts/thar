@@ -347,7 +347,10 @@ export const useInput = (inputHandler: Handler, options: Options = {}) => {
   const { stdin, setRawMode } = useStdin();
   const { stdout } = useStdout();
   const handlerRef = useRef(inputHandler);
-  handlerRef.current = inputHandler;
+
+  useLayoutEffect(() => {
+    handlerRef.current = inputHandler;
+  });
 
   useLayoutEffect(() => {
     if (options.isActive === false || !stdin) {
