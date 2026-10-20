@@ -1,0 +1,8 @@
+{
+  "name": "todotui",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "^19.3.0"
+  }
+}
