@@ -239,6 +239,81 @@ Deno.test(
 );
 
 Deno.test(
+  "should stay on first todo when navigating up past a leading context header",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = [
+      new Todo("Alpha @A"),
+      new Todo("Beta @A"),
+    ];
+    let navContext: NavigationContextType = null!;
+
+    const { unmount } = render(
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
+    );
+
+    await waitFor(() => {
+      assertEquals(navContext.getSelectedTodo()?.text, "Alpha @A");
+      assertEquals(navContext.indexes[0]?.type, IndexType.context);
+    });
+
+    navContext.navigateUp();
+    await waitFor(() =>
+      assertEquals(navContext.getSelectedTodo()?.text, "Alpha @A")
+    );
+
+    navContext.navigatePageUp();
+    await waitFor(() =>
+      assertEquals(navContext.getSelectedTodo()?.text, "Alpha @A")
+    );
+
+    unmount();
+  },
+);
+
+Deno.test(
+  "should stay on last todo when navigating down at the end of a context group",
+  { sanitizeResources: false, sanitizeOps: false },
+  async () => {
+    const todos = [
+      new Todo("Alpha @A"),
+      new Todo("Beta @A"),
+      new Todo("Gamma @B"),
+    ];
+    let navContext: NavigationContextType = null!;
+
+    const { unmount } = render(
+      <TestWrapper todos={todos} onContext={(ctx) => navContext = ctx} />,
+    );
+
+    await waitFor(() => {
+      assertEquals(navContext.getSelectedTodo()?.text, "Alpha @A");
+      assertEquals(
+        navContext.indexes.at(-2)?.type,
+        IndexType.context,
+      );
+    });
+
+    navContext.navigateEnd();
+    await waitFor(() =>
+      assertEquals(navContext.getSelectedTodo()?.text, "Gamma @B")
+    );
+
+    navContext.navigateDown();
+    await waitFor(() =>
+      assertEquals(navContext.getSelectedTodo()?.text, "Gamma @B")
+    );
+
+    navContext.navigatePageDown();
+    await waitFor(() =>
+      assertEquals(navContext.getSelectedTodo()?.text, "Gamma @B")
+    );
+
+    unmount();
+  },
+);
+
+Deno.test(
   "should preserve selection after todo update",
   { sanitizeResources: false, sanitizeOps: false },
   async () => {
