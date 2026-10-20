@@ -121,14 +121,20 @@ export const TodoProvider = ({
   const { todos } = state;
   const { showToaster } = useToaster();
   const justReadFileFlag = useRef(false);
+  const hasLoadedFileRef = useRef(false);
   const lastWriteTimeRef = useRef(0);
 
   // Initial load
   useEffect(() => {
     let cancelled = false;
+    // Until the file has been read, `todos` is just the empty startup state.
+    // Saving it would truncate the real file when the read is slow (the save
+    // debounce is shorter than a slow disk access).
+    hasLoadedFileRef.current = false;
     readTodosFromFile(filename)
       .then((initialTodos) => {
         if (cancelled) return;
+        hasLoadedFileRef.current = true;
         justReadFileFlag.current = true;
         dispatch({ type: "load", todos: [...initialTodos] });
       })
@@ -171,6 +177,8 @@ export const TodoProvider = ({
   }, [saveTodos]);
 
   useEffect(() => {
+    // Do not persist the empty startup state before the initial load completes.
+    if (!hasLoadedFileRef.current) return;
     saveTodos(todos);
   }, [todos, saveTodos]);
 
