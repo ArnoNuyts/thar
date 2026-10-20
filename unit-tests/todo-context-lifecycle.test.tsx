@@ -167,6 +167,59 @@ Deno.test({
 });
 
 Deno.test({
+  name:
+    "TodoContext: slow initial read does not overwrite the file with the empty startup state",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    await withTempFile("Existing todo\n", async (filename) => {
+      setupWatcherMock();
+      let readCount = 0;
+
+      // Simulate a slow disk / busy startup: the initial read takes longer
+      // than the save debounce (50ms), which used to write the empty initial
+      // state over the real file.
+      // deno-lint-ignore no-explicit-any
+      (Deno as any).readTextFile = async (path: string | URL) => {
+        await delay(250);
+        readCount++;
+        return await originalReadTextFile(path);
+      };
+
+      let currentApi: TodoContextType | undefined;
+      const onApi = (api: TodoContextType) => {
+        currentApi = api;
+      };
+
+      const { unmount } = render(
+        <LifecycleApp
+          filename={filename}
+          showTodoProvider
+          onApi={onApi}
+          onMessage={() => {}}
+        />,
+      );
+
+      await waitFor(() => {
+        if (readCount === 0) throw new Error("File not loaded yet");
+        if (!currentApi || currentApi.todos.length !== 1) {
+          throw new Error("Initial todos not loaded yet");
+        }
+      });
+
+      assertEquals(
+        await Deno.readTextFile(filename),
+        "Existing todo\n",
+        "The startup empty state must not truncate the todo file",
+      );
+      assertEquals(currentApi?.todos[0].text, "Existing todo");
+
+      unmount();
+    });
+  },
+});
+
+Deno.test({
   name: "TodoContext: unmount cancels the pending save debounce",
   sanitizeOps: false,
   sanitizeResources: false,
