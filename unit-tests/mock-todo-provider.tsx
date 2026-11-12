@@ -144,6 +144,8 @@ export const MockTodoProvider = ({
       canUndo,
       redo,
       canRedo,
+      loadError: undefined,
+      readOnly: false,
     }),
     [
       todos,

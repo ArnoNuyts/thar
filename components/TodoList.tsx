@@ -7,6 +7,7 @@ import { ExtendedKey, useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { useTodoCommands } from "../hooks/useTodoCommands.ts";
 import { IndexEntry } from "../logic/indexes.ts";
+import { sanitizeForDisplay } from "../logic/display-safety.ts";
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
 import type { UpperCaseLetter } from "../types/types.ts";
@@ -19,7 +20,7 @@ export const renderTodoText = (
   isHighlighted: boolean,
   isOverdue: boolean,
 ) => {
-  const parts = text.split(/(@[^ ]+|\+[^ ]+)/g);
+  const parts = sanitizeForDisplay(text).split(/(@[^ ]+|\+[^ ]+)/g);
   let offset = 0;
   return parts.map((part) => {
     // Offset + content stays unique even when the same tag repeats, unlike
@@ -116,13 +117,22 @@ type TodoSuffix = { text: string; color: string };
 const getTodoSuffixes = (todo: Todo): TodoSuffix[] => {
   const suffixes: TodoSuffix[] = [];
   if (todo.tags.due) {
-    suffixes.push({ text: `due:${todo.tags.due}`, color: COLORS.danger });
+    suffixes.push({
+      text: sanitizeForDisplay(`due:${todo.tags.due}`),
+      color: COLORS.danger,
+    });
   }
   if (todo.tags.t) {
-    suffixes.push({ text: `t:${todo.tags.t}`, color: COLORS.success });
+    suffixes.push({
+      text: sanitizeForDisplay(`t:${todo.tags.t}`),
+      color: COLORS.success,
+    });
   }
   if (todo.tags.rec) {
-    suffixes.push({ text: `rec:${todo.tags.rec}`, color: COLORS.info });
+    suffixes.push({
+      text: sanitizeForDisplay(`rec:${todo.tags.rec}`),
+      color: COLORS.info,
+    });
   }
   return suffixes;
 };
