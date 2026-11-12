@@ -1,5 +1,11 @@
 import { Runtime } from "../utils/runtime.ts";
+import {
+  getReadLimits,
+  type ReadLimits,
+  TodoFileTooLargeError,
+} from "./limits.ts";
 import { Todo } from "./todo.ts";
+import { validateTodoFileContent } from "./todo-file-validation.ts";
 
 const isNotFound = (error: unknown) =>
   typeof error === "object" &&
@@ -7,20 +13,48 @@ const isNotFound = (error: unknown) =>
   "code" in error &&
   (error as NodeJS.ErrnoException).code === "ENOENT";
 
-export async function readTodosFromFile(filename: string) {
-  let data: string;
+const createEmptyFile = async (filename: string) => {
+  await Runtime.writeTextFile(filename, ""); // Create the file if it doesn't exist
+};
+
+export async function readTodosFromFile(
+  filename: string,
+  limits: ReadLimits = getReadLimits(),
+) {
   try {
-    data = await Runtime.readTextFile(filename);
+    // Reject an oversized file before it is read into memory. `size` may be
+    // absent in tests that provide a minimal Runtime.stat mock.
+    const stats = await Runtime.stat(filename);
+    if (typeof stats.size === "number" && stats.size > limits.maxFileBytes) {
+      throw new TodoFileTooLargeError(stats.size, limits.maxFileBytes);
+    }
   } catch (error) {
     if (isNotFound(error)) {
-      await Runtime.writeTextFile(filename, ""); // Create the file if it doesn't exist
+      await createEmptyFile(filename);
       return []; // Return an empty list after creating the file
     }
     throw error;
   }
 
-  return data
-    .split("\n")
+  let data: string;
+  try {
+    data = await Runtime.readTextFile(filename);
+  } catch (error) {
+    if (isNotFound(error)) {
+      await createEmptyFile(filename);
+      return [];
+    }
+    throw error;
+  }
+
+  // Stat can race with a growing file (or be mocked), so re-check the bytes
+  // that were actually decoded.
+  const actualBytes = Buffer.byteLength(data, "utf8");
+  if (actualBytes > limits.maxFileBytes) {
+    throw new TodoFileTooLargeError(actualBytes, limits.maxFileBytes);
+  }
+
+  return validateTodoFileContent(data, limits)
     .filter((x) => x.trim())
     .map((x) => new Todo(x));
 }
