@@ -4,6 +4,7 @@ import { useToaster } from "../contexts/toaster-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
 import { Priority } from "../logic/priority.ts";
+import { MAX_PASTE_TODOS, validateTodoBatch } from "../logic/todo-input.ts";
 
 export interface CommandOptions {
   /** Called once the command has finished, if it acted on a selection. */
@@ -166,13 +167,31 @@ export const useTodoCommands = () => {
         return;
       }
 
+      if (lines.length > MAX_PASTE_TODOS) {
+        throw new Error(
+          `Too many todos in one paste; the limit is ${MAX_PASTE_TODOS}`,
+        );
+      }
+      // Validate every line before the confirmation prompt so a rejected
+      // paste cannot add a partial batch.
+      validateTodoBatch(lines, 0);
+
       const doPaste = () => {
-        const added = addTodos(...lines);
-        if (added.length > 0) {
-          setSelectedTodoId(added[added.length - 1].id);
+        try {
+          const added = addTodos(...lines);
+          if (added.length > 0) {
+            setSelectedTodoId(added[added.length - 1].id);
+          }
+          showToaster(`Pasted ${lines.length} todo(s)`);
+        } catch (error) {
+          showToaster(
+            `Paste failed: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          );
+        } finally {
+          finish();
         }
-        showToaster(`Pasted ${lines.length} todo(s)`);
-        finish();
       };
 
       if (lines.length > 10) {

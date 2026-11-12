@@ -3,19 +3,28 @@ import {
   addMonths,
   addWeeks,
   addYears,
-  format,
   isBefore,
   isSameDay,
-  parseISO,
+  isValid,
   startOfDay,
 } from "date-fns";
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
-import { formatDateTag, parseDateTag } from "./dates.ts";
+import { formatDateTag, parseDateTag, scanTodoPrefix } from "./dates.ts";
 import { CONTEXT_REGEX, PROJECT_REGEX } from "./patterns.ts";
 
-const TODO_REGEX =
-  /^((?<done>[x])\s){0,1}(\((?<prio>[A-Z])\)\s){0,1}((?<completionDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}((?<creationDate>\d{4}-[0-1][0-9]-[0-3][0-9])\s){0,1}(?<rest>[^\n\r]+)\s*$/;
+const RECURRENCE_REGEX = /^\+?(\d+)([dwmy])$/;
+const INVALID_RECURRENCE_MESSAGE =
+  "Invalid recurrence value; no new todo was created";
+const OUT_OF_RANGE_RECURRENCE_MESSAGE =
+  "Recurrence is out of range; no new todo was created";
+
+const isValidTodoDate = (date: Date): boolean => {
+  if (!isValid(date)) return false;
+  const year = date.getFullYear();
+  return year >= 1 && year <= 9999;
+};
+
 const TAG_REGEX = /(^|\s)(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
 
 let nextTodoId = 0;
@@ -30,6 +39,8 @@ export class Todo {
   private _projects: Set<string> = new Set();
   private _contexts: Set<string> = new Set();
   private _tags: { [key: string]: string | string[] } = {};
+  private _invalidDateTokens: string[] = [];
+  private _datesInText = false;
 
   get text(): string {
     return this._text;
@@ -55,32 +66,58 @@ export class Todo {
   get tags(): { [key: string]: string | string[] } {
     return this._tags;
   }
+  get invalidDateTokens(): string[] {
+    return [...this._invalidDateTokens];
+  }
 
   constructor(text: string) {
     this.id = Symbol(String(nextTodoId++));
-    const match = text.match(TODO_REGEX);
-    if (match?.groups) {
-      if (match.groups.done) {
+    const prefix = scanTodoPrefix(text);
+    this._state = prefix.hasDoneMarker
+      ? TodoStateEnum.done
+      : TodoStateEnum.todo;
+    this._priority = prefix.priority as UpperCaseLetter | undefined;
+
+    const dateSection = text.slice(prefix.dateStartIndex);
+    const remainder = text.slice(prefix.endIndex);
+    const hasBody = remainder.trim().length > 0;
+    const canConsumeDates =
+      prefix.dateTokens.length > 0 &&
+      prefix.invalidDateTokens.length === 0 &&
+      hasBody &&
+      (prefix.hasDoneMarker || prefix.dateTokens.length === 1);
+
+    if (canConsumeDates) {
+      if (prefix.hasDoneMarker) {
         // For completed todos, the first date is the completion date and an
         // optional second date is the creation date.
-        this._completionDate = match.groups.completionDate
-          ? parseISO(match.groups.completionDate)
-          : undefined;
-        this._creationDate = match.groups.creationDate
-          ? parseISO(match.groups.creationDate)
-          : undefined;
+        this._completionDate = parseDateTag(prefix.dateTokens[0]);
+        this._creationDate = parseDateTag(prefix.dateTokens[1]);
       } else {
         // Without the `x` marker the first date is a creation date.
-        this._completionDate = undefined;
-        this._creationDate =
-          match.groups.creationDate || match.groups.completionDate
-            ? parseISO(match.groups.creationDate || match.groups.completionDate)
-            : undefined;
+        this._creationDate = parseDateTag(prefix.dateTokens[0]);
       }
-      this._priority = match.groups.prio as UpperCaseLetter;
-      text = match.groups.rest as string;
-      this._state = match.groups.done ? TodoStateEnum.done : TodoStateEnum.todo;
+      text = remainder;
+    } else {
+      text = dateSection;
+      if (prefix.dateTokens.length > 0) {
+        // Invalid or ambiguous leading dates stay in the body text so the
+        // line round-trips. Valid date fields are still exposed when their
+        // position is unambiguous (a completed line).
+        this._datesInText = true;
+        this._invalidDateTokens = [...prefix.invalidDateTokens];
+        if (prefix.hasDoneMarker) {
+          this._completionDate = parseDateTag(prefix.dateTokens[0]);
+          this._creationDate = parseDateTag(prefix.dateTokens[1]);
+        } else if (
+          prefix.dateTokens.length === 1 &&
+          prefix.invalidDateTokens.length === 0
+        ) {
+          this._creationDate = parseDateTag(prefix.dateTokens[0]);
+        }
+      }
     }
+
     this.internalParseText(text);
   }
 
@@ -101,6 +138,7 @@ export class Todo {
     Object.assign(next, this);
     next._projects = new Set(this._projects);
     next._contexts = new Set(this._contexts);
+    next._invalidDateTokens = [...this._invalidDateTokens];
     next._tags = { ...this._tags };
     for (const key in next._tags) {
       if (Array.isArray(next._tags[key])) {
@@ -110,7 +148,11 @@ export class Todo {
     return next;
   }
 
-  toggleState(): { updated: Todo; recurring?: Todo } {
+  toggleState(): {
+    updated: Todo;
+    recurring?: Todo;
+    recurrenceError?: string;
+  } {
     const next = this.with((next) => {
       next._state =
         next._state == TodoStateEnum.todo
@@ -125,34 +167,53 @@ export class Todo {
     });
 
     if (next._state === TodoStateEnum.done && next._tags.rec) {
-      const recurrence = next._tags.rec as string;
-      let newTodo = new Todo(next.toString());
-      newTodo = newTodo.setState(TodoStateEnum.todo);
-      newTodo = newTodo.setCompletionDate(undefined);
-
-      const regex = /(\d+)([dwmy])/;
-      const match = recurrence.match(regex);
-      if (match) {
-        const amount = parseInt(match[1]);
-        const unit = match[2];
-        let newDueDate = new Date();
-
-        switch (unit) {
-          case "d":
-            newDueDate = addDays(newDueDate, amount);
-            break;
-          case "w":
-            newDueDate = addWeeks(newDueDate, amount);
-            break;
-          case "m":
-            newDueDate = addMonths(newDueDate, amount);
-            break;
-          case "y":
-            newDueDate = addYears(newDueDate, amount);
-            break;
-        }
-        newTodo = newTodo.setDue(newDueDate);
+      const recurrence = next._tags.rec;
+      if (typeof recurrence !== "string") {
+        return { updated: next, recurrenceError: INVALID_RECURRENCE_MESSAGE };
       }
+
+      const match = RECURRENCE_REGEX.exec(recurrence);
+      if (!match) {
+        return { updated: next, recurrenceError: INVALID_RECURRENCE_MESSAGE };
+      }
+
+      const amount = Number(match[1]);
+      if (!Number.isSafeInteger(amount) || amount <= 0) {
+        return {
+          updated: next,
+          recurrenceError: OUT_OF_RANGE_RECURRENCE_MESSAGE,
+        };
+      }
+
+      const base = new Date();
+      let newDueDate: Date;
+      switch (match[2]) {
+        case "d":
+          newDueDate = addDays(base, amount);
+          break;
+        case "w":
+          newDueDate = addWeeks(base, amount);
+          break;
+        case "m":
+          newDueDate = addMonths(base, amount);
+          break;
+        case "y":
+        default:
+          newDueDate = addYears(base, amount);
+          break;
+      }
+
+      if (!isValidTodoDate(newDueDate)) {
+        return {
+          updated: next,
+          recurrenceError: OUT_OF_RANGE_RECURRENCE_MESSAGE,
+        };
+      }
+
+      const newTodo = new Todo(next.toString())
+        .setState(TodoStateEnum.todo)
+        .setCompletionDate(undefined)
+        .setDue(newDueDate);
 
       return { updated: next, recurring: newTodo };
     }
@@ -163,11 +224,13 @@ export class Todo {
     return (
       (this.isDone() ? "x " : "") +
       (this._priority ? `(${this._priority}) ` : "") +
-      (this._completionDate
-        ? format(this._completionDate, "yyyy-MM-dd") + " "
+      (!this._datesInText &&
+      this._completionDate &&
+      isValid(this._completionDate)
+        ? formatDateTag(this._completionDate) + " "
         : "") +
-      (this._creationDate
-        ? format(this._creationDate, "yyyy-MM-dd") + " "
+      (!this._datesInText && this._creationDate && isValid(this._creationDate)
+        ? formatDateTag(this._creationDate) + " "
         : "") +
       this._text +
       (Object.keys(this._tags).length > 0 ? " " : "") +
@@ -183,12 +246,14 @@ export class Todo {
   }
 
   setCreationDate(date: Date): Todo {
+    if (!isValidTodoDate(date)) return this;
     return this.with((next) => {
       next._creationDate = date;
     });
   }
 
   setCompletionDate(date: Date | undefined): Todo {
+    if (date !== undefined && !isValidTodoDate(date)) return this;
     return this.with((next) => {
       next._completionDate = date;
     });
@@ -250,8 +315,7 @@ export class Todo {
     }
 
     const parsedTags: { [key: string]: string | string[] } = {};
-    const matchTags = text.matchAll(TAG_REGEX);
-    for (const tag of matchTags) {
+    for (const tag of text.matchAll(TAG_REGEX)) {
       const key = tag.groups!.key;
       const value = tag.groups!.value;
       const current = parsedTags[key];
@@ -262,8 +326,10 @@ export class Todo {
       } else {
         parsedTags[key] = value;
       }
-      text = text.replace(tag[0], "");
     }
+    // Remove every tag token in one pass. Replacing per tag is quadratic on
+    // lines with many tags.
+    text = text.replace(TAG_REGEX, "");
     // Tags in the supplied text are authoritative unless the caller explicitly
     // preserves programmatic metadata (project/context edits re-parse text
     // that has had its tags stripped).
@@ -284,12 +350,14 @@ export class Todo {
   }
 
   setDue(date: Date): Todo {
+    if (!isValidTodoDate(date)) return this;
     return this.with((next) => {
       next._tags.due = formatDateTag(date);
     });
   }
 
   setThreshold(date: Date): Todo {
+    if (!isValidTodoDate(date)) return this;
     return this.with((next) => {
       next._tags.t = formatDateTag(date);
     });

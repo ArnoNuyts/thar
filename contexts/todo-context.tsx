@@ -15,6 +15,7 @@ import {
 } from "../logic/todo-file-helpers.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
+import { MAX_TODOS, validateTodoBatch } from "../logic/todo-input.ts";
 import { Runtime, type FsWatcher } from "../utils/runtime.ts";
 import { useToaster } from "./toaster-context.tsx";
 
@@ -100,13 +101,21 @@ export const TodoContext = createContext<TodoContextType | undefined>(
 const buildToggledTodos = (
   prev: Todos,
   idsToToggle: Set<symbol>,
-): { todos: Todos; recurringCount: number } => {
+): {
+  todos: Todos;
+  recurringCount: number;
+  recurrenceErrors: string[];
+} => {
   const newInstances: Todo[] = [];
+  const recurrenceErrors: string[] = [];
   const transformed = prev.map((t) => {
     if (idsToToggle.has(t.id)) {
-      const { updated, recurring } = t.toggleState();
+      const { updated, recurring, recurrenceError } = t.toggleState();
       if (recurring) {
         newInstances.push(recurring);
+      }
+      if (recurrenceError) {
+        recurrenceErrors.push(recurrenceError);
       }
       return updated;
     }
@@ -115,6 +124,7 @@ const buildToggledTodos = (
   return {
     todos: [...transformed, ...newInstances],
     recurringCount: newInstances.length,
+    recurrenceErrors: [...new Set(recurrenceErrors)],
   };
 };
 
@@ -143,6 +153,10 @@ export const TodoProvider = ({
   const justReadFileFlag = useRef(false);
   const hasLoadedFileRef = useRef(false);
   const lastWriteTimeRef = useRef(0);
+  // Tracks the current count so consecutive addTodos calls in one tick cannot
+  // race past MAX_TODOS before React re-renders.
+  const todoCountRef = useRef(0);
+  todoCountRef.current = todos.length;
 
   // Initial load
   useEffect(() => {
@@ -284,9 +298,13 @@ export const TodoProvider = ({
 
   const addTodos = useCallback((...texts: string[]): Todo[] => {
     if (texts.length === 0) return [];
+    // Defense in depth: validate the whole batch before constructing anything,
+    // so a rejected call never partially mutates the list.
+    validateTodoBatch(texts, todoCountRef.current);
     const newTodos = texts.map((text) =>
       new Todo(text).setCreationDate(new Date()),
     );
+    todoCountRef.current += newTodos.length;
     dispatch({
       type: "mutate",
       updater: (prev) => [...prev, ...newTodos],
@@ -320,14 +338,25 @@ export const TodoProvider = ({
       const idsToToggle = new Set(todosToToggle.map((t) => t.id));
       // Compute the toast count from the current state; the reducer updater
       // stays pure so StrictMode's double invocation cannot duplicate instances.
-      const { recurringCount } = buildToggledTodos(todos, idsToToggle);
+      const {
+        todos: candidateTodos,
+        recurringCount,
+        recurrenceErrors,
+      } = buildToggledTodos(todos, idsToToggle);
+
+      if (candidateTodos.length > MAX_TODOS) {
+        showToaster(`Too many todos; the limit is ${MAX_TODOS}`);
+        return;
+      }
 
       dispatch({
         type: "mutate",
         updater: (prev) => buildToggledTodos(prev, idsToToggle).todos,
       });
 
-      if (recurringCount === 1) {
+      if (recurrenceErrors.length > 0) {
+        showToaster(recurrenceErrors[0]);
+      } else if (recurringCount === 1) {
         showToaster("Recurring todo created");
       } else if (recurringCount > 1) {
         showToaster(`${recurringCount} recurring todos created`);
