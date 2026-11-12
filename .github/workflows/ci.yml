@@ -2,16 +2,27 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "release/next"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "release/next"]
+  workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
 
     steps:
       - name: Setup repo
@@ -25,6 +36,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Typecheck
         run: npm run typecheck
@@ -42,4 +56,95 @@ jobs:
         run: npm run build
 
       - name: Build single executable
+        if: runner.os == 'Linux'
         run: npm run build:sea
+
+  version-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Check release version
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE_REF" != "main" ]; then
+            echo "Release version check only applies to main."
+            exit 0
+          fi
+
+          version="$(node -p "require('./package.json').version")"
+          if [[ "$version" == *-* ]]; then
+            echo "main must contain a stable version, got $version" >&2
+            exit 1
+          fi
+
+          latest="$(git tag -l 'v*' | grep -v -- '-' | sort -V | tail -n1 || true)"
+          if [ -n "$latest" ]; then
+            if [ "$version" = "${latest#v}" ]; then
+              echo "Version $version has already been released as $latest" >&2
+              exit 1
+            fi
+
+            newest="$(printf '%s\n%s\n' "${latest#v}" "$version" | sort -V | tail -n1)"
+            if [ "$newest" != "$version" ]; then
+              echo "Version $version must be greater than $latest" >&2
+              exit 1
+            fi
+          fi
+
+          echo "Releasing v$version."
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify package contents
+        run: npm pack --dry-run
+
+  package-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Pack package
+        id: pack
+        run: echo "tarball=$(npm pack --silent | tail -n1)" >> "$GITHUB_OUTPUT"
+
+      - name: Install package globally
+        run: npm install -g --prefix "$RUNNER_TEMP/prefix" "./${{ steps.pack.outputs.tarball }}"
+
+      - name: Smoke test the installed package
+        run: |
+          bin_name="$(node -p "Object.keys(require('./package.json').bin ?? {})[0] ?? ''")"
+          if [ -z "$bin_name" ]; then
+            # release/next currently has no bin entry; the pack/install steps above
+            # still verify packaging, and the bin checks run once one is added.
+            echo "Package has no bin entry; skipping CLI smoke checks."
+            exit 0
+          fi
+          "$RUNNER_TEMP/prefix/bin/$bin_name" --version
+          "$RUNNER_TEMP/prefix/bin/$bin_name" --help
