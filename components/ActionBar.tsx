@@ -4,9 +4,11 @@ import { useToaster } from "../contexts/toaster-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
+import { useUpdate } from "../contexts/update-context.tsx";
 import { navigationSelectedTodoRef } from "../contexts/navigation-context.tsx";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { COLORS } from "../theme/colors.ts";
+import { formatUpdateBadge, UpdateBadge } from "./UpdateBadge.tsx";
 
 const ACTION_ITEMS = [
   { key: "x", text: "Menu" },
@@ -29,15 +31,23 @@ export const ActionBar = memo(() => {
   const { readOnly } = useTodo();
   const { openModal, activeModal } = useModal();
   const { focusRef } = useSearch();
+  const { isUpdateAvailable, latestVersion } = useUpdate();
 
   // Keep the transient toast inside the status-bar width, leaving room for
-  // the action items and the persistent read-only indicator.
-  const indicatorWidth = readOnly ? READ_ONLY_LABEL.length + 2 : 0;
-  const toastWidth = Math.max(0, columns - ACTION_WIDTH - indicatorWidth - 1);
+  // the action items and the persistent read-only/update indicators.
+  const indicatorWidth = readOnly ? READ_ONLY_LABEL.length + 1 : 0;
+  const rightWidth = Math.max(0, columns - ACTION_WIDTH - 1);
+  const statusWidth = Math.max(0, rightWidth - indicatorWidth);
+  const toastWidth = statusWidth;
   const boundedToast =
     toasterMessage && toastWidth > 0
       ? toasterMessage.slice(0, toastWidth)
       : undefined;
+  const badgeWidth = statusWidth;
+  const badgeText =
+    !boundedToast && isUpdateAvailable
+      ? formatUpdateBadge(latestVersion, badgeWidth)
+      : "";
 
   useMouseInput((event) => {
     if (!event.leftClick || event.x === undefined || event.y === undefined) {
@@ -76,6 +86,10 @@ export const ActionBar = memo(() => {
       }
       x += segment.length;
     }
+
+    if (badgeText && event.x >= columns - badgeText.length + 1) {
+      openModal("update-modal");
+    }
   });
 
   return (
@@ -107,10 +121,14 @@ export const ActionBar = memo(() => {
             <Text color={COLORS.danger}>{READ_ONLY_LABEL}</Text>
           </Box>
         )}
-        {boundedToast && (
+        {boundedToast ? (
           <Box padding={0}>
             <Text color={COLORS.secondary}>{boundedToast}</Text>
           </Box>
+        ) : (
+          isUpdateAvailable && (
+            <UpdateBadge latest={latestVersion} availableWidth={badgeWidth} />
+          )
         )}
       </Box>
     </Box>

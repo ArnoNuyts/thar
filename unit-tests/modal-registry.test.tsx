@@ -17,6 +17,7 @@ const EXPECTED_GENERIC_MODAL_IDS = [
   "set-priority",
   "add-project",
   "add-context",
+  "update-modal",
 ] as const;
 
 test("modal-registry: keys exactly match the non-confirm modal ids", () => {

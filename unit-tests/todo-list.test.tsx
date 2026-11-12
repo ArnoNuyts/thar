@@ -31,6 +31,7 @@ import {
 import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import { UpdateProvider } from "../contexts/update-context.tsx";
 import { MultiSelectMenu, TodoMenu } from "../components/TodoMenu.tsx";
 
 import { useTodo } from "../contexts/todo-context.tsx";
@@ -60,20 +61,22 @@ const TestWrapper = ({
 }) => {
   return (
     <ToasterProvider>
-      <MockTodoProvider
-        initialTodos={initialTodos}
-        onTodosChange={onTodosChange}
-      >
-        <FocusProvider>
-          <SuggestionProvider>
-            <SearchProvider>
-              <NavigationWrapper>
-                <ModalProvider>{children}</ModalProvider>
-              </NavigationWrapper>
-            </SearchProvider>
-          </SuggestionProvider>
-        </FocusProvider>
-      </MockTodoProvider>
+      <UpdateProvider options={{ enabled: false }}>
+        <MockTodoProvider
+          initialTodos={initialTodos}
+          onTodosChange={onTodosChange}
+        >
+          <FocusProvider>
+            <SuggestionProvider>
+              <SearchProvider>
+                <NavigationWrapper>
+                  <ModalProvider>{children}</ModalProvider>
+                </NavigationWrapper>
+              </SearchProvider>
+            </SuggestionProvider>
+          </FocusProvider>
+        </MockTodoProvider>
+      </UpdateProvider>
     </ToasterProvider>
   );
 };
