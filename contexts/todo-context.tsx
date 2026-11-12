@@ -7,8 +7,10 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import { debounce } from "../utils/debounce.ts";
+import { toBoundedDisplayMessage } from "../logic/display-safety.ts";
 import {
   readTodosFromFile,
   writeTodosToFile,
@@ -32,6 +34,10 @@ export interface TodoContextType {
   canUndo: boolean;
   redo: () => void;
   canRedo: boolean;
+  /** Last read failure, bounded and safe to display; undefined when healthy. */
+  loadError: string | undefined;
+  /** True while the last load/reload failed; mutations must not be saved. */
+  readOnly: boolean;
 }
 
 interface TodoHistoryState {
@@ -150,13 +156,23 @@ export const TodoProvider = ({
   );
   const { todos } = state;
   const { showToaster } = useToaster();
-  const justReadFileFlag = useRef(false);
+  const justReadFileRef = useRef<Todos | null>(null);
   const hasLoadedFileRef = useRef(false);
   const lastWriteTimeRef = useRef(0);
   // Tracks the current count so consecutive addTodos calls in one tick cannot
   // race past MAX_TODOS before React re-renders.
   const todoCountRef = useRef(0);
   todoCountRef.current = todos.length;
+  const [loadError, setLoadErrorState] = useState<string | undefined>(
+    undefined,
+  );
+  const loadErrorRef = useRef<string | undefined>(undefined);
+  const readOnly = loadError !== undefined;
+
+  const setLoadError = useCallback((message: string | undefined) => {
+    loadErrorRef.current = message;
+    setLoadErrorState(message);
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -165,37 +181,50 @@ export const TodoProvider = ({
     // Saving it would truncate the real file when the read is slow (the save
     // debounce is shorter than a slow disk access).
     hasLoadedFileRef.current = false;
+    setLoadError(undefined);
     readTodosFromFile(filename)
       .then((initialTodos) => {
         if (cancelled) return;
+        const loadedTodos = [...initialTodos];
         hasLoadedFileRef.current = true;
-        justReadFileFlag.current = true;
-        dispatch({ type: "load", todos: [...initialTodos] });
+        justReadFileRef.current = loadedTodos;
+        setLoadError(undefined);
+        dispatch({ type: "load", todos: loadedTodos });
       })
       .catch((error) => {
-        if (!cancelled) {
-          console.error("Failed to load todos:", error);
-        }
+        if (cancelled) return;
+        // Stay unloaded and read-only so the empty startup state (or stale
+        // state from a previous file) cannot be written over the file.
+        const message = toBoundedDisplayMessage(error);
+        setLoadError(message);
+        showToaster(message);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [filename]);
+  }, [filename, setLoadError, showToaster]);
 
   // Save effect
   const saveTodos = useMemo(
     () =>
       debounce(async (currentTodos: Todos) => {
-        if (justReadFileFlag.current) {
-          justReadFileFlag.current = false;
+        // A failed load/reload puts the provider in read-only mode until a
+        // later read succeeds. Check at execution time too: a save scheduled
+        // just before the failure must not overwrite the rejected file.
+        if (loadErrorRef.current) return;
+        if (justReadFileRef.current === currentTodos) {
+          justReadFileRef.current = null;
           return;
         }
         lastWriteTimeRef.current = Date.now();
         try {
           await writeTodosToFile(currentTodos, filename);
         } catch (error) {
-          console.error("Failed to save todos:", error);
+          console.error(
+            "Failed to save todos:",
+            toBoundedDisplayMessage(error),
+          );
         } finally {
           lastWriteTimeRef.current = Date.now();
         }
@@ -211,10 +240,11 @@ export const TodoProvider = ({
   }, [saveTodos]);
 
   useEffect(() => {
-    // Do not persist the empty startup state before the initial load completes.
-    if (!hasLoadedFileRef.current) return;
+    // Do not persist the empty startup state before the initial load completes,
+    // and never persist stale in-memory todos while the file is rejected.
+    if (!hasLoadedFileRef.current || readOnly) return;
     saveTodos(todos);
-  }, [todos, saveTodos]);
+  }, [todos, saveTodos, readOnly]);
 
   // Watcher effect
   useEffect(() => {
@@ -230,13 +260,20 @@ export const TodoProvider = ({
       try {
         const todosFromFile = await readTodosFromFile(filename);
         if (cancelled) return;
-        justReadFileFlag.current = true;
-        dispatch({ type: "load", todos: [...todosFromFile] });
+        const loadedTodos = [...todosFromFile];
+        hasLoadedFileRef.current = true;
+        justReadFileRef.current = loadedTodos;
+        setLoadError(undefined);
+        dispatch({ type: "load", todos: loadedTodos });
         showToaster("File reloaded");
       } catch (error) {
-        if (!cancelled) {
-          console.error("Failed to reload todos:", error);
-        }
+        if (cancelled) return;
+        // Keep the last known good list, but stop saving it until the file is
+        // valid again. Cancel a pending save from before the failure.
+        saveTodos.clear();
+        const message = toBoundedDisplayMessage(error);
+        setLoadError(message);
+        showToaster(message);
       }
     }, 500);
 
@@ -246,8 +283,9 @@ export const TodoProvider = ({
         for await (const event of watcher) {
           if (cancelled) break;
           // Ignore startup events (for example creating a missing todo file)
-          // until the initial load has settled.
-          if (!hasLoadedFileRef.current) continue;
+          // until the initial load has settled. Once a load has failed, keep
+          // processing so a fixed file can recover the provider.
+          if (!hasLoadedFileRef.current && !loadErrorRef.current) continue;
           if (event.kind === "modify" || event.kind === "rename") {
             // Prevent write-read loop
             if (Date.now() - lastWriteTimeRef.current < 1000) {
@@ -275,7 +313,7 @@ export const TodoProvider = ({
         }
       }
     };
-  }, [filename, showToaster]);
+  }, [filename, setLoadError, saveTodos, showToaster]);
 
   const canUndo = state.history.length > 0;
   const canRedo = state.redoStack.length > 0;
@@ -402,6 +440,8 @@ export const TodoProvider = ({
       canUndo,
       redo,
       canRedo,
+      loadError,
+      readOnly,
     }),
     [
       todos,
@@ -416,6 +456,8 @@ export const TodoProvider = ({
       canUndo,
       redo,
       canRedo,
+      loadError,
+      readOnly,
     ],
   );
 

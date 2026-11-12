@@ -14,6 +14,7 @@ import { ToasterProvider, useToaster } from "../contexts/toaster-context.tsx";
 import {
   MockWatcher,
   originalReadTextFile,
+  originalWriteTextFile,
   restoreRuntimeMocks,
   waitFor,
   waitPast,
@@ -222,6 +223,148 @@ test("TodoContext: slow initial read does not overwrite the file with the empty 
     });
 
     expect(currentApi?.todos[0].text).toEqual("Existing todo");
+    unmount();
+  });
+});
+
+test("TodoContext: an initial load failure is read-only and never writes", async () => {
+  const poisoned = "INITIAL_POISON_MARKER\u0000\n";
+
+  await withTempFile(poisoned, async (filename) => {
+    setupWatcherMock();
+
+    let writeCount = 0;
+    (Runtime as any).writeTextFile = async (
+      path: string | URL,
+      data: string,
+      options?: unknown,
+    ) => {
+      writeCount++;
+      return await originalWriteTextFile(path, data, options as never);
+    };
+
+    const messages: string[] = [];
+    let currentApi: TodoContextType | undefined;
+
+    const { unmount } = render(
+      <LifecycleApp
+        filename={filename}
+        showTodoProvider
+        onApi={(api) => {
+          currentApi = api;
+        }}
+        onMessage={(message) => messages.push(message)}
+      />,
+    );
+
+    await waitFor(() => {
+      if (!currentApi?.loadError) throw new Error("Load error not set yet");
+    });
+
+    expect(currentApi!.readOnly).toEqual(true);
+    expect(currentApi!.todos).toEqual([]);
+    expect(currentApi!.loadError).not.toContain("INITIAL_POISON_MARKER");
+    expect(messages.some((message) => message.includes("U+0000"))).toEqual(
+      true,
+    );
+
+    currentApi!.addTodos("Blocked todo");
+    await waitFor(() => expect(currentApi?.todos.length).toEqual(1));
+    await waitPast(120);
+
+    expect(writeCount, "No save after a failed initial load").toEqual(0);
+    expect(await originalReadTextFile(filename)).toEqual(poisoned);
+
+    unmount();
+  });
+});
+
+test("TodoContext: a failed reload is read-only and blocks saves until a valid reload", async () => {
+  await withTempFile("Original\n", async (filename) => {
+    setupWatcherMock();
+
+    let writeCount = 0;
+    (Runtime as any).writeTextFile = async (
+      path: string | URL,
+      data: string,
+      options?: unknown,
+    ) => {
+      writeCount++;
+      return await originalWriteTextFile(path, data, options as never);
+    };
+
+    const messages: string[] = [];
+    let currentApi: TodoContextType | undefined;
+    const onApi = (api: TodoContextType) => {
+      currentApi = api;
+    };
+    const onMessage = (message: string) => messages.push(message);
+
+    const { unmount } = render(
+      <LifecycleApp
+        filename={filename}
+        showTodoProvider
+        onApi={onApi}
+        onMessage={onMessage}
+      />,
+    );
+
+    await waitFor(() => {
+      if (!currentApi || currentApi.todos.length !== 1) {
+        throw new Error("Initial todos not loaded yet");
+      }
+      if (currentApi.readOnly) throw new Error("Unexpected read-only state");
+    });
+
+    // Let the initial no-op save debounce consume the just-read flag.
+    await waitPast(60);
+    writeCount = 0;
+
+    const marker = "RELOAD_POISON_MARKER";
+    const poisoned = `${marker}\u001b[31mred\n`;
+    await originalWriteTextFile(filename, poisoned);
+    mockWatcher.emit("modify");
+
+    await waitFor(() => {
+      if (!currentApi?.loadError) throw new Error("Load error not set yet");
+    });
+
+    expect(currentApi!.readOnly).toEqual(true);
+    expect(currentApi!.loadError).not.toContain(marker);
+    expect(currentApi!.loadError).not.toContain("\u001b");
+    expect((currentApi!.loadError ?? "").length).toBeLessThan(400);
+    expect(currentApi!.todos.map((todo) => todo.text)).toEqual(["Original"]);
+    expect(messages.some((message) => message.includes("U+001B"))).toEqual(
+      true,
+    );
+
+    // A mutation while read-only must not write the rejected file.
+    currentApi!.addTodos("Blocked todo");
+    await waitFor(() => expect(currentApi?.todos.length).toEqual(2));
+    await waitPast(120);
+    expect(writeCount, "No save while read-only").toEqual(0);
+    expect(await originalReadTextFile(filename)).toEqual(poisoned);
+    expect(currentApi!.readOnly).toEqual(true);
+
+    // Fixing the file externally recovers the provider.
+    await originalWriteTextFile(filename, "Recovered\n");
+    mockWatcher.emit("modify");
+    await waitFor(() => {
+      if (!currentApi) throw new Error("API not ready");
+      if (currentApi.readOnly) throw new Error("Provider still read-only");
+      if (!currentApi.todos.some((todo) => todo.text === "Recovered")) {
+        throw new Error("Valid file not reloaded yet");
+      }
+    });
+    expect(currentApi!.loadError).toBeUndefined();
+
+    // Saving resumes after the valid reload.
+    currentApi!.addTodos("Persisted");
+    await waitFor(async () => {
+      const content = await originalReadTextFile(filename);
+      expect(content).toContain("Persisted");
+    });
+
     unmount();
   });
 });
