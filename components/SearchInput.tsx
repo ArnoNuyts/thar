@@ -8,6 +8,7 @@ import { useNavigation } from "../contexts/navigation-context.tsx";
 import { useSuggestionInput } from "../hooks/useSuggestionInput.ts";
 import { useTagSources } from "../hooks/useTagSources.ts";
 import { COLORS } from "../theme/colors.ts";
+import { sanitizeForDisplay } from "../logic/display-safety.ts";
 
 import type { Todos } from "../logic/Todos.ts";
 
@@ -153,7 +154,9 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
             cursorOffset={cursorPos}
           />
         ) : (
-          <Text color={COLORS.foreground}>{searchQuery}</Text>
+          <Text color={COLORS.foreground}>
+            {sanitizeForDisplay(searchQuery)}
+          </Text>
         )}
       </Box>
       <Text color={isFocused ? COLORS.secondary : COLORS.muted}>{` / `}</Text>

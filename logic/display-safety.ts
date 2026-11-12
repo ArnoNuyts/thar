@@ -1,10 +1,7 @@
-const TAB = 0x09;
-
-const isUnsafeDisplayCodePoint = (codePoint: number): boolean =>
-  (codePoint >= 0x00 && codePoint <= 0x1f) ||
-  (codePoint >= 0x7f && codePoint <= 0x9f) ||
-  codePoint === 0x2028 ||
-  codePoint === 0x2029;
+import {
+  isRejectedControlCodePoint,
+  TAB_CODE_POINT,
+} from "./control-characters.ts";
 
 /**
  * Make text safe to write to a terminal.
@@ -18,9 +15,9 @@ export const sanitizeForDisplay = (text: string): string => {
   let safe = "";
   for (let index = 0; index < text.length; index++) {
     const codePoint = text.charCodeAt(index);
-    if (codePoint === TAB) {
+    if (codePoint === TAB_CODE_POINT) {
       safe += "\t";
-    } else if (isUnsafeDisplayCodePoint(codePoint)) {
+    } else if (isRejectedControlCodePoint(codePoint)) {
       safe += `\\u${codePoint.toString(16).toUpperCase().padStart(4, "0")}`;
     } else {
       safe += text[index];
