@@ -1,12 +1,15 @@
 import { expect, test } from "vitest";
 
 import {
+  DEFAULT_MAX_LINE_CHARS,
+  DEFAULT_MAX_READ_TODOS,
   MAX_PASTE_TODOS,
   MAX_TODO_CHARS,
   MAX_TODOS,
+} from "../logic/limits.ts";
+import {
   TodoInputError,
   validateTodoBatch,
-  validateTodoInput,
   validateTodoText,
 } from "../logic/todo-input.ts";
 
@@ -65,7 +68,15 @@ test("write validation rejects impossible and ambiguous leading dates", () => {
   expect(() => validateTodoText("2026-01-01 2026-01-02 task")).toThrow(
     TodoInputError,
   );
-  expect(() => validateTodoText("2026-01-01 task")).not.toThrow();
+});
+
+test("write validation rejects any valid leading date token", () => {
+  for (const text of ["2026-01-01 task", "(A) 2026-01-01 task"]) {
+    expect(() => validateTodoText(text)).toThrow(TodoInputError);
+    expect(() => validateTodoText(text)).toThrow(/cannot start with a date/i);
+  }
+  // A date anywhere else in the text is ordinary content.
+  expect(() => validateTodoText("task 2026-01-01")).not.toThrow();
 });
 
 test("write validation messages do not echo the payload", () => {
@@ -108,6 +119,9 @@ test("batch validation is atomic: one bad line rejects the whole batch", () => {
   );
 });
 
-test("validateTodoInput is an alias for validateTodoText", () => {
-  expect(validateTodoInput).toBe(validateTodoText);
+test("write caps share one source with the read limits", () => {
+  expect(MAX_TODOS).toEqual(DEFAULT_MAX_READ_TODOS);
+  expect(MAX_TODO_CHARS).toEqual(2_000);
+  expect(MAX_PASTE_TODOS).toEqual(100);
+  expect(MAX_TODO_CHARS).toBeLessThan(DEFAULT_MAX_LINE_CHARS);
 });

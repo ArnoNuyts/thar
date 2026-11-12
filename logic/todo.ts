@@ -14,10 +14,25 @@ import { formatDateTag, parseDateTag, scanTodoPrefix } from "./dates.ts";
 import { CONTEXT_REGEX, PROJECT_REGEX } from "./patterns.ts";
 
 const RECURRENCE_REGEX = /^\+?(\d+)([dwmy])$/;
+/** Upper bound for `rec:` amounts so serialized values stay sane. */
+export const MAX_RECURRENCE_AMOUNT = 9_999;
 const INVALID_RECURRENCE_MESSAGE =
   "Invalid recurrence value; no new todo was created";
 const OUT_OF_RANGE_RECURRENCE_MESSAGE =
   "Recurrence is out of range; no new todo was created";
+
+/** True when `value` can be stored in a `rec:` tag. */
+export const isValidRecurrence = (value: unknown): value is string => {
+  if (typeof value !== "string") return false;
+  const match = RECURRENCE_REGEX.exec(value);
+  if (!match) return false;
+  const amount = Number(match[1]);
+  return (
+    Number.isSafeInteger(amount) &&
+    amount > 0 &&
+    amount <= MAX_RECURRENCE_AMOUNT
+  );
+};
 
 const isValidTodoDate = (date: Date): boolean => {
   if (!isValid(date)) return false;
@@ -39,8 +54,13 @@ export class Todo {
   private _projects: Set<string> = new Set();
   private _contexts: Set<string> = new Set();
   private _tags: { [key: string]: string | string[] } = {};
-  private _invalidDateTokens: string[] = [];
   private _datesInText = false;
+  /**
+   * True when `_completionDate` is already present as the leading literal
+   * token in `_text` (an invalid/ambiguous done line keeps its dates in text).
+   * Serialization must then not prepend the same date again.
+   */
+  private _completionDateInText = false;
 
   get text(): string {
     return this._text;
@@ -65,9 +85,6 @@ export class Todo {
   }
   get tags(): { [key: string]: string | string[] } {
     return this._tags;
-  }
-  get invalidDateTokens(): string[] {
-    return [...this._invalidDateTokens];
   }
 
   constructor(text: string) {
@@ -105,9 +122,9 @@ export class Todo {
         // line round-trips. Valid date fields are still exposed when their
         // position is unambiguous (a completed line).
         this._datesInText = true;
-        this._invalidDateTokens = [...prefix.invalidDateTokens];
         if (prefix.hasDoneMarker) {
           this._completionDate = parseDateTag(prefix.dateTokens[0]);
+          this._completionDateInText = this._completionDate !== undefined;
           this._creationDate = parseDateTag(prefix.dateTokens[1]);
         } else if (
           prefix.dateTokens.length === 1 &&
@@ -138,7 +155,6 @@ export class Todo {
     Object.assign(next, this);
     next._projects = new Set(this._projects);
     next._contexts = new Set(this._contexts);
-    next._invalidDateTokens = [...this._invalidDateTokens];
     next._tags = { ...this._tags };
     for (const key in next._tags) {
       if (Array.isArray(next._tags[key])) {
@@ -158,11 +174,14 @@ export class Todo {
         next._state == TodoStateEnum.todo
           ? TodoStateEnum.done
           : TodoStateEnum.todo;
-      if (next._state === TodoStateEnum.done && next._creationDate) {
+      if (next._state === TodoStateEnum.done) {
+        // Completing always records today, even when the line had no creation
+        // date or kept its dates as literal text.
         next._completionDate = new Date();
-      }
-      if (next._state === TodoStateEnum.todo && next._completionDate) {
+        next._completionDateInText = false;
+      } else if (next._completionDate) {
         next._completionDate = undefined;
+        next._completionDateInText = false;
       }
     });
 
@@ -178,7 +197,11 @@ export class Todo {
       }
 
       const amount = Number(match[1]);
-      if (!Number.isSafeInteger(amount) || amount <= 0) {
+      if (
+        !Number.isSafeInteger(amount) ||
+        amount <= 0 ||
+        amount > MAX_RECURRENCE_AMOUNT
+      ) {
         return {
           updated: next,
           recurrenceError: OUT_OF_RANGE_RECURRENCE_MESSAGE,
@@ -224,7 +247,7 @@ export class Todo {
     return (
       (this.isDone() ? "x " : "") +
       (this._priority ? `(${this._priority}) ` : "") +
-      (!this._datesInText &&
+      (!this._completionDateInText &&
       this._completionDate &&
       isValid(this._completionDate)
         ? formatDateTag(this._completionDate) + " "
@@ -256,6 +279,7 @@ export class Todo {
     if (date !== undefined && !isValidTodoDate(date)) return this;
     return this.with((next) => {
       next._completionDate = date;
+      next._completionDateInText = false;
     });
   }
 
@@ -338,6 +362,7 @@ export class Todo {
   }
 
   setRecurrence(recurrence: string): Todo {
+    if (!isValidRecurrence(recurrence)) return this;
     return this.with((next) => {
       next._tags.rec = recurrence;
     });

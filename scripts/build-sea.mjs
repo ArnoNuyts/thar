@@ -6,7 +6,7 @@ import { build } from "vite";
 const root = resolve(import.meta.dirname, "..");
 const outputName =
   process.env.SEA_OUTPUT ??
-  (process.platform === "win32" ? "todotui.exe" : "todotui");
+  (process.platform === "win32" ? "thar.exe" : "thar");
 const outputPath = resolve(root, "dist", outputName);
 const bundlePath = resolve(root, "dist-sea", "main.mjs");
 const seaConfigPath = resolve(root, "dist-sea", "sea-config.json");

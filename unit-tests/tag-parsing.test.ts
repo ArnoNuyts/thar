@@ -38,6 +38,14 @@ test("tag parsing removes every tag token and trims surrounding whitespace", () 
   expect(todo.text).toEqual("task");
 });
 
+test("tag removal preserves internal whitespace runs", () => {
+  const todo = new Todo("a  ka:x  b");
+
+  expect(todo.tags).toEqual({ ka: "x" });
+  // The preceding space is part of the removed token; the run after it stays.
+  expect(todo.text).toEqual("a   b");
+});
+
 test("tag parsing keeps preserveTags semantics", () => {
   const preserved = new Todo("a rec:1d").setText("b", { preserveTags: true });
   expect(preserved.tags).toEqual({ rec: "1d" });

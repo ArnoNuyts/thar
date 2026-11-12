@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 
 import { render } from "ink-testing-library";
 import { Text } from "ink";
+import { Runtime } from "../utils/runtime.ts";
 import { Button } from "../components/Button.tsx";
 import { FocusProvider } from "../contexts/focus-context.tsx";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
@@ -152,4 +153,13 @@ test("Button.Group: first render activation uses the initial selection", async (
   } finally {
     unmount();
   }
+});
+
+test("TodoProvider: the todo count ref is only assigned outside render", async () => {
+  const source = await Runtime.readTextFile("contexts/todo-context.tsx");
+
+  expect(source).toMatch(
+    /useEffect\(\(\) => \{\s*todoCountRef\.current = todos\.length;\s*\}, \[todos\]\);/,
+  );
+  expect(source.match(/todoCountRef\.current =/g)).toHaveLength(1);
 });

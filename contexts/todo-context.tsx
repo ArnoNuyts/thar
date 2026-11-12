@@ -12,7 +12,8 @@ import { writeTodosToFile } from "../logic/todo-file-helpers.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
 import { useTodoFileSync } from "../hooks/useTodoFileSync.ts";
-import { MAX_TODOS, validateTodoBatch } from "../logic/todo-input.ts";
+import { MAX_TODOS } from "../logic/limits.ts";
+import { validateTodoBatch } from "../logic/todo-input.ts";
 import { useToaster } from "./toaster-context.tsx";
 
 const NOT_SAVED_READ_ONLY = "Not saved: read-only";

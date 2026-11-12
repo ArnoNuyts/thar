@@ -85,7 +85,11 @@ export const parseDateTag = (value: unknown): Date | undefined => {
     return undefined;
   }
   const date = parseISO(value);
-  return isValid(date) ? startOfDay(date) : undefined;
+  if (!isValid(date)) return undefined;
+  // date-fns formats year 1 BCE as `0001`, so accepting year 0000 would
+  // silently rewrite a loaded line. Keep the token literal instead.
+  const year = date.getFullYear();
+  return year >= 1 && year <= 9999 ? startOfDay(date) : undefined;
 };
 
 /** Format a Date as a `yyyy-MM-dd` date-tag value in local time. */

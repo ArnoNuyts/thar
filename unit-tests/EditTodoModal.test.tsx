@@ -172,8 +172,119 @@ test("EditTodoModal: rejects an impossible leading date and stays open", async (
   unmount();
 });
 
-test("EditTodoModal: rejects overlong text and stays open", async () => {
+test("EditTodoModal: rejects editing the text to start with a date", async () => {
   let updateCalls = 0;
+  let toast: string | undefined;
+  const todo = new Todo("original");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    const { toasterMessage } = useToaster();
+
+    useEffect(() => {
+      openModal("edit-todo");
+    }, [openModal]);
+
+    useEffect(() => {
+      toast = toasterMessage;
+    }, [toasterMessage]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "edit-todo" && <EditTodoModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ getSelectedTodo: () => todo }}
+      todoValue={{
+        updateTodos: () => {
+          updateCalls++;
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => {
+    expect(lastFrame() || "").toMatch(/original/);
+  });
+
+  for (let index = 0; index < "original".length; index++) {
+    stdin.write("\x7f");
+  }
+  stdin.write("2026-01-01 edited");
+  await waitFor(() => {
+    expect(lastFrame() || "").toMatch(/2026-01-01 edited/);
+  });
+
+  stdin.write("\r");
+
+  await waitFor(() => {
+    expect(toast || "").toMatch(/cannot start with a date/i);
+  });
+  expect(updateCalls).toEqual(0);
+  expect(lastFrame() || "").toMatch(/Edit todo/);
+
+  unmount();
+});
+
+test("EditTodoModal: saves an unchanged overlong value", async () => {
+  let updatedTodo: Todo | undefined;
+  let activeModalName: string | null = null;
+  const todo = new Todo("a".repeat(2_001));
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+
+    useEffect(() => {
+      openModal("edit-todo");
+    }, [openModal]);
+
+    useEffect(() => {
+      activeModalName = activeModal;
+    }, [activeModal]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "edit-todo" && <EditTodoModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, stdin } = render(
+    <TestWrapper
+      navValue={{ getSelectedTodo: () => todo }}
+      todoValue={{
+        updateTodos: (todosToUpdate: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todosToUpdate[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => {
+    expect(activeModalName).toEqual("edit-todo");
+  });
+
+  stdin.write("\r");
+
+  await waitFor(() => {
+    expect(updatedTodo?.text.length).toEqual(2_001);
+  });
+  await waitFor(() => expect(activeModalName).toEqual(null));
+
+  unmount();
+});
+
+test("EditTodoModal: rejects growth, then saves after shrinking back", async () => {
+  let updateCalls = 0;
+  let savedLength = 0;
   let toast: string | undefined;
   let activeModalName: string | null = null;
   const todo = new Todo("a".repeat(2_001));
@@ -205,8 +316,9 @@ test("EditTodoModal: rejects overlong text and stays open", async () => {
     <TestWrapper
       navValue={{ getSelectedTodo: () => todo }}
       todoValue={{
-        updateTodos: () => {
+        updateTodos: (todosToUpdate: Todo[], transform: (t: Todo) => Todo) => {
           updateCalls++;
+          savedLength = transform(todosToUpdate[0]).text.length;
         },
       }}
     >
@@ -218,13 +330,22 @@ test("EditTodoModal: rejects overlong text and stays open", async () => {
     expect(activeModalName).toEqual("edit-todo");
   });
 
-  stdin.write("\r");
+  await stdin.write("x");
+  await stdin.write("\r");
 
   await waitFor(() => {
     expect(toast || "").toMatch(/too long/i);
   });
   expect(updateCalls).toEqual(0);
   expect(activeModalName).toEqual("edit-todo");
+
+  await stdin.write("\x7f");
+  await stdin.write("\r");
+
+  await waitFor(() => {
+    expect(updateCalls).toEqual(1);
+    expect(savedLength).toEqual(2_001);
+  });
 
   unmount();
 });

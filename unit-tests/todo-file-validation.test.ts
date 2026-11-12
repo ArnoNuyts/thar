@@ -38,9 +38,9 @@ test("limits: defaults and positive-integer environment overrides", () => {
 
   expect(
     getReadLimits({
-      TODOTUI_MAX_FILE_BYTES: "2048",
-      TODOTUI_MAX_READ_TODOS: "25",
-      TODOTUI_MAX_LINE_CHARS: "100",
+      THAR_MAX_FILE_BYTES: "2048",
+      THAR_MAX_READ_TODOS: "25",
+      THAR_MAX_LINE_CHARS: "100",
     }),
   ).toEqual({ maxFileBytes: 2048, maxReadTodos: 25, maxLineChars: 100 });
 });
@@ -48,11 +48,11 @@ test("limits: defaults and positive-integer environment overrides", () => {
 test("limits: invalid environment values throw a clear, bounded error", () => {
   for (const value of ["0", "-1", "abc", "1.5", "", " 10", "Infinity"]) {
     const error = captureError(() =>
-      getReadLimits({ TODOTUI_MAX_READ_TODOS: value }),
+      getReadLimits({ THAR_MAX_READ_TODOS: value }),
     );
     expect(error).toBeInstanceOf(InvalidLimitError);
     const message = (error as Error).message;
-    expect(message).toContain("TODOTUI_MAX_READ_TODOS");
+    expect(message).toContain("THAR_MAX_READ_TODOS");
     expect(message).toContain("positive integer");
     if (value !== "") expect(message).not.toContain(value);
   }

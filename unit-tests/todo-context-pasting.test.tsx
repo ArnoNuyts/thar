@@ -5,11 +5,9 @@ import { render } from "ink-testing-library";
 import { Text } from "ink";
 import { TodoProvider, useTodo } from "../contexts/todo-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
-import {
-  MAX_PASTE_TODOS,
-  MAX_TODO_CHARS,
-  TodoInputError,
-} from "../logic/todo-input.ts";
+import { MAX_PASTE_TODOS, MAX_TODO_CHARS, MAX_TODOS } from "../logic/limits.ts";
+import { TodoInputError } from "../logic/todo-input.ts";
+import { Todo } from "../logic/todo.ts";
 
 import { MockWatcher, restoreRuntimeMocks, waitFor } from "./test-utils.ts";
 
@@ -39,21 +37,23 @@ const PastingTestApp = ({
   onUpdate,
 }: {
   onUpdate: (api: {
-    addTodos: (...texts: string[]) => void;
+    addTodos: (...texts: string[]) => Todo[];
+    setTodos: (todos: Todo[]) => void;
     undo: () => void;
     redo: () => void;
     todos: any[];
   }) => void;
 }) => {
-  const { addTodos, undo, redo, todos } = useTodo();
+  const { addTodos, setTodos, undo, redo, todos } = useTodo();
   useEffect(() => {
     onUpdate({
       addTodos,
+      setTodos,
       undo,
       redo,
       todos,
     });
-  }, [addTodos, undo, redo, todos, onUpdate]);
+  }, [addTodos, setTodos, undo, redo, todos, onUpdate]);
   return <Text>PastingTestApp</Text>;
 };
 
@@ -139,6 +139,9 @@ test("TodoContext: addTodos rejects unsafe input without partial writes", async 
   expect(() => currentApi!.addTodos("a".repeat(MAX_TODO_CHARS + 1))).toThrow(
     TodoInputError,
   );
+  expect(() => currentApi!.addTodos("2026-01-01 task")).toThrow(
+    /cannot start with a date/i,
+  );
 
   // None of the rejected batches may have added anything.
   expect(currentApi!.todos.length).toEqual(0);
@@ -150,6 +153,60 @@ test("TodoContext: addTodos rejects unsafe input without partial writes", async 
   unmount();
   mockWatcher.close();
   teardownMocks();
+});
+
+test("TodoContext: addTodos enforces MAX_TODOS atomically, including same-tick calls", async () => {
+  setupMocks();
+
+  let currentApi:
+    | {
+        addTodos: (...texts: string[]) => Todo[];
+        setTodos: (todos: Todo[]) => void;
+        todos: Todo[];
+      }
+    | undefined;
+
+  const { unmount } = render(
+    <ToasterProvider>
+      <TodoProvider filename="test.txt">
+        <PastingTestApp onUpdate={(api) => (currentApi = api)} />
+      </TodoProvider>
+    </ToasterProvider>,
+  );
+
+  try {
+    await waitFor(() => {
+      if (!currentApi) throw new Error("API not ready");
+      if (readCount === 0) throw new Error("File not loaded yet");
+    });
+
+    currentApi!.setTodos(
+      Array.from(
+        { length: MAX_TODOS - 1 },
+        (_, index) => new Todo(`Todo ${index}`),
+      ),
+    );
+    await waitFor(() =>
+      expect(currentApi!.todos.length).toEqual(MAX_TODOS - 1),
+    );
+
+    // Two synchronous calls: the second sees the optimistic count from the
+    // first even though React has not re-rendered in between.
+    const added = currentApi!.addTodos("first");
+    expect(added).toHaveLength(1);
+    expect(() => currentApi!.addTodos("second")).toThrow(/limit is 10000/i);
+    await waitFor(() => expect(currentApi!.todos.length).toEqual(MAX_TODOS));
+
+    // A rejected batch at the cap leaves the list untouched.
+    expect(() => currentApi!.addTodos("third", "fourth")).toThrow(
+      TodoInputError,
+    );
+    expect(currentApi!.todos.length).toEqual(MAX_TODOS);
+  } finally {
+    unmount();
+    mockWatcher.close();
+    teardownMocks();
+  }
 });
 
 test("TodoContext: addTodos caps a paste batch atomically", async () => {
