@@ -6,6 +6,7 @@ import { Box } from "ink";
 
 import { CreateTodoModal } from "../components/CreateTodoModal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
+import { useToaster } from "../contexts/toaster-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
 import { FocusObserver, TestWrapper } from "./test-components.tsx";
@@ -251,6 +252,117 @@ test("CreateTodoModal: mouse hover should stay aligned when help text wraps", as
   await waitFor(() => {
     expect(lastFrame() || "").toMatch(new RegExp(activeButtonLabel("Cancel")));
   });
+
+  unmount();
+});
+
+test("CreateTodoModal: rejects an impossible leading date and stays open", async () => {
+  let addedText = "";
+  let toast: string | undefined;
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    const { toasterMessage } = useToaster();
+
+    useEffect(() => {
+      openModal("create-todo");
+    }, [openModal]);
+
+    useEffect(() => {
+      toast = toasterMessage;
+    }, [toasterMessage]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "create-todo" && <CreateTodoModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <SearchProvider>
+      <TestWrapper
+        todoValue={{
+          addTodos: (text: string) => {
+            addedText = text;
+            return [new Todo(text)];
+          },
+        }}
+      >
+        <TestComponent />
+      </TestWrapper>
+    </SearchProvider>,
+  );
+
+  await waitFor(() => {
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+  });
+
+  stdin.write("2024-02-30 impossible");
+  await waitFor(() => {
+    expect(lastFrame() || "").toMatch(/2024-02-30 impossible/);
+  });
+
+  stdin.write("\r");
+
+  await waitFor(() => {
+    expect(toast || "").toMatch(/impossible date/i);
+  });
+  expect(addedText).toEqual("");
+  expect(lastFrame() || "").toMatch(/Create new todo/);
+
+  unmount();
+});
+
+test("CreateTodoModal: rejects empty input and stays open", async () => {
+  let addedText = "";
+  let toast: string | undefined;
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    const { toasterMessage } = useToaster();
+
+    useEffect(() => {
+      openModal("create-todo");
+    }, [openModal]);
+
+    useEffect(() => {
+      toast = toasterMessage;
+    }, [toasterMessage]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "create-todo" && <CreateTodoModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <SearchProvider>
+      <TestWrapper
+        todoValue={{
+          addTodos: (text: string) => {
+            addedText = text;
+            return [new Todo(text)];
+          },
+        }}
+      >
+        <TestComponent />
+      </TestWrapper>
+    </SearchProvider>,
+  );
+
+  await waitFor(() => {
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+  });
+
+  stdin.write("\r");
+
+  await waitFor(() => {
+    expect(toast || "").toMatch(/empty|whitespace/i);
+  });
+  expect(addedText).toEqual("");
+  expect(lastFrame() || "").toMatch(/Create new todo/);
 
   unmount();
 });

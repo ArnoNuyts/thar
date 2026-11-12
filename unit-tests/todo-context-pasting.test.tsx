@@ -5,6 +5,11 @@ import { render } from "ink-testing-library";
 import { Text } from "ink";
 import { TodoProvider, useTodo } from "../contexts/todo-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import {
+  MAX_PASTE_TODOS,
+  MAX_TODO_CHARS,
+  TodoInputError,
+} from "../logic/todo-input.ts";
 
 import { MockWatcher, restoreRuntimeMocks, waitFor } from "./test-utils.ts";
 
@@ -95,6 +100,93 @@ test("TodoContext: should add many todos and undo/redo as a single action", asyn
   expect(currentApi!.todos[0].text).toEqual("Todo 1");
   expect(currentApi!.todos[1].text).toEqual("Todo 2");
   expect(currentApi!.todos[2].text).toEqual("Todo 3");
+
+  unmount();
+  mockWatcher.close();
+  teardownMocks();
+});
+
+test("TodoContext: addTodos rejects unsafe input without partial writes", async () => {
+  setupMocks();
+
+  let currentApi:
+    | {
+        addTodos: (...texts: string[]) => void;
+        todos: any[];
+      }
+    | undefined;
+
+  const { unmount } = render(
+    <ToasterProvider>
+      <TodoProvider filename="test.txt">
+        <PastingTestApp onUpdate={(api) => (currentApi = api)} />
+      </TodoProvider>
+    </ToasterProvider>,
+  );
+
+  await waitFor(() => {
+    if (!currentApi) throw new Error("API not ready");
+    if (readCount === 0) throw new Error("File not loaded yet");
+  });
+
+  expect(() => currentApi!.addTodos("good", " ")).toThrow(TodoInputError);
+  expect(() => currentApi!.addTodos("good", "bad\nline")).toThrow(
+    TodoInputError,
+  );
+  expect(() => currentApi!.addTodos("good", "bad\u0000line")).toThrow(
+    TodoInputError,
+  );
+  expect(() => currentApi!.addTodos("a".repeat(MAX_TODO_CHARS + 1))).toThrow(
+    TodoInputError,
+  );
+
+  // None of the rejected batches may have added anything.
+  expect(currentApi!.todos.length).toEqual(0);
+
+  currentApi!.addTodos("safe");
+  await waitFor(() => expect(currentApi!.todos.length).toEqual(1));
+  expect(currentApi!.todos[0].text).toEqual("safe");
+
+  unmount();
+  mockWatcher.close();
+  teardownMocks();
+});
+
+test("TodoContext: addTodos caps a paste batch atomically", async () => {
+  setupMocks();
+
+  let currentApi:
+    | {
+        addTodos: (...texts: string[]) => void;
+        todos: any[];
+      }
+    | undefined;
+
+  const { unmount } = render(
+    <ToasterProvider>
+      <TodoProvider filename="test.txt">
+        <PastingTestApp onUpdate={(api) => (currentApi = api)} />
+      </TodoProvider>
+    </ToasterProvider>,
+  );
+
+  await waitFor(() => {
+    if (!currentApi) throw new Error("API not ready");
+    if (readCount === 0) throw new Error("File not loaded yet");
+  });
+
+  const tooMany = Array.from(
+    { length: MAX_PASTE_TODOS + 1 },
+    (_, index) => `Todo ${index}`,
+  );
+  expect(() => currentApi!.addTodos(...tooMany)).toThrow(/limit is 100/i);
+  expect(currentApi!.todos.length).toEqual(0);
+
+  const allowed = tooMany.slice(0, MAX_PASTE_TODOS);
+  currentApi!.addTodos(...allowed);
+  await waitFor(() =>
+    expect(currentApi!.todos.length).toEqual(MAX_PASTE_TODOS),
+  );
 
   unmount();
   mockWatcher.close();

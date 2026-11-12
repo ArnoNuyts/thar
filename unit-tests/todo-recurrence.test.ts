@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import { Todo } from "../logic/todo.ts";
 
@@ -67,4 +67,81 @@ test("toggleState - yearly recurrence", () => {
   nextYear.setFullYear(nextYear.getFullYear() + 1);
 
   expect(recurring?.tags.due).toEqual(formatDate(nextYear));
+});
+
+test("toggleState - accepts an explicit plus sign", () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date(2026, 0, 1, 12));
+    const { recurring, recurrenceError } = new Todo(
+      "todo rec:+2d",
+    ).toggleState();
+
+    expect(recurrenceError).toBeUndefined();
+    expect(recurring?.tags.due).toEqual("2026-01-03");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("toggleState - rejects malformed recurrence values without throwing", () => {
+  for (const recurrence of [
+    "1dd",
+    "1d2",
+    "x1d",
+    "d",
+    "1",
+    "-1d",
+    "1D",
+    "1 d",
+    "0d",
+    "01dd",
+  ]) {
+    const todo = new Todo(`todo rec:${recurrence}`);
+
+    expect(() => todo.toggleState()).not.toThrow();
+    const result = todo.toggleState();
+    expect(result.updated.isDone()).toEqual(true);
+    expect(result.recurring).toBeUndefined();
+    expect(result.recurrenceError).toMatch(/recurrence/i);
+  }
+});
+
+test("toggleState - out-of-range yearly and monthly recurrence does not throw", () => {
+  for (const recurrence of [
+    "999999999999y",
+    "999999999999m",
+    "999999999999d",
+  ]) {
+    const todo = new Todo(`task rec:${recurrence}`);
+
+    expect(() => todo.toggleState()).not.toThrow();
+    const result = todo.toggleState();
+    expect(result.recurring).toBeUndefined();
+    expect(result.updated.isDone()).toEqual(true);
+    expect(result.recurrenceError).toMatch(/out of range/i);
+    expect(result.updated.toString()).not.toMatch(/Invalid Date|NaN/);
+  }
+});
+
+test("toggleState - monthly recurrence clamps to the end of the month", () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date(2024, 0, 31, 12));
+    const { recurring } = new Todo("task rec:1m").toggleState();
+    expect(recurring?.tags.due).toEqual("2024-02-29");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("toggleState - yearly recurrence clamps a leap day", () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date(2024, 1, 29, 12));
+    const { recurring } = new Todo("task rec:1y").toggleState();
+    expect(recurring?.tags.due).toEqual("2025-02-28");
+  } finally {
+    vi.useRealTimers();
+  }
 });
