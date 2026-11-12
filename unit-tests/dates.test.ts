@@ -32,6 +32,7 @@ test("parseDateTag - rejects invalid and non-string values", () => {
     "2024-01-32",
     "2024-1-1",
     "24-01-01",
+    "0000-01-01",
     "2024-01-01T10:00:00",
     "2024-01-01 due",
     undefined,

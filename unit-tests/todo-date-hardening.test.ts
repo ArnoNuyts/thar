@@ -1,6 +1,7 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { isValid } from "date-fns";
 
+import { scanTodoPrefix, formatDateTag } from "../logic/dates.ts";
 import { Todo } from "../logic/todo.ts";
 import { TodoInputError, validateTodoText } from "../logic/todo-input.ts";
 
@@ -18,7 +19,7 @@ test("impossible leading dates stay literal and round-trip", () => {
 
     expect(todo.toString()).toEqual(input);
     expect(todo.text).toEqual(input);
-    expect(todo.invalidDateTokens).toEqual([token]);
+    expect(scanTodoPrefix(input).invalidDateTokens).toEqual([token]);
     expect(todo.creationDate).toBeUndefined();
     expect(todo.completionDate).toBeUndefined();
   }
@@ -30,7 +31,7 @@ test("impossible completion dates on done lines stay literal", () => {
     const todo = new Todo(input);
 
     expect(todo.toString()).toEqual(input);
-    expect(todo.invalidDateTokens).toEqual([token]);
+    expect(scanTodoPrefix(input).invalidDateTokens).toEqual([token]);
     expect(todo.completionDate).toBeUndefined();
     expect(() => todo.toString()).not.toThrow();
   }
@@ -41,7 +42,7 @@ test("a done line with one invalid and one valid date is not duplicated or dropp
   const todo = new Todo(input);
 
   expect(todo.toString()).toEqual(input);
-  expect(todo.invalidDateTokens).toEqual(["2024-02-30"]);
+  expect(scanTodoPrefix(input).invalidDateTokens).toEqual(["2024-02-30"]);
   expect(todo.completionDate).toBeUndefined();
   // The valid token is still exposed, but serialized exactly once as text.
   expect(todo.creationDate).toBeInstanceOf(Date);
@@ -55,7 +56,7 @@ test("a done line with a valid completion and invalid creation date round-trips"
   const todo = new Todo(input);
 
   expect(todo.toString()).toEqual(input);
-  expect(todo.invalidDateTokens).toEqual(["2024-02-30"]);
+  expect(scanTodoPrefix(input).invalidDateTokens).toEqual(["2024-02-30"]);
   expect(todo.completionDate?.getFullYear()).toEqual(2024);
   expect(todo.creationDate).toBeUndefined();
 });
@@ -64,7 +65,9 @@ test("valid done lines still parse completion and creation dates", () => {
   const todo = new Todo("x 2024-01-02 2024-01-01 done");
 
   expect(todo.toString()).toEqual("x 2024-01-02 2024-01-01 done");
-  expect(todo.invalidDateTokens).toEqual([]);
+  expect(
+    scanTodoPrefix("x 2024-01-02 2024-01-01 done").invalidDateTokens,
+  ).toEqual([]);
   expect(todo.completionDate?.getFullYear()).toEqual(2024);
   expect(todo.completionDate?.getMonth()).toEqual(0);
   expect(todo.completionDate?.getDate()).toEqual(2);
@@ -78,7 +81,7 @@ test("an open todo with two leading dates preserves both tokens", () => {
   expect(todo.toString()).toEqual(input);
   expect(todo.text).toEqual(input);
   expect(todo.creationDate).toBeUndefined();
-  expect(todo.invalidDateTokens).toEqual([]);
+  expect(scanTodoPrefix(input).invalidDateTokens).toEqual([]);
 });
 
 test("an open todo with one valid leading date still parses it", () => {
@@ -115,6 +118,46 @@ test("write validation rejects impossible and ambiguous leading dates", () => {
   expect(() => validateTodoText("2026-01-01 2026-01-02 new")).toThrow(
     /more than one date/i,
   );
+});
+
+test("completing a todo whose dates stay in text records today's completion", () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date(2026, 10, 12, 12));
+    const cases = [
+      ["2026-01-01 2026-01-02 task", "2026-01-01 2026-01-02 task"],
+      ["2024-02-30 impossible", "2024-02-30 impossible"],
+    ];
+
+    for (const [input, literalBody] of cases) {
+      const todo = new Todo(input);
+      const { updated } = todo.toggleState();
+
+      expect(updated.isDone()).toEqual(true);
+      expect(updated.completionDate).toBeInstanceOf(Date);
+      expect(formatDateTag(updated.completionDate!)).toEqual("2026-11-12");
+      expect(updated.toString()).toEqual(`x 2026-11-12 ${literalBody}`);
+
+      const reloaded = new Todo(updated.toString());
+      expect(reloaded.isDone()).toEqual(true);
+      expect(reloaded.completionDate).toBeInstanceOf(Date);
+      expect(formatDateTag(reloaded.completionDate!)).toEqual("2026-11-12");
+      expect(reloaded.toString()).toEqual(`x 2026-11-12 ${literalBody}`);
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("year 0000 stays literal instead of being rewritten to 0001", () => {
+  const todo = new Todo("0000-01-01 task");
+
+  expect(todo.toString()).toEqual("0000-01-01 task");
+  expect(todo.text).toEqual("0000-01-01 task");
+  expect(todo.creationDate).toBeUndefined();
+  expect(scanTodoPrefix("0000-01-01 task").invalidDateTokens).toEqual([
+    "0000-01-01",
+  ]);
 });
 
 test("setters ignore invalid dates instead of throwing", () => {

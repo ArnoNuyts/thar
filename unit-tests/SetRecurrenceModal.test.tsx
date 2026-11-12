@@ -6,6 +6,7 @@ import { Box } from "ink";
 
 import { SetRecurrenceModal } from "../components/SetRecurrenceModal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
+import { useToaster } from "../contexts/toaster-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
 import { FocusObserver, TestWrapper } from "./test-components.tsx";
@@ -157,6 +158,68 @@ test("SetRecurrenceModal: mouse click should select recurrence base", async () =
       true,
     ),
   );
+  unmount();
+});
+
+test("SetRecurrenceModal: rejects 0, then accepts a fixed positive amount", async () => {
+  let updatedTodo: Todo | undefined;
+  let toast: string | undefined;
+  const todo = new Todo("Recurrence validation todo");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    const { toasterMessage } = useToaster();
+    useEffect(() => {
+      openModal("set-recurrence");
+    }, [openModal]);
+
+    useEffect(() => {
+      toast = toasterMessage;
+    }, [toasterMessage]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "set-recurrence" && <SetRecurrenceModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ getSelectedTodos: () => [todo] }}
+      todoValue={{
+        updateTodos: (todos: Todo[], transform: (t: Todo) => Todo) => {
+          updatedTodo = transform(todos[0]);
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Set Recurrence Base/));
+  stdin.write("\r"); // Daily
+  await waitFor(() =>
+    expect(lastFrame() || "").toMatch(/Set Recurrence Interval \(Daily\)/),
+  );
+
+  stdin.write("0");
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Every0/));
+  stdin.write("\r");
+
+  await waitFor(() => expect(toast || "").toMatch(/whole number from 1 to/i));
+  expect(updatedTodo).toBeUndefined();
+  expect(lastFrame() || "").toMatch(/Set Recurrence Interval \(Daily\)/);
+
+  stdin.write("\x7f");
+  stdin.write("2");
+  await waitFor(() => expect(lastFrame() || "").toMatch(/Every2/));
+  stdin.write("\r");
+
+  await waitFor(() => {
+    expect(updatedTodo?.tags.rec).toEqual("2d");
+  });
+
   unmount();
 });
 
