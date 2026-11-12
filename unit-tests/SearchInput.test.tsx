@@ -396,3 +396,31 @@ test("SearchInput: ignores keys until focused", async () => {
 
   unmount();
 });
+
+test("SearchInput: unfocused query escapes terminal controls", async () => {
+  const controls =
+    /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u2028\u2029]/u;
+  const poisoned = "c1\u009b31m\u2028sep\u001b[31m";
+
+  const { lastFrame, unmount } = render(
+    <TestWrapper initialTodos={[]}>
+      <SearchQuerySetter query={poisoned} />
+      <ConnectedSearchInput />
+    </TestWrapper>,
+  );
+
+  try {
+    await waitFor(() => {
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("\\u009B");
+      expect(frame).toContain("\\u2028");
+      expect(frame).toContain("\\u001B");
+    });
+
+    const frame = lastFrame() ?? "";
+    expect(frame.includes("\u001b"), "no ESC").toEqual(false);
+    expect(controls.test(frame), "no C0/C1/U+2028").toEqual(false);
+  } finally {
+    unmount();
+  }
+});

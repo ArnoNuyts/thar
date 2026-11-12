@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Text } from "ink";
 import chalk from "chalk";
 import { type Key, useInput } from "../hooks/useInput.ts";
+import { sanitizeForDisplay } from "../logic/display-safety.ts";
 
 interface ControlledTextInputProps {
   value: string;
@@ -167,24 +168,35 @@ function renderText(
   showCursor: boolean,
   focus: boolean,
 ): RenderedText {
+  // The stored value and cursor offsets stay over the raw text; only the
+  // rendered copy escapes control characters. Sanitizing one raw character at
+  // a time keeps the cursor offset meaningful even when one character expands
+  // to a six-character `\uXXXX` escape.
+  const safePlaceholder = sanitizeForDisplay(placeholder);
+
   if (!showCursor || !focus) {
     return {
-      renderedValue: value,
-      renderedPlaceholder: placeholder ? chalk.grey(placeholder) : undefined,
+      renderedValue: sanitizeForDisplay(value),
+      renderedPlaceholder: placeholder
+        ? chalk.grey(safePlaceholder)
+        : undefined,
     };
   }
 
   const renderedPlaceholder =
-    placeholder.length > 0
-      ? chalk.inverse(placeholder[0]) + chalk.grey(placeholder.slice(1))
+    safePlaceholder.length > 0
+      ? chalk.inverse(safePlaceholder[0]) + chalk.grey(safePlaceholder.slice(1))
       : chalk.inverse(" ");
 
   let renderedValue = value.length > 0 ? "" : chalk.inverse(" ");
 
-  let i = 0;
+  let offset = 0;
   for (const char of value) {
-    renderedValue += i === cursorOffset ? chalk.inverse(char) : char;
-    i++;
+    const safeChar = sanitizeForDisplay(char);
+    const charEnd = offset + char.length;
+    const isCursor = cursorOffset >= offset && cursorOffset < charEnd;
+    renderedValue += isCursor ? chalk.inverse(safeChar) : safeChar;
+    offset = charEnd;
   }
 
   if (value.length > 0 && cursorOffset === value.length) {

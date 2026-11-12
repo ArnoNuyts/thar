@@ -1,6 +1,10 @@
 # Security Hardening Tasklist — todotui
 
-> **Status:** proposed (2026-11-12). Nothing in this list is implemented yet.
+> **Status:** implemented. The read-path, terminal-display, and read-only
+> recovery hardening landed in [#24](https://github.com/ArnoNuyts/todotui/pull/24);
+> the parser and write-input hardening landed in
+> [#25](https://github.com/ArnoNuyts/todotui/pull/25). #10 (visual spoofing)
+> remains deferred.
 > **Source:** the fuzzing findings and security fixes landed in
 > `todo-txt-mcp` between `aaa0808` and `b17687b` (PRs #45, #52–#55), reviewed
 > against this TUI.
@@ -59,27 +63,32 @@ They were reproduced on Node 24 with the repo's Vitest/Vite toolchain.
 
 ### 1. Validate every loaded line before it becomes a `Todo`
 
-- [ ] Add `logic/limits.ts` with read limits and typed errors, mirroring
+**Status:** implemented in
+[#24](https://github.com/ArnoNuyts/todotui/pull/24).
+
+- [x] Add `logic/limits.ts` with read limits and typed errors, mirroring
       `todo-txt-mcp` but with UI-appropriate defaults: - `TODOTUI_MAX_FILE_BYTES` — default **1 MiB**, checked via
       `Runtime.stat()` **before** `readTextFile`, and re-checked after the
       read with the actual UTF-8 byte length. - `TODOTUI_MAX_READ_TODOS` — default **10,000** (interactive budget; the
       MCP read cap of 50,000 exists to keep over-cap files deletable, which
       is less useful in a TUI that must render the list). - `TODOTUI_MAX_LINE_CHARS` — default **8,192** UTF-16 code units.
       Keep the values in one module; do not scatter literals.
-- [ ] Add a pure `validateTodoFileContent(data, limits): string[]` in a new
+- [x] Add a pure `validateTodoFileContent(data, limits): string[]` in a new
       `logic/todo-file-validation.ts`: - Count newlines with an `indexOf("\n")` loop **before** `split`. - Split only after the count is within the limit. - Strip exactly one trailing `\r` from each line (CRLF support), then
       reject any remaining `\r`. - Reject `\u0000-\u0008`, `\u000B-\u001F`, `\u007F-\u009F`,
       `\u2028`, and `\u2029`. Allow tab. - Error messages report only line number, length, or `U+XXXX`; never the
       line content.
-- [ ] Call the validator from `readTodosFromFile` before constructing `Todo`
+- [x] Call the validator from `readTodosFromFile` before constructing `Todo`
       objects. Keep the missing-file behavior (`ENOENT` creates an empty file).
-- [ ] Add a defense-in-depth `sanitizeForDisplay(text)` used by
-      `renderTodoText` (and any toast/modal that shows file-supplied text):
-      replace C0/C1/DEL and `\u2028/\u2029` with visible escapes or a
+- [x] Add a defense-in-depth `sanitizeForDisplay(text)` used by
+      `renderTodoText`, `ControlledTextInput`, `SearchInput`, and any
+      toast/modal that shows file-supplied text: replace C0/C1/DEL and
+      `\u2028/\u2029` with visible escapes or a
       placeholder, and neutralize ESC. This protects programmatic strings that
       bypass the file validator.
 - [ ] Add a controlled escape hatch only if needed (`TODOTUI_ALLOW_UNSAFE_FILE=1`)
       and document that it disables terminal-injection protection.
+      _Not needed; no escape hatch was added._
 
 **Acceptance:** a file with CR, NUL, ESC, DEL, C1, U+2028, or U+2029 is refused
 with a bounded error and the app does not write the file; a CRLF file loads and
@@ -93,14 +102,19 @@ or `\u009b`.
 
 ### 2. Do not let a rejected reload be overwritten
 
-- [ ] Add a `loadError` / `readOnly` state to `TodoProvider`. On initial load
+**Status:** implemented in
+[#24](https://github.com/ArnoNuyts/todotui/pull/24).
+
+- [x] Add a `loadError` / `readOnly` state to `TodoProvider`. On initial load
       or watcher reload failure, show a bounded toast and block the save
       effect until a later load succeeds.
-- [ ] Do not silently `console.error` and continue with stale state when a
+- [x] Do not silently `console.error` and continue with stale state when a
       reload fails; the current behavior can clobber a file that the user is
       fixing externally.
-- [ ] Make the recovery explicit: a successful watcher reload clears
+- [x] Make the recovery explicit: a successful watcher reload clears
       `loadError`; `undo`/`redo` do not bypass the write block.
+- [x] Surface the read-only state persistently in the status bar and warn on
+      mutations/undo instead of silently dropping edits.
 
 **Acceptance:** poison `todo.txt` while the app is running, then edit a todo;
 the app reports the load error, leaves the file untouched, and resumes saving
@@ -114,15 +128,18 @@ subsequent mutation.
 
 ### 3. Make tag parsing linear
 
-- [ ] Replace the per-token `text.replace(tag[0], "")` loop in
+**Status:** implemented in
+[#25](https://github.com/ArnoNuyts/todotui/pull/25).
+
+- [x] Replace the per-token `text.replace(tag[0], "")` loop in
       `internalParseText` with one `text.replace(TAG_REGEX, "")` pass after
       collecting values.
-- [ ] Keep the existing public tag shape (`string | string[]`) and the
+- [x] Keep the existing public tag shape (`string | string[]`) and the
       `preserveTags` behavior; do not change dedupe/order semantics as part of
       this fix.
-- [ ] Optionally add `TODOTUI_MAX_TAGS_PER_LINE` (default **1,024**) as
+- [x] Optionally add `TODOTUI_MAX_TAGS_PER_LINE` (default **1,024**) as
       defense in depth; the line-length cap already bounds the input.
-- [ ] Benchmark 60k tags on one line and keep it well under 1 s.
+- [x] Benchmark 60k tags on one line and keep it well under 1 s.
 
 **Acceptance:** the 589 KB / 60k-tag line no longer blocks the UI; a 2,000-char
 line with ~400 tags parses in a few milliseconds; tags are still removed from
@@ -133,20 +150,23 @@ whitespace, and `preserveTags` cases); keep `unit-tests/todo.test.ts` green.
 
 ### 4. Keep impossible dates readable and never throw on serialization
 
-- [ ] Add a strict leading-date parser in `logic/dates.ts` that reuses
+**Status:** implemented in
+[#25](https://github.com/ArnoNuyts/todotui/pull/25).
+
+- [x] Add a strict leading-date parser in `logic/dates.ts` that reuses
       `parseDateTag` (regex + `isValid` + `startOfDay`) instead of calling
       `parseISO` directly in the `Todo` constructor.
-- [ ] For a regex-valid but impossible date (`2024-13-01`, `2024-02-30`,
+- [x] For a regex-valid but impossible date (`2024-13-01`, `2024-02-30`,
       `2024-00-00`, `2024-01-39`), keep the token as literal body text and
       record it as an invalid date token. `toString()` must always succeed and
       preserve the loaded bytes.
-- [ ] For an open todo with two leading dates, preserve **both** tokens in the
+- [x] For an open todo with two leading dates, preserve **both** tokens in the
       body instead of silently dropping the first, or mark the line ambiguous
       and refuse mutation with a bounded message. Pick one and test it.
-- [ ] On **new** text (`addTodos`, create modal, edit modal, paste), reject
+- [x] On **new** text (`addTodos`, create modal, edit modal, paste), reject
       impossible leading dates and two-date lines with a bounded toast; do not
       save a partially mutated list.
-- [ ] Never call `format()` / `formatDateTag()` with a Date that has not been
+- [x] Never call `format()` / `formatDateTag()` with a Date that has not been
       checked with `isValid`.
 
 **Acceptance:** all four impossible-date examples load, display, serialize, and
@@ -158,17 +178,20 @@ hardening suite; include open/done lines and a mixed valid+invalid pair.
 
 ### 5. Clamp recurrence and validate the resulting date
 
-- [ ] Parse `rec:` with a strict whole-value pattern (optional `+`, positive
+**Status:** implemented in
+[#25](https://github.com/ArnoNuyts/todotui/pull/25).
+
+- [x] Parse `rec:` with a strict whole-value pattern (optional `+`, positive
       amount, `d/w/m/y`) rather than matching a substring anywhere.
-- [ ] Compute the next date with `addDays/addWeeks/addMonths/addYears`, then
+- [x] Compute the next date with `addDays/addWeeks/addMonths/addYears`, then
       verify `isValid(next)` and `1 <= year <= 9999` before calling
       `formatDateTag`.
-- [ ] If the result is out of range, do not create the recurring instance and
+- [x] If the result is out of range, do not create the recurring instance and
       show a bounded toast (or refuse the toggle, matching MCP); the app must
       not crash.
-- [ ] Keep the existing end-of-month/leap-day clamping (`date-fns` already
+- [x] Keep the existing end-of-month/leap-day clamping (`date-fns` already
       clamps `Jan 31 +1m` and `Feb 29 +1y`).
-- [ ] If a total todo cap is added, count the recurrence expansion before
+- [x] If a total todo cap is added, count the recurrence expansion before
       saving and refuse the whole mutation when it would exceed the cap.
 
 **Acceptance:** `rec:999999999999y` and `rec:999999999999m` complete the todo
@@ -181,15 +204,19 @@ parsing, month-end, leap-day, and post-expansion cap cases.
 
 ### 6. Bound the read path before it allocates
 
-- [ ] Use `Runtime.stat()` to reject an oversized file before `readTextFile`.
-      Handle `ENOENT` with the existing create-empty-file behavior.
-- [ ] After reading, re-check the byte length and run the structural validator
+**Status:** implemented in
+[#24](https://github.com/ArnoNuyts/todotui/pull/24).
+
+- [x] Use `Runtime.stat()` to reject an oversized file before `readTextFile`.
+      Handle `ENOENT` with an exclusive create so a concurrent writer is not
+      truncated.
+- [x] After reading, re-check the byte length and run the structural validator
       from task 1 before `split`/`new Todo`.
-- [ ] Reject at `MAX_READ_TODOS + 1` lines and at `MAX_LINE_CHARS + 1`
+- [x] Reject at `MAX_READ_TODOS + 1` lines and at `MAX_LINE_CHARS + 1`
       characters; report counts/lengths only.
-- [ ] Do not render a partial list after a rejected load; keep the last known
+- [x] Do not render a partial list after a rejected load; keep the last known
       good state and enter read-only mode (task 2).
-- [ ] Keep error messages actionable, e.g.
+- [x] Keep error messages actionable, e.g.
       `Todo file has 500000 lines; the limit is 10000. Trim the file or raise
       TODOTUI_MAX_READ_TODOS. Nothing was changed.`
 
@@ -205,18 +232,22 @@ process; otherwise document the manual check.
 
 ### 7. Bound the write path (create, edit, paste, programmatic add)
 
-- [ ] Enforce `TODOTUI_MAX_TODO_CHARS` (default **2,000**, or 2,100 including
+**Status:** implemented in
+[#25](https://github.com/ArnoNuyts/todotui/pull/25). #24 adds the final
+write-time serialization invariant.
+
+- [x] Enforce `TODOTUI_MAX_TODO_CHARS` (default **2,000**, or 2,100 including
       metadata) on create/edit/paste.
-- [ ] Cap a paste batch (default **100** items) and keep the existing >10
+- [x] Cap a paste batch (default **100** items) and keep the existing >10
       confirmation prompt.
-- [ ] Reject empty/whitespace-only text in `addTodos` itself, not only in the
+- [x] Reject empty/whitespace-only text in `addTodos` itself, not only in the
       modal.
-- [ ] Reject `\n`, `\r`, `\u2028`, `\u2029`, C0/C1 controls (tab allowed only
+- [x] Reject `\n`, `\r`, `\u2028`, `\u2029`, C0/C1 controls (tab allowed only
       if the write path already permits it), and unpaired surrogates
       (`String.prototype.isWellFormed()`).
-- [ ] Enforce a total todo cap (including recurrence expansion) before any
+- [x] Enforce a total todo cap (including recurrence expansion) before any
       save.
-- [ ] Show one bounded toast per rejected action; never echo the payload.
+- [x] Show one bounded toast per rejected action; never echo the payload.
 
 **Acceptance:** pasting 10,000 lines shows a rejected-action message and adds
 nothing; a 2,001-character todo is refused; whitespace-only, multi-line, and
@@ -227,25 +258,33 @@ lone-surrogate input never reaches `writeTodosToFile`.
 
 ### 8. Normalize line endings and blank lines explicitly
 
-- [ ] Accept CRLF on read by stripping one trailing `\r`; reject bare `\r`.
-- [ ] Decide whether blank lines are preserved or dropped on save. The current
+**Status:** implemented in
+[#24](https://github.com/ArnoNuyts/todotui/pull/24).
+
+- [x] Accept CRLF on read by stripping one trailing `\r`; reject bare `\r`.
+- [x] Decide whether blank lines are preserved or dropped on save. The current
       reader drops them and the writer always rewrites the file, so document
       the normalization rather than pretending saves are byte-stable.
-- [ ] Add a Windows CRLF fixture and a round-trip test.
+- [x] Add a Windows CRLF fixture and a round-trip test.
 
 **Acceptance:** a CRLF file loads, edits, and saves as LF without stray `\r`
 characters or duplicated blank lines; a bare CR is rejected by task 1.
 
 ### 9. Keep errors and toasts bounded
 
-- [ ] Validation and load/save errors report line number, length, offset, and
+**Status:** implemented in
+[#24](https://github.com/ArnoNuyts/todotui/pull/24).
+
+- [x] Validation and load/save errors report line number, length, offset, and
       `U+XXXX` only; never the line or payload.
-- [ ] Treat error text as display text too: sanitize/truncate before passing it
+- [x] Treat error text as display text too: sanitize/truncate before passing it
       to `showToaster`.
-- [ ] Do not print raw file content through `console.error` when a typed error
+- [x] Do not print raw file content through `console.error` when a typed error
       already contains a safe message.
 
 ### 10. Optional: harden against visual spoofing
+
+**Status:** deferred.
 
 - [ ] Consider rejecting or escaping bidi controls (`U+202A–U+202E`,
       `U+2066–U+2069`) and zero-width characters that can visually reorder a
@@ -255,14 +294,16 @@ characters or duplicated blank lines; a bare CR is rejected by task 1.
 
 ## Test and CI checklist
 
-- [ ] New suites: `todo-file-validation.test.ts`, `read-limits.test.ts`,
+- [x] New suites: `todo-file-validation.test.ts`, `read-limits.test.ts`,
       `tag-parsing.test.ts`, `todo-render-safety.test.tsx`, and a
       `hardening-matrix.test.ts` for dates/recurrence/paste.
-- [ ] Generate large files at runtime; do not commit megabyte fixtures.
-- [ ] Include the control matrix: tab (allowed), NUL, SOH, ESC, DEL, C1,
+      (`tag-parsing` and `hardening-matrix` are in
+      [#25](https://github.com/ArnoNuyts/todotui/pull/25).)
+- [x] Generate large files at runtime; do not commit megabyte fixtures.
+- [x] Include the control matrix: tab (allowed), NUL, SOH, ESC, DEL, C1,
       U+2028, U+2029, bare CR, CRLF.
-- [ ] Include ANSI cases: SGR, OSC 0 title, OSC 8 hyperlink, CSI clear/hide.
-- [ ] Run `npm test` and `npm run check` before opening a PR.
+- [x] Include ANSI cases: SGR, OSC 0 title, OSC 8 hyperlink, CSI clear/hide.
+- [x] Run `npm test` and `npm run check` before opening a PR.
 
 ## Explicitly not porting from `todo-txt-mcp`
 

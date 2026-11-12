@@ -3,6 +3,7 @@ import { useNavigation } from "../contexts/navigation-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
+import { toBoundedDisplayMessage } from "../logic/display-safety.ts";
 import { Priority } from "../logic/priority.ts";
 import { MAX_PASTE_TODOS, validateTodoBatch } from "../logic/todo-input.ts";
 
@@ -31,6 +32,7 @@ export const useTodoCommands = () => {
     addTodos,
     archiveCompletedTodos,
     deleteTodos,
+    readOnly,
     redo,
     toggleHidden,
     toggleTodos,
@@ -181,14 +183,14 @@ export const useTodoCommands = () => {
           const added = addTodos(...lines);
           if (added.length > 0) {
             setSelectedTodoId(added[added.length - 1].id);
+            // While read-only, addTodos has already shown the "not saved"
+            // warning; a success toast would hide it.
+            if (!readOnly) {
+              showToaster(`Pasted ${added.length} todo(s)`);
+            }
           }
-          showToaster(`Pasted ${lines.length} todo(s)`);
         } catch (error) {
-          showToaster(
-            `Paste failed: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`,
-          );
+          showToaster(`Paste failed: ${toBoundedDisplayMessage(error)}`);
         } finally {
           finish();
         }

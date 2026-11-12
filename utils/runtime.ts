@@ -36,6 +36,8 @@ export interface FsWatcher extends AsyncIterable<FsEvent> {
 export type WriteFileOptions = {
   append?: boolean;
   create?: boolean;
+  /** Fail with EEXIST instead of overwriting an existing file. */
+  exclusive?: boolean;
   mode?: number;
   signal?: AbortSignal;
 };
@@ -241,7 +243,13 @@ export const Runtime = {
     options?: WriteFileOptions,
   ) => {
     await writeFile(toPath(path), data, {
-      flag: options?.append ? "a" : options?.create === false ? "r+" : "w",
+      flag: options?.append
+        ? "a"
+        : options?.exclusive
+          ? "wx"
+          : options?.create === false
+            ? "r+"
+            : "w",
       mode: options?.mode,
       signal: options?.signal,
     });
