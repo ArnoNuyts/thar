@@ -18,7 +18,9 @@ import { SuggestionProvider } from "./contexts/suggestion-context.tsx";
 import { SearchProvider } from "./contexts/search-context.tsx";
 import { NavigationProvider } from "./contexts/navigation-context.tsx";
 import { SearchInput } from "./components/SearchInput.tsx";
+import { CliError, formatUsage, parseCliArgs } from "./logic/cli.ts";
 import { Runtime } from "./utils/runtime.ts";
+import packageJson from "./package.json" with { type: "json" };
 
 const AppContent = () => {
   const { activeModal, modalData } = useModal();
@@ -81,7 +83,34 @@ const App = ({ filename }: { filename: string }) => {
   );
 };
 
-const filename = Runtime.args[0] || "todo.txt";
+const version = packageJson.version;
+const filename = parseFilename();
+
+function parseFilename() {
+  let options;
+  try {
+    options = parseCliArgs(Runtime.args);
+  } catch (error) {
+    if (error instanceof CliError) {
+      console.error(`todotui: ${error.message}\n`);
+      console.error(formatUsage(version));
+      return Runtime.exit(2);
+    }
+    throw error;
+  }
+
+  if (options.help) {
+    console.log(formatUsage(version));
+    return Runtime.exit(0);
+  }
+
+  if (options.version) {
+    console.log(version);
+    return Runtime.exit(0);
+  }
+
+  return options.file;
+}
 
 const isWindows = Runtime.platform === "windows";
 let originalChcp: string | null = null;
