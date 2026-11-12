@@ -30,6 +30,7 @@ export const useTodoCommands = () => {
     addTodos,
     archiveCompletedTodos,
     deleteTodos,
+    readOnly,
     redo,
     toggleHidden,
     toggleTodos,
@@ -170,8 +171,12 @@ export const useTodoCommands = () => {
         const added = addTodos(...lines);
         if (added.length > 0) {
           setSelectedTodoId(added[added.length - 1].id);
+          // While read-only, addTodos has already shown the "not saved"
+          // warning; a success toast would hide it.
+          if (!readOnly) {
+            showToaster(`Pasted ${added.length} todo(s)`);
+          }
         }
-        showToaster(`Pasted ${lines.length} todo(s)`);
         finish();
       };
 

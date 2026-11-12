@@ -3,20 +3,19 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useReducer,
-  useRef,
 } from "react";
-import { debounce } from "../utils/debounce.ts";
-import {
-  readTodosFromFile,
-  writeTodosToFile,
-} from "../logic/todo-file-helpers.ts";
+import { toBoundedDisplayMessage } from "../logic/display-safety.ts";
+import { findUnsafeTodoTextCodePoint } from "../logic/control-characters.ts";
+import { TodoControlCharacterError } from "../logic/limits.ts";
+import { writeTodosToFile } from "../logic/todo-file-helpers.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
-import { Runtime, type FsWatcher } from "../utils/runtime.ts";
+import { useTodoFileSync } from "../hooks/useTodoFileSync.ts";
 import { useToaster } from "./toaster-context.tsx";
+
+const NOT_SAVED_READ_ONLY = "Not saved: read-only";
 
 export interface TodoContextType {
   todos: Todos;
@@ -31,6 +30,10 @@ export interface TodoContextType {
   canUndo: boolean;
   redo: () => void;
   canRedo: boolean;
+  /** Last read failure, bounded and safe to display; undefined when healthy. */
+  loadError: string | undefined;
+  /** True while the last load/reload failed; mutations must not be saved. */
+  readOnly: boolean;
 }
 
 interface TodoHistoryState {
@@ -140,128 +143,21 @@ export const TodoProvider = ({
   );
   const { todos } = state;
   const { showToaster } = useToaster();
-  const justReadFileFlag = useRef(false);
-  const hasLoadedFileRef = useRef(false);
-  const lastWriteTimeRef = useRef(0);
 
-  // Initial load
-  useEffect(() => {
-    let cancelled = false;
-    // Until the file has been read, `todos` is just the empty startup state.
-    // Saving it would truncate the real file when the read is slow (the save
-    // debounce is shorter than a slow disk access).
-    hasLoadedFileRef.current = false;
-    readTodosFromFile(filename)
-      .then((initialTodos) => {
-        if (cancelled) return;
-        hasLoadedFileRef.current = true;
-        justReadFileFlag.current = true;
-        dispatch({ type: "load", todos: [...initialTodos] });
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          console.error("Failed to load todos:", error);
-        }
-      });
+  const loadTodos = useCallback((loadedTodos: Todos) => {
+    dispatch({ type: "load", todos: loadedTodos });
+  }, []);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [filename]);
+  const { loadError, readOnly } = useTodoFileSync({
+    filename,
+    todos,
+    onLoad: loadTodos,
+    showToaster,
+  });
 
-  // Save effect
-  const saveTodos = useMemo(
-    () =>
-      debounce(async (currentTodos: Todos) => {
-        if (justReadFileFlag.current) {
-          justReadFileFlag.current = false;
-          return;
-        }
-        lastWriteTimeRef.current = Date.now();
-        try {
-          await writeTodosToFile(currentTodos, filename);
-        } catch (error) {
-          console.error("Failed to save todos:", error);
-        } finally {
-          lastWriteTimeRef.current = Date.now();
-        }
-      }, 50),
-    [filename],
-  );
-
-  // Cancel a pending save only when the debounced function is replaced (for
-  // example when `filename` changes) or the provider unmounts. Ordinary todo
-  // updates must not cancel the debounce.
-  useEffect(() => {
-    return () => saveTodos.clear();
-  }, [saveTodos]);
-
-  useEffect(() => {
-    // Do not persist the empty startup state before the initial load completes.
-    if (!hasLoadedFileRef.current) return;
-    saveTodos(todos);
-  }, [todos, saveTodos]);
-
-  // Watcher effect
-  useEffect(() => {
-    let cancelled = false;
-    let watcher: FsWatcher | undefined;
-    try {
-      watcher = Runtime.watchFs(filename);
-    } catch (error) {
-      console.error("Failed to watch file:", error);
-    }
-
-    const readTodosDebounced = debounce(async () => {
-      try {
-        const todosFromFile = await readTodosFromFile(filename);
-        if (cancelled) return;
-        justReadFileFlag.current = true;
-        dispatch({ type: "load", todos: [...todosFromFile] });
-        showToaster("File reloaded");
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Failed to reload todos:", error);
-        }
-      }
-    }, 500);
-
-    const processEvents = async () => {
-      if (!watcher) return;
-      try {
-        for await (const event of watcher) {
-          if (cancelled) break;
-          // Ignore startup events (for example creating a missing todo file)
-          // until the initial load has settled.
-          if (!hasLoadedFileRef.current) continue;
-          if (event.kind === "modify" || event.kind === "rename") {
-            // Prevent write-read loop
-            if (Date.now() - lastWriteTimeRef.current < 1000) {
-              continue;
-            }
-            readTodosDebounced();
-          }
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Failed to process file events:", error);
-        }
-      }
-    };
-    processEvents();
-
-    return () => {
-      cancelled = true;
-      readTodosDebounced.clear();
-      if (watcher) {
-        try {
-          watcher.close();
-        } catch (error) {
-          console.error("Failed to close file watcher:", error);
-        }
-      }
-    };
-  }, [filename, showToaster]);
+  const notifyReadOnly = useCallback(() => {
+    if (readOnly) showToaster(NOT_SAVED_READ_ONLY);
+  }, [readOnly, showToaster]);
 
   const canUndo = state.history.length > 0;
   const canRedo = state.redoStack.length > 0;
@@ -273,30 +169,49 @@ export const TodoProvider = ({
   const undo = useCallback(() => {
     if (!canUndo) return;
     dispatch({ type: "undo" });
-    showToaster("Undo successful");
-  }, [canUndo, showToaster]);
+    showToaster(readOnly ? NOT_SAVED_READ_ONLY : "Undo successful");
+  }, [canUndo, readOnly, showToaster]);
 
   const redo = useCallback(() => {
     if (!canRedo) return;
     dispatch({ type: "redo" });
-    showToaster("Redo successful");
-  }, [canRedo, showToaster]);
+    showToaster(readOnly ? NOT_SAVED_READ_ONLY : "Redo successful");
+  }, [canRedo, readOnly, showToaster]);
 
-  const addTodos = useCallback((...texts: string[]): Todo[] => {
-    if (texts.length === 0) return [];
-    const newTodos = texts.map((text) =>
-      new Todo(text).setCreationDate(new Date()),
-    );
-    dispatch({
-      type: "mutate",
-      updater: (prev) => [...prev, ...newTodos],
-    });
-    return newTodos;
-  }, []);
+  const addTodos = useCallback(
+    (...texts: string[]): Todo[] => {
+      if (texts.length === 0) return [];
+
+      for (let index = 0; index < texts.length; index++) {
+        const codePoint = findUnsafeTodoTextCodePoint(texts[index]);
+        if (codePoint !== undefined) {
+          showToaster(
+            toBoundedDisplayMessage(
+              new TodoControlCharacterError(index + 1, codePoint),
+            ),
+          );
+          return [];
+        }
+      }
+
+      notifyReadOnly();
+
+      const newTodos = texts.map((text) =>
+        new Todo(text).setCreationDate(new Date()),
+      );
+      dispatch({
+        type: "mutate",
+        updater: (prev) => [...prev, ...newTodos],
+      });
+      return newTodos;
+    },
+    [notifyReadOnly, showToaster],
+  );
 
   const updateTodos = useCallback(
     (todosToUpdate: Todo[], transform: (todo: Todo) => Todo) => {
       const idsToUpdate = new Set(todosToUpdate.map((t) => t.id));
+      notifyReadOnly();
       dispatch({
         type: "mutate",
         updater: (prev) => [
@@ -304,19 +219,26 @@ export const TodoProvider = ({
         ],
       });
     },
-    [],
+    [notifyReadOnly],
   );
 
-  const deleteTodos = useCallback((todosToDelete: Todo[]) => {
-    const idsToDelete = new Set(todosToDelete.map((t) => t.id));
-    dispatch({
-      type: "mutate",
-      updater: (prev) => [...prev.filter((t) => !idsToDelete.has(t.id))],
-    });
-  }, []);
+  const deleteTodos = useCallback(
+    (todosToDelete: Todo[]) => {
+      if (todosToDelete.length === 0) return;
+      notifyReadOnly();
+      const idsToDelete = new Set(todosToDelete.map((t) => t.id));
+      dispatch({
+        type: "mutate",
+        updater: (prev) => [...prev.filter((t) => !idsToDelete.has(t.id))],
+      });
+    },
+    [notifyReadOnly],
+  );
 
   const toggleTodos = useCallback(
     (todosToToggle: Todo[]) => {
+      if (todosToToggle.length === 0) return;
+      notifyReadOnly();
       const idsToToggle = new Set(todosToToggle.map((t) => t.id));
       // Compute the toast count from the current state; the reducer updater
       // stays pure so StrictMode's double invocation cannot duplicate instances.
@@ -327,13 +249,14 @@ export const TodoProvider = ({
         updater: (prev) => buildToggledTodos(prev, idsToToggle).todos,
       });
 
+      if (readOnly) return;
       if (recurringCount === 1) {
         showToaster("Recurring todo created");
       } else if (recurringCount > 1) {
         showToaster(`${recurringCount} recurring todos created`);
       }
     },
-    [todos, showToaster],
+    [todos, notifyReadOnly, readOnly, showToaster],
   );
 
   const toggleHidden = useCallback(
@@ -344,6 +267,11 @@ export const TodoProvider = ({
   );
 
   const archiveCompletedTodos = useCallback(async () => {
+    if (readOnly) {
+      showToaster(NOT_SAVED_READ_ONLY);
+      return;
+    }
+
     const completedTodos = todos.filter((t: Todo) => t.isDone());
     if (completedTodos.length === 0) return;
 
@@ -357,7 +285,7 @@ export const TodoProvider = ({
       type: "mutate",
       updater: (prev) => [...prev.filter((t) => !t.isDone())],
     });
-  }, [todos, filename]);
+  }, [todos, filename, readOnly, showToaster]);
 
   const value = useMemo(
     () => ({
@@ -373,6 +301,8 @@ export const TodoProvider = ({
       canUndo,
       redo,
       canRedo,
+      loadError,
+      readOnly,
     }),
     [
       todos,
@@ -387,6 +317,8 @@ export const TodoProvider = ({
       canUndo,
       redo,
       canRedo,
+      loadError,
+      readOnly,
     ],
   );
 

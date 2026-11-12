@@ -1,6 +1,7 @@
 import { Box, Text, useApp, useWindowSize } from "ink";
 import { Fragment, memo } from "react";
 import { useToaster } from "../contexts/toaster-context.tsx";
+import { useTodo } from "../contexts/todo-context.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
 import { navigationSelectedTodoRef } from "../contexts/navigation-context.tsx";
@@ -15,12 +16,28 @@ const ACTION_ITEMS = [
   { key: "/", text: "Search" },
 ] as const;
 
+const ACTION_WIDTH = ACTION_ITEMS.reduce(
+  (width, item) => width + ` ${item.key} ${item.text}  `.length,
+  0,
+);
+const READ_ONLY_LABEL = "READ-ONLY";
+
 export const ActionBar = memo(() => {
   const { exit } = useApp();
-  const { rows } = useWindowSize();
+  const { rows, columns } = useWindowSize();
   const { toasterMessage } = useToaster();
+  const { readOnly } = useTodo();
   const { openModal, activeModal } = useModal();
   const { focusRef } = useSearch();
+
+  // Keep the transient toast inside the status-bar width, leaving room for
+  // the action items and the persistent read-only indicator.
+  const indicatorWidth = readOnly ? READ_ONLY_LABEL.length + 2 : 0;
+  const toastWidth = Math.max(0, columns - ACTION_WIDTH - indicatorWidth - 1);
+  const boundedToast =
+    toasterMessage && toastWidth > 0
+      ? toasterMessage.slice(0, toastWidth)
+      : undefined;
 
   useMouseInput((event) => {
     if (!event.leftClick || event.x === undefined || event.y === undefined) {
@@ -84,11 +101,18 @@ export const ActionBar = memo(() => {
           );
         })}
       </Box>
-      {toasterMessage && (
-        <Box padding={0}>
-          <Text color={COLORS.secondary}>{toasterMessage}</Text>
-        </Box>
-      )}
+      <Box>
+        {readOnly && (
+          <Box marginRight={1}>
+            <Text color={COLORS.danger}>{READ_ONLY_LABEL}</Text>
+          </Box>
+        )}
+        {boundedToast && (
+          <Box padding={0}>
+            <Text color={COLORS.secondary}>{boundedToast}</Text>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 });

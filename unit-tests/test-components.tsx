@@ -104,6 +104,8 @@ export const TestWrapper = ({
         canUndo: false,
         redo: () => {},
         canRedo: false,
+        loadError: undefined,
+        readOnly: false,
         ...todoValue,
       }) as TodoContextType,
     [todoValue],
