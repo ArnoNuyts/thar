@@ -1,4 +1,8 @@
 import {
+  isRejectedControlCodePoint,
+  TAB_CODE_POINT,
+} from "./control-characters.ts";
+import {
   type ReadLimits,
   TodoControlCharacterError,
   TodoLineCountLimitError,
@@ -9,13 +13,6 @@ export type TodoContentLimits = Pick<
   ReadLimits,
   "maxReadTodos" | "maxLineChars"
 >;
-
-const isRejectedCodePoint = (codePoint: number): boolean =>
-  (codePoint >= 0x00 && codePoint <= 0x08) ||
-  (codePoint >= 0x0b && codePoint <= 0x1f) ||
-  (codePoint >= 0x7f && codePoint <= 0x9f) ||
-  codePoint === 0x2028 ||
-  codePoint === 0x2029;
 
 /**
  * Validate and normalize raw todo-file text.
@@ -68,7 +65,13 @@ export const validateTodoFileContent = (
 
     for (let offset = 0; offset < line.length; offset++) {
       const codePoint = line.charCodeAt(offset);
-      if (codePoint === 0x0d || isRejectedCodePoint(codePoint)) {
+      // Tab is the only control allowed inside a line. LF was consumed by the
+      // split above; a CR that was not the terminator of a CRLF pair remains
+      // here and is rejected like any other control.
+      if (
+        isRejectedControlCodePoint(codePoint) &&
+        codePoint !== TAB_CODE_POINT
+      ) {
         throw new TodoControlCharacterError(index + 1, codePoint);
       }
     }
