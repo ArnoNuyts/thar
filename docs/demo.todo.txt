@@ -1,4 +1,4 @@
-(A) Ship thar v0.5.0 +release @laptop due:2027-01-15
+(A) Ship todotui v0.5.0 +release @laptop due:2027-01-15
 (B) Review the todo.txt parser +code @desk
 Water the plants rec:1w
 Read the todo.txt spec +reading

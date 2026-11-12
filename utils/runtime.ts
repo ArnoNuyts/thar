@@ -1,16 +1,20 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { watch } from "node:fs";
 import {
   mkdir,
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
   stat,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type RuntimePlatform = "windows" | "darwin" | "linux";
 
@@ -69,7 +73,8 @@ export type SpawnedCommand = {
   status: Promise<{ success: boolean; code: number }>;
 };
 
-const toPath = (path: string | URL) => path;
+const toPath = (path: string | URL) =>
+  typeof path === "string" ? path : fileURLToPath(path);
 
 const toStdio = (value: CommandOptions["stdin"]) => {
   if (value === "inherit") return "inherit";
@@ -223,6 +228,63 @@ export function watchFs(filename: string): FsWatcher {
   };
 }
 
+const writeTextFile = async (
+  path: string | URL,
+  data: string,
+  options?: WriteFileOptions,
+) => {
+  const target = toPath(path);
+  const append = options?.append === true;
+  const mustExist = options?.create === false;
+  const exclusive = options?.exclusive === true;
+
+  if (exclusive) {
+    await writeFile(target, data, {
+      flag: "wx",
+      mode: options?.mode,
+      signal: options?.signal,
+    });
+    return;
+  }
+
+  if (append || mustExist) {
+    await writeFile(target, data, {
+      flag: append ? "a" : "r+",
+      mode: options?.mode,
+      signal: options?.signal,
+    });
+    return;
+  }
+
+  const temporary = join(
+    dirname(target),
+    `.${basename(target)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+
+  let mode = options?.mode;
+  if (mode === undefined) {
+    // Preserve the permissions of an existing file across the atomic replace.
+    try {
+      mode = (await stat(target)).mode & 0o777;
+    } catch {
+      mode = undefined;
+    }
+  }
+
+  try {
+    await writeFile(temporary, data, {
+      flag: "w",
+      mode,
+      signal: options?.signal,
+    });
+    options?.signal?.throwIfAborted();
+    await rename(temporary, target);
+  } catch (error) {
+    await unlink(temporary).catch(() => {});
+    throw error;
+  }
+};
+
 export const Runtime = {
   platform: (process.platform === "win32"
     ? "windows"
@@ -237,23 +299,7 @@ export const Runtime = {
     rows: process.stdout.rows ?? 24,
   }),
   readTextFile: (path: string | URL) => readFile(toPath(path), "utf8"),
-  writeTextFile: async (
-    path: string | URL,
-    data: string,
-    options?: WriteFileOptions,
-  ) => {
-    await writeFile(toPath(path), data, {
-      flag: options?.append
-        ? "a"
-        : options?.exclusive
-          ? "wx"
-          : options?.create === false
-            ? "r+"
-            : "w",
-      mode: options?.mode,
-      signal: options?.signal,
-    });
-  },
+  writeTextFile,
   stat: async (path: string | URL) => {
     const info = await stat(toPath(path));
     return {
