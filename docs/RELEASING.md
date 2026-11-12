@@ -40,7 +40,7 @@ The first npm publish needs a granular npm token with publish rights. Add it as
 the `NPM_TOKEN` repository secret, run a beta or stable release, then configure
 [trusted publishing](https://docs.npmjs.com/trusted-publishers) on npmjs.com:
 
-- Repository: `ArnoNuyts/todotui`
+- Repository: `ArnoNuyts/thar`
 - Workflow: `release.yml`
 - Environment: `npm`
 
@@ -52,9 +52,9 @@ publishing from GitHub Actions with `id-token: write`.
 Merge a small change into `release/next`, then verify:
 
 ```sh
-npm view todotui dist-tags
-npm install -g todotui@next
-todotui --version
+npm view thar dist-tags
+npm install -g thar@next
+thar --version
 ```
 
 Then promote `release/next` to `main` and repeat with `latest`.

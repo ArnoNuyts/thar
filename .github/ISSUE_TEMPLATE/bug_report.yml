@@ -20,7 +20,7 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. Run `todotui`
+        1. Run `thar`
         2. Press ...
         3. See ...
     validations:
@@ -36,8 +36,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: todotui version
-      description: Output of `todotui --version`.
+      label: thar version
+      description: Output of `thar --version`.
       placeholder: 0.5.0
     validations:
       required: true

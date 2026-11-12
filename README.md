@@ -1,20 +1,20 @@
-# todotui
+# thar
 
 A keyboard-driven [todo.txt](https://github.com/todotxt/todo.txt) TUI for the
 terminal.
 
-![todotui demo](https://raw.githubusercontent.com/ArnoNuyts/todotui/main/docs/demo.gif)
+![thar demo](https://raw.githubusercontent.com/ArnoNuyts/thar/main/docs/demo.gif)
 
 ## Install
 
 ```sh
-npm install -g todotui
+npm install -g thar
 ```
 
 Or run it without installing:
 
 ```sh
-npx todotui
+npx thar
 ```
 
 Requires Node.js 22.12 or newer.
@@ -22,9 +22,9 @@ Requires Node.js 22.12 or newer.
 ## Usage
 
 ```sh
-todotui                 # opens ./todo.txt
-todotui work.txt        # opens work.txt
-todotui --help
+thar                 # opens ./todo.txt
+thar work.txt        # opens work.txt
+thar --help
 ```
 
 The todo file is created if it does not exist. Completed items are archived to
@@ -40,7 +40,7 @@ The todo file is created if it does not exist. Completed items are archived to
 | `q`       | Quit                  |
 
 Supports projects (`+project`), contexts (`@context`), priorities, due dates,
-threshold dates, recurrence, and hidden todos. Run `todotui --help` for options
+threshold dates, recurrence, and hidden todos. Run `thar --help` for options
 and see the [todo.txt format](https://github.com/todotxt/todo.txt) for tags.
 
 ## License

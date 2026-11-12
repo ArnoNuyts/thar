@@ -61,14 +61,14 @@ jobs:
 
       - name: Build single executable
         env:
-          SEA_OUTPUT: todotui-${{ matrix.name }}${{ matrix.ext }}
+          SEA_OUTPUT: thar-${{ matrix.name }}${{ matrix.ext }}
         run: npm run build:sea
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
-          name: todotui-${{ matrix.name }}
-          path: dist/todotui-*
+          name: thar-${{ matrix.name }}
+          path: dist/thar-*
           if-no-files-found: error
 
   publish:
@@ -146,7 +146,7 @@ jobs:
           fi
 
           npm_exists=false
-          if npm view "todotui@$VERSION" version >/dev/null 2>&1; then
+          if npm view "thar@$VERSION" version >/dev/null 2>&1; then
             npm_exists=true
           fi
 
@@ -177,7 +177,7 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         uses: actions/download-artifact@v8
         with:
-          pattern: todotui-*
+          pattern: thar-*
           path: dist
           merge-multiple: true
 

@@ -92,7 +92,7 @@ function parseFilename() {
     options = parseCliArgs(Runtime.args);
   } catch (error) {
     if (error instanceof CliError) {
-      console.error(`todotui: ${error.message}\n`);
+      console.error(`thar: ${error.message}\n`);
       console.error(formatUsage(version));
       return Runtime.exit(2);
     }

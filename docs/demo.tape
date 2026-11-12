@@ -1,4 +1,4 @@
-# todotui terminal demo — records docs/demo.gif.
+# thar terminal demo — records docs/demo.gif.
 #
 # Run from the repository root:
 #   vhs docs/demo.tape
@@ -7,7 +7,7 @@
 # use its sandbox, run:
 #   VHS_NO_SANDBOX=1 vhs docs/demo.tape
 #
-# The fixture is copied to /tmp/opencode/todotui-demo.txt so the demo never
+# The fixture is copied to /tmp/opencode/thar-demo.txt so the demo never
 # mutates the tracked file and every recording starts from the same list.
 
 Output docs/demo.gif
@@ -21,14 +21,14 @@ Set Padding 20
 Set Framerate 10
 Set TypingSpeed 35ms
 Set CursorBlink false
-Set Theme { "name": "todotui-demo", "black": "#181818", "red": "#CE7768", "green": "#7BA152", "yellow": "#DDB14D", "blue": "#6399C6", "magenta": "#AF76B7", "cyan": "#6399C6", "white": "#EEECE5", "brightBlack": "#676560", "brightRed": "#CE7768", "brightGreen": "#7BA152", "brightYellow": "#DDB14D", "brightBlue": "#6399C6", "brightMagenta": "#AF76B7", "brightCyan": "#6399C6", "brightWhite": "#FFFFFF", "background": "#181818", "foreground": "#EEECE5", "selection": "#AF76B7", "cursor": "#EEECE5" }
+Set Theme { "name": "thar-demo", "black": "#181818", "red": "#CE7768", "green": "#7BA152", "yellow": "#DDB14D", "blue": "#6399C6", "magenta": "#AF76B7", "cyan": "#6399C6", "white": "#EEECE5", "brightBlack": "#676560", "brightRed": "#CE7768", "brightGreen": "#7BA152", "brightYellow": "#DDB14D", "brightBlue": "#6399C6", "brightMagenta": "#AF76B7", "brightCyan": "#6399C6", "brightWhite": "#FFFFFF", "background": "#181818", "foreground": "#EEECE5", "selection": "#AF76B7", "cursor": "#EEECE5" }
 
 # Prepare a disposable copy and launch the built app without showing the shell.
 Hide
-Type "mkdir -p /tmp/opencode && cp docs/demo.todo.txt /tmp/opencode/todotui-demo.txt && clear"
+Type "mkdir -p /tmp/opencode && cp docs/demo.todo.txt /tmp/opencode/thar-demo.txt && clear"
 Enter
 Sleep 500ms
-Type "node bin/todotui.js --file /tmp/opencode/todotui-demo.txt"
+Type "node bin/thar.js --file /tmp/opencode/thar-demo.txt"
 Enter
 Sleep 5s
 

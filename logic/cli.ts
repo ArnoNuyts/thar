@@ -15,12 +15,12 @@ export class CliError extends Error {
 
 export const formatUsage = (version: string) =>
   [
-    `todotui ${version}`,
+    `thar ${version}`,
     "",
     "A keyboard-driven todo.txt TUI for the terminal.",
     "",
     "Usage:",
-    "  todotui [options] [file]",
+    "  thar [options] [file]",
     "",
     "Arguments:",
     `  file                  Todo file to open (default: ./${DEFAULT_FILENAME})`,

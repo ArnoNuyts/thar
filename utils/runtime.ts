@@ -325,7 +325,7 @@ export const Runtime = {
   },
   mkdir: (path: string | URL, options?: { recursive?: boolean }) =>
     mkdir(toPath(path), { recursive: options?.recursive ?? false }),
-  makeTempDir: () => mkdtemp(join(tmpdir(), "todotui-")),
+  makeTempDir: () => mkdtemp(join(tmpdir(), "thar-")),
   remove: (path: string | URL, options?: { recursive?: boolean }) =>
     rm(toPath(path), { recursive: options?.recursive ?? false, force: false }),
   watchFs,

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve todotui.
+Thanks for helping improve thar.
 
 ## Setup
 

@@ -1,5 +1,5 @@
 {
-  "name": "todotui",
+  "name": "thar",
   "version": "0.5.0",
   "description": "A keyboard-driven todo.txt TUI for the terminal",
   "keywords": [
@@ -12,18 +12,18 @@
     "todo.txt",
     "tui"
   ],
-  "homepage": "https://github.com/ArnoNuyts/todotui#readme",
+  "homepage": "https://github.com/ArnoNuyts/thar#readme",
   "bugs": {
-    "url": "https://github.com/ArnoNuyts/todotui/issues"
+    "url": "https://github.com/ArnoNuyts/thar/issues"
   },
   "license": "MIT",
   "author": "Arno Nuyts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ArnoNuyts/todotui.git"
+    "url": "git+https://github.com/ArnoNuyts/thar.git"
   },
   "bin": {
-    "todotui": "./bin/todotui.js"
+    "thar": "./bin/thar.js"
   },
   "files": [
     "bin",

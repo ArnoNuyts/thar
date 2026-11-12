@@ -20,5 +20,5 @@ First public release.
 - Undo/redo, copy/paste, archive to `done.txt`, and external file watching.
 - npm package and single-file executables for Linux, macOS, and Windows.
 
-[Unreleased]: https://github.com/ArnoNuyts/todotui/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/ArnoNuyts/todotui/releases/tag/v0.5.0
+[Unreleased]: https://github.com/ArnoNuyts/thar/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0

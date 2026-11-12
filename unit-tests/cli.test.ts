@@ -64,7 +64,7 @@ describe("parseCliArgs", () => {
 test("formatUsage includes the version, usage and options", () => {
   const usage = formatUsage("1.2.3");
 
-  expect(usage).toContain("todotui 1.2.3");
+  expect(usage).toContain("thar 1.2.3");
   expect(usage).toContain("Usage:");
   expect(usage).toContain("--file <path>");
   expect(usage).toContain("--help");
