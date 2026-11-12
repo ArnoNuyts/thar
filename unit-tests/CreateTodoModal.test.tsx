@@ -68,6 +68,77 @@ test("CreateTodoModal: should render and handle input", async () => {
   unmount();
 });
 
+test("CreateTodoModal: rejects a leading date, then accepts the fixed text", async () => {
+  let addedText = "";
+  let toast: string | undefined;
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    const { toasterMessage } = useToaster();
+
+    useEffect(() => {
+      openModal("create-todo");
+    }, [openModal]);
+
+    useEffect(() => {
+      toast = toasterMessage;
+    }, [toasterMessage]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "create-todo" && <CreateTodoModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <SearchProvider>
+      <TestWrapper
+        todoValue={{
+          addTodos: (text: string) => {
+            addedText = text;
+            return [new Todo(text)];
+          },
+        }}
+      >
+        <TestComponent />
+      </TestWrapper>
+    </SearchProvider>,
+  );
+
+  await waitFor(() => {
+    expect(lastFrame() || "").toMatch(/Create new todo/);
+  });
+
+  const rejected = "2026-01-01 task";
+  stdin.write(rejected);
+  await waitFor(() => {
+    expect(lastFrame() || "").toMatch(new RegExp(rejected));
+  });
+
+  stdin.write("\r");
+  await waitFor(() => {
+    expect(toast || "").toMatch(/cannot start with a date/i);
+  });
+  expect(addedText).toEqual("");
+  expect(lastFrame() || "").toMatch(/Create new todo/);
+
+  for (let index = 0; index < rejected.length; index++) {
+    stdin.write("\x7f");
+  }
+  stdin.write("fixed task");
+  await waitFor(() => {
+    expect(lastFrame() || "").toMatch(/fixed task/);
+  });
+
+  stdin.write("\r");
+  await waitFor(() => {
+    expect(addedText).toEqual("fixed task");
+  });
+
+  unmount();
+});
+
 test("CreateTodoModal: should prefill context from search query", async () => {
   const TestComponent = () => {
     const { openModal, activeModal } = useModal();

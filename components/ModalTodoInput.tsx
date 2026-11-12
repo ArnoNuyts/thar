@@ -4,6 +4,7 @@ import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { TodoInputError, validateTodoText } from "../logic/todo-input.ts";
+import { MAX_TODO_CHARS } from "../logic/limits.ts";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { SuggestionInput } from "./SuggestionInput.tsx";
@@ -52,7 +53,14 @@ export const ModalTodoInput = ({
 
   const handleSubmit = (val: string) => {
     try {
-      validateTodoText(val);
+      // Grandfather an edit that started over the write cap: only reject the
+      // value when it grows. A file line may be up to the 8,192-character read
+      // limit, while new writes are capped at MAX_TODO_CHARS.
+      const maxChars =
+        mode === "edit"
+          ? Math.max(MAX_TODO_CHARS, initialValue.length)
+          : MAX_TODO_CHARS;
+      validateTodoText(val, { maxChars });
       onSubmit(val);
     } catch (error) {
       if (error instanceof TodoInputError) {
@@ -120,9 +128,11 @@ export const ModalTodoInput = ({
   const buttonRowIndex = inputLineCount + 1;
   // Input row(s), spacer before buttons, buttons row, spacer before help, help row(s).
   const bodyRows = inputLineCount + 3 + helpLineCount;
-  const handlePrimaryAction = () => {
+  const handlePrimaryAction = (latestValue?: string) => {
     if (selectedButtonIndex === 0) {
-      handleSubmit(value);
+      // Prefer the value handed over by the input: it is already up to date
+      // even when Enter arrives in the same tick as the last edit.
+      handleSubmit(latestValue ?? value);
       return;
     }
     handleCancel();

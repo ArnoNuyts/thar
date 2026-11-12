@@ -1,6 +1,10 @@
 import { expect, test, vi } from "vitest";
 
-import { Todo } from "../logic/todo.ts";
+import {
+  isValidRecurrence,
+  MAX_RECURRENCE_AMOUNT,
+  Todo,
+} from "../logic/todo.ts";
 
 test("setRecurrence - sets correctly", () => {
   const testCases = [
@@ -20,6 +24,30 @@ test("setRecurrence - sets correctly", () => {
       expected,
     );
   }
+});
+
+test("setRecurrence - rejects values the strict parser would refuse", () => {
+  for (const recurrence of [
+    "",
+    "0d",
+    "00w",
+    "-1d",
+    "1dd",
+    "1d2",
+    "d",
+    `${MAX_RECURRENCE_AMOUNT + 1}d`,
+  ]) {
+    const todo = new Todo("todo");
+
+    expect(isValidRecurrence(recurrence)).toEqual(false);
+    expect(todo.setRecurrence(recurrence).tags.rec).toBeUndefined();
+    expect(todo.setRecurrence(recurrence).toString()).toEqual("todo");
+  }
+
+  expect(isValidRecurrence(`${MAX_RECURRENCE_AMOUNT}d`)).toEqual(true);
+  expect(
+    new Todo("todo").setRecurrence(`${MAX_RECURRENCE_AMOUNT}d`).tags.rec,
+  ).toEqual(`${MAX_RECURRENCE_AMOUNT}d`);
 });
 
 const formatDate = (date: Date) => {

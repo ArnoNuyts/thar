@@ -10,6 +10,28 @@ export const DEFAULT_MAX_FILE_BYTES = 1024 * 1024; // 1 MiB
 export const DEFAULT_MAX_READ_TODOS = 10_000;
 export const DEFAULT_MAX_LINE_CHARS = 8_192;
 
+/**
+ * Maximum length of a single todo line created or edited in the TUI, in
+ * UTF-16 code units.
+ *
+ * This is intentionally smaller than `DEFAULT_MAX_LINE_CHARS`: the reader
+ * accepts legacy overlong lines (up to 8,192 characters) so existing files
+ * stay loadable, while new writes stay comfortably below the read limit. The
+ * edit modal grandfathers an unchanged overlong value by only enforcing this
+ * cap when the value grows.
+ */
+export const MAX_TODO_CHARS = 2_000;
+
+/** Maximum number of todos accepted from one paste. */
+export const MAX_PASTE_TODOS = 100;
+
+/**
+ * Maximum number of todos kept in memory (including recurrence copies).
+ * Derived from the read limit so the in-memory cap and a file that can be
+ * loaded always agree.
+ */
+export const MAX_TODOS = DEFAULT_MAX_READ_TODOS;
+
 export interface ReadLimits {
   maxFileBytes: number;
   maxReadTodos: number;

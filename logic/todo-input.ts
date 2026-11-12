@@ -1,13 +1,6 @@
+import { findUnsafeTodoTextCodePoint } from "./control-characters.ts";
 import { scanTodoPrefix } from "./dates.ts";
-
-/** Maximum length of a single todo line, in UTF-16 code units. */
-export const MAX_TODO_CHARS = 2_000;
-
-/** Maximum number of todos accepted from one paste. */
-export const MAX_PASTE_TODOS = 100;
-
-/** Maximum number of todos kept in the list (including recurrence copies). */
-export const MAX_TODOS = 10_000;
+import { MAX_PASTE_TODOS, MAX_TODO_CHARS, MAX_TODOS } from "./limits.ts";
 
 export type TodoInputErrorCode =
   | "empty"
@@ -17,6 +10,7 @@ export type TodoInputErrorCode =
   | "too-long"
   | "invalid-date"
   | "ambiguous-date"
+  | "leading-date"
   | "batch-too-large"
   | "too-many-todos";
 
@@ -34,18 +28,31 @@ export class TodoInputError extends Error {
   }
 }
 
-const MULTILINE_REGEX = /[\n\r\u2028\u2029]/;
-// C0 and C1 controls, excluding tab (U+0009) which the write path allows.
-const CONTROL_CHARACTER_REGEX = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/;
+const MULTILINE_SEPARATORS = ["\n", "\r", "\u2028", "\u2029"] as const;
+
+export interface TodoTextValidationOptions {
+  /**
+   * Effective character cap. Defaults to `MAX_TODO_CHARS`. The edit modal
+   * passes the original length when it is already over the cap so unchanged
+   * legacy values can still be saved; a growing value is rejected.
+   */
+  maxChars?: number;
+}
 
 /**
  * Validate one todo line before it is parsed or written.
  *
  * Throws `TodoInputError` with a bounded message when `text` is empty,
  * multiline, contains a disallowed control character or unpaired surrogate, is
- * too long, or starts with an impossible or ambiguous date.
+ * too long, or starts with a date. The app owns creation dates, so a leading
+ * date token is rejected instead of being silently dropped or prepended.
  */
-export const validateTodoText = (text: string): void => {
+export const validateTodoText = (
+  text: string,
+  options: TodoTextValidationOptions = {},
+): void => {
+  const maxChars = options.maxChars ?? MAX_TODO_CHARS;
+
   if (typeof text !== "string" || text.trim().length === 0) {
     throw new TodoInputError(
       "empty",
@@ -53,11 +60,14 @@ export const validateTodoText = (text: string): void => {
     );
   }
 
-  if (MULTILINE_REGEX.test(text)) {
+  if (MULTILINE_SEPARATORS.some((separator) => text.includes(separator))) {
     throw new TodoInputError("multiline", "Todo must be a single line");
   }
 
-  if (CONTROL_CHARACTER_REGEX.test(text)) {
+  // `findUnsafeTodoTextCodePoint` is the shared write/read/display policy.
+  // LF, CR, and the Unicode separators are handled above so they keep their
+  // dedicated "multiline" message.
+  if (findUnsafeTodoTextCodePoint(text) !== undefined) {
     throw new TodoInputError(
       "control-character",
       "Todo contains a disallowed control character",
@@ -71,10 +81,10 @@ export const validateTodoText = (text: string): void => {
     );
   }
 
-  if (text.length > MAX_TODO_CHARS) {
+  if (text.length > maxChars) {
     throw new TodoInputError(
       "too-long",
-      `Todo is too long; the limit is ${MAX_TODO_CHARS} characters`,
+      `Todo is too long; the limit is ${maxChars} characters`,
     );
   }
 
@@ -92,10 +102,14 @@ export const validateTodoText = (text: string): void => {
       "Todo starts with more than one date",
     );
   }
-};
 
-/** Alias used by programmatic callers that want an assertion-like name. */
-export const validateTodoInput = validateTodoText;
+  if (prefix.dateTokens.length > 0) {
+    throw new TodoInputError(
+      "leading-date",
+      "Todo text cannot start with a date; use the date picker",
+    );
+  }
+};
 
 /**
  * Validate a batch of todo lines atomically and check the list capacity.
