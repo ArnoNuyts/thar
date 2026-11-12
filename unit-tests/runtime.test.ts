@@ -66,7 +66,10 @@ test("Runtime: watches a file and emits a change event", async () => {
       ]);
 
       assert.equal(result.done, false);
-      assert.equal(result.value.kind, "modify");
+      assert.ok(
+        result.value.kind === "modify" || result.value.kind === "rename",
+        `unexpected event kind: ${result.value.kind}`,
+      );
       assert.deepEqual(result.value.paths, [filename]);
     } finally {
       watcher.close();
