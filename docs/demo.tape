@@ -1,4 +1,4 @@
-# thar terminal demo — records docs/demo.gif.
+# Thar terminal demo — records docs/demo.gif.
 #
 # Run from the repository root:
 #   vhs docs/demo.tape

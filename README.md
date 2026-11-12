@@ -1,4 +1,4 @@
-# thar
+# Thar
 
 A keyboard-driven [todo.txt](https://github.com/todotxt/todo.txt) TUI for the
 terminal.
