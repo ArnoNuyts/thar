@@ -86,3 +86,21 @@ test("ActionBar: mouse click on 'n New' opens create-todo modal", async () => {
 
   unmount();
 });
+
+test("ActionBar: shows a persistent read-only indicator", async () => {
+  const { unmount, lastFrame } = render(
+    <TestWrapper todoValue={{ readOnly: true }}>
+      <SearchProvider>
+        <ActionBar />
+      </SearchProvider>
+    </TestWrapper>,
+  );
+
+  try {
+    await waitFor(() => {
+      expect(lastFrame() ?? "").toMatch(/READ-ONLY/);
+    });
+  } finally {
+    unmount();
+  }
+});

@@ -649,3 +649,32 @@ test("ControlledTextInput - Mouse wheel escape does not insert characters", asyn
 
   unmount();
 });
+
+const RENDER_CONTROLS =
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u2028\u2029]/u;
+
+test("ControlledTextInput - escapes terminal controls in focused and unfocused paths", () => {
+  const poisoned = "pasted\u009b31mred\u2028sep\u001b[31m";
+
+  for (const focus of [true, false]) {
+    const { lastFrame, unmount } = render(
+      <ControlledTextInput
+        value={poisoned}
+        onChange={() => {}}
+        focus={focus}
+        cursorOffset={0}
+      />,
+    );
+
+    try {
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("\\u009B");
+      expect(frame).toContain("\\u2028");
+      expect(frame).toContain("\\u001B");
+      expect(frame.includes("\u001b"), "no ESC").toEqual(false);
+      expect(RENDER_CONTROLS.test(frame), "no C0/C1/U+2028").toEqual(false);
+    } finally {
+      unmount();
+    }
+  }
+});
