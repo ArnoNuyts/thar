@@ -107,6 +107,37 @@ export const writeUpdateCache = async (
   }
 };
 
+const cacheQueues = new Map<string, Promise<unknown>>();
+
+/**
+ * Serializes read-modify-write cycles per cache path.
+ *
+ * A background check, a one-time notification and a skip action can all
+ * update the cache independently. Without this queue, a later write can
+ * overwrite a field another action just persisted.
+ */
+export const mutateUpdateCache = (
+  path: string,
+  mutate: (cache: UpdateCache) => UpdateCache | undefined,
+): Promise<UpdateCache | undefined> => {
+  const previous = cacheQueues.get(path) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(async () => {
+      const current = await readUpdateCache(path);
+      const updated = mutate(current);
+      if (!updated) return undefined;
+      return (await writeUpdateCache(path, updated)) ? updated : undefined;
+    });
+
+  cacheQueues.set(path, next);
+  void next.finally(() => {
+    if (cacheQueues.get(path) === next) cacheQueues.delete(path);
+  });
+
+  return next;
+};
+
 export const isCacheFresh = (
   cache: UpdateCache,
   now: number,

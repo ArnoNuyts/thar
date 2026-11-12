@@ -251,17 +251,18 @@ todotui --no-update-check    skip the background check
 
 ### Files and responsibilities
 
-| File                          | Responsibility                                                   |
-| ----------------------------- | ---------------------------------------------------------------- |
-| `logic/version.ts`            | `parseVersion`, `isNewer`, formatting; pure and unit-testable.   |
-| `logic/update-cache.ts`       | Cache read/write, TTL, corruption-tolerant, atomic write.        |
-| `logic/update-check.ts`       | Registry fetch, gating, timeout, result validation; no React.    |
-| `logic/install-method.ts`     | Detect npm/pnpm/yarn/bun/volta/npx/brew/sea; command mapping.    |
-| `logic/self-update.ts`        | Run installer or download+replace binary; progress events.       |
-| `contexts/update-context.tsx` | Holds `current`, `latest`, `status`, `noticeDismissed`, actions. |
-| `hooks/useUpdateCheck.ts`     | Idle-delayed check after first paint; cleanup on unmount.        |
-| `components/UpdateBadge.tsx`  | Non-blocking footer badge.                                       |
-| `components/UpdateModal.tsx`  | On-demand details and actions.                                   |
+| File                          | Responsibility                                                 |
+| ----------------------------- | -------------------------------------------------------------- |
+| `logic/version.ts`            | `parseVersion`, `isNewer`, formatting; pure and unit-testable. |
+| `logic/update-cache.ts`       | Cache read/write, TTL, corruption-tolerant, atomic write.      |
+| `logic/update-check.ts`       | Registry fetch, gating, timeout, result validation; no React.  |
+| `logic/install-method.ts`     | Detect npm/pnpm/yarn/bun/volta/npx/brew/sea; command mapping.  |
+| `logic/self-update.ts`        | Runs the pending package-manager update after Ink exits.       |
+| `logic/pending-update.ts`     | Process-scoped hand-off from the TUI to the post-exit updater. |
+| `logic/update-badge.ts`       | Pure footer label formatting/truncation.                       |
+| `contexts/update-context.tsx` | Status, cache, toast, install detection and update actions.    |
+| `components/UpdateBadge.tsx`  | Non-blocking footer badge.                                     |
+| `components/UpdateModal.tsx`  | On-demand details and actions.                                 |
 
 ### Check flow
 
@@ -314,14 +315,17 @@ Use the existing footer rather than a modal:
 
 - Right side of `ActionBar` (where the toaster currently renders):
   `↑ v0.5.0 · u update`.
-- Priority: update badge > transient toaster. Or show the toast for 3 s once
-  per version (`lastNotified`), then keep the badge.
+- Priority: the transient 2 s toast wins while it is visible; the persistent
+  badge shows immediately afterwards. The toast is emitted once per version
+  (`lastNotified`).
 - `u` opens `UpdateModal` only on explicit keypress; Esc closes it. No focus
   stealing, no auto-open, no blocking.
 - Narrow terminals: degrade to `↑ v0.5.0`, then `↑`. Mouse support: reuse the
   `ActionBar` click-segment pattern.
-- Modal actions: _Update now_, _Update on exit_, _Skip this version_,
-  _Release notes_ (`https://github.com/ArnoNuyts/todotui/releases/tag/vX.Y.Z`).
+- Modal actions: _Update now_, _Later_, _Skip this version_, plus the release
+  notes link (`https://github.com/ArnoNuyts/todotui/releases/tag/vX.Y.Z`).
+  _Update now_ records a pending install, exits the TUI, and runs the package
+  manager with inherited stdio.
 - If the install kind is ephemeral (`npx`/`dlx`/`bunx`), replace “Update” with
   the exact `npx todotui@latest` command and a copy hint; no self-update.
 

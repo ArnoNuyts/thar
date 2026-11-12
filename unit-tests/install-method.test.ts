@@ -72,38 +72,123 @@ test("install-method: detects global package managers from paths", () => {
   ).toEqual("volta");
 });
 
-test("install-method: detects package-manager environment markers", () => {
+test("install-method: uses environment markers only with matching paths", () => {
   expect(
     detectInstallKind({
-      scriptPath: "/opt/todotui/main.js",
+      scriptPath:
+        "/home/me/.volta/tools/image/packages/todotui/lib/node_modules/todotui/dist/main.js",
       env: { VOLTA_HOME: "/home/me/.volta" },
     }),
   ).toEqual("volta");
   expect(
     detectInstallKind({
-      scriptPath: "/opt/todotui/main.js",
+      scriptPath:
+        "/home/me/.local/share/pnpm/global/5/node_modules/todotui/dist/main.js",
       env: { PNPM_HOME: "/home/me/.local/share/pnpm" },
     }),
   ).toEqual("pnpm-global");
   expect(
     detectInstallKind({
-      scriptPath: "/opt/todotui/main.js",
+      scriptPath:
+        "/home/me/.bun/install/global/node_modules/todotui/dist/main.js",
       env: { BUN_INSTALL: "/home/me/.bun" },
     }),
   ).toEqual("bun-global");
   expect(
     detectInstallKind({
-      scriptPath: "/opt/todotui/main.js",
+      scriptPath:
+        "/opt/homebrew/Cellar/todotui/0.5.0/libexec/lib/node_modules/todotui/dist/main.js",
       env: { HOMEBREW_PREFIX: "/opt/homebrew" },
     }),
   ).toEqual("homebrew");
+  expect(
+    detectInstallKind({
+      scriptPath: "C:\\Users\\me\\scoop\\apps\\todotui\\current\\dist\\main.js",
+      env: { SCOOP: "C:\\Users\\me\\scoop" },
+      platform: "windows",
+    }),
+  ).toEqual("scoop");
+
+  // Bare shell markers must not override the real path.
+  expect(
+    detectInstallKind({
+      scriptPath: "/opt/todotui/main.js",
+      env: { VOLTA_HOME: "/home/me/.volta" },
+    }),
+  ).toEqual("unknown");
+  expect(
+    detectInstallKind({
+      scriptPath: "/opt/todotui/main.js",
+      env: { PNPM_HOME: "/home/me/.local/share/pnpm" },
+    }),
+  ).toEqual("unknown");
+  expect(
+    detectInstallKind({
+      scriptPath: "/opt/todotui/main.js",
+      env: { BUN_INSTALL: "/home/me/.bun" },
+    }),
+  ).toEqual("unknown");
+  expect(
+    detectInstallKind({
+      scriptPath: "/opt/todotui/main.js",
+      env: { HOMEBREW_PREFIX: "/opt/homebrew" },
+    }),
+  ).toEqual("unknown");
   expect(
     detectInstallKind({
       scriptPath: "/opt/todotui/main.js",
       env: { SCOOP: "C:\\Users\\me\\scoop" },
       platform: "windows",
     }),
-  ).toEqual("scoop");
+  ).toEqual("unknown");
+});
+
+test("install-method: path evidence outranks ambient manager variables", () => {
+  // A dev checkout in a shell that exports HOMEBREW_PREFIX is still a dev
+  // checkout, not a Homebrew formula.
+  expect(
+    detectInstallKind({
+      scriptPath: "/home/me/projects/todotui/dist/main.js",
+      env: { HOMEBREW_PREFIX: "/opt/homebrew" },
+      cwd: "/home/me/projects/todotui",
+    }),
+  ).toEqual("dev");
+  expect(
+    detectInstallKind({
+      scriptPath: "/home/me/projects/todotui/dist/main.js",
+      env: { PNPM_HOME: "/home/me/.local/share/pnpm" },
+      cwd: "/home/me/projects/todotui",
+    }),
+  ).toEqual("dev");
+
+  // An npm global package installed by a Homebrew-managed Node lives under
+  // HOMEBREW_PREFIX but is still an npm install.
+  expect(
+    detectInstallKind({
+      scriptPath: "/opt/homebrew/lib/node_modules/todotui/dist/main.js",
+      env: { HOMEBREW_PREFIX: "/opt/homebrew" },
+      platform: "darwin",
+    }),
+  ).toEqual("npm-global");
+});
+
+test("install-method: handles macOS and Windows path casing/layouts", () => {
+  expect(
+    detectInstallKind({
+      scriptPath:
+        "/usr/local/Cellar/todotui/0.5.0/libexec/lib/node_modules/todotui/dist/main.js",
+      env: {},
+      platform: "darwin",
+    }),
+  ).toEqual("homebrew");
+  expect(
+    detectInstallKind({
+      scriptPath:
+        "C:\\Users\\me\\AppData\\Local\\Yarn\\Data\\global\\node_modules\\todotui\\dist\\main.js",
+      env: {},
+      platform: "windows",
+    }),
+  ).toEqual("yarn-global");
 });
 
 test("install-method: detects brew, scoop and an explicit global npm root", () => {

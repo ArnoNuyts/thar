@@ -7,8 +7,9 @@ import { useSearch } from "../contexts/search-context.tsx";
 import { useUpdate } from "../contexts/update-context.tsx";
 import { navigationSelectedTodoRef } from "../contexts/navigation-context.tsx";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
+import { formatUpdateBadge } from "../logic/update-badge.ts";
 import { COLORS } from "../theme/colors.ts";
-import { formatUpdateBadge, UpdateBadge } from "./UpdateBadge.tsx";
+import { UpdateBadge } from "./UpdateBadge.tsx";
 
 const ACTION_ITEMS = [
   { key: "x", text: "Menu" },

@@ -7,6 +7,7 @@ import {
   isCacheFresh,
   isNegativeCacheFresh,
   isVersionSkipped,
+  mutateUpdateCache,
   NEGATIVE_CACHE_MS,
   readUpdateCache,
   resolveStateDir,
@@ -148,6 +149,29 @@ test("update-cache: negative cache is strict at the boundary", () => {
     isNegativeCacheFresh({ failedAt: now - NEGATIVE_CACHE_MS }, now),
   ).toEqual(false);
   expect(isNegativeCacheFresh({}, now)).toEqual(false);
+});
+
+test("update-cache: serializes concurrent mutations without losing fields", async () => {
+  await withTempDir(async (dir) => {
+    const path = join(dir, "update-check.json");
+    await writeUpdateCache(path, { latest: "0.5.0" });
+
+    await Promise.all([
+      mutateUpdateCache(path, (cache) => ({
+        ...cache,
+        lastNotified: "0.5.0",
+      })),
+      mutateUpdateCache(path, (cache) => ({
+        ...cache,
+        skipped: "0.5.0",
+      })),
+    ]);
+
+    const cache = await readUpdateCache(path);
+    expect(cache.latest).toEqual("0.5.0");
+    expect(cache.lastNotified).toEqual("0.5.0");
+    expect(cache.skipped).toEqual("0.5.0");
+  });
 });
 
 test("update-cache: skip matching is version-specific", () => {

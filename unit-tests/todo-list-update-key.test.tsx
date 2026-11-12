@@ -1,5 +1,6 @@
 import { Box } from "ink";
 import { render } from "ink-testing-library";
+import { useEffect } from "react";
 import { expect, test } from "vitest";
 
 import { TodoList } from "../components/TodoList.tsx";
@@ -58,7 +59,11 @@ const ModalObserver = ({
   onChange: (id: string | null) => void;
 }) => {
   const { activeModal } = useModal();
-  onChange(activeModal);
+
+  useEffect(() => {
+    onChange(activeModal);
+  }, [activeModal, onChange]);
+
   return null;
 };
 

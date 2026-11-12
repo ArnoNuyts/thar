@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { expect, test } from "vitest";
 
 import { ActionBar } from "../components/ActionBar.tsx";
-import { formatUpdateBadge } from "../components/UpdateBadge.tsx";
+import { formatUpdateBadge } from "../logic/update-badge.ts";
 import { useModal } from "../contexts/modal-context.tsx";
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";

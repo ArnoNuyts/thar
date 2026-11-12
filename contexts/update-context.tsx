@@ -21,8 +21,7 @@ import { setPendingUpdate } from "../logic/pending-update.ts";
 import { lookupNpmGlobalRoot } from "../logic/self-update.ts";
 import {
   getUpdateCachePath,
-  readUpdateCache,
-  writeUpdateCache,
+  mutateUpdateCache,
 } from "../logic/update-cache.ts";
 import {
   runUpdateCheck,
@@ -38,9 +37,7 @@ export type UpdateStatus =
   | "available"
   | "up-to-date"
   | "error"
-  | "updating"
-  | "updated"
-  | "failed";
+  | "updating";
 
 export interface UpdateInitialState {
   status?: UpdateStatus;
@@ -71,6 +68,7 @@ export interface UpdateProviderOptions {
   globalRootLookup?: () => Promise<string | undefined>;
   random?: () => number;
   check?: typeof runUpdateCheck;
+  exit?: () => void;
 }
 
 export interface UpdateContextType {
@@ -121,7 +119,8 @@ export const UpdateProvider = ({
     config.installDescriptor ?? getDefaultInstallDescriptor(),
   );
 
-  const { exit } = useApp();
+  const app = useApp();
+  const exit = config.exit ?? app.exit;
   const { showToaster } = useToaster();
 
   const [currentVersion] = useState(config.currentVersion ?? __APP_VERSION__);
@@ -140,6 +139,15 @@ export const UpdateProvider = ({
   );
 
   const lastNotifiedRef = useRef<string | undefined>(undefined);
+  const checkInFlightRef = useRef<Promise<void> | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const platform = config.platform ?? Runtime.platform;
   const updateCommand = useMemo(
@@ -159,53 +167,68 @@ export const UpdateProvider = ({
 
       lastNotifiedRef.current = result.latest;
       showToaster(`Update available: v${result.latest} · press u`);
-      await writeUpdateCache(cachePathFor(optionsRef.current), {
-        ...result.cache,
+      await mutateUpdateCache(cachePathFor(optionsRef.current), (cache) => ({
+        ...cache,
         lastNotified: result.latest,
-      });
+      }));
     },
     [showToaster],
   );
 
   const checkForUpdates = useCallback(
     async (checkOptions?: { force?: boolean }) => {
-      const current = optionsRef.current;
-      const enabled = current.enabled ?? true;
-      if (!enabled && !checkOptions?.force) return;
+      // Coalesce overlapping checks so a manual check cannot race the
+      // background one (and write a stale cache result).
+      if (checkInFlightRef.current) return checkInFlightRef.current;
 
-      setStatus("checking");
-      const checker = current.check ?? runUpdateCheck;
-      const result = await checker({
-        currentVersion,
-        env: current.env,
-        isTTY: current.isTTY,
-        argv: current.argv,
-        now: current.now,
-        fetchImpl: current.fetchImpl,
-        cachePath: cachePathFor(current),
-        registryBase: current.registryBase,
-        timeoutMs: current.timeoutMs,
-        intervalMs: current.intervalMs,
-        negativeCacheMs: current.negativeCacheMs,
-        force: checkOptions?.force,
-        platform: current.platform ?? Runtime.platform,
-        homeDir: current.homeDir,
-      });
+      const run = (async () => {
+        const current = optionsRef.current;
+        const enabled = current.enabled ?? true;
+        if (!enabled && !checkOptions?.force) return;
 
-      if (result.status === "disabled") {
-        setStatus("idle");
-        return;
+        setStatus("checking");
+        const checker = current.check ?? runUpdateCheck;
+        const result = await checker({
+          currentVersion,
+          env: current.env,
+          isTTY: current.isTTY,
+          argv: current.argv,
+          now: current.now,
+          fetchImpl: current.fetchImpl,
+          cachePath: cachePathFor(current),
+          registryBase: current.registryBase,
+          timeoutMs: current.timeoutMs,
+          intervalMs: current.intervalMs,
+          negativeCacheMs: current.negativeCacheMs,
+          force: checkOptions?.force,
+          platform: current.platform ?? Runtime.platform,
+          homeDir: current.homeDir,
+        });
+
+        if (!mountedRef.current) return;
+
+        if (result.status === "disabled") {
+          setStatus("idle");
+          return;
+        }
+
+        if (result.latest) setLatestVersion(result.latest);
+
+        if (result.updateAvailable) {
+          setStatus("available");
+          void notify(result);
+          return;
+        }
+
+        setStatus(result.status === "failed" ? "error" : "up-to-date");
+      })();
+
+      checkInFlightRef.current = run;
+      try {
+        await run;
+      } finally {
+        checkInFlightRef.current = null;
       }
-
-      if (result.latest) setLatestVersion(result.latest);
-
-      if (result.updateAvailable) {
-        setStatus("available");
-        void notify(result);
-        return;
-      }
-
-      setStatus(result.status === "failed" ? "error" : "up-to-date");
     },
     [currentVersion, notify],
   );
@@ -232,11 +255,10 @@ export const UpdateProvider = ({
     if (!latestVersion) return;
     setSkippedVersion(latestVersion);
 
-    void (async () => {
-      const path = cachePathFor(optionsRef.current);
-      const cache = await readUpdateCache(path);
-      await writeUpdateCache(path, { ...cache, skipped: latestVersion });
-    })();
+    void mutateUpdateCache(cachePathFor(optionsRef.current), (cache) => ({
+      ...cache,
+      skipped: latestVersion,
+    }));
   }, [latestVersion]);
 
   const prepareInstall = useCallback(async () => {

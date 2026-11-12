@@ -89,6 +89,15 @@ export const runPendingUpdate = async (
   pending: PendingUpdate,
   runner: CommandRunner = createRuntimeCommandRunner(),
 ): Promise<PendingUpdateResult> => {
+  if (!pending.command.command || pending.command.args.length === 0) {
+    return {
+      ok: false,
+      code: 1,
+      display: pending.command.display,
+      version: pending.version,
+    };
+  }
+
   try {
     const result = await runner(pending.command.command, pending.command.args, {
       stdin: "inherit",

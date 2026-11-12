@@ -37,7 +37,11 @@ export interface InstallCommand {
 
 const normalizePath = (path: string, platform: RuntimePlatform): string => {
   const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
-  return platform === "windows" ? normalized.toLowerCase() : normalized;
+  // Windows and macOS filesystems are case-insensitive by default, and
+  // Homebrew paths commonly mix case (`/usr/local/Cellar`).
+  return platform === "windows" || platform === "darwin"
+    ? normalized.toLowerCase()
+    : normalized;
 };
 
 export const pathIsInside = (
@@ -65,31 +69,32 @@ export const detectInstallKind = ({
   if (seaRuntime) return "sea";
 
   const path = normalizePath(scriptPath, platform);
+  // Layout markers (Cellar, scoop, _npx, ...) are matched case-insensitively
+  // so Intel macOS Homebrew (`/usr/local/Cellar`) and Windows paths work.
+  const markers = path.toLowerCase();
 
-  if (path.includes("/_npx/")) return "npx";
-  if (path.includes("/pnpm/dlx/")) return "pnpm-dlx";
-  if (path.includes("/.bun/install/cache/")) return "bunx";
+  // Ephemeral installs are identified by their cache paths.
+  if (markers.includes("/_npx/")) return "npx";
+  if (markers.includes("/pnpm/dlx/")) return "pnpm-dlx";
+  if (markers.includes("/.bun/install/cache/")) return "bunx";
 
-  if (env.VOLTA_HOME || path.includes("/.volta/")) return "volta";
-  if (env.PNPM_HOME) return "pnpm-global";
-  if (env.BUN_INSTALL || path.includes("/.bun/install/global/")) {
-    return "bun-global";
-  }
-
+  // Path evidence outranks ambient package-manager variables. Homebrew and
+  // Scoop both set global variables for their whole shell, which says nothing
+  // about how this particular executable was installed.
+  if (markers.includes("/cellar/")) return "homebrew";
+  if (markers.includes("/scoop/apps/")) return "scoop";
   if (
-    env.HOMEBREW_PREFIX ||
-    path.includes("/cellar/") ||
-    path.includes("/homebrew/") ||
-    path.includes("/linuxbrew/")
+    markers.includes("/yarn/global/") ||
+    markers.includes("/yarn/data/global/") ||
+    markers.includes("/.config/yarn/global/")
   ) {
-    return "homebrew";
+    return "yarn-global";
   }
+  if (markers.includes("/pnpm/global/")) return "pnpm-global";
+  if (markers.includes("/.bun/install/global/")) return "bun-global";
+  if (markers.includes("/.volta/")) return "volta";
 
-  if (env.SCOOP || path.includes("/scoop/apps/")) return "scoop";
-
-  if (path.includes("/yarn/global/")) return "yarn-global";
-  if (path.includes("/pnpm/global/")) return "pnpm-global";
-
+  // An explicitly resolved global npm root is authoritative.
   if (
     nodeModulesGlobalRoot &&
     pathIsInside(scriptPath, nodeModulesGlobalRoot, platform)
@@ -98,20 +103,47 @@ export const detectInstallKind = ({
   }
 
   if (
-    path.includes("/lib/node_modules/") ||
-    path.includes("/appdata/roaming/npm/") ||
-    path.includes("/.npm-global/") ||
-    path.includes("/npm-global/")
+    markers.includes("/lib/node_modules/") ||
+    markers.includes("/appdata/roaming/npm/") ||
+    markers.includes("/.npm-global/") ||
+    markers.includes("/npm-global/")
   ) {
     return "npm-global";
   }
 
+  // Homebrew's bin shims live under the prefix rather than under Cellar.
+  if (markers.includes("/homebrew/") || markers.includes("/linuxbrew/")) {
+    return "homebrew";
+  }
+
+  // A source checkout or a path under the working tree is a dev install, even
+  // when the shell exports PNPM_HOME, HOMEBREW_PREFIX, or similar markers.
   if (
-    path.endsWith(".ts") ||
-    path.endsWith(".tsx") ||
+    markers.endsWith(".ts") ||
+    markers.endsWith(".tsx") ||
     (cwd && scriptPath && pathIsInside(scriptPath, cwd, platform))
   ) {
     return "dev";
+  }
+
+  // Fall back to environment markers only when the executable lives under the
+  // manager's own directory. A bare marker is not enough evidence.
+  if (env.VOLTA_HOME && pathIsInside(scriptPath, env.VOLTA_HOME, platform)) {
+    return "volta";
+  }
+  if (env.PNPM_HOME && pathIsInside(scriptPath, env.PNPM_HOME, platform)) {
+    return "pnpm-global";
+  }
+  if (env.BUN_INSTALL && pathIsInside(scriptPath, env.BUN_INSTALL, platform)) {
+    return "bun-global";
+  }
+  if (env.HOMEBREW_PREFIX) {
+    const cellar = `${env.HOMEBREW_PREFIX.replace(/\/+$/, "")}/Cellar`;
+    if (pathIsInside(scriptPath, cellar, platform)) return "homebrew";
+  }
+  if (env.SCOOP) {
+    const apps = `${env.SCOOP.replace(/\\+$/, "")}/apps`;
+    if (pathIsInside(scriptPath, apps, platform)) return "scoop";
   }
 
   return "unknown";

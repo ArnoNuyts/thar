@@ -10,6 +10,10 @@ import {
   useUpdate,
   type UpdateContextType,
 } from "../contexts/update-context.tsx";
+import {
+  clearPendingUpdate,
+  peekPendingUpdate,
+} from "../logic/pending-update.ts";
 import { readUpdateCache, writeUpdateCache } from "../logic/update-cache.ts";
 import type { FetchLike } from "../logic/update-check.ts";
 import { Runtime } from "../utils/runtime.ts";
@@ -284,6 +288,52 @@ test("UpdateProvider: disabled providers never call fetch", async () => {
 
     unmount();
   });
+});
+
+test("UpdateProvider: startSelfUpdate records a pending install and exits", async () => {
+  clearPendingUpdate();
+  let latest: UpdateContextType | undefined;
+  let exits = 0;
+
+  const StartTrigger = () => {
+    const { startSelfUpdate } = useUpdate();
+    useEffect(() => {
+      startSelfUpdate();
+    }, [startSelfUpdate]);
+    return null;
+  };
+
+  const { unmount } = render(
+    <ToasterProvider>
+      <UpdateProvider
+        options={{
+          enabled: false,
+          currentVersion: "0.4.0",
+          initialState: { status: "available", latestVersion: "0.5.0" },
+          installDescriptor: npmDescriptor,
+          exit: () => {
+            exits++;
+          },
+        }}
+      >
+        <Probe
+          onValue={(value) => {
+            latest = value;
+          }}
+        />
+        <StartTrigger />
+      </UpdateProvider>
+    </ToasterProvider>,
+  );
+
+  await waitFor(() => {
+    expect(exits).toEqual(1);
+    expect(latest?.status).toEqual("updating");
+    expect(peekPendingUpdate()?.version).toEqual("0.5.0");
+  });
+
+  clearPendingUpdate();
+  unmount();
 });
 
 test("UpdateProvider: exposes the detected install command", async () => {
