@@ -1,6 +1,7 @@
 # Thar terminal demo — records docs/demo.gif.
 #
-# Run from the repository root:
+# Run from the repository root after building the app:
+#   npm run build
 #   vhs docs/demo.tape
 #
 # Requires vhs and ttyd on PATH. In headless containers where Chromium cannot
@@ -28,7 +29,7 @@ Hide
 Type "mkdir -p /tmp/opencode && cp docs/demo.todo.txt /tmp/opencode/thar-demo.txt && clear"
 Enter
 Sleep 500ms
-Type "node bin/thar.js --file /tmp/opencode/thar-demo.txt"
+Type "node dist/main.js /tmp/opencode/thar-demo.txt"
 Enter
 Sleep 5s
 
