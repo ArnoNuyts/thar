@@ -3,16 +3,16 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
+  useRef,
 } from "react";
-import { toBoundedDisplayMessage } from "../logic/display-safety.ts";
-import { findUnsafeTodoTextCodePoint } from "../logic/control-characters.ts";
-import { TodoControlCharacterError } from "../logic/limits.ts";
 import { writeTodosToFile } from "../logic/todo-file-helpers.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
 import { useTodoFileSync } from "../hooks/useTodoFileSync.ts";
+import { MAX_TODOS, validateTodoBatch } from "../logic/todo-input.ts";
 import { useToaster } from "./toaster-context.tsx";
 
 const NOT_SAVED_READ_ONLY = "Not saved: read-only";
@@ -103,13 +103,21 @@ export const TodoContext = createContext<TodoContextType | undefined>(
 const buildToggledTodos = (
   prev: Todos,
   idsToToggle: Set<symbol>,
-): { todos: Todos; recurringCount: number } => {
+): {
+  todos: Todos;
+  recurringCount: number;
+  recurrenceErrors: string[];
+} => {
   const newInstances: Todo[] = [];
+  const recurrenceErrors: string[] = [];
   const transformed = prev.map((t) => {
     if (idsToToggle.has(t.id)) {
-      const { updated, recurring } = t.toggleState();
+      const { updated, recurring, recurrenceError } = t.toggleState();
       if (recurring) {
         newInstances.push(recurring);
+      }
+      if (recurrenceError) {
+        recurrenceErrors.push(recurrenceError);
       }
       return updated;
     }
@@ -118,6 +126,7 @@ const buildToggledTodos = (
   return {
     todos: [...transformed, ...newInstances],
     recurringCount: newInstances.length,
+    recurrenceErrors: [...new Set(recurrenceErrors)],
   };
 };
 
@@ -143,7 +152,6 @@ export const TodoProvider = ({
   );
   const { todos } = state;
   const { showToaster } = useToaster();
-
   const loadTodos = useCallback((loadedTodos: Todos) => {
     dispatch({ type: "load", todos: loadedTodos });
   }, []);
@@ -154,6 +162,14 @@ export const TodoProvider = ({
     onLoad: loadTodos,
     showToaster,
   });
+
+  // Tracks the current count so consecutive addTodos calls in one tick cannot
+  // race past MAX_TODOS before React re-renders. Syncing in an effect keeps
+  // the ref out of the render path (discarded renders cannot corrupt it).
+  const todoCountRef = useRef(todos.length);
+  useEffect(() => {
+    todoCountRef.current = todos.length;
+  }, [todos]);
 
   const notifyReadOnly = useCallback(() => {
     if (readOnly) showToaster(NOT_SAVED_READ_ONLY);
@@ -182,30 +198,25 @@ export const TodoProvider = ({
     (...texts: string[]): Todo[] => {
       if (texts.length === 0) return [];
 
-      for (let index = 0; index < texts.length; index++) {
-        const codePoint = findUnsafeTodoTextCodePoint(texts[index]);
-        if (codePoint !== undefined) {
-          showToaster(
-            toBoundedDisplayMessage(
-              new TodoControlCharacterError(index + 1, codePoint),
-            ),
-          );
-          return [];
-        }
-      }
+      // Defense in depth: validate the whole batch before constructing
+      // anything, so a rejected call never partially mutates the list.
+      // UI callers validate earlier and catch TodoInputError; programmatic
+      // callers get the error so a rejected batch is never silently dropped.
+      validateTodoBatch(texts, todoCountRef.current);
 
       notifyReadOnly();
 
       const newTodos = texts.map((text) =>
         new Todo(text).setCreationDate(new Date()),
       );
+      todoCountRef.current += newTodos.length;
       dispatch({
         type: "mutate",
         updater: (prev) => [...prev, ...newTodos],
       });
       return newTodos;
     },
-    [notifyReadOnly, showToaster],
+    [notifyReadOnly],
   );
 
   const updateTodos = useCallback(
@@ -242,17 +253,27 @@ export const TodoProvider = ({
       const idsToToggle = new Set(todosToToggle.map((t) => t.id));
       // Compute the toast count from the current state; the reducer updater
       // stays pure so StrictMode's double invocation cannot duplicate instances.
-      const { recurringCount } = buildToggledTodos(todos, idsToToggle);
+      const {
+        todos: candidateTodos,
+        recurringCount,
+        recurrenceErrors,
+      } = buildToggledTodos(todos, idsToToggle);
+
+      if (candidateTodos.length > MAX_TODOS) {
+        showToaster(`Too many todos; the limit is ${MAX_TODOS}`);
+        return;
+      }
 
       dispatch({
         type: "mutate",
         updater: (prev) => buildToggledTodos(prev, idsToToggle).todos,
       });
 
-      if (readOnly) return;
-      if (recurringCount === 1) {
+      if (recurrenceErrors.length > 0) {
+        showToaster(recurrenceErrors[0]);
+      } else if (!readOnly && recurringCount === 1) {
         showToaster("Recurring todo created");
-      } else if (recurringCount > 1) {
+      } else if (!readOnly && recurringCount > 1) {
         showToaster(`${recurringCount} recurring todos created`);
       }
     },

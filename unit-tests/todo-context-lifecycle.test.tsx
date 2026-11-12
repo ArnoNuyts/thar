@@ -14,6 +14,7 @@ import { ToasterProvider, useToaster } from "../contexts/toaster-context.tsx";
 import { useTodoFileSync } from "../hooks/useTodoFileSync.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
+import { TodoInputError } from "../logic/todo-input.ts";
 import {
   MockWatcher,
   originalReadTextFile,
@@ -652,7 +653,6 @@ test("TodoContext: addTodos rejects control characters without mutating or writi
       return await originalWriteTextFile(path, data, options as never);
     };
 
-    const messages: string[] = [];
     let currentApi: TodoContextType | undefined;
     const { unmount } = render(
       <LifecycleApp
@@ -661,7 +661,7 @@ test("TodoContext: addTodos rejects control characters without mutating or writi
         onApi={(api) => {
           currentApi = api;
         }}
-        onMessage={(message) => messages.push(message)}
+        onMessage={() => {}}
       />,
     );
 
@@ -674,14 +674,10 @@ test("TodoContext: addTodos rejects control characters without mutating or writi
       await waitPast(60);
       writeCount = 0;
 
-      const added = currentApi!.addTodos("pasted\u009b31mred");
-      expect(added).toEqual([]);
+      expect(() => currentApi!.addTodos("pasted\u009b31mred")).toThrow(
+        TodoInputError,
+      );
       expect(currentApi!.todos.map((todo) => todo.text)).toEqual(["Original"]);
-      await waitFor(() => {
-        expect(messages.some((message) => message.includes("U+009B"))).toEqual(
-          true,
-        );
-      });
 
       await waitPast(100);
       expect(writeCount, "A rejected add must not save").toEqual(0);

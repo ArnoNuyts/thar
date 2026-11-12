@@ -6,6 +6,7 @@ import { Box } from "ink";
 
 import { EditTodoModal } from "../components/EditTodoModal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
+import { useToaster } from "../contexts/toaster-context.tsx";
 import { Todo } from "../logic/todo.ts";
 import { waitFor } from "./test-utils.ts";
 import { FocusObserver, TestWrapper } from "./test-components.tsx";
@@ -115,6 +116,115 @@ test("EditTodoModal: preserves tags when editing text", async () => {
       h: "1",
     });
   });
+
+  unmount();
+});
+
+test("EditTodoModal: rejects an impossible leading date and stays open", async () => {
+  let updateCalls = 0;
+  let toast: string | undefined;
+  const todo = new Todo("2024-02-30 impossible");
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    const { toasterMessage } = useToaster();
+
+    useEffect(() => {
+      openModal("edit-todo");
+    }, [openModal]);
+
+    useEffect(() => {
+      toast = toasterMessage;
+    }, [toasterMessage]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "edit-todo" && <EditTodoModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, lastFrame, stdin } = render(
+    <TestWrapper
+      navValue={{ getSelectedTodo: () => todo }}
+      todoValue={{
+        updateTodos: () => {
+          updateCalls++;
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => {
+    expect(lastFrame() || "").toMatch(/2024-02-30 impossible/);
+  });
+
+  stdin.write("\r");
+
+  await waitFor(() => {
+    expect(toast || "").toMatch(/impossible date/i);
+  });
+  expect(updateCalls).toEqual(0);
+  expect(lastFrame() || "").toMatch(/Edit todo/);
+
+  unmount();
+});
+
+test("EditTodoModal: rejects overlong text and stays open", async () => {
+  let updateCalls = 0;
+  let toast: string | undefined;
+  let activeModalName: string | null = null;
+  const todo = new Todo("a".repeat(2_001));
+
+  const TestComponent = () => {
+    const { openModal, activeModal } = useModal();
+    const { toasterMessage } = useToaster();
+
+    useEffect(() => {
+      openModal("edit-todo");
+    }, [openModal]);
+
+    useEffect(() => {
+      activeModalName = activeModal;
+    }, [activeModal]);
+
+    useEffect(() => {
+      toast = toasterMessage;
+    }, [toasterMessage]);
+
+    return (
+      <Box flexDirection="column" height={20} width={80}>
+        {activeModal === "edit-todo" && <EditTodoModal />}
+      </Box>
+    );
+  };
+
+  const { unmount, stdin } = render(
+    <TestWrapper
+      navValue={{ getSelectedTodo: () => todo }}
+      todoValue={{
+        updateTodos: () => {
+          updateCalls++;
+        },
+      }}
+    >
+      <TestComponent />
+    </TestWrapper>,
+  );
+
+  await waitFor(() => {
+    expect(activeModalName).toEqual("edit-todo");
+  });
+
+  stdin.write("\r");
+
+  await waitFor(() => {
+    expect(toast || "").toMatch(/too long/i);
+  });
+  expect(updateCalls).toEqual(0);
+  expect(activeModalName).toEqual("edit-todo");
 
   unmount();
 });

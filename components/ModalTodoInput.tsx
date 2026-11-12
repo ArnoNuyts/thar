@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Box, measureElement, Text, useWindowSize } from "ink";
 import { Modal } from "./Modal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
+import { useToaster } from "../contexts/toaster-context.tsx";
+import { TodoInputError, validateTodoText } from "../logic/todo-input.ts";
 import { useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { SuggestionInput } from "./SuggestionInput.tsx";
@@ -37,6 +39,7 @@ export const ModalTodoInput = ({
   tag,
 }: ModalTodoInputProps) => {
   const { closeModal } = useModal();
+  const { showToaster } = useToaster();
   const [selectedButtonIndex, setSelectedButtonIndex] = useState(0);
   const [hoveredButtonIndex, setHoveredButtonIndex] = useState<number | null>(
     null,
@@ -48,8 +51,15 @@ export const ModalTodoInput = ({
   }>({});
 
   const handleSubmit = (val: string) => {
-    if (val.trim().length > 0) {
+    try {
+      validateTodoText(val);
       onSubmit(val);
+    } catch (error) {
+      if (error instanceof TodoInputError) {
+        showToaster(error.message);
+        return;
+      }
+      throw error;
     }
     closeModal();
   };
