@@ -5,7 +5,7 @@ import { useTodo } from "../contexts/todo-context.tsx";
 import { copyToClipboard, readFromClipboard } from "../logic/clipboard.ts";
 import { toBoundedDisplayMessage } from "../logic/display-safety.ts";
 import { Priority } from "../logic/priority.ts";
-import { MAX_PASTE_TODOS, validateTodoBatch } from "../logic/todo-input.ts";
+import { validateTodoBatch } from "../logic/todo-input.ts";
 
 export interface CommandOptions {
   /** Called once the command has finished, if it acted on a selection. */
@@ -169,13 +169,9 @@ export const useTodoCommands = () => {
         return;
       }
 
-      if (lines.length > MAX_PASTE_TODOS) {
-        throw new Error(
-          `Too many todos in one paste; the limit is ${MAX_PASTE_TODOS}`,
-        );
-      }
       // Validate every line before the confirmation prompt so a rejected
-      // paste cannot add a partial batch.
+      // paste cannot add a partial batch. This is the only paste-cap check;
+      // the catch below turns its TodoInputError into the toast.
       validateTodoBatch(lines, 0);
 
       const doPaste = () => {

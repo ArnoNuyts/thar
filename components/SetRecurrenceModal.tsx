@@ -8,7 +8,9 @@ import { SelectList } from "./SelectList.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
+import { useToaster } from "../contexts/toaster-context.tsx";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
+import { MAX_RECURRENCE_AMOUNT, isValidRecurrence } from "../logic/todo.ts";
 
 const BASE_OPTIONS = [
   { label: "Daily", value: "d", unit: "day(s)" },
@@ -21,6 +23,7 @@ const RESET_OPTION = { label: "Reset", value: "reset", unit: "" };
 
 export const SetRecurrenceModal = () => {
   const { closeModal } = useModal();
+  const { showToaster } = useToaster();
   const { updateTodos } = useTodo();
   const { getSelectedTodos } = useNavigation();
   const selectedTodos = getSelectedTodos();
@@ -86,6 +89,12 @@ export const SetRecurrenceModal = () => {
         if (selectedTodos.length > 0 && amountRef.current.trim().length > 0) {
           const base = options[selection.selectedIndex].value;
           const recurrenceString = `${amountRef.current}${base}`;
+          if (!isValidRecurrence(recurrenceString)) {
+            showToaster(
+              `Recurrence must be a whole number from 1 to ${MAX_RECURRENCE_AMOUNT}`,
+            );
+            return;
+          }
           updateTodos(selectedTodos, (t) => t.setRecurrence(recurrenceString));
           closeModal();
         }
