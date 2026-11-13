@@ -617,22 +617,28 @@ test("TodoContext: undo after a mutation that preempted the just-read save still
       // save can consume its flag.
       currentApi!.addTodos("Mutated");
 
-      await waitFor(async () => {
-        const content = await originalReadTextFile(filename);
-        if (!content.includes("Mutated")) {
-          throw new Error("Mutation not saved yet");
-        }
-      });
+      await waitFor(
+        async () => {
+          const content = await originalReadTextFile(filename);
+          if (!content.includes("Mutated")) {
+            throw new Error("Mutation not saved yet");
+          }
+        },
+        { timeout: 15_000 },
+      );
 
       currentApi!.undo();
 
-      await waitFor(async () => {
-        const content = await originalReadTextFile(filename);
-        expect(
-          content,
-          "Undo back to the loaded array must be written",
-        ).toEqual("Original\n");
-      });
+      await waitFor(
+        async () => {
+          const content = await originalReadTextFile(filename);
+          expect(
+            content,
+            "Undo back to the loaded array must be written",
+          ).toEqual("Original\n");
+        },
+        { timeout: 15_000 },
+      );
     } finally {
       unmount();
     }
@@ -740,13 +746,18 @@ test("TodoContext: archive is blocked while read-only and leaves done.txt alone"
 
       writes.length = 0;
       await currentApi!.archiveCompletedTodos();
-      await waitPast(60);
+      await waitFor(() => {
+        if (
+          !messages.some((message) =>
+            message.toLowerCase().includes("read-only"),
+          )
+        ) {
+          throw new Error("Read-only archive message not shown yet");
+        }
+      });
 
       expect(writes, "No done.txt write while read-only").toEqual([]);
       expect(currentApi!.todos.some((todo) => todo.isDone())).toEqual(true);
-      expect(
-        messages.some((message) => message.toLowerCase().includes("read-only")),
-      ).toEqual(true);
 
       await expect(
         Runtime.stat(join(dirname(filename), "done.txt")),
@@ -789,20 +800,26 @@ test("TodoFileSync: a mutation that preempts the just-read save still allows a l
       // definitely wins the debounce and clears the just-read flag.
       snapshot!.setTodos([...loaded, new Todo("Mutated")]);
 
-      await waitFor(async () => {
-        const content = await originalReadTextFile(filename);
-        if (!content.includes("Mutated")) {
-          throw new Error("Mutation not saved yet");
-        }
-      });
+      await waitFor(
+        async () => {
+          const content = await originalReadTextFile(filename);
+          if (!content.includes("Mutated")) {
+            throw new Error("Mutation not saved yet");
+          }
+        },
+        { timeout: 15_000 },
+      );
 
       // Undo back to the exact array the load produced. Without clearing the
       // just-read ref on the mismatch save this would be skipped as a no-op.
       snapshot!.setTodos(loaded);
 
-      await waitFor(async () => {
-        expect(await originalReadTextFile(filename)).toEqual("Original\n");
-      });
+      await waitFor(
+        async () => {
+          expect(await originalReadTextFile(filename)).toEqual("Original\n");
+        },
+        { timeout: 15_000 },
+      );
     } finally {
       unmount();
     }

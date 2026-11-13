@@ -41,7 +41,6 @@
 - `npm run check` — typecheck, lint, format check.
 - `npm test` — full Vitest suite.
 - `npm run build` — Vite SSR bundle in `dist/`.
-- `npm run build:sea` — Node single executable in `dist/` (current platform).
 - When debugging behavior that depends on row layout, prefer rerunning the full
   suite after targeted fixes because navigation and mouse tests depend on shared
   index semantics.

@@ -1,7 +1,16 @@
 /.vscode
-settings.json
-GEMINI.md
 node_modules/
 dist/
-dist-sea/
+coverage/
 *.log
+
+# Local todo data (the app creates/uses these in the working directory)
+todo.txt
+done.txt
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example

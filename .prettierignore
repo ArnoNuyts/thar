@@ -1,9 +1,4 @@
 package-lock.json
-CODE_REVIEW.md
-done.txt
-todo.txt
-todomeh.txt
-test.txt
 dist/
-dist-sea/
 node_modules/
+coverage/

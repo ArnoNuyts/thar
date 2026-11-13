@@ -39,9 +39,9 @@ export interface ReadLimits {
 }
 
 const LIMIT_ENV_VARS = {
-  maxFileBytes: "TODOTUI_MAX_FILE_BYTES",
-  maxReadTodos: "TODOTUI_MAX_READ_TODOS",
-  maxLineChars: "TODOTUI_MAX_LINE_CHARS",
+  maxFileBytes: "THAR_MAX_FILE_BYTES",
+  maxReadTodos: "THAR_MAX_READ_TODOS",
+  maxLineChars: "THAR_MAX_LINE_CHARS",
 } as const;
 
 export class InvalidLimitError extends Error {

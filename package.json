@@ -1,13 +1,47 @@
 {
-  "name": "todotui",
-  "version": "0.4.0",
-  "private": true,
+  "name": "@arnoarnoarno/thar",
+  "version": "0.5.0",
+  "description": "A keyboard-driven todo.txt TUI for the terminal",
+  "keywords": [
+    "cli",
+    "ink",
+    "productivity",
+    "react",
+    "terminal",
+    "todo",
+    "todo.txt",
+    "tui"
+  ],
+  "homepage": "https://github.com/ArnoNuyts/thar#readme",
+  "bugs": {
+    "url": "https://github.com/ArnoNuyts/thar/issues"
+  },
+  "license": "MIT",
+  "author": "Arno Nuyts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArnoNuyts/thar.git"
+  },
+  "bin": {
+    "thar": "bin/thar.js"
+  },
+  "files": [
+    "bin",
+    "dist/*.js",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "start": "vite-node main.tsx",
     "dev": "vite-node main.tsx",
     "build": "vite build",
-    "build:sea": "node scripts/build-sea.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check && npm test",
+    "package:check": "npm pack --dry-run",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -15,7 +49,7 @@
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt --check .",
     "check": "npm run typecheck && npm run lint && npm run fmt:check",
-    "doctor": "npx --yes react-doctor@latest ."
+    "doctor": "react-doctor ."
   },
   "dependencies": {
     "chalk": "^6.0.1",
@@ -30,13 +64,14 @@
     "ink-testing-library": "^4.0.0",
     "oxfmt": "^0.74.0",
     "oxlint": "^1.89.0",
+    "react-doctor": "^0.9.18",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vite-node": "^6.0.0",
     "vitest": "^5.0.5"
   },
   "engines": {
-    "node": ">=26.12.0"
+    "node": ">=22.12.0"
   },
   "packageManager": "npm@11.20.0"
 }

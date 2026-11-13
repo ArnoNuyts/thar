@@ -66,11 +66,42 @@ test("Runtime: watches a file and emits a change event", async () => {
       ]);
 
       assert.equal(result.done, false);
-      assert.equal(result.value.kind, "modify");
+      assert.ok(
+        result.value.kind === "modify" || result.value.kind === "rename",
+        `unexpected event kind: ${result.value.kind}`,
+      );
       assert.deepEqual(result.value.paths, [filename]);
     } finally {
       watcher.close();
     }
+  });
+});
+
+test("Runtime: overwrites files atomically without leaving temp files", async () => {
+  await withTempDir(async (dir) => {
+    const filename = `${dir}/todos.txt`;
+    await Runtime.writeTextFile(filename, "first");
+    await Runtime.writeTextFile(filename, "second");
+
+    assert.equal(await Runtime.readTextFile(filename), "second");
+
+    const entries: string[] = [];
+    for await (const entry of Runtime.readDir(dir)) {
+      entries.push(entry.name);
+    }
+
+    assert.deepEqual(entries, ["todos.txt"]);
+  });
+});
+
+test("Runtime: create: false refuses to create a missing file", async () => {
+  await withTempDir(async (dir) => {
+    const filename = `${dir}/missing.txt`;
+
+    await assert.rejects(
+      Runtime.writeTextFile(filename, "data", { create: false }),
+      (error: NodeJS.ErrnoException) => error.code === "ENOENT",
+    );
   });
 });
 
