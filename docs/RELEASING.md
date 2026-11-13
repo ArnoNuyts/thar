@@ -28,9 +28,8 @@ version there before the next beta cycle.
 `.github/workflows/release.yml` runs on pushes to `main` and `release/next`:
 
 1. `verify` calls the CI workflow.
-2. `build` creates the five single-file executables.
-3. `publish` creates the tag, publishes to npm, and creates or updates the
-   GitHub release with binaries and `SHA256SUMS`.
+2. `publish` creates the tag, publishes to npm, and creates or updates the
+   GitHub release notes.
 
 The publish job is idempotent: if the npm version already exists, it skips.
 
