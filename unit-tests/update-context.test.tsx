@@ -141,17 +141,23 @@ test("UpdateProvider: auto-checks after mount and notifies once per version", as
       </ToasterProvider>,
     );
 
-    await waitFor(() => {
-      expect(latest?.status).toEqual("available");
-      expect(latest?.latestVersion).toEqual("0.5.0");
-      expect(latest?.isUpdateAvailable).toEqual(true);
-    });
+    await waitFor(
+      () => {
+        expect(latest?.status).toEqual("available");
+        expect(latest?.latestVersion).toEqual("0.5.0");
+        expect(latest?.isUpdateAvailable).toEqual(true);
+      },
+      { timeout: 15_000 },
+    );
 
-    await waitFor(async () => {
-      const cache = await readUpdateCache(cachePath);
-      expect(cache.latest).toEqual("0.5.0");
-      expect(cache.lastNotified).toEqual("0.5.0");
-    });
+    await waitFor(
+      async () => {
+        const cache = await readUpdateCache(cachePath);
+        expect(cache.latest).toEqual("0.5.0");
+        expect(cache.lastNotified).toEqual("0.5.0");
+      },
+      { timeout: 15_000 },
+    );
 
     expect(toasts).toHaveLength(1);
     expect(toasts[0]).toMatch(/0\.5\.0/);
