@@ -85,7 +85,7 @@ test("update-modal: shows versions, install command and release notes", async ()
     expect(frame).toMatch(/Update available/);
     expect(frame).toMatch(/0\.4\.0/);
     expect(frame).toMatch(/0\.5\.0/);
-    expect(frame).toMatch(/npm install -g todotui@latest/);
+    expect(frame).toMatch(/npm install -g @arnoarnoarno\/thar@latest/);
     expect(frame).toMatch(/Release notes:/);
     expect(frame).toMatch(/releases\/tag\/v0\.5\.0/);
     expect(frame).toMatch(/Update now/);
@@ -163,7 +163,11 @@ test("update-modal: Update now records a pending update and exits", async () => 
     const pending = peekPendingUpdate();
     expect(pending?.version).toEqual("0.5.0");
     expect(pending?.command.command).toEqual("npm");
-    expect(pending?.command.args).toEqual(["install", "-g", "todotui@latest"]);
+    expect(pending?.command.args).toEqual([
+      "install",
+      "-g",
+      "@arnoarnoarno/thar@latest",
+    ]);
   });
 
   clearPendingUpdate();
@@ -175,7 +179,7 @@ test("update-modal: ephemeral installs show the exact command and no self-update
 
   await waitFor(() => {
     const frame = lastFrame() || "";
-    expect(frame).toMatch(/npx todotui@latest/);
+    expect(frame).toMatch(/npx @arnoarnoarno\/thar@latest/);
     expect(frame).not.toMatch(/Update now/);
     expect(frame).toMatch(/Later/);
     expect(frame).toMatch(/Skip this version/);

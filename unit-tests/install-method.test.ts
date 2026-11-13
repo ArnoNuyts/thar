@@ -257,47 +257,47 @@ test("install-method: pathIsInside respects path boundaries", () => {
 test("install-method: builds npm/pnpm/yarn/bun/volta commands", () => {
   expect(getInstallCommand("npm-global", "linux")).toMatchObject({
     command: "npm",
-    args: ["install", "-g", "todotui@latest"],
-    display: "npm install -g todotui@latest",
+    args: ["install", "-g", "@arnoarnoarno/thar@latest"],
+    display: "npm install -g @arnoarnoarno/thar@latest",
     canSelfUpdate: true,
   });
   expect(getInstallCommand("pnpm-global", "linux")).toMatchObject({
     command: "pnpm",
-    args: ["add", "-g", "todotui@latest"],
-    display: "pnpm add -g todotui@latest",
+    args: ["add", "-g", "@arnoarnoarno/thar@latest"],
+    display: "pnpm add -g @arnoarnoarno/thar@latest",
     canSelfUpdate: true,
   });
   expect(getInstallCommand("yarn-global", "linux")).toMatchObject({
     command: "yarn",
-    args: ["global", "add", "todotui@latest"],
-    display: "yarn global add todotui@latest",
+    args: ["global", "add", "@arnoarnoarno/thar@latest"],
+    display: "yarn global add @arnoarnoarno/thar@latest",
     canSelfUpdate: true,
   });
   expect(getInstallCommand("bun-global", "linux")).toMatchObject({
     command: "bun",
-    args: ["add", "-g", "todotui@latest"],
-    display: "bun add -g todotui@latest",
+    args: ["add", "-g", "@arnoarnoarno/thar@latest"],
+    display: "bun add -g @arnoarnoarno/thar@latest",
     canSelfUpdate: true,
   });
   expect(getInstallCommand("volta", "linux")).toMatchObject({
     command: "volta",
-    args: ["install", "todotui@latest"],
-    display: "volta install todotui@latest",
+    args: ["install", "@arnoarnoarno/thar@latest"],
+    display: "volta install @arnoarnoarno/thar@latest",
     canSelfUpdate: true,
   });
 });
 
 test("install-method: ephemeral, brew and scoop commands", () => {
   expect(getInstallCommand("npx", "linux")).toMatchObject({
-    display: "npx todotui@latest",
+    display: "npx @arnoarnoarno/thar@latest",
     canSelfUpdate: false,
   });
   expect(getInstallCommand("pnpm-dlx", "linux")).toMatchObject({
-    display: "pnpm dlx todotui@latest",
+    display: "pnpm dlx @arnoarnoarno/thar@latest",
     canSelfUpdate: false,
   });
   expect(getInstallCommand("bunx", "linux")).toMatchObject({
-    display: "bunx todotui@latest",
+    display: "bunx @arnoarnoarno/thar@latest",
     canSelfUpdate: false,
   });
   expect(getInstallCommand("homebrew", "darwin")).toMatchObject({
@@ -322,23 +322,31 @@ test("install-method: dev, sea and unknown never self-update", () => {
   }
   expect(getInstallCommand("dev", "linux").display).toMatch(/git pull/);
   expect(getInstallCommand("sea", "linux").display).toMatch(
-    /github\.com\/ArnoNuyts\/todotui\/releases/,
+    /github\.com\/ArnoNuyts\/thar\/releases/,
   );
   expect(getInstallCommand("unknown", "linux").display).toEqual(
-    "npm install -g todotui@latest",
+    "npm install -g @arnoarnoarno/thar@latest",
   );
 });
 
 test("install-method: Windows uses cmd.exe with fixed argv", () => {
   expect(getInstallCommand("npm-global", "windows")).toMatchObject({
     command: "cmd.exe",
-    args: ["/d", "/s", "/c", "npm", "install", "-g", "todotui@latest"],
-    display: "npm install -g todotui@latest",
+    args: [
+      "/d",
+      "/s",
+      "/c",
+      "npm",
+      "install",
+      "-g",
+      "@arnoarnoarno/thar@latest",
+    ],
+    display: "npm install -g @arnoarnoarno/thar@latest",
     canSelfUpdate: true,
   });
   expect(getInstallCommand("pnpm-global", "windows")).toMatchObject({
     command: "cmd.exe",
-    args: ["/d", "/s", "/c", "pnpm", "add", "-g", "todotui@latest"],
+    args: ["/d", "/s", "/c", "pnpm", "add", "-g", "@arnoarnoarno/thar@latest"],
   });
 });
 

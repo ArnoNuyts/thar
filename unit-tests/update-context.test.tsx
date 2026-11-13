@@ -361,7 +361,7 @@ test("UpdateProvider: exposes the detected install command", async () => {
   await waitFor(() => {
     expect(latest?.installKind).toEqual("npm-global");
     expect(latest?.updateCommand.display).toEqual(
-      "npm install -g todotui@latest",
+      "npm install -g @arnoarnoarno/thar@latest",
     );
     expect(latest?.updateCommand.canSelfUpdate).toEqual(true);
   });

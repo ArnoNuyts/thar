@@ -34,7 +34,7 @@ test("update-check: resolves the registry base URL", () => {
     }),
   ).toEqual("https://registry.example.test");
   expect(buildLatestManifestUrl("http://127.0.0.1:1234/")).toEqual(
-    "http://127.0.0.1:1234/todotui/latest",
+    "http://127.0.0.1:1234/%40arnoarnoarno%2Fthar/latest",
   );
 });
 
@@ -56,6 +56,18 @@ test("update-check: gating skips non-TTY, CI, npm lifecycle and opt-outs", () =>
       isTTY: true,
     }),
   ).toEqual(false);
+  expect(
+    shouldCheckForUpdates({
+      env: { npm_lifecycle_event: "npx" },
+      isTTY: true,
+    }),
+  ).toEqual(true);
+  expect(
+    shouldCheckForUpdates({
+      env: { npm_lifecycle_event: "exec" },
+      isTTY: true,
+    }),
+  ).toEqual(true);
   expect(
     shouldCheckForUpdates({ env: { VITEST: "true" }, isTTY: true }),
   ).toEqual(false);
@@ -101,9 +113,11 @@ test("update-check: fetches the latest manifest with the expected headers", asyn
     registryBase: "http://registry.test",
   });
 
-  expect(requestedUrl).toEqual("http://registry.test/todotui/latest");
+  expect(requestedUrl).toEqual(
+    "http://registry.test/%40arnoarnoarno%2Fthar/latest",
+  );
   expect(headers.Accept).toEqual("application/json");
-  expect(headers["User-Agent"]).toEqual("todotui/0.4.0");
+  expect(headers["User-Agent"]).toEqual("thar/0.4.0");
   expect(outcome).toEqual({
     status: "update-available",
     current: "0.4.0",
@@ -408,7 +422,7 @@ test("update-check: a local mock registry works end to end", async () => {
       registryBase: `http://127.0.0.1:${address.port}`,
     });
 
-    expect(requests).toEqual(["/todotui/latest"]);
+    expect(requests).toEqual(["/%40arnoarnoarno%2Fthar/latest"]);
     expect(result.status).toEqual("checked");
     expect(result.latest).toEqual("0.6.0");
     expect(result.updateAvailable).toEqual(true);

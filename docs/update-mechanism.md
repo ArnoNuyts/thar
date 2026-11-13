@@ -45,8 +45,8 @@ codesigned** (Node's documented SEA build requires `codesign --sign -`).
 
 | Fact                                                                | Implication                                                                                                                     |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `todotui@0.4.0`, `"private": true`                                  | Cannot publish until removed.                                                                                                   |
-| Name `todotui` returns 404 from the npm registry                    | Name appears unclaimed; publishing claims it. Do it early to avoid squatting.                                                   |
+| `@arnoarnoarno/thar@0.4.0`, `"private": true`                       | Cannot publish until removed.                                                                                                   |
+| Published name is `@arnoarnoarno/thar`                              | Scope must be claimed before the first publish.                                                                                 |
 | Distribution: npm (planned) **and** SEA binaries on GitHub releases | Two install kinds, two update paths.                                                                                            |
 | Long-running Ink TUI, `patchConsole: true`                          | Background code must not `console.log`/write stderr; surface state through React.                                               |
 | No `bin` field and no shebang yet                                   | npm install has no executable entry point today.                                                                                |
@@ -80,7 +80,7 @@ own components. The registry request is trivial; skip the dependency.
 
 ### C. Custom check + in-app notice (recommended)
 
-- Fetch `https://registry.npmjs.org/todotui/latest` (single manifest, ~1–3 KB)
+- Fetch `https://registry.npmjs.org/%40arnoarnoarno%2Fthar/latest` (single manifest, ~1–3 KB)
   with `Accept: application/json` and a `User-Agent`.
 - Compare with `semver.gt(latest, current)` (or a ~30-line comparator if you
   want zero new deps; `semver` is 0-dep and battle-tested).
@@ -103,19 +103,19 @@ to a file and show progress in the UI.
 
 Command per install kind:
 
-| Install kind | Update command                   | Notes                                                 |
-| ------------ | -------------------------------- | ----------------------------------------------------- |
-| npm global   | `npm install -g todotui@latest`  | Canonical. May fail `EACCES` if prefix is root-owned. |
-| pnpm global  | `pnpm add -g todotui@latest`     | Don't use npm here; it creates a second copy.         |
-| yarn global  | `yarn global add todotui@latest` | Yarn v1 vs berry differ; consider instructions only.  |
-| bun global   | `bun add -g todotui@latest`      |                                                       |
-| Volta        | `volta install todotui@latest`   |                                                       |
-| `npx`        | `npx todotui@latest`             | Can't hot-swap; just tell the user.                   |
-| `pnpm dlx`   | `pnpm dlx todotui@latest`        | Same.                                                 |
-| `bunx`       | `bunx todotui@latest`            | Same.                                                 |
-| Homebrew     | `brew upgrade todotui`           | Only if a tap exists.                                 |
-| Scoop        | `scoop update todotui`           | Only if a manifest exists.                            |
-| Dev checkout | refuse                           | Suggest `git pull && npm i`.                          |
+| Install kind | Update command                              | Notes                                                 |
+| ------------ | ------------------------------------------- | ----------------------------------------------------- |
+| npm global   | `npm install -g @arnoarnoarno/thar@latest`  | Canonical. May fail `EACCES` if prefix is root-owned. |
+| pnpm global  | `pnpm add -g @arnoarnoarno/thar@latest`     | Don't use npm here; it creates a second copy.         |
+| yarn global  | `yarn global add @arnoarnoarno/thar@latest` | Yarn v1 vs berry differ; consider instructions only.  |
+| bun global   | `bun add -g @arnoarnoarno/thar@latest`      |                                                       |
+| Volta        | `volta install @arnoarnoarno/thar@latest`   |                                                       |
+| `npx`        | `npx @arnoarnoarno/thar@latest`             | Can't hot-swap; just tell the user.                   |
+| `pnpm dlx`   | `pnpm dlx @arnoarnoarno/thar@latest`        | Same.                                                 |
+| `bunx`       | `bunx @arnoarnoarno/thar@latest`            | Same.                                                 |
+| Homebrew     | `brew upgrade todotui`                      | Only if a tap exists.                                 |
+| Scoop        | `scoop update todotui`                      | Only if a manifest exists.                            |
+| Dev checkout | refuse                                      | Suggest `git pull && npm i`.                          |
 
 Detection order (only on demand, not at startup):
 
@@ -152,7 +152,7 @@ most platform-specific sharp edges. Recommended design:
 1. Use the **npm registry as version source** (one source of truth for both
    install kinds, no GitHub rate limit, no prerelease API weirdness).
 2. Download the asset for the running platform/arch from
-   `https://github.com/ArnoNuyts/todotui/releases/download/v<version>/todotui-<os>-<arch>[.exe]`.
+   `https://github.com/ArnoNuyts/thar/releases/download/v<version>/todotui-<os>-<arch>[.exe]`.
    Extend the existing matrix to cover `linux-arm64` and `macos-x64`; the
    current matrix has only `linux-x64`, `windows-x64`, `macos-arm64`.
 3. Verify a `SHA256SUMS` asset (generate it in the release workflow); cap the
@@ -180,7 +180,7 @@ most platform-specific sharp edges. Recommended design:
 
 Worth doing later, in rough order of value:
 
-- **Homebrew tap** (`brew install ArnoNuyts/todotui/todotui`) — the natural
+- **Homebrew tap** (`brew install ArnoNuyts/thar/todotui`) — the natural
   macOS path; `brew upgrade` handles updates and signatures/notarization
   expectations. Can be auto-bumped from the release workflow.
 - **Scoop** bucket for Windows; **Winget** after that.
@@ -273,14 +273,14 @@ startup
   └─ useEffect: after ~2–3 s idle (unref timer)
        ├─ skip if disabled / !TTY / CI / npm lifecycle / dev? (dev optional)
        ├─ read cache; if checkedAt < 24 h → use cached latest
-       └─ else GET registry/todotui/latest (timeout 1.5 s)
+       └─ else GET registry/%40arnoarnoarno%2Fthar/latest (timeout 1.5 s)
             ├─ 200 → validate semver, write cache atomically, update state
             └─ error/timeout → silent; optionally negative-cache 1 h
 ```
 
 Registry details:
 
-- URL: `https://registry.npmjs.org/todotui/latest` (the manifest behind the
+- URL: `https://registry.npmjs.org/%40arnoarnoarno%2Fthar/latest` (the manifest behind the
   `latest` dist-tag). The registry does **not** return an `ETag` for this
   endpoint (verified), so don't build conditional-request logic; use TTL.
 - Honor `TODOTUI_REGISTRY` and, if present, `npm_config_registry`.
@@ -323,11 +323,11 @@ Use the existing footer rather than a modal:
 - Narrow terminals: degrade to `↑ v0.5.0`, then `↑`. Mouse support: reuse the
   `ActionBar` click-segment pattern.
 - Modal actions: _Update now_, _Later_, _Skip this version_, plus the release
-  notes link (`https://github.com/ArnoNuyts/todotui/releases/tag/vX.Y.Z`).
+  notes link (`https://github.com/ArnoNuyts/thar/releases/tag/vX.Y.Z`).
   _Update now_ records a pending install, exits the TUI, and runs the package
   manager with inherited stdio.
 - If the install kind is ephemeral (`npx`/`dlx`/`bunx`), replace “Update” with
-  the exact `npx todotui@latest` command and a copy hint; no self-update.
+  the exact `npx @arnoarnoarno/thar@latest` command and a copy hint; no self-update.
 
 ### Update execution
 

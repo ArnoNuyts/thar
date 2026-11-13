@@ -16,7 +16,7 @@ import { getTerminalSize } from "../utils/terminal-size.ts";
 import { Button } from "./Button.tsx";
 import { Modal } from "./Modal.tsx";
 
-const RELEASE_NOTES_BASE = "https://github.com/ArnoNuyts/todotui/releases/tag";
+const RELEASE_NOTES_BASE = "https://github.com/ArnoNuyts/thar/releases/tag";
 
 export const UpdateModal = () => {
   const { closeModal } = useModal();

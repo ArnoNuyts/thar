@@ -18,9 +18,9 @@ import {
 
 const npmCommand: InstallCommand = {
   kind: "npm-global",
-  display: "npm install -g todotui@latest",
+  display: "npm install -g @arnoarnoarno/thar@latest",
   command: "npm",
-  args: ["install", "-g", "todotui@latest"],
+  args: ["install", "-g", "@arnoarnoarno/thar@latest"],
   canSelfUpdate: true,
 };
 
@@ -60,13 +60,13 @@ test("self-update: runs the installer with inherited stdio and fixed argv", asyn
   expect(result).toEqual({
     ok: true,
     code: 0,
-    display: "npm install -g todotui@latest",
+    display: "npm install -g @arnoarnoarno/thar@latest",
     version: "0.5.0",
   });
   expect(calls).toEqual([
     {
       command: "npm",
-      args: ["install", "-g", "todotui@latest"],
+      args: ["install", "-g", "@arnoarnoarno/thar@latest"],
       options: { stdin: "inherit", stdout: "inherit", stderr: "inherit" },
     },
   ]);

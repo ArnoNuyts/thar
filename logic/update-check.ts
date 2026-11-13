@@ -9,6 +9,7 @@ import {
   writeUpdateCache,
   type UpdateCache,
 } from "./update-cache.ts";
+import { PACKAGE_NAME } from "./package.ts";
 import { isNewerVersion, parseVersion } from "./version.ts";
 import { Runtime } from "../utils/runtime.ts";
 
@@ -57,7 +58,8 @@ export const resolveRegistryBase = (
 
 export const buildLatestManifestUrl = (
   registryBase: string = DEFAULT_REGISTRY_BASE,
-): string => `${registryBase.replace(/\/+$/, "")}/todotui/latest`;
+): string =>
+  `${registryBase.replace(/\/+$/, "")}/${encodeURIComponent(PACKAGE_NAME)}/latest`;
 
 export interface UpdateGateOptions {
   env?: NodeJS.ProcessEnv;
@@ -76,7 +78,16 @@ export const shouldCheckForUpdates = ({
   if (!isTTY) return false;
 
   if (isEnabledMarker(environment.CI)) return false;
-  if (isEnabledMarker(environment.npm_lifecycle_event)) return false;
+  // `npx` sets npm_lifecycle_event to an exec marker; that is a normal CLI
+  // invocation, not an npm lifecycle script.
+  const lifecycle = environment.npm_lifecycle_event;
+  if (
+    isEnabledMarker(lifecycle) &&
+    lifecycle !== "npx" &&
+    lifecycle !== "exec"
+  ) {
+    return false;
+  }
   if (isEnabledMarker(environment.VITEST)) return false;
   if (environment.NODE_ENV === "test") return false;
 
@@ -122,7 +133,7 @@ export const checkForUpdate = async ({
       method: "GET",
       headers: {
         Accept: "application/json",
-        "User-Agent": `todotui/${currentVersion}`,
+        "User-Agent": `thar/${currentVersion}`,
       },
       signal: controller.signal,
     });

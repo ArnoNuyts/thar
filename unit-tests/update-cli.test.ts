@@ -103,7 +103,7 @@ test("update-cli: non-interactive mode requires --yes", async () => {
   });
 
   expect(code).toEqual(0);
-  expect(output.join("")).toMatch(/npm install -g todotui@latest/);
+  expect(output.join("")).toMatch(/npm install -g @arnoarnoarno\/thar@latest/);
   expect(output.join("")).toMatch(/--yes/);
   expect(runnerCalls).toEqual(0);
 });
@@ -125,7 +125,9 @@ test("update-cli: --yes runs the detected command", async () => {
   });
 
   expect(code).toEqual(0);
-  expect(invocations).toEqual([["npm", "install", "-g", "todotui@latest"]]);
+  expect(invocations).toEqual([
+    ["npm", "install", "-g", "@arnoarnoarno/thar@latest"],
+  ]);
   expect(output.join("")).toMatch(/Updated todotui to v0\.5\.0/);
   expect(output.join("")).toMatch(/Restart todotui/);
 });
@@ -155,7 +157,7 @@ test("update-cli: interactive confirmation can cancel", async () => {
 
   expect(code).toEqual(0);
   expect(confirmations).toHaveLength(1);
-  expect(confirmations[0]).toMatch(/npm install -g todotui@latest/);
+  expect(confirmations[0]).toMatch(/npm install -g @arnoarnoarno\/thar@latest/);
   expect(output.join("")).toMatch(/cancelled/i);
   expect(runnerCalls).toEqual(0);
 });
@@ -174,7 +176,7 @@ test("update-cli: a failed install prints the manual command", async () => {
 
   expect(code).toEqual(1);
   expect(output.join("")).toMatch(/Update failed/);
-  expect(output.join("")).toMatch(/npm install -g todotui@latest/);
+  expect(output.join("")).toMatch(/npm install -g @arnoarnoarno\/thar@latest/);
 });
 
 test("update-cli: ephemeral npx installs print the command instead of installing", async () => {
@@ -194,7 +196,7 @@ test("update-cli: ephemeral npx installs print the command instead of installing
   });
 
   expect(code).toEqual(0);
-  expect(output.join("")).toMatch(/npx todotui@latest/);
+  expect(output.join("")).toMatch(/npx @arnoarnoarno\/thar@latest/);
   expect(runnerCalls).toEqual(0);
 });
 
@@ -237,6 +239,8 @@ test("update-cli: an unknown install can be resolved with npm root -g", async ()
   });
 
   expect(code).toEqual(0);
-  expect(invocations).toEqual([["npm", "install", "-g", "todotui@latest"]]);
+  expect(invocations).toEqual([
+    ["npm", "install", "-g", "@arnoarnoarno/thar@latest"],
+  ]);
   expect(output.join("")).toMatch(/npm/);
 });

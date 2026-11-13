@@ -1,6 +1,7 @@
 import { isSea } from "node:sea";
 import { fileURLToPath } from "node:url";
 
+import { packageSpecifier } from "./package.ts";
 import { Runtime, type RuntimePlatform } from "../utils/runtime.ts";
 
 export type InstallKind =
@@ -168,53 +169,55 @@ const INSTALL_LABELS: Record<InstallKind, string> = {
 export const describeInstallKind = (kind: InstallKind): string =>
   INSTALL_LABELS[kind];
 
+const LATEST = packageSpecifier();
+
 const COMMANDS: Record<InstallKind, Omit<InstallCommand, "kind">> = {
   "npm-global": {
-    display: "npm install -g todotui@latest",
+    display: `npm install -g ${LATEST}`,
     command: "npm",
-    args: ["install", "-g", "todotui@latest"],
+    args: ["install", "-g", LATEST],
     canSelfUpdate: true,
   },
   "pnpm-global": {
-    display: "pnpm add -g todotui@latest",
+    display: `pnpm add -g ${LATEST}`,
     command: "pnpm",
-    args: ["add", "-g", "todotui@latest"],
+    args: ["add", "-g", LATEST],
     canSelfUpdate: true,
   },
   "yarn-global": {
-    display: "yarn global add todotui@latest",
+    display: `yarn global add ${LATEST}`,
     command: "yarn",
-    args: ["global", "add", "todotui@latest"],
+    args: ["global", "add", LATEST],
     canSelfUpdate: true,
   },
   "bun-global": {
-    display: "bun add -g todotui@latest",
+    display: `bun add -g ${LATEST}`,
     command: "bun",
-    args: ["add", "-g", "todotui@latest"],
+    args: ["add", "-g", LATEST],
     canSelfUpdate: true,
   },
   volta: {
-    display: "volta install todotui@latest",
+    display: `volta install ${LATEST}`,
     command: "volta",
-    args: ["install", "todotui@latest"],
+    args: ["install", LATEST],
     canSelfUpdate: true,
   },
   npx: {
-    display: "npx todotui@latest",
+    display: `npx ${LATEST}`,
     command: "npx",
-    args: ["todotui@latest"],
+    args: [LATEST],
     canSelfUpdate: false,
   },
   "pnpm-dlx": {
-    display: "pnpm dlx todotui@latest",
+    display: `pnpm dlx ${LATEST}`,
     command: "pnpm",
-    args: ["dlx", "todotui@latest"],
+    args: ["dlx", LATEST],
     canSelfUpdate: false,
   },
   bunx: {
-    display: "bunx todotui@latest",
+    display: `bunx ${LATEST}`,
     command: "bunx",
-    args: ["todotui@latest"],
+    args: [LATEST],
     canSelfUpdate: false,
   },
   homebrew: {
@@ -237,13 +240,13 @@ const COMMANDS: Record<InstallKind, Omit<InstallCommand, "kind">> = {
   },
   sea: {
     display:
-      "Download the latest release from https://github.com/ArnoNuyts/todotui/releases",
+      "Download the latest release from https://github.com/ArnoNuyts/thar/releases",
     command: "",
     args: [],
     canSelfUpdate: false,
   },
   unknown: {
-    display: "npm install -g todotui@latest",
+    display: `npm install -g ${LATEST}`,
     command: "",
     args: [],
     canSelfUpdate: false,
