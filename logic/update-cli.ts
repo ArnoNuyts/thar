@@ -64,7 +64,8 @@ export const runUpdateCli = async (
     ...options.io,
   };
   const env = options.env ?? process.env;
-  const platform = options.platform ?? Runtime.platform;
+  let descriptor = options.installDescriptor ?? getDefaultInstallDescriptor();
+  const platform = options.platform ?? descriptor.platform ?? Runtime.platform;
 
   const outcome = await checkForUpdate({
     currentVersion: options.currentVersion,
@@ -87,7 +88,6 @@ export const runUpdateCli = async (
     return 0;
   }
 
-  let descriptor = options.installDescriptor ?? getDefaultInstallDescriptor();
   let kind = detectInstallKind(descriptor);
 
   if (kind === "unknown") {

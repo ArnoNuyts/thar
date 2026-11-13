@@ -149,7 +149,8 @@ export const UpdateProvider = ({
     };
   }, []);
 
-  const platform = config.platform ?? Runtime.platform;
+  const platform =
+    config.platform ?? descriptorRef.current.platform ?? Runtime.platform;
   const updateCommand = useMemo(
     () => getInstallCommand(installKind, platform),
     [installKind, platform],

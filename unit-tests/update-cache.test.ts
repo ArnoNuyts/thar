@@ -32,10 +32,10 @@ test("update-cache: resolves the Linux state directory", () => {
       env: { XDG_STATE_HOME: "/tmp/state" },
       homeDir: "/home/me",
     }),
-  ).toEqual("/tmp/state/thar");
+  ).toEqual(join("/tmp/state", "thar"));
   expect(
     resolveStateDir({ platform: "linux", env: {}, homeDir: "/home/me" }),
-  ).toEqual("/home/me/.local/state/thar");
+  ).toEqual(join("/home/me", ".local", "state", "thar"));
 });
 
 test("update-cache: resolves the macOS state directory", () => {
@@ -68,7 +68,7 @@ test("update-cache: THAR_STATE_DIR overrides every platform", () => {
       env: { THAR_STATE_DIR: "/tmp/thar-state" },
       homeDir: "/home/me",
     }),
-  ).toEqual("/tmp/thar-state/update-check.json");
+  ).toEqual(join("/tmp/thar-state", "update-check.json"));
 });
 
 test("update-cache: missing and corrupt files behave like an empty cache", async () => {
