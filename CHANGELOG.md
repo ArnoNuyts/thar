@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Type declaration file for the package entry point, so the published package
   reports its types to editors and npm.
+- Navigation benchmark (`npm run bench:list`) for measuring list keypress
+  latency, React render work, and Ink output cost.
 
 ### Changed
 

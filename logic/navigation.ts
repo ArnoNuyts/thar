@@ -199,27 +199,12 @@ export function validateSelection(
 ): symbol | undefined {
   if (indexes.length === 0) return undefined;
 
-  const firstTodoIndex = indexes.findIndex(
-    (entry) => entry.type === IndexType.todo,
-  );
-  if (firstTodoIndex === -1) return undefined;
-
-  // Check if current selection is valid. The cursor row is stable during
-  // navigation, so try it before scanning.
-  if (cursorId !== undefined) {
-    const candidate = indexes[lastIndex];
-    if (candidate?.type === IndexType.todo && candidate.todo.id === cursorId) {
-      return cursorId;
-    }
+  // Fast path: the cursor row is stable during navigation, so verify it by ID
+  // before scanning. findTodoRow still falls back to a full scan when the
+  // index changed underneath.
+  if (findTodoRow(indexes, cursorId, lastIndex) !== -1) {
+    return cursorId;
   }
-
-  const isValid =
-    cursorId !== undefined &&
-    indexes.some(
-      (entry) => entry.type === IndexType.todo && entry.todo.id === cursorId,
-    );
-
-  if (isValid) return cursorId;
 
   // Fallback 1: Match by hash (handle file reload)
   if (lastHash) {

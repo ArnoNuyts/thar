@@ -26,6 +26,7 @@ import { takePendingUpdate } from "./logic/pending-update.ts";
 import { runPendingUpdate } from "./logic/self-update.ts";
 import { runUpdateCli } from "./logic/update-cli.ts";
 import { Runtime } from "./utils/runtime.ts";
+import { INK_PERFORMANCE_OPTIONS } from "./utils/ink-options.ts";
 import packageJson from "./package.json" with { type: "json" };
 
 const AppContent = () => {
@@ -159,14 +160,9 @@ if (cli.update) {
   const instance = render(
     <App filename={cli.file} noUpdateCheck={cli.noUpdateCheck} />,
     {
-      incrementalRendering: true,
+      ...INK_PERFORMANCE_OPTIONS,
       patchConsole: true,
       exitOnCtrlC: true,
-      // Ink defaults to 30 fps, which adds up to a full frame of latency to
-      // every keypress even when nothing animates. Navigation is input-driven
-      // and already coalesced by React, so allow frames as soon as the
-      // renderer is ready (with a cap to keep pathological updates bounded).
-      maxFps: 120,
     },
   );
 

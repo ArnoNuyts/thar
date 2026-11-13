@@ -7,14 +7,21 @@
  *  - wall time per keypress (input -> committed frame)
  *  - React commit time (Profiler actualDuration)
  *  - Ink output generation time (its own onRender metric)
- *  - `Todo.isOverdue()` calls per key (proxy for re-rendered todo rows)
+ *  - `Todo.isOverdue()` calls per key (row-render proxy: TodoItem currently
+ *    calls it exactly once per row render)
  *  - `Todo.getHash()` calls per key (proxy for selection bookkeeping work)
  *
+ * Production render options come from `utils/ink-options.ts`, the same source
+ * the app uses, so the benchmark cannot silently drift from the shipped
+ * configuration. Color is forced to truecolor because piped output would
+ * otherwise make focus changes byte-identical and hide their render cost.
+ *
  * Usage: npx vite-node scripts/benchmark-list.tsx [--todos=3000] [--keys=200]
- *        [--warmup=20] [--runs=3] [--rows=40] [--throttled] [--maxfps=30]
+ *        [--warmup=20] [--runs=3] [--rows=40] [--debug] [--maxfps=120]
  */
 import { EventEmitter } from "node:events";
 import { performance } from "node:perf_hooks";
+import chalk from "chalk";
 import { Box, render } from "ink";
 import { Profiler } from "react";
 
@@ -24,15 +31,25 @@ import { SearchInput } from "../components/SearchInput.tsx";
 import { TodoList } from "../components/TodoList.tsx";
 import { FocusProvider } from "../contexts/focus-context.tsx";
 import { ModalProvider } from "../contexts/modal-context.tsx";
-import { NavigationProvider } from "../contexts/navigation-context.tsx";
+import {
+  NavigationProvider,
+  useNavigation,
+} from "../contexts/navigation-context.tsx";
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 import { UpdateProvider } from "../contexts/update-context.tsx";
 import { Todo } from "../logic/todo.ts";
+import { INK_PERFORMANCE_OPTIONS } from "../utils/ink-options.ts";
 import { Runtime } from "../utils/runtime.ts";
 import { MockTodoProvider } from "../unit-tests/mock-todo-provider.tsx";
+
+// Deterministic ANSI output regardless of how the benchmark is launched.
+chalk.level = 3;
+
+const DOWN = "\x1b[B";
+const UP = "\x1b[A";
 
 type FrameMetrics = { renderTime: number };
 
@@ -166,6 +183,14 @@ const NavigationWrapper = ({ children }: { children: React.ReactNode }) => {
   return <NavigationProvider todos={todos}>{children}</NavigationProvider>;
 };
 
+type SelectionRef = { current: symbol | undefined };
+
+const SelectionProbe = ({ target }: { target: SelectionRef }) => {
+  const { selectedTodoId } = useNavigation();
+  target.current = selectedTodoId;
+  return null;
+};
+
 type Counters = {
   overdueCalls: number;
   hashCalls: number;
@@ -202,12 +227,16 @@ type Sample = {
 };
 
 const percentile = (values: number[], p: number) => {
+  if (values.length === 0) return 0;
+
   const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(
-    sorted.length - 1,
-    Math.max(0, Math.round((p / 100) * (sorted.length - 1))),
-  );
-  return sorted[index] ?? 0;
+  const rank = (p / 100) * (sorted.length - 1);
+  const lower = Math.floor(rank);
+  const upper = Math.ceil(rank);
+  if (lower === upper) return sorted[lower];
+
+  // Linear interpolation so p50 is a true median for even-sized samples.
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (rank - lower);
 };
 
 const sum = (values: number[]) => values.reduce((total, v) => total + v, 0);
@@ -233,6 +262,7 @@ const run = async ({
   const stdout = new BenchStdout(rows);
   const stderr = new BenchStdout(rows);
   const stdin = new BenchStdin();
+  const selectionRef: SelectionRef = { current: undefined };
 
   let frameWaiters: (() => void)[] = [];
   const frame = () =>
@@ -266,6 +296,7 @@ const run = async ({
                 <SearchProvider>
                   <ModalProvider>
                     <NavigationWrapper>
+                      <SelectionProbe target={selectionRef} />
                       <AppContent rows={rows} />
                     </NavigationWrapper>
                   </ModalProvider>
@@ -277,6 +308,7 @@ const run = async ({
       </ToasterProvider>
     </Profiler>,
     {
+      ...INK_PERFORMANCE_OPTIONS,
       stdout: stdout as unknown as NodeJS.WriteStream,
       stderr: stderr as unknown as NodeJS.WriteStream,
       stdin: stdin as unknown as NodeJS.ReadStream,
@@ -284,7 +316,9 @@ const run = async ({
       maxFps,
       exitOnCtrlC: false,
       patchConsole: false,
-      incrementalRendering: true,
+      // The fake stdout reports a TTY, but Ink also checks CI. Force the
+      // interactive path so the benchmark measures real frame output.
+      interactive: true,
       onRender,
     },
   );
@@ -309,13 +343,34 @@ const run = async ({
     }
   };
 
+  let cursorStep = 0;
+  let direction: 1 | -1 = 1;
+
   const measure = async () => {
-    await press("\x1b[B");
+    if (todosCount <= 1) {
+      throw new Error("--todos must be greater than 1 to measure navigation");
+    }
+
+    // Stay inside the list: walk down to the end, then reverse. This keeps a
+    // low --todos/--keys ratio usable instead of timing out on a no-op key.
+    if (cursorStep >= todosCount - 1) direction = -1;
+    else if (cursorStep <= 0) direction = 1;
+
+    const sequence = direction === 1 ? DOWN : UP;
+    try {
+      await press(sequence);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `no frame after ${direction === 1 ? "down" : "up"} at todo ${cursorStep}/${todosCount} (selected: ${String(selectionRef.current)}): ${reason}`,
+      );
+    }
+    cursorStep += direction;
   };
 
   try {
     // Settle the initial mount and focus effects.
-    await press("\x1b[B");
+    await measure();
 
     for (let index = 0; index < warmup; index++) {
       await measure();
@@ -382,7 +437,9 @@ const run = async ({
       subtrees: Object.fromEntries(
         [...subtreeTotals].map(([id, total]) => [id, total / keys]),
       ),
-      frames: stdout.frames.length,
+      // Includes Ink's synchronized-output and cursor control writes, so this
+      // is the number of stdout chunks, not strictly the number of frames.
+      stdoutWrites: stdout.frames.length,
       outputBytes: sum(stdout.frames.map((value) => value.length)),
     };
   } finally {
@@ -398,8 +455,8 @@ const todosCount = parseArg("todos", 3000);
 const keys = parseArg("keys", 200);
 const warmup = parseArg("warmup", 20);
 const runs = parseArg("runs", 3);
-const throttled = Runtime.args.includes("--throttled");
-const maxFps = parseArg("maxfps", 30);
+const throttled = !Runtime.args.includes("--debug");
+const maxFps = parseArg("maxfps", INK_PERFORMANCE_OPTIONS.maxFps);
 const rows = parseArg("rows", 40);
 type RunResult = Awaited<ReturnType<typeof run>>;
 
@@ -415,8 +472,10 @@ const medianOf = (pick: (result: (typeof results)[number]) => number) =>
 
 console.log(`\nList navigation benchmark — ${todosCount} todos, ${keys} keys`);
 console.log(
-  `mode: ${throttled ? `production (interactive, ${maxFps} fps throttle)` : "debug (unthrottled)"}\n`,
+  `mode: ${throttled ? `production (interactive, ${maxFps} fps throttle)` : "debug (unthrottled)"}`,
 );
+console.log(`color level: ${chalk.level} (forced truecolor)`);
+console.log();
 console.log(
   [
     "metric".padEnd(28),
@@ -437,7 +496,7 @@ const tableRows: [string, (result: (typeof results)[number]) => string][] = [
   ["commits per key", (r) => format(r.commitsPerKey)],
   ["Todo.isOverdue calls/key", (r) => format(r.overdueCallsPerKey)],
   ["Todo.getHash calls/key", (r) => format(r.hashCallsPerKey)],
-  ["frames", (r) => String(r.frames)],
+  ["stdout writes (ANSI)", (r) => String(r.stdoutWrites)],
   ["output bytes", (r) => String(r.outputBytes)],
 ];
 

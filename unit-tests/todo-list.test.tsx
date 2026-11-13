@@ -1,5 +1,6 @@
 import { Runtime } from "../utils/runtime.ts";
 import { expect, test } from "vitest";
+import chalk from "chalk";
 
 import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
@@ -1287,5 +1288,41 @@ test("TodoList: repeated tag text renders without duplicate-key warnings", async
   } finally {
     unmount();
     console.error = originalError;
+  }
+});
+
+test("TodoList: focus highlight follows the selected todo", async () => {
+  const todos = [new Todo("Focus first"), new Todo("Focus second")];
+  const previousLevel = chalk.level;
+  // Ink only emits styles when chalk has a color level. Enable truecolor so
+  // the focused row's background is observable in the frame.
+  chalk.level = 3;
+
+  const { stdin, lastFrame, unmount } = render(
+    <TestWrapper initialTodos={todos}>
+      <AppContentMock todos={todos} />
+    </TestWrapper>,
+  );
+
+  const styled = chalk.bgHex(COLORS.focusBackground)("x");
+  const focusBackground = styled.slice(0, styled.indexOf("x"));
+  const lineFor = (text: string) =>
+    (lastFrame() ?? "").split("\n").find((line) => line.includes(text));
+
+  try {
+    await waitFor(() => {
+      expect(lineFor("Focus first")?.includes(focusBackground)).toEqual(true);
+      expect(lineFor("Focus second")?.includes(focusBackground)).toEqual(false);
+    });
+
+    stdin.write("\x1b[B");
+
+    await waitFor(() => {
+      expect(lineFor("Focus second")?.includes(focusBackground)).toEqual(true);
+      expect(lineFor("Focus first")?.includes(focusBackground)).toEqual(false);
+    });
+  } finally {
+    chalk.level = previousLevel;
+    unmount();
   }
 });

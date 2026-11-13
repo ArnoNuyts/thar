@@ -7,6 +7,7 @@ import { useUpdate } from "../contexts/update-context.tsx";
 import { ExtendedKey, useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { useTodoCommands } from "../hooks/useTodoCommands.ts";
+import { useTodayKey } from "../hooks/useTodayKey.ts";
 import { IndexEntry } from "../logic/indexes.ts";
 import { sanitizeForDisplay } from "../logic/display-safety.ts";
 import { Todo } from "../logic/todo.ts";
@@ -458,7 +459,7 @@ export const TodoList = () => {
   // Rows are memoized, but overdue styling depends on today's date. Fold the
   // day into the row key so the visible rows refresh when midnight passes,
   // without re-rendering them on every keypress.
-  const todayKey = new Date().toDateString();
+  const todayKey = useTodayKey();
 
   return (
     <Box flexGrow={0} height={listHeight} backgroundColor={COLORS.background}>

@@ -41,10 +41,11 @@
 - `npm run check` — typecheck, lint, format check.
 - `npm test` — full Vitest suite.
 - `npm run build` — Vite SSR bundle in `dist/`.
-- `npm run bench:list` — navigation benchmark for the main list. Reports
-  per-keypress wall time, React commit time, Ink output time, and a render-count
-  proxy (`Todo.isOverdue` calls). Pass `-- --todos=3000 --keys=200 --runs=3
-  --throttled --maxfps=120` to measure the production render path.
+- `npm run bench:list` — navigation benchmark for the main list. Uses the
+  production Ink options by default and reports per-keypress wall time, React
+  commit time, Ink output time, and a render-count proxy (`Todo.isOverdue`
+  calls). Pass `-- --debug` to measure unthrottled render cost, or
+  `-- --maxfps=30` to simulate Ink's old default.
 - When debugging behavior that depends on row layout, prefer rerunning the full
   suite after targeted fixes because navigation and mouse tests depend on shared
   index semantics.
