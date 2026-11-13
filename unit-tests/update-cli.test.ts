@@ -128,8 +128,8 @@ test("update-cli: --yes runs the detected command", async () => {
   expect(invocations).toEqual([
     ["npm", "install", "-g", "@arnoarnoarno/thar@latest"],
   ]);
-  expect(output.join("")).toMatch(/Updated todotui to v0\.5\.0/);
-  expect(output.join("")).toMatch(/Restart todotui/);
+  expect(output.join("")).toMatch(/Updated thar to v0\.5\.0/);
+  expect(output.join("")).toMatch(/Restart thar/);
 });
 
 test("update-cli: interactive confirmation can cancel", async () => {

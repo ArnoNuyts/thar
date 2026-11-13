@@ -7,7 +7,7 @@ _Date: 2026-11-12. Package versions and APIs verified at that date._
 ## Implemented
 
 - Compile-time `__APP_VERSION__`, `--version`/`-v`, `--no-update-check`, and
-  `todotui update [--check] [--yes]` are parsed before the TUI starts.
+  `thar update [--check] [--yes]` are parsed before the TUI starts.
 - A cached npm-registry check runs after first paint, with a 24 h TTL, 1.5 s
   timeout, TTY/CI/lifecycle gating, jitter, and a one-hour negative cache.
 - The footer shows `↑ v<latest> · u update`; `u` or a click opens the update
@@ -25,7 +25,7 @@ Ship a **small custom checker** rather than `update-notifier`:
    **persistent, non-blocking footer badge** plus a one-time toast —
    `↑ v0.5.0 · press u`. Never auto-open a modal, never print from a
    background task.
-2. **Phase 2 (~1–2 days):** `todotui update` / `u` that detects how the app was
+2. **Phase 2 (~1–2 days):** `thar update` / `u` that detects how the app was
    installed and runs the matching package-manager command **on exit** (or
    restarts after success). Explicit user action only. Never `sudo`.
 3. **Phase 3 (~2–3 days):** self-update for the SEA binaries via GitHub
@@ -53,7 +53,7 @@ codesigned** (Node's documented SEA build requires `codesign --sign -`).
 | `engines.node: >=26.12.0`, build target `esnext`                    | Very few npm users are on Node 26 yet; npm warns `EBADENGINE`. Consider `>=22` and `build.target: "node22"` for the npm bundle. |
 | GitHub release workflow always uses `--prerelease`                  | `GET /releases/latest` 404s; npm-registry-based checks are more reliable.                                                       |
 | No checksums in releases; macOS not codesigned                      | Required before binary self-update, and for macOS usability.                                                                    |
-| `Runtime.args[0]` is treated as the todo filename                   | `todotui --version` would create a file named `--version` today.                                                                |
+| `Runtime.args[0]` is treated as the todo filename                   | `thar --version` would create a file named `--version` today.                                                                   |
 | No `README` yet                                                     | Needed for npm and for documenting update/opt-out behavior.                                                                     |
 
 ## Options
@@ -87,7 +87,7 @@ own components. The registry request is trivial; skip the dependency.
 - Cache result for 24 h; run the check after first paint, with a 1–1.5 s
   timeout, and fail silently.
 - Gate it: only in a TTY, not in CI, not under npm lifecycle/test, and
-  disable with `--no-update-check`, `TODOTUI_NO_UPDATE_CHECK=1`, or the
+  disable with `--no-update-check`, `THAR_NO_UPDATE_CHECK=1`, or the
   de-facto `NO_UPDATE_NOTIFIER=1`.
 - Render a persistent badge, one-time toast, and an on-demand modal.
 
@@ -113,8 +113,8 @@ Command per install kind:
 | `npx`        | `npx @arnoarnoarno/thar@latest`             | Can't hot-swap; just tell the user.                   |
 | `pnpm dlx`   | `pnpm dlx @arnoarnoarno/thar@latest`        | Same.                                                 |
 | `bunx`       | `bunx @arnoarnoarno/thar@latest`            | Same.                                                 |
-| Homebrew     | `brew upgrade todotui`                      | Only if a tap exists.                                 |
-| Scoop        | `scoop update todotui`                      | Only if a manifest exists.                            |
+| Homebrew     | `brew upgrade thar`                         | Only if a tap exists.                                 |
+| Scoop        | `scoop update thar`                         | Only if a manifest exists.                            |
 | Dev checkout | refuse                                      | Suggest `git pull && npm i`.                          |
 
 Detection order (only on demand, not at startup):
@@ -152,7 +152,7 @@ most platform-specific sharp edges. Recommended design:
 1. Use the **npm registry as version source** (one source of truth for both
    install kinds, no GitHub rate limit, no prerelease API weirdness).
 2. Download the asset for the running platform/arch from
-   `https://github.com/ArnoNuyts/thar/releases/download/v<version>/todotui-<os>-<arch>[.exe]`.
+   `https://github.com/ArnoNuyts/thar/releases/download/v<version>/thar-<os>-<arch>[.exe]`.
    Extend the existing matrix to cover `linux-arm64` and `macos-x64`; the
    current matrix has only `linux-x64`, `windows-x64`, `macos-arm64`.
 3. Verify a `SHA256SUMS` asset (generate it in the release workflow); cap the
@@ -162,8 +162,8 @@ most platform-specific sharp edges. Recommended design:
      binary (avoids cross-device rename), `chmod 755`, then `rename()` over the
      target. The running inode stays valid.
    - **Windows:** a running `.exe` cannot be overwritten, but it _can_ be
-     renamed. Try `rename(todotui.exe, todotui.exe.old)` then
-     `rename(new, todotui.exe)`. If that fails (AV lock), write a tiny `.cmd`
+     renamed. Try `rename(thar.exe, thar.exe.old)` then
+     `rename(new, thar.exe)`. If that fails (AV lock), write a tiny `.cmd`
      helper that waits for the PID to exit, moves the files, optionally
      restarts, and deletes itself; launch it detached and quit. On next
      startup, best-effort delete `*.old` and restore it if the main binary is
@@ -180,12 +180,12 @@ most platform-specific sharp edges. Recommended design:
 
 Worth doing later, in rough order of value:
 
-- **Homebrew tap** (`brew install ArnoNuyts/thar/todotui`) — the natural
+- **Homebrew tap** (`brew install ArnoNuyts/thar/thar`) — the natural
   macOS path; `brew upgrade` handles updates and signatures/notarization
   expectations. Can be auto-bumped from the release workflow.
 - **Scoop** bucket for Windows; **Winget** after that.
 - **AUR** / **nixpkgs** if there is demand.
-- A `curl | sh` installer with `todotui update` is possible but adds a second
+- A `curl | sh` installer with `thar update` is possible but adds a second
   update mechanism to maintain; prefer package managers.
 
 When these exist, the in-app checker should detect the installation and
@@ -224,13 +224,13 @@ Parse before rendering (today everything is treated as a filename):
 const args = Runtime.args;
 const version = args.includes("--version") || args.includes("-v");
 if (version) {
-  process.stdout.write(`todotui ${__APP_VERSION__}\n`);
+  process.stdout.write(`thar ${__APP_VERSION__}\n`);
   process.exit(0);
 }
 
 const noUpdateCheck =
   args.includes("--no-update-check") ||
-  process.env.TODOTUI_NO_UPDATE_CHECK === "1" ||
+  process.env.THAR_NO_UPDATE_CHECK === "1" ||
   process.env.NO_UPDATE_NOTIFIER === "1";
 
 const subcommand = args[0] === "update" ? "update" : undefined;
@@ -240,11 +240,11 @@ const filename = (subcommand ? args[1] : args[0]) || "todo.txt";
 Suggested surface:
 
 ```
-todotui                      interactive TUI
-todotui <file>               interactive TUI on <file>
-todotui --version | -v       print version, no TUI
-todotui update [--check]     check/install updates, no TUI
-todotui --no-update-check    skip the background check
+thar                      interactive TUI
+thar <file>               interactive TUI on <file>
+thar --version | -v       print version, no TUI
+thar update [--check]     check/install updates, no TUI
+thar --no-update-check    skip the background check
 ```
 
 `update` becomes a reserved filename; `./update` still works. Document it.
@@ -283,7 +283,7 @@ Registry details:
 - URL: `https://registry.npmjs.org/%40arnoarnoarno%2Fthar/latest` (the manifest behind the
   `latest` dist-tag). The registry does **not** return an `ETag` for this
   endpoint (verified), so don't build conditional-request logic; use TTL.
-- Honor `TODOTUI_REGISTRY` and, if present, `npm_config_registry`.
+- Honor `THAR_REGISTRY` and, if present, `npm_config_registry`.
 - Don't spawn `npm view` — it costs hundreds of ms and another Node process.
 - Jitter the check by 0–5 s so a release doesn't produce a synchronized spike.
 - Prereleases: only compare against `latest`; if the running version is a
@@ -291,11 +291,11 @@ Registry details:
 
 Cache (state, not config):
 
-| Platform | Path                                                          |
-| -------- | ------------------------------------------------------------- |
-| Linux    | `${XDG_STATE_HOME:-~/.local/state}/todotui/update-check.json` |
-| macOS    | `~/Library/Application Support/todotui/update-check.json`     |
-| Windows  | `%LOCALAPPDATA%\todotui\update-check.json`                    |
+| Platform | Path                                                       |
+| -------- | ---------------------------------------------------------- |
+| Linux    | `${XDG_STATE_HOME:-~/.local/state}/thar/update-check.json` |
+| macOS    | `~/Library/Application Support/thar/update-check.json`     |
+| Windows  | `%LOCALAPPDATA%\thar\update-check.json`                    |
 
 ```json
 {
@@ -367,15 +367,15 @@ restart();
 
 ## Publishing checklist (separate from updates, but blocking)
 
-- Remove `"private": true`; claim `todotui` now (currently unclaimed).
+- Remove `"private": true`; claim `/thar` now (currently unclaimed).
 - Add `description`, `license`, `repository`, `homepage`, `bugs`, `keywords`,
   `author`, `README.md`.
 - Add a real entry point:
   ```json
-  "bin": { "todotui": "./bin/todotui.js" },
+  "bin": { "thar": "./bin/thar.js" },
   "files": ["bin", "dist", "README.md", "LICENSE"]
   ```
-  with `bin/todotui.js`:
+  with `bin/thar.js`:
   ```js
   #!/usr/bin/env node
   import "../dist/main.js";
@@ -401,7 +401,7 @@ restart();
 | Phase | Scope                                                      | Estimate  |
 | ----- | ---------------------------------------------------------- | --------- |
 | 1     | version + flags + cached check + badge/toast + tests       | 0.5–1 day |
-| 2     | install detection + `todotui update` + exit/restart flow   | 1–2 days  |
+| 2     | install detection + `thar update` + exit/restart flow      | 1–2 days  |
 | 3     | SEA self-update + checksums + Windows helper + mac signing | 2–3 days  |
 | 4     | Homebrew/Scoop/Winget + docs                               | ongoing   |
 
@@ -418,7 +418,7 @@ restart();
   truncation on narrow widths, `u` opens the modal, Esc dismisses, and the
   toast doesn't reappear for the same version.
 - Manual: `npm pack`, install into a temp prefix
-  (`npm i -g --prefix /tmp/... ./todotui-0.4.0.tgz`), then exercise the update
+  (`npm i -g --prefix /tmp/... ./thar-0.5.0.tgz`), then exercise the update
   path against a second local tarball; on Windows, test the replace helper.
 
 ## Anti-patterns to avoid

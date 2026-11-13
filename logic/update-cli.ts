@@ -55,7 +55,7 @@ export const runUpdateCli = async (
   options: UpdateCliOptions,
 ): Promise<number> => {
   const command = parseCliArgs(options.argv);
-  if (command.kind !== "update") return 2;
+  if (!command.update) return 2;
 
   const io: UpdateCliIO = {
     write: (text) => process.stdout.write(text),
@@ -80,10 +80,10 @@ export const runUpdateCli = async (
   io.write(`Current: v${options.currentVersion}\n`);
   io.write(`Latest:  v${outcome.latest}\n`);
 
-  if (command.checkOnly) return 0;
+  if (command.updateCheckOnly) return 0;
 
   if (!isNewerVersion(outcome.latest, options.currentVersion)) {
-    io.write(`todotui is up to date (v${options.currentVersion}).\n`);
+    io.write(`thar is up to date (v${options.currentVersion}).\n`);
     return 0;
   }
 
@@ -111,7 +111,7 @@ export const runUpdateCli = async (
 
   io.write(`Update command: ${installCommand.display}\n`);
 
-  if (!command.yes) {
+  if (!command.updateYes) {
     if (!io.isTTY) {
       io.write("Re-run with --yes to install.\n");
       return 0;
@@ -148,7 +148,7 @@ export const runUpdateCli = async (
   }
 
   io.write(
-    `Updated todotui to v${outcome.latest}. Restart todotui to use the new version.\n`,
+    `Updated thar to v${outcome.latest}. Restart thar to use the new version.\n`,
   );
   return 0;
 };

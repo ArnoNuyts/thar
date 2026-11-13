@@ -32,23 +32,23 @@ export const resolveStateDir = ({
   env = {},
   homeDir = homedir(),
 }: StateDirOptions): string => {
-  const override = env.TODOTUI_STATE_DIR?.trim();
+  const override = env.THAR_STATE_DIR?.trim() || env.TODOTUI_STATE_DIR?.trim();
   if (override) return override;
 
   if (platform === "windows") {
     return join(
       env.LOCALAPPDATA?.trim() || join(homeDir, "AppData", "Local"),
-      "todotui",
+      "thar",
     );
   }
 
   if (platform === "darwin") {
-    return join(homeDir, "Library", "Application Support", "todotui");
+    return join(homeDir, "Library", "Application Support", "thar");
   }
 
   return join(
     env.XDG_STATE_HOME?.trim() || join(homeDir, ".local", "state"),
-    "todotui",
+    "thar",
   );
 };
 

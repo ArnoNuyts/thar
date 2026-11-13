@@ -49,9 +49,10 @@ const isEnabledMarker = (value: string | undefined): boolean =>
 export const resolveRegistryBase = (
   env: NodeJS.ProcessEnv = process.env,
 ): string => {
-  const configured = env.TODOTUI_REGISTRY?.trim()
-    ? env.TODOTUI_REGISTRY.trim()
-    : env.npm_config_registry?.trim();
+  const configured =
+    env.THAR_REGISTRY?.trim() ||
+    env.TODOTUI_REGISTRY?.trim() ||
+    env.npm_config_registry?.trim();
 
   return (configured || DEFAULT_REGISTRY_BASE).replace(/\/+$/, "");
 };
@@ -91,6 +92,7 @@ export const shouldCheckForUpdates = ({
   if (isEnabledMarker(environment.VITEST)) return false;
   if (environment.NODE_ENV === "test") return false;
 
+  if (isEnabledMarker(environment.THAR_NO_UPDATE_CHECK)) return false;
   if (isEnabledMarker(environment.TODOTUI_NO_UPDATE_CHECK)) return false;
   if (isEnabledMarker(environment.NO_UPDATE_NOTIFIER)) return false;
 

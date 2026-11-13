@@ -740,13 +740,18 @@ test("TodoContext: archive is blocked while read-only and leaves done.txt alone"
 
       writes.length = 0;
       await currentApi!.archiveCompletedTodos();
-      await waitPast(60);
+      await waitFor(() => {
+        if (
+          !messages.some((message) =>
+            message.toLowerCase().includes("read-only"),
+          )
+        ) {
+          throw new Error("Read-only archive message not shown yet");
+        }
+      });
 
       expect(writes, "No done.txt write while read-only").toEqual([]);
       expect(currentApi!.todos.some((todo) => todo.isDone())).toEqual(true);
-      expect(
-        messages.some((message) => message.toLowerCase().includes("read-only")),
-      ).toEqual(true);
 
       await expect(
         Runtime.stat(join(dirname(filename), "done.txt")),

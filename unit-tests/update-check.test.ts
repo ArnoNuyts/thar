@@ -25,11 +25,11 @@ const okResponse = (body: unknown): Response =>
 test("update-check: resolves the registry base URL", () => {
   expect(resolveRegistryBase({})).toEqual(DEFAULT_REGISTRY_BASE);
   expect(
-    resolveRegistryBase({ TODOTUI_REGISTRY: "http://127.0.0.1:1234/" }),
+    resolveRegistryBase({ THAR_REGISTRY: "http://127.0.0.1:1234/" }),
   ).toEqual("http://127.0.0.1:1234");
   expect(
     resolveRegistryBase({
-      TODOTUI_REGISTRY: " ",
+      THAR_REGISTRY: " ",
       npm_config_registry: "https://registry.example.test/",
     }),
   ).toEqual("https://registry.example.test");
@@ -76,13 +76,13 @@ test("update-check: gating skips non-TTY, CI, npm lifecycle and opt-outs", () =>
   ).toEqual(false);
   expect(
     shouldCheckForUpdates({
-      env: { TODOTUI_NO_UPDATE_CHECK: "1" },
+      env: { THAR_NO_UPDATE_CHECK: "1" },
       isTTY: true,
     }),
   ).toEqual(false);
   expect(
     shouldCheckForUpdates({
-      env: { TODOTUI_NO_UPDATE_CHECK: "0" },
+      env: { THAR_NO_UPDATE_CHECK: "0" },
       isTTY: true,
     }),
   ).toEqual(true);
@@ -237,7 +237,7 @@ test("update-check: disabled checks never call fetch", async () => {
     const result = await runUpdateCheck({
       currentVersion: "0.4.0",
       cachePath: join(dir, "update-check.json"),
-      env: { TODOTUI_NO_UPDATE_CHECK: "1" },
+      env: { THAR_NO_UPDATE_CHECK: "1" },
       isTTY: true,
       fetchImpl,
     });

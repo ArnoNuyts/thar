@@ -19,12 +19,18 @@ import { SuggestionProvider } from "./contexts/suggestion-context.tsx";
 import { SearchProvider } from "./contexts/search-context.tsx";
 import { NavigationProvider } from "./contexts/navigation-context.tsx";
 import { SearchInput } from "./components/SearchInput.tsx";
-import { parseCliArgs } from "./logic/cli.ts";
+import {
+  CliError,
+  formatUsage,
+  parseCliArgs,
+  type CliOptions,
+} from "./logic/cli.ts";
 import { getDefaultInstallDescriptor } from "./logic/install-method.ts";
 import { takePendingUpdate } from "./logic/pending-update.ts";
 import { runPendingUpdate } from "./logic/self-update.ts";
 import { runUpdateCli } from "./logic/update-cli.ts";
 import { Runtime } from "./utils/runtime.ts";
+import packageJson from "./package.json" with { type: "json" };
 
 const AppContent = () => {
   const { activeModal, modalData } = useModal();
@@ -97,14 +103,34 @@ const App = ({
   );
 };
 
-const cli = parseCliArgs(Runtime.args);
+const version = packageJson.version;
 
-if (cli.kind === "version") {
-  process.stdout.write(`todotui ${__APP_VERSION__}\n`);
-} else if (cli.kind === "update") {
+let cli: CliOptions;
+try {
+  cli = parseCliArgs(Runtime.args);
+} catch (error) {
+  if (error instanceof CliError) {
+    console.error(`thar: ${error.message}\n`);
+    console.error(formatUsage(version));
+    Runtime.exit(2);
+  }
+  throw error;
+}
+
+if (cli.help) {
+  console.log(formatUsage(version));
+  Runtime.exit(0);
+}
+
+if (cli.version) {
+  console.log(version);
+  Runtime.exit(0);
+}
+
+if (cli.update) {
   process.exitCode = await runUpdateCli({
     argv: Runtime.args,
-    currentVersion: __APP_VERSION__,
+    currentVersion: version,
     installDescriptor: getDefaultInstallDescriptor(),
   });
 } else {
@@ -133,7 +159,7 @@ if (cli.kind === "version") {
   }
 
   const instance = render(
-    <App filename={cli.filename} noUpdateCheck={cli.noUpdateCheck} />,
+    <App filename={cli.file} noUpdateCheck={cli.noUpdateCheck} />,
     {
       incrementalRendering: true,
       patchConsole: true,
@@ -156,12 +182,12 @@ if (cli.kind === "version") {
 
   const pendingUpdate = takePendingUpdate();
   if (pendingUpdate) {
-    process.stdout.write(`Updating todotui to v${pendingUpdate.version}...\n`);
+    process.stdout.write(`Updating thar to v${pendingUpdate.version}...\n`);
     const result = await runPendingUpdate(pendingUpdate);
 
     if (result.ok) {
       process.stdout.write(
-        `Updated todotui to v${pendingUpdate.version}. Restart todotui to use the new version.\n`,
+        `Updated thar to v${pendingUpdate.version}. Restart thar to use the new version.\n`,
       );
     } else {
       process.stdout.write(
