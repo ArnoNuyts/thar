@@ -195,11 +195,10 @@ suggest the package-manager command instead of self-updating.
 
 ### Version source
 
-Use a compile-time define so the version works in both the npm bundle and the
-SEA binary (where `package.json` is not present):
+Use a compile-time define so the version is available in the bundled CLI:
 
 ```ts
-// vite.config.ts and vite.sea.config.ts
+// vite.config.ts
 import pkg from "./package.json" with { type: "json" };
 
 export default defineConfig({
