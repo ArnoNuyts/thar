@@ -14,6 +14,10 @@ export class MockWatcher {
     return this.nextCalls;
   }
 
+  get isClosed() {
+    return this.closed;
+  }
+
   private nextEvent(): Promise<FsEvent | undefined> {
     this.nextCalls++;
     if (this.closed) return Promise.resolve(undefined);
