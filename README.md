@@ -8,13 +8,13 @@ terminal.
 ## Install
 
 ```sh
-npm install -g thar
+npm install -g @arnoarnoarno/thar
 ```
 
 Or run it without installing:
 
 ```sh
-npx thar
+npx @arnoarnoarno/thar
 ```
 
 Requires Node.js 22.12 or newer.

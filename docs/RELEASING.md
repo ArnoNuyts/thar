@@ -52,8 +52,8 @@ publishing from GitHub Actions with `id-token: write`.
 Merge a small change into `release/next`, then verify:
 
 ```sh
-npm view thar dist-tags
-npm install -g thar@next
+npm view @arnoarnoarno/thar dist-tags
+npm install -g @arnoarnoarno/thar@next
 thar --version
 ```
 
