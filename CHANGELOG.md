@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Type declaration file for the package entry point, so the published package
+  reports its types to editors and npm.
+
+### Changed
+
+- Publish with provenance by default via `publishConfig.provenance`, so a
+  release can no longer drop its SLSA attestation.
+
 ## [0.5.0] - 2026-11-12
 
 First public release.
