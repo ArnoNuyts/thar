@@ -9,6 +9,7 @@ import {
   useRef,
 } from "react";
 import { writeTodosToFile } from "../logic/todo-file-helpers.ts";
+import type { TodoFileRepository } from "../logic/todo-file-repository.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
 import { useTodoFileSync } from "../hooks/useTodoFileSync.ts";
@@ -141,9 +142,15 @@ export const useTodo = () => {
 
 export const TodoProvider = ({
   filename,
+  repository,
   children,
 }: {
   filename: string;
+  /**
+   * File access port; defaults to the real filesystem repository. Must be
+   * referentially stable across renders because it is an effect dependency.
+   */
+  repository?: TodoFileRepository;
   children?: React.ReactNode;
 }) => {
   const [state, dispatch] = useReducer(
@@ -162,6 +169,7 @@ export const TodoProvider = ({
     todos,
     onLoad: loadTodos,
     showToaster,
+    repository,
   });
 
   // Tracks the current count so consecutive addTodos calls in one tick cannot
