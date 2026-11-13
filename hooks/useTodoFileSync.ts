@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { debounce } from "../utils/debounce.ts";
 import { toBoundedDisplayMessage } from "../logic/display-safety.ts";
-import {
-  readTodosFromFile,
-  writeTodosToFile,
-} from "../logic/todo-file-helpers.ts";
 import type { Todos } from "../logic/Todos.ts";
-import { Runtime, type FsWatcher } from "../utils/runtime.ts";
+import {
+  todoFileRepository,
+  type TodoFileRepository,
+} from "../logic/todo-file-repository.ts";
+import type { FsWatcher } from "../utils/runtime.ts";
 
 export const DEFAULT_SAVE_DEBOUNCE_MS = 50;
 export const DEFAULT_RELOAD_DEBOUNCE_MS = 500;
@@ -16,6 +16,8 @@ export interface TodoFileSyncOptions {
   todos: Todos;
   onLoad: (todos: Todos) => void;
   showToaster: (message: string) => void;
+  /** File access port; defaults to the real filesystem repository. */
+  repository?: TodoFileRepository;
   /** Test seam: shortens the save debounce without changing production flow. */
   saveDebounceMs?: number;
   /** Test seam: shortens the watcher reload debounce. */
@@ -41,6 +43,7 @@ export const useTodoFileSync = ({
   todos,
   onLoad,
   showToaster,
+  repository = todoFileRepository,
   saveDebounceMs = DEFAULT_SAVE_DEBOUNCE_MS,
   reloadDebounceMs = DEFAULT_RELOAD_DEBOUNCE_MS,
 }: TodoFileSyncOptions): TodoFileSyncState => {
@@ -66,7 +69,8 @@ export const useTodoFileSync = ({
     // debounce is shorter than a slow disk access).
     hasLoadedFileRef.current = false;
     setLoadError(undefined);
-    readTodosFromFile(filename)
+    repository
+      .load(filename)
       .then((initialTodos) => {
         if (cancelled) return;
         const loadedTodos = [...initialTodos];
@@ -87,7 +91,7 @@ export const useTodoFileSync = ({
     return () => {
       cancelled = true;
     };
-  }, [filename, setLoadError, onLoad, showToaster]);
+  }, [filename, repository, setLoadError, onLoad, showToaster]);
 
   // Save effect
   const saveTodos = useMemo(
@@ -107,7 +111,7 @@ export const useTodoFileSync = ({
         justReadFileRef.current = null;
         lastWriteTimeRef.current = Date.now();
         try {
-          await writeTodosToFile(currentTodos, filename);
+          await repository.save(filename, currentTodos);
         } catch (error) {
           // A write-time rejection must be visible: the in-memory change was
           // not persisted. The message is bounded and never echoes content.
@@ -118,7 +122,7 @@ export const useTodoFileSync = ({
           lastWriteTimeRef.current = Date.now();
         }
       }, saveDebounceMs),
-    [filename, saveDebounceMs, showToaster],
+    [filename, repository, saveDebounceMs, showToaster],
   );
 
   // Cancel a pending save only when the debounced function is replaced (for
@@ -140,14 +144,14 @@ export const useTodoFileSync = ({
     let cancelled = false;
     let watcher: FsWatcher | undefined;
     try {
-      watcher = Runtime.watchFs(filename);
+      watcher = repository.watch(filename);
     } catch (error) {
       console.error("Failed to watch file:", error);
     }
 
     const readTodosDebounced = debounce(async () => {
       try {
-        const todosFromFile = await readTodosFromFile(filename);
+        const todosFromFile = await repository.load(filename);
         if (cancelled) return;
         const loadedTodos = [...todosFromFile];
         hasLoadedFileRef.current = true;
@@ -204,6 +208,7 @@ export const useTodoFileSync = ({
     };
   }, [
     filename,
+    repository,
     setLoadError,
     saveTodos,
     showToaster,
