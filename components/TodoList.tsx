@@ -3,9 +3,11 @@ import { memo, useMemo, useRef } from "react";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
+import { useUpdate } from "../contexts/update-context.tsx";
 import { ExtendedKey, useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { useTodoCommands } from "../hooks/useTodoCommands.ts";
+import { useTodayKey } from "../hooks/useTodayKey.ts";
 import { IndexEntry } from "../logic/indexes.ts";
 import { sanitizeForDisplay } from "../logic/display-safety.ts";
 import { Todo } from "../logic/todo.ts";
@@ -156,44 +158,51 @@ const TodoSuffixes = ({
   </>
 );
 
-const TodoItem = ({
-  todo,
-  isFocused,
-  isSelectedInRange,
-  number,
-  maxDigits,
-}: {
-  todo: Todo;
-  isFocused: boolean;
-  isSelectedInRange: boolean;
-  number: number;
-  maxDigits: number;
-  key?: React.Key;
-}) => {
-  const isOverdue = todo.isOverdue();
-  const isHighlighted = isFocused || isSelectedInRange;
-  const textColor = getTextColor(isHighlighted, isOverdue);
+const TodoItem = memo(
+  ({
+    todo,
+    isFocused,
+    isSelectedInRange,
+    number,
+    maxDigits,
+  }: {
+    todo: Todo;
+    isFocused: boolean;
+    isSelectedInRange: boolean;
+    number: number;
+    maxDigits: number;
+    key?: React.Key;
+  }) => {
+    const isOverdue = todo.isOverdue();
+    const isHighlighted = isFocused || isSelectedInRange;
+    const textColor = getTextColor(isHighlighted, isOverdue);
 
-  return (
-    <Box
-      backgroundColor={getBackgroundColor(
-        isFocused,
-        isSelectedInRange,
-        isOverdue,
-      )}
-    >
-      <Text wrap="truncate">
-        <Text dimColor color={textColor}>
-          {` ${getPaddedNumber(number, maxDigits)} `}
+    return (
+      <Box
+        backgroundColor={getBackgroundColor(
+          isFocused,
+          isSelectedInRange,
+          isOverdue,
+        )}
+      >
+        <Text wrap="truncate">
+          <Text dimColor color={textColor}>
+            {` ${getPaddedNumber(number, maxDigits)} `}
+          </Text>
+          <Text color={textColor}>{`${getCheckbox(todo.isDone())} `}</Text>
+          <TodoPriority
+            priority={todo.priority}
+            isHighlighted={isHighlighted}
+          />
+          {renderTodoText(todo.text, isHighlighted, isOverdue)}
+          <TodoSuffixes todo={todo} isHighlighted={isHighlighted} />
         </Text>
-        <Text color={textColor}>{`${getCheckbox(todo.isDone())} `}</Text>
-        <TodoPriority priority={todo.priority} isHighlighted={isHighlighted} />
-        {renderTodoText(todo.text, isHighlighted, isOverdue)}
-        <TodoSuffixes todo={todo} isHighlighted={isHighlighted} />
-      </Text>
-    </Box>
-  );
-};
+      </Box>
+    );
+  },
+);
+
+TodoItem.displayName = "TodoItem";
 
 const ContextTitle = memo(
   ({ title, count }: { title: string; count: number; key?: React.Key }) => {
@@ -263,16 +272,16 @@ export const TodoList = () => {
     navigateHome,
     navigateEnd,
     setSelectedTodoId,
-    getSelectedTodo,
+    selectedTodoId,
     selectedTodoIds,
     clearMultiSelect,
   } = useNavigation();
 
   const { openModal, activeModal } = useModal();
   const { focusRef, searchQuery, isSearchFocused } = useSearch();
+  const { isUpdateAvailable } = useUpdate();
   const commands = useTodoCommands();
 
-  const todo = getSelectedTodo();
   const lastClickRef = useRef<{
     id?: symbol;
     x?: number;
@@ -322,6 +331,11 @@ export const TodoList = () => {
           break;
         case "n":
           openModal("create-todo");
+          break;
+        case "u":
+          if (isUpdateAvailable) {
+            openModal("update-modal");
+          }
           break;
         case "z":
           commands.undo();
@@ -417,7 +431,7 @@ export const TodoList = () => {
         if (clickedCheckbox) {
           commands.toggle([entry.todo]);
         } else {
-          openModal("edit-todo", entry.todo);
+          openModal("edit-todo");
         }
       }
 
@@ -431,11 +445,21 @@ export const TodoList = () => {
     { isActive: true },
   );
 
-  // Calculate the maximum number of digits needed for numbering
-  const totalTodoCount = indexes.filter(
-    (e) => e.type === IndexType.todo,
-  ).length;
-  const maxDigits = totalTodoCount.toString().length;
+  // Calculate the maximum number of digits needed for numbering. Only the
+  // todo entries carry a number, and indexes only change when the visible set
+  // changes, so this must not be recomputed on every navigation key.
+  const maxDigits = useMemo(() => {
+    let totalTodoCount = 0;
+    for (const entry of indexes) {
+      if (entry.type === IndexType.todo) totalTodoCount++;
+    }
+    return totalTodoCount.toString().length;
+  }, [indexes]);
+
+  // Rows are memoized, but overdue styling depends on today's date. Fold the
+  // day into the row key so the visible rows refresh when midnight passes,
+  // without re-rendering them on every keypress.
+  const todayKey = useTodayKey();
 
   return (
     <Box flexGrow={0} height={listHeight} backgroundColor={COLORS.background}>
@@ -459,12 +483,12 @@ export const TodoList = () => {
               );
             }
 
-            const isFocused = entry.todo === todo;
+            const isFocused = entry.todo.id === selectedTodoId;
             const isSelectedInRange = selectedTodoIds.has(entry.todo.id);
 
             return (
               <TodoItem
-                key={String(entry.todo.id)}
+                key={`${String(entry.todo.id)}:${todayKey}`}
                 todo={entry.todo}
                 isFocused={isFocused}
                 isSelectedInRange={isSelectedInRange}

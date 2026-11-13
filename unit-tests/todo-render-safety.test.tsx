@@ -8,6 +8,7 @@ import { NavigationProvider } from "../contexts/navigation-context.tsx";
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import { UpdateProvider } from "../contexts/update-context.tsx";
 import { sanitizeForDisplay } from "../logic/display-safety.ts";
 import type { Todos } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
@@ -19,19 +20,21 @@ const CONTROLS =
 
 const Wrapper = ({ todos }: { todos: Todos }) => (
   <ToasterProvider>
-    <MockTodoProvider initialTodos={todos}>
-      <FocusProvider>
-        <SuggestionProvider>
-          <SearchProvider>
-            <NavigationProvider todos={todos} listHeightForTest={20}>
-              <ModalProvider>
-                <TodoList />
-              </ModalProvider>
-            </NavigationProvider>
-          </SearchProvider>
-        </SuggestionProvider>
-      </FocusProvider>
-    </MockTodoProvider>
+    <UpdateProvider options={{ enabled: false }}>
+      <MockTodoProvider initialTodos={todos}>
+        <FocusProvider>
+          <SuggestionProvider>
+            <SearchProvider>
+              <NavigationProvider todos={todos} listHeightForTest={20}>
+                <ModalProvider>
+                  <TodoList />
+                </ModalProvider>
+              </NavigationProvider>
+            </SearchProvider>
+          </SuggestionProvider>
+        </FocusProvider>
+      </MockTodoProvider>
+    </UpdateProvider>
   </ToasterProvider>
 );
 

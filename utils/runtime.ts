@@ -122,6 +122,27 @@ export class RuntimeCommand {
     };
   }
 
+  async run(): Promise<{ success: boolean; code: number }> {
+    const child = spawn(this.command, this.options.args ?? [], {
+      cwd: this.options.cwd,
+      env: this.options.env,
+      stdio: [
+        toStdio(this.options.stdin),
+        toStdio(this.options.stdout),
+        toStdio(this.options.stderr),
+      ],
+    });
+
+    return await new Promise<{ success: boolean; code: number }>(
+      (resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", (code) =>
+          resolve({ success: code === 0, code: code ?? 1 }),
+        );
+      },
+    );
+  }
+
   spawn(): SpawnedCommand {
     const child = spawn(this.command, this.options.args ?? [], {
       cwd: this.options.cwd,
@@ -326,6 +347,8 @@ export const Runtime = {
   mkdir: (path: string | URL, options?: { recursive?: boolean }) =>
     mkdir(toPath(path), { recursive: options?.recursive ?? false }),
   makeTempDir: () => mkdtemp(join(tmpdir(), "thar-")),
+  rename: (from: string | URL, to: string | URL) =>
+    rename(toPath(from), toPath(to)),
   remove: (path: string | URL, options?: { recursive?: boolean }) =>
     rm(toPath(path), { recursive: options?.recursive ?? false, force: false }),
   watchFs,

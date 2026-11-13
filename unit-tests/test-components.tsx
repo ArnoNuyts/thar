@@ -74,6 +74,7 @@ export const NavController = ({
 };
 
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import { UpdateProvider } from "../contexts/update-context.tsx";
 
 // Stable fallbacks so omitting the overrides never creates a fresh object on
 // every render of TestWrapper.
@@ -138,15 +139,17 @@ export const TestWrapper = ({
 
   return (
     <ToasterProvider>
-      <TodoContext.Provider value={fullTodoValue}>
-        <NavigationContext.Provider value={fullNavValue}>
-          <FocusProvider>
-            <SuggestionProvider>
-              <ModalProvider>{children}</ModalProvider>
-            </SuggestionProvider>
-          </FocusProvider>
-        </NavigationContext.Provider>
-      </TodoContext.Provider>
+      <UpdateProvider options={{ enabled: false }}>
+        <TodoContext.Provider value={fullTodoValue}>
+          <NavigationContext.Provider value={fullNavValue}>
+            <FocusProvider>
+              <SuggestionProvider>
+                <ModalProvider>{children}</ModalProvider>
+              </SuggestionProvider>
+            </FocusProvider>
+          </NavigationContext.Provider>
+        </TodoContext.Provider>
+      </UpdateProvider>
     </ToasterProvider>
   );
 };

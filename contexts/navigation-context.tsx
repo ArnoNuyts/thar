@@ -29,6 +29,7 @@ export interface NavigationContextType {
   selectedTodoIds: Set<symbol>;
   clearMultiSelect: () => void;
   getSelectedTodo: () => Todo | undefined;
+  /** Returns a shared selection snapshot; callers must not mutate the array. */
   getSelectedTodos: () => Todo[];
   showHidden: boolean;
   toggleShowHidden: () => void;

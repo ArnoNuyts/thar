@@ -1,5 +1,6 @@
 import { Runtime } from "../utils/runtime.ts";
 import { expect, test } from "vitest";
+import chalk from "chalk";
 
 import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
@@ -19,11 +20,7 @@ import { renderTodoText, TodoList } from "../components/TodoList.tsx";
 import { COLORS } from "../theme/colors.ts";
 
 import { FocusProvider } from "../contexts/focus-context.tsx";
-import {
-  isConfirmModalData,
-  ModalProvider,
-  useModal,
-} from "../contexts/modal-context.tsx";
+import { ModalProvider, useModal } from "../contexts/modal-context.tsx";
 import {
   NavigationContextType,
   NavigationProvider,
@@ -31,6 +28,7 @@ import {
 import { SearchProvider, useSearch } from "../contexts/search-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import { UpdateProvider } from "../contexts/update-context.tsx";
 import { MultiSelectMenu, TodoMenu } from "../components/TodoMenu.tsx";
 
 import { useTodo } from "../contexts/todo-context.tsx";
@@ -60,20 +58,22 @@ const TestWrapper = ({
 }) => {
   return (
     <ToasterProvider>
-      <MockTodoProvider
-        initialTodos={initialTodos}
-        onTodosChange={onTodosChange}
-      >
-        <FocusProvider>
-          <SuggestionProvider>
-            <SearchProvider>
-              <NavigationWrapper>
-                <ModalProvider>{children}</ModalProvider>
-              </NavigationWrapper>
-            </SearchProvider>
-          </SuggestionProvider>
-        </FocusProvider>
-      </MockTodoProvider>
+      <UpdateProvider options={{ enabled: false }}>
+        <MockTodoProvider
+          initialTodos={initialTodos}
+          onTodosChange={onTodosChange}
+        >
+          <FocusProvider>
+            <SuggestionProvider>
+              <SearchProvider>
+                <NavigationWrapper>
+                  <ModalProvider>{children}</ModalProvider>
+                </NavigationWrapper>
+              </SearchProvider>
+            </SuggestionProvider>
+          </FocusProvider>
+        </MockTodoProvider>
+      </UpdateProvider>
     </ToasterProvider>
   );
 };
@@ -94,7 +94,7 @@ const AppContentMock = ({ todos = [] }: { todos?: Todos }) => {
       <SearchInput todos={todos} />
       <TodoList />
       <ActionBar />
-      {activeModal === "confirm-modal" && isConfirmModalData(modalData) && (
+      {activeModal === "confirm-modal" && modalData && (
         <ConfirmModal
           title={modalData.title}
           message={modalData.message}
@@ -1288,5 +1288,41 @@ test("TodoList: repeated tag text renders without duplicate-key warnings", async
   } finally {
     unmount();
     console.error = originalError;
+  }
+});
+
+test("TodoList: focus highlight follows the selected todo", async () => {
+  const todos = [new Todo("Focus first"), new Todo("Focus second")];
+  const previousLevel = chalk.level;
+  // Ink only emits styles when chalk has a color level. Enable truecolor so
+  // the focused row's background is observable in the frame.
+  chalk.level = 3;
+
+  const { stdin, lastFrame, unmount } = render(
+    <TestWrapper initialTodos={todos}>
+      <AppContentMock todos={todos} />
+    </TestWrapper>,
+  );
+
+  const styled = chalk.bgHex(COLORS.focusBackground)("x");
+  const focusBackground = styled.slice(0, styled.indexOf("x"));
+  const lineFor = (text: string) =>
+    (lastFrame() ?? "").split("\n").find((line) => line.includes(text));
+
+  try {
+    await waitFor(() => {
+      expect(lineFor("Focus first")?.includes(focusBackground)).toEqual(true);
+      expect(lineFor("Focus second")?.includes(focusBackground)).toEqual(false);
+    });
+
+    stdin.write("\x1b[B");
+
+    await waitFor(() => {
+      expect(lineFor("Focus second")?.includes(focusBackground)).toEqual(true);
+      expect(lineFor("Focus first")?.includes(focusBackground)).toEqual(false);
+    });
+  } finally {
+    chalk.level = previousLevel;
+    unmount();
   }
 });
