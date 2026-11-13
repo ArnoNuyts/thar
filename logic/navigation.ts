@@ -166,6 +166,28 @@ export function guesstimateSelection(
 }
 
 /**
+ * Find the row for a todo ID. `lastIndex` is almost always the cursor row, so
+ * checking it first keeps navigation O(1) instead of scanning the whole index
+ * on every keypress; the scan only happens when the index changed underneath.
+ */
+export const findTodoRow = (
+  indexes: IndexEntry[],
+  id: symbol | undefined,
+  lastIndex = 0,
+): number => {
+  if (id === undefined) return -1;
+
+  const candidate = indexes[lastIndex];
+  if (candidate?.type === IndexType.todo && candidate.todo.id === id) {
+    return lastIndex;
+  }
+
+  return indexes.findIndex(
+    (entry) => entry.type === IndexType.todo && entry.todo.id === id,
+  );
+};
+
+/**
  * Validate the current selection. If invalid, find a fallback.
  * Returns the validated/fallback cursor ID.
  */
@@ -182,7 +204,15 @@ export function validateSelection(
   );
   if (firstTodoIndex === -1) return undefined;
 
-  // Check if current selection is valid
+  // Check if current selection is valid. The cursor row is stable during
+  // navigation, so try it before scanning.
+  if (cursorId !== undefined) {
+    const candidate = indexes[lastIndex];
+    if (candidate?.type === IndexType.todo && candidate.todo.id === cursorId) {
+      return cursorId;
+    }
+  }
+
   const isValid =
     cursorId !== undefined &&
     indexes.some(

@@ -48,6 +48,7 @@
     "package:check": "npm pack --dry-run",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench:list": "vite-node scripts/benchmark-list.tsx",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint .",
     "fmt": "oxfmt .",

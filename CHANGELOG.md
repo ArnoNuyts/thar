@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Publish with provenance by default via `publishConfig.provenance`, so a
   release can no longer drop its SLSA attestation.
+- Improve list navigation responsiveness: rows and the scrollbar are memoized,
+  navigation bookkeeping avoids full-list scans on every keypress, and Ink's
+  render throttle is raised from its 30 fps default so keypresses are not held
+  for a frame window.
 
 ## [0.5.0] - 2026-11-12
 

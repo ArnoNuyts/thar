@@ -162,6 +162,11 @@ if (cli.update) {
       incrementalRendering: true,
       patchConsole: true,
       exitOnCtrlC: true,
+      // Ink defaults to 30 fps, which adds up to a full frame of latency to
+      // every keypress even when nothing animates. Navigation is input-driven
+      // and already coalesced by React, so allow frames as soon as the
+      // renderer is ready (with a cap to keep pathological updates bounded).
+      maxFps: 120,
     },
   );
 
