@@ -23,7 +23,7 @@
     "url": "git+https://github.com/ArnoNuyts/thar.git"
   },
   "bin": {
-    "thar": "./bin/thar.js"
+    "thar": "bin/thar.js"
   },
   "files": [
     "bin",

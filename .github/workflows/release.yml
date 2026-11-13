@@ -173,6 +173,23 @@ jobs:
           git tag "$TAG"
           git push origin "refs/tags/$TAG"
 
+      - name: Set package version
+        if: steps.check.outputs.skip != 'true'
+        env:
+          CHANNEL: ${{ steps.release.outputs.channel }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if [ "$CHANNEL" = "beta" ]; then
+            npm version "$VERSION" --no-git-tag-version
+          fi
+
+      - name: Publish to npm
+        if: steps.check.outputs.skip != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ steps.release.outputs.dist_tag }}
+        run: npm publish --provenance --access public --tag "$DIST_TAG"
+
       - name: Download binaries
         if: steps.check.outputs.skip != 'true'
         uses: actions/download-artifact@v8
@@ -181,16 +198,13 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Remove web build artifacts
+        if: steps.check.outputs.skip != 'true'
+        run: rm -f dist/main.js dist/main.js.map
+
       - name: Generate checksums
         if: steps.check.outputs.skip != 'true'
         run: node scripts/checksums.mjs dist
-
-      - name: Publish to npm
-        if: steps.check.outputs.skip != 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DIST_TAG: ${{ steps.release.outputs.dist_tag }}
-        run: npm publish --provenance --access public --tag "$DIST_TAG"
 
       - name: Create or update GitHub release
         if: steps.check.outputs.skip != 'true'
