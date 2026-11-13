@@ -92,6 +92,13 @@ export const parseDateTag = (value: unknown): Date | undefined => {
   return year >= 1 && year <= 9999 ? startOfDay(date) : undefined;
 };
 
+/** True for a valid Date whose local calendar year is 1..9999. */
+export const isValidTodoDate = (date: Date): boolean => {
+  if (!isValid(date)) return false;
+  const year = date.getFullYear();
+  return year >= 1 && year <= 9999;
+};
+
 /** Format a Date as a `yyyy-MM-dd` date-tag value in local time. */
 export const formatDateTag = (date: Date): string => format(date, "yyyy-MM-dd");
 
