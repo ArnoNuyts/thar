@@ -18,7 +18,7 @@ First public release.
 - Search with project/context autocomplete, multi-select, mouse support, and a
   command menu.
 - Undo/redo, copy/paste, archive to `done.txt`, and external file watching.
-- npm package and single-file executables for Linux, macOS, and Windows.
+- npm package for Node.js 22.12 and newer.
 
 [Unreleased]: https://github.com/ArnoNuyts/thar/compare/v0.5.0...HEAD
 [0.5.0]: https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0

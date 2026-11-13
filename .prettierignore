@@ -1,5 +1,4 @@
 package-lock.json
 dist/
-dist-sea/
 node_modules/
 coverage/
