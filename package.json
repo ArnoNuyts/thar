@@ -28,17 +28,21 @@
   "files": [
     "bin",
     "dist/*.js",
+    "dist/*.d.ts",
     "README.md",
     "LICENSE"
   ],
   "type": "module",
+  "types": "./dist/main.d.ts",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "start": "vite-node main.tsx",
     "dev": "vite-node main.tsx",
-    "build": "vite build",
+    "build": "vite build && npm run build:types",
+    "build:types": "node scripts/build-types.mjs",
     "prepack": "npm run build",
     "prepublishOnly": "npm run check && npm test",
     "package:check": "npm pack --dry-run",
