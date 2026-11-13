@@ -26,7 +26,7 @@ export interface ToggleHiddenViewOptions extends CommandOptions {
  * as a separate command instead of being duplicated here.
  */
 export const useTodoCommands = () => {
-  const { openModal } = useModal();
+  const { openModal, openConfirmModal } = useModal();
   const { showToaster } = useToaster();
   const {
     addTodos,
@@ -51,14 +51,14 @@ export const useTodoCommands = () => {
   const selectedTodos = getSelectedTodos();
 
   const editSelected = () => {
-    if (todo) openModal("edit-todo", todo);
+    if (todo) openModal("edit-todo");
   };
 
   const deleteSelected = () => {
     if (selectedTodos.length === 0) return;
 
     const isMultiple = selectedTodos.length > 1;
-    openModal("confirm-modal", {
+    openConfirmModal({
       title: isMultiple ? "Delete Todos" : "Delete Todo",
       message: isMultiple
         ? `Are you sure you want to delete ${selectedTodos.length} todos?`
@@ -119,7 +119,7 @@ export const useTodoCommands = () => {
   };
 
   const archiveSelected = () => {
-    openModal("confirm-modal", {
+    openConfirmModal({
       title: "Archive Completed",
       message: "Archive all completed todos to done.txt?",
       onConfirm: archiveCompleted,
@@ -193,7 +193,7 @@ export const useTodoCommands = () => {
       };
 
       if (lines.length > 10) {
-        openModal("confirm-modal", {
+        openConfirmModal({
           title: "Paste Multiple Todos",
           message: `Are you sure you want to paste ${lines.length} todos?`,
           onConfirm: doPaste,
