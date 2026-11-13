@@ -50,7 +50,9 @@ export const filterHidden = (todos: Todo[]): Todo[] =>
  *
  * Terms are matched case-insensitively against the todo text and against its
  * contexts and projects. A leading `@` or `+` is stripped before matching a
- * term against a context or project, so `@work` also finds `+work`.
+ * term against a context or project, so `@work` also finds `+work`. Terms are
+ * split on whitespace and trimmed of wrapper punctuation. A query with no
+ * usable terms (for example `"!!!"`) matches every todo.
  *
  * An empty or whitespace-only query returns the input untouched.
  */

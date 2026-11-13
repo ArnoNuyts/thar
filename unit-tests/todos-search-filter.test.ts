@@ -29,14 +29,17 @@ test("filterBySearch matches text case-insensitively", () => {
   expect(textsOf(filterBySearch(todos, "milk"))).toEqual(["Buy Milk"]);
 });
 
-test("filterBySearch matches a @context", () => {
+// These two cases pass through the text branch because `Todo.text` keeps the
+// @context/+project tokens. The separate contexts/projects branches are
+// exercised by the cross-prefix test below.
+test("filterBySearch matches a todo containing a @context token", () => {
   const todos = createTodos("buy milk @home", "buy milk @work", "walk dog");
 
   expect(textsOf(filterBySearch(todos, "@home"))).toEqual(["buy milk @home"]);
   expect(textsOf(filterBySearch(todos, "@work"))).toEqual(["buy milk @work"]);
 });
 
-test("filterBySearch matches a +project", () => {
+test("filterBySearch matches a todo containing a +project token", () => {
   const todos = createTodos("fix bug +work", "fix bug +side", "walk dog");
 
   expect(textsOf(filterBySearch(todos, "+work"))).toEqual(["fix bug +work"]);
@@ -68,6 +71,21 @@ test("filterBySearch requires every term to match (AND)", () => {
   expect(textsOf(filterBySearch(todos, "buy milk @home"))).toEqual([
     "buy milk @home",
   ]);
+});
+
+test("filterBySearch tolerates wrapper punctuation in terms", () => {
+  const todos = createTodos("buy milk", "walk dog @home");
+
+  expect(textsOf(filterBySearch(todos, "milk,"))).toEqual(["buy milk"]);
+  expect(textsOf(filterBySearch(todos, "/@home"))).toEqual(["walk dog @home"]);
+});
+
+test("filterBySearch with only punctuation matches everything", () => {
+  // Pinned existing semantics: no usable terms means the `every` check is
+  // vacuously true, matching every todo (not just an empty query).
+  const todos = createTodos("buy milk", "walk dog");
+
+  expect(filterBySearch(todos, "!!!")).toEqual(todos);
 });
 
 test("filterBySearch returns no todos when nothing matches", () => {
