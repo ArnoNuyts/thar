@@ -1,38 +1,11 @@
-import {
-  addDays,
-  addMonths,
-  addWeeks,
-  addYears,
-  isBefore,
-  isSameDay,
-  isValid,
-  startOfDay,
-} from "date-fns";
+import { isBefore, isSameDay, isValid, startOfDay } from "date-fns";
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
 import { formatDateTag, parseDateTag, scanTodoPrefix } from "./dates.ts";
 import { CONTEXT_REGEX, PROJECT_REGEX } from "./patterns.ts";
+import { isValidRecurrence, planRecurrence } from "./recurrence.ts";
 
-const RECURRENCE_REGEX = /^\+?(\d+)([dwmy])$/;
-/** Upper bound for `rec:` amounts so serialized values stay sane. */
-export const MAX_RECURRENCE_AMOUNT = 9_999;
-const INVALID_RECURRENCE_MESSAGE =
-  "Invalid recurrence value; no new todo was created";
-const OUT_OF_RANGE_RECURRENCE_MESSAGE =
-  "Recurrence is out of range; no new todo was created";
-
-/** True when `value` can be stored in a `rec:` tag. */
-export const isValidRecurrence = (value: unknown): value is string => {
-  if (typeof value !== "string") return false;
-  const match = RECURRENCE_REGEX.exec(value);
-  if (!match) return false;
-  const amount = Number(match[1]);
-  return (
-    Number.isSafeInteger(amount) &&
-    amount > 0 &&
-    amount <= MAX_RECURRENCE_AMOUNT
-  );
-};
+export { isValidRecurrence, MAX_RECURRENCE_AMOUNT } from "./recurrence.ts";
 
 const isValidTodoDate = (date: Date): boolean => {
   if (!isValid(date)) return false;
@@ -186,57 +159,15 @@ export class Todo {
     });
 
     if (next._state === TodoStateEnum.done && next._tags.rec) {
-      const recurrence = next._tags.rec;
-      if (typeof recurrence !== "string") {
-        return { updated: next, recurrenceError: INVALID_RECURRENCE_MESSAGE };
-      }
-
-      const match = RECURRENCE_REGEX.exec(recurrence);
-      if (!match) {
-        return { updated: next, recurrenceError: INVALID_RECURRENCE_MESSAGE };
-      }
-
-      const amount = Number(match[1]);
-      if (
-        !Number.isSafeInteger(amount) ||
-        amount <= 0 ||
-        amount > MAX_RECURRENCE_AMOUNT
-      ) {
-        return {
-          updated: next,
-          recurrenceError: OUT_OF_RANGE_RECURRENCE_MESSAGE,
-        };
-      }
-
-      const base = new Date();
-      let newDueDate: Date;
-      switch (match[2]) {
-        case "d":
-          newDueDate = addDays(base, amount);
-          break;
-        case "w":
-          newDueDate = addWeeks(base, amount);
-          break;
-        case "m":
-          newDueDate = addMonths(base, amount);
-          break;
-        case "y":
-        default:
-          newDueDate = addYears(base, amount);
-          break;
-      }
-
-      if (!isValidTodoDate(newDueDate)) {
-        return {
-          updated: next,
-          recurrenceError: OUT_OF_RANGE_RECURRENCE_MESSAGE,
-        };
+      const plan = planRecurrence(next._tags.rec);
+      if ("error" in plan) {
+        return { updated: next, recurrenceError: plan.error };
       }
 
       const newTodo = new Todo(next.toString())
         .setState(TodoStateEnum.todo)
         .setCompletionDate(undefined)
-        .setDue(newDueDate);
+        .setDue(plan.nextDue);
 
       return { updated: next, recurring: newTodo };
     }
