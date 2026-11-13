@@ -1,3 +1,4 @@
+import { extractSearchTerms } from "../utils/search-utils.ts";
 import { Todo } from "./todo.ts";
 
 export type Todos = Todo[];
@@ -43,3 +44,35 @@ export const sortByImportance = (todos: Todo[]): Todo[] =>
 
 export const filterHidden = (todos: Todo[]): Todo[] =>
   todos.filter((todo) => todo.isVisibleInOverview());
+
+/**
+ * Keeps todos matching every term in `searchQuery`.
+ *
+ * Terms are matched case-insensitively against the todo text and against its
+ * contexts and projects. A leading `@` or `+` is stripped before matching a
+ * term against a context or project, so `@work` also finds `+work`.
+ *
+ * An empty or whitespace-only query returns the input untouched.
+ */
+export const filterBySearch = (todos: Todos, searchQuery: string): Todos => {
+  if (!searchQuery.trim()) return todos;
+
+  const terms = extractSearchTerms(searchQuery);
+
+  return todos.filter((todo) => {
+    const text = todo.text.toLowerCase();
+    const contexts = Array.from(todo.contexts).map((c) => c.toLowerCase());
+    const projects = Array.from(todo.projects).map((p) => p.toLowerCase());
+
+    return terms.every((term) => {
+      const normalized =
+        term.startsWith("@") || term.startsWith("+") ? term.slice(1) : term;
+
+      return (
+        text.includes(term) ||
+        contexts.some((c) => c.includes(normalized)) ||
+        projects.some((p) => p.includes(normalized))
+      );
+    });
+  });
+};
