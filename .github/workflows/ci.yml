@@ -55,10 +55,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Build single executable
-        if: runner.os == 'Linux'
-        run: npm run build:sea
-
   version-guard:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

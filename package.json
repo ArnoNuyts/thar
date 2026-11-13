@@ -39,7 +39,6 @@
     "start": "vite-node main.tsx",
     "dev": "vite-node main.tsx",
     "build": "vite build",
-    "build:sea": "node scripts/build-sea.mjs",
     "prepack": "npm run build",
     "prepublishOnly": "npm run check && npm test",
     "package:check": "npm pack --dry-run",

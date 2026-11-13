@@ -2,7 +2,7 @@
   "$schema": "https://react.doctor/schema/config.json",
   // Build outputs are generated, not application source.
   "ignore": {
-    "files": ["dist/**", "dist-sea/**"],
+    "files": ["dist/**"],
     "overrides": [
       {
         "files": ["unit-tests/test-components.tsx"],
