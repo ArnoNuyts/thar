@@ -26,6 +26,7 @@ import { takePendingUpdate } from "./logic/pending-update.ts";
 import { runPendingUpdate } from "./logic/self-update.ts";
 import { runUpdateCli } from "./logic/update-cli.ts";
 import { Runtime } from "./utils/runtime.ts";
+import { INK_PERFORMANCE_OPTIONS } from "./utils/ink-options.ts";
 import packageJson from "./package.json" with { type: "json" };
 
 const AppContent = () => {
@@ -159,7 +160,7 @@ if (cli.update) {
   const instance = render(
     <App filename={cli.file} noUpdateCheck={cli.noUpdateCheck} />,
     {
-      incrementalRendering: true,
+      ...INK_PERFORMANCE_OPTIONS,
       patchConsole: true,
       exitOnCtrlC: true,
     },

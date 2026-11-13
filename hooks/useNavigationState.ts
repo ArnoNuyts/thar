@@ -12,6 +12,7 @@ import {
   areSetsEqual,
   calculateScrollOffset,
   clamp,
+  findTodoRow,
   getNavigableRow,
   getSelectionRangeRows,
   type NavState,
@@ -289,10 +290,10 @@ export const useNavigationState = (
   const doNavigate = useCallback(
     (step: number, shift: boolean = false) => {
       setState((prev) => {
-        const todoIndex = indexes.findIndex(
-          (entry) =>
-            entry.type === IndexType.todo &&
-            entry.todo.id === prev.selection.cursorId,
+        const todoIndex = findTodoRow(
+          indexes,
+          prev.selection.cursorId,
+          prev.lastIndex,
         );
         const currentRow = todoIndex === -1 ? 0 : todoIndex;
         const newSelectedRow = getNavigableRow(indexes, currentRow, step);
@@ -308,10 +309,10 @@ export const useNavigationState = (
       setState((prev) => {
         if (indexes.length === 0) return prev;
 
-        const todoIndex = indexes.findIndex(
-          (entry) =>
-            entry.type === IndexType.todo &&
-            entry.todo.id === prev.selection.cursorId,
+        const todoIndex = findTodoRow(
+          indexes,
+          prev.selection.cursorId,
+          prev.lastIndex,
         );
         const currentRow = todoIndex === -1 ? 0 : todoIndex;
 
@@ -435,21 +436,29 @@ export const useNavigationState = (
     }
   }, [indexes, setSelectedTodoId]);
 
-  const getSelectedTodo = useCallback(() => {
-    return todos.find((t) => t.id === activeState.selection.cursorId);
-  }, [todos, activeState.selection.cursorId]);
+  const todosById = useMemo(
+    () => new Map(todos.map((todo) => [todo.id, todo] as const)),
+    [todos],
+  );
 
-  const getSelectedTodos = useCallback(() => {
+  const selectedTodo = useMemo(
+    () =>
+      activeState.selection.cursorId === undefined
+        ? undefined
+        : todosById.get(activeState.selection.cursorId),
+    [todosById, activeState.selection.cursorId],
+  );
+
+  const selectedTodos = useMemo(() => {
     if (activeState.selection.rangeIds.size > 0) {
       return todos.filter((t) => activeState.selection.rangeIds.has(t.id));
     }
-    const todo = todos.find((t) => t.id === activeState.selection.cursorId);
-    return todo ? [todo] : [];
-  }, [todos, activeState.selection.rangeIds, activeState.selection.cursorId]);
+    return selectedTodo ? [selectedTodo] : [];
+  }, [todos, activeState.selection.rangeIds, selectedTodo]);
 
-  const selectedTodo = todos.find(
-    (t) => t.id === activeState.selection.cursorId,
-  );
+  const getSelectedTodo = useCallback(() => selectedTodo, [selectedTodo]);
+
+  const getSelectedTodos = useCallback(() => selectedTodos, [selectedTodos]);
 
   const value = useMemo(
     () => ({
