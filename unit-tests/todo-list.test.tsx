@@ -19,11 +19,7 @@ import { renderTodoText, TodoList } from "../components/TodoList.tsx";
 import { COLORS } from "../theme/colors.ts";
 
 import { FocusProvider } from "../contexts/focus-context.tsx";
-import {
-  isConfirmModalData,
-  ModalProvider,
-  useModal,
-} from "../contexts/modal-context.tsx";
+import { ModalProvider, useModal } from "../contexts/modal-context.tsx";
 import {
   NavigationContextType,
   NavigationProvider,
@@ -97,7 +93,7 @@ const AppContentMock = ({ todos = [] }: { todos?: Todos }) => {
       <SearchInput todos={todos} />
       <TodoList />
       <ActionBar />
-      {activeModal === "confirm-modal" && isConfirmModalData(modalData) && (
+      {activeModal === "confirm-modal" && modalData && (
         <ConfirmModal
           title={modalData.title}
           message={modalData.message}

@@ -20,11 +20,7 @@ import { TodoList } from "../components/TodoList.tsx";
 import { MultiSelectMenu, TodoMenu } from "../components/TodoMenu.tsx";
 
 import { FocusProvider } from "../contexts/focus-context.tsx";
-import {
-  isConfirmModalData,
-  ModalProvider,
-  useModal,
-} from "../contexts/modal-context.tsx";
+import { ModalProvider, useModal } from "../contexts/modal-context.tsx";
 import {
   NavigationContextType,
   NavigationProvider,
@@ -48,7 +44,7 @@ const ModalHost = () => {
   const { activeModal, modalData } = useModal();
   return (
     <>
-      {activeModal === "confirm-modal" && isConfirmModalData(modalData) && (
+      {activeModal === "confirm-modal" && modalData && (
         <ConfirmModal
           title={modalData.title}
           message={modalData.message}

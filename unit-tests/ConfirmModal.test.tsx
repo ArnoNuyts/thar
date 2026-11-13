@@ -14,16 +14,16 @@ test("ConfirmModal: should render and set focus", async () => {
   let confirmed = false;
 
   const TestComponent = () => {
-    const { openModal, activeModal, modalData } = useModal();
+    const { openConfirmModal, activeModal, modalData } = useModal();
     useEffect(() => {
-      openModal("confirm-modal", {
+      openConfirmModal({
         title: "Test Title",
         message: "Test Message",
         onConfirm: () => {
           confirmed = true;
         },
       });
-    }, [openModal]);
+    }, [openConfirmModal]);
 
     return (
       <Box flexDirection="column" height={10}>
@@ -62,9 +62,9 @@ test("ConfirmModal: Tab then Enter should cancel", async () => {
   let cancelled = false;
 
   const TestComponent = () => {
-    const { openModal, activeModal, modalData } = useModal();
+    const { openConfirmModal, activeModal, modalData } = useModal();
     useEffect(() => {
-      openModal("confirm-modal", {
+      openConfirmModal({
         title: "Tab Cancel",
         message: "Use tab to cancel",
         onConfirm: () => {},
@@ -72,7 +72,7 @@ test("ConfirmModal: Tab then Enter should cancel", async () => {
           cancelled = true;
         },
       });
-    }, [openModal]);
+    }, [openConfirmModal]);
 
     return (
       <Box flexDirection="column" height={12} width={80}>
@@ -107,16 +107,16 @@ test("ConfirmModal: Space should activate selected button", async () => {
   let confirmed = false;
 
   const TestComponent = () => {
-    const { openModal, activeModal, modalData } = useModal();
+    const { openConfirmModal, activeModal, modalData } = useModal();
     useEffect(() => {
-      openModal("confirm-modal", {
+      openConfirmModal({
         title: "Mouse Confirm",
         message: "Click to confirm",
         onConfirm: () => {
           confirmed = true;
         },
       });
-    }, [openModal]);
+    }, [openConfirmModal]);
 
     return (
       <Box flexDirection="column" height={10} width={80}>
@@ -149,16 +149,16 @@ test("ConfirmModal: mouse click left half should confirm", async () => {
   let confirmed = false;
 
   const TestComponent = () => {
-    const { openModal, activeModal, modalData } = useModal();
+    const { openConfirmModal, activeModal, modalData } = useModal();
     useEffect(() => {
-      openModal("confirm-modal", {
+      openConfirmModal({
         title: "Mouse Cancel",
         message: "Click cancel",
         onConfirm: () => {
           confirmed = true;
         },
       });
-    }, [openModal]);
+    }, [openConfirmModal]);
 
     return (
       <Box flexDirection="column" height={25} width={101}>
@@ -194,9 +194,9 @@ test("ConfirmModal: mouse click right half should cancel", async () => {
   let cancelled = false;
 
   const TestComponent = () => {
-    const { openModal, activeModal, modalData } = useModal();
+    const { openConfirmModal, activeModal, modalData } = useModal();
     useEffect(() => {
-      openModal("confirm-modal", {
+      openConfirmModal({
         title: "Mouse Confirm",
         message: "Click confirm",
         onConfirm: () => {},
@@ -204,7 +204,7 @@ test("ConfirmModal: mouse click right half should cancel", async () => {
           cancelled = true;
         },
       });
-    }, [openModal]);
+    }, [openConfirmModal]);
 
     return (
       <Box flexDirection="column" height={25} width={101}>

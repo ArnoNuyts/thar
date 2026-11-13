@@ -7,13 +7,7 @@ import { SetPriorityModal } from "./SetPriorityModal.tsx";
 import { SetRecurrenceModal } from "./SetRecurrenceModal.tsx";
 import { MultiSelectMenu, TodoMenu } from "./TodoMenu.tsx";
 import { UpdateModal } from "./UpdateModal.tsx";
-import type { ModalId } from "../contexts/modal-context.tsx";
-
-/**
- * Modal ids rendered without extra data. `confirm-modal` is excluded because
- * it renders from `modalData` instead.
- */
-export type GenericModalId = Exclude<ModalId, "confirm-modal">;
+import type { GenericModalId } from "../contexts/modal-context.tsx";
 
 /**
  * Maps every generic modal id to the component that renders it.

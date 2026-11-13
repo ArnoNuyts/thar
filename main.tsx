@@ -5,11 +5,7 @@ import { HiddenIndicator } from "./components/HiddenIndicator.tsx";
 import { modalRegistry } from "./components/modal-registry.tsx";
 import { TodoList } from "./components/TodoList.tsx";
 import { FocusProvider } from "./contexts/focus-context.tsx";
-import {
-  isConfirmModalData,
-  ModalProvider,
-  useModal,
-} from "./contexts/modal-context.tsx";
+import { ModalProvider, useModal } from "./contexts/modal-context.tsx";
 import { TodoProvider, useTodo } from "./contexts/todo-context.tsx";
 import { ToasterProvider } from "./contexts/toaster-context.tsx";
 import { UpdateProvider } from "./contexts/update-context.tsx";
@@ -40,7 +36,7 @@ const AppContent = () => {
     if (activeModal === null) return null;
 
     if (activeModal === "confirm-modal") {
-      if (!isConfirmModalData(modalData)) return null;
+      if (!modalData) return null;
 
       return (
         <ConfirmModal

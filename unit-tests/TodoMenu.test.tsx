@@ -12,7 +12,6 @@ import { MultiSelectMenu, TodoMenu } from "../components/TodoMenu.tsx";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useToaster } from "../contexts/toaster-context.tsx";
 import { ConfirmModal } from "../components/ConfirmModal.tsx";
-import { isConfirmModalData } from "../contexts/modal-context.tsx";
 import { FocusObserver, TestWrapper } from "./test-components.tsx";
 
 const AppContentMock = () => {
@@ -28,7 +27,7 @@ const AppContentMock = () => {
       </Box>
       {activeModal === "todo-menu" && <TodoMenu />}
       {activeModal === "multi-select-menu" && <MultiSelectMenu />}
-      {activeModal === "confirm-modal" && isConfirmModalData(modalData) && (
+      {activeModal === "confirm-modal" && modalData && (
         <ConfirmModal
           title={modalData.title}
           message={modalData.message}

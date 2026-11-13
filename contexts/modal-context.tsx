@@ -6,7 +6,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Todo } from "../logic/todo.ts";
 
 export type ModalId =
   | "create-todo"
@@ -22,6 +21,12 @@ export type ModalId =
   | "add-context"
   | "update-modal";
 
+/**
+ * Modal ids that render without extra data. `confirm-modal` is excluded
+ * because it renders from `ConfirmModalData` via `openConfirmModal`.
+ */
+export type GenericModalId = Exclude<ModalId, "confirm-modal">;
+
 export interface ConfirmModalData {
   title: string;
   message: string;
@@ -29,24 +34,11 @@ export interface ConfirmModalData {
   onCancel?: () => void;
 }
 
-export function isConfirmModalData(
-  data: ModalData | null,
-): data is ConfirmModalData {
-  return (
-    data !== null &&
-    typeof data === "object" &&
-    "title" in data &&
-    "message" in data &&
-    "onConfirm" in data
-  );
-}
-
-export type ModalData = Todo | ConfirmModalData;
-
 interface ModalContextType {
   activeModal: ModalId | null;
-  modalData: ModalData | null;
-  openModal: (id: ModalId, data?: ModalData) => void;
+  modalData: ConfirmModalData | null;
+  openModal: (id: GenericModalId) => void;
+  openConfirmModal: (data: ConfirmModalData) => void;
   closeModal: () => void;
 }
 
@@ -54,11 +46,16 @@ const ModalContext = createContext<ModalContextType | null>(null);
 
 export const ModalProvider = ({ children }: { children?: ReactNode }) => {
   const [activeModal, setActiveModal] = useState<ModalId | null>(null);
-  const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [modalData, setModalData] = useState<ConfirmModalData | null>(null);
 
-  const openModal = useCallback((id: ModalId, data?: ModalData) => {
+  const openModal = useCallback((id: GenericModalId) => {
     setActiveModal(id);
-    setModalData(data || null);
+    setModalData(null);
+  }, []);
+
+  const openConfirmModal = useCallback((data: ConfirmModalData) => {
+    setActiveModal("confirm-modal");
+    setModalData(data);
   }, []);
 
   const closeModal = useCallback(() => {
@@ -67,8 +64,8 @@ export const ModalProvider = ({ children }: { children?: ReactNode }) => {
   }, []);
 
   const value = useMemo(
-    () => ({ activeModal, modalData, openModal, closeModal }),
-    [activeModal, modalData, openModal, closeModal],
+    () => ({ activeModal, modalData, openModal, openConfirmModal, closeModal }),
+    [activeModal, modalData, openModal, openConfirmModal, closeModal],
   );
 
   return (

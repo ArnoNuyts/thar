@@ -77,7 +77,7 @@ export const ActionBar = memo(() => {
             return;
           case "e":
             if (navigationSelectedTodoRef.current) {
-              openModal("edit-todo", navigationSelectedTodoRef.current);
+              openModal("edit-todo");
             }
             return;
           case "/":

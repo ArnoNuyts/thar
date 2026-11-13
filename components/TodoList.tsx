@@ -424,7 +424,7 @@ export const TodoList = () => {
         if (clickedCheckbox) {
           commands.toggle([entry.todo]);
         } else {
-          openModal("edit-todo", entry.todo);
+          openModal("edit-todo");
         }
       }
 
