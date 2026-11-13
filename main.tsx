@@ -36,6 +36,8 @@ const AppContent = () => {
     if (activeModal === null) return null;
 
     if (activeModal === "confirm-modal") {
+      // `openConfirmModal` sets both fields atomically, so this only guards
+      // the nullable context type (and a defensive render before state lands).
       if (!modalData) return null;
 
       return (

@@ -27,11 +27,11 @@ test("ConfirmModal: should render and set focus", async () => {
 
     return (
       <Box flexDirection="column" height={10}>
-        {activeModal === "confirm-modal" && (
+        {activeModal === "confirm-modal" && modalData && (
           <ConfirmModal
-            title={(modalData as { title: string }).title}
-            message={(modalData as { message: string }).message}
-            onConfirm={(modalData as { onConfirm: () => void }).onConfirm}
+            title={modalData.title}
+            message={modalData.message}
+            onConfirm={modalData.onConfirm}
           />
         )}
         <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
@@ -76,12 +76,12 @@ test("ConfirmModal: Tab then Enter should cancel", async () => {
 
     return (
       <Box flexDirection="column" height={12} width={80}>
-        {activeModal === "confirm-modal" && (
+        {activeModal === "confirm-modal" && modalData && (
           <ConfirmModal
-            title={(modalData as { title: string }).title}
-            message={(modalData as { message: string }).message}
-            onConfirm={(modalData as { onConfirm: () => void }).onConfirm}
-            onCancel={(modalData as { onCancel: () => void }).onCancel}
+            title={modalData.title}
+            message={modalData.message}
+            onConfirm={modalData.onConfirm}
+            onCancel={modalData.onCancel}
           />
         )}
       </Box>
@@ -120,11 +120,11 @@ test("ConfirmModal: Space should activate selected button", async () => {
 
     return (
       <Box flexDirection="column" height={10} width={80}>
-        {activeModal === "confirm-modal" && (
+        {activeModal === "confirm-modal" && modalData && (
           <ConfirmModal
-            title={(modalData as { title: string }).title}
-            message={(modalData as { message: string }).message}
-            onConfirm={(modalData as { onConfirm: () => void }).onConfirm}
+            title={modalData.title}
+            message={modalData.message}
+            onConfirm={modalData.onConfirm}
           />
         )}
       </Box>
@@ -162,12 +162,12 @@ test("ConfirmModal: mouse click left half should confirm", async () => {
 
     return (
       <Box flexDirection="column" height={25} width={101}>
-        {activeModal === "confirm-modal" && (
+        {activeModal === "confirm-modal" && modalData && (
           <ConfirmModal
-            title={(modalData as { title: string }).title}
-            message={(modalData as { message: string }).message}
-            onConfirm={(modalData as { onConfirm: () => void }).onConfirm}
-            onCancel={(modalData as { onCancel: () => void }).onCancel}
+            title={modalData.title}
+            message={modalData.message}
+            onConfirm={modalData.onConfirm}
+            onCancel={modalData.onCancel}
           />
         )}
       </Box>
@@ -208,12 +208,12 @@ test("ConfirmModal: mouse click right half should cancel", async () => {
 
     return (
       <Box flexDirection="column" height={25} width={101}>
-        {activeModal === "confirm-modal" && (
+        {activeModal === "confirm-modal" && modalData && (
           <ConfirmModal
-            title={(modalData as { title: string }).title}
-            message={(modalData as { message: string }).message}
-            onConfirm={(modalData as { onConfirm: () => void }).onConfirm}
-            onCancel={(modalData as { onCancel: () => void }).onCancel}
+            title={modalData.title}
+            message={modalData.message}
+            onConfirm={modalData.onConfirm}
+            onCancel={modalData.onCancel}
           />
         )}
       </Box>

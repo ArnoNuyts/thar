@@ -13,7 +13,8 @@ import type { GenericModalId } from "../contexts/modal-context.tsx";
  * Maps every generic modal id to the component that renders it.
  *
  * The `Record<GenericModalId, ...>` type makes the map exhaustive: adding a
- * new id to `ModalId` without adding an entry here fails `deno check`.
+ * new id to `GenericModalId` without adding an entry here fails
+ * `npm run typecheck`.
  */
 export const modalRegistry: Record<GenericModalId, ComponentType> = {
   "create-todo": CreateTodoModal,

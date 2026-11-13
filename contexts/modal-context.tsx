@@ -7,7 +7,12 @@ import {
   useState,
 } from "react";
 
-export type ModalId =
+/**
+ * Modal ids that render without extra data. This is an explicit union rather
+ * than `Exclude<ModalId, "confirm-modal">`, so adding a data-carrying modal
+ * forces a new opener instead of silently accepting `openModal(id)`.
+ */
+export type GenericModalId =
   | "create-todo"
   | "edit-todo"
   | "todo-menu"
@@ -16,16 +21,12 @@ export type ModalId =
   | "set-threshold-date"
   | "set-recurrence"
   | "set-priority"
-  | "confirm-modal"
   | "add-project"
   | "add-context"
   | "update-modal";
 
-/**
- * Modal ids that render without extra data. `confirm-modal` is excluded
- * because it renders from `ConfirmModalData` via `openConfirmModal`.
- */
-export type GenericModalId = Exclude<ModalId, "confirm-modal">;
+/** `confirm-modal` renders from `ConfirmModalData` via `openConfirmModal`. */
+export type ModalId = GenericModalId | "confirm-modal";
 
 export interface ConfirmModalData {
   title: string;
