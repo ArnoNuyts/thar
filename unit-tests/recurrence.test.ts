@@ -1,4 +1,4 @@
-import { expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 
 import { formatDateTag } from "../logic/dates.ts";
 import {
@@ -97,14 +97,26 @@ test("planRecurrence - reports year overflow as out of range", () => {
   expect(planRecurrence("1m", new Date(9999, 11, 1, 12))).toEqual({
     error: OUT_OF_RANGE_RECURRENCE_MESSAGE,
   });
+  expect(planRecurrence("1w", new Date(9999, 11, 31, 12))).toEqual({
+    error: OUT_OF_RANGE_RECURRENCE_MESSAGE,
+  });
+  expect(planRecurrence("1d", new Date(9999, 11, 31, 12))).toEqual({
+    error: OUT_OF_RANGE_RECURRENCE_MESSAGE,
+  });
 });
 
 test("planRecurrence - clamps month ends and leap days", () => {
-  const jan31 = new Date(2024, 0, 31, 12);
-  const month = planRecurrence("1m", jan31);
-  expect("nextDue" in month && formatDateTag(month.nextDue)).toEqual(
+  const leapYearJan31 = new Date(2024, 0, 31, 12);
+  const leapMonth = planRecurrence("1m", leapYearJan31);
+  expect("nextDue" in leapMonth && formatDateTag(leapMonth.nextDue)).toEqual(
     "2024-02-29",
   );
+
+  const nonLeapYearJan31 = new Date(2026, 0, 31, 12);
+  const nonLeapMonth = planRecurrence("1m", nonLeapYearJan31);
+  expect(
+    "nextDue" in nonLeapMonth && formatDateTag(nonLeapMonth.nextDue),
+  ).toEqual("2026-02-28");
 
   const leapDay = new Date(2024, 1, 29, 12);
   const year = planRecurrence("1y", leapDay);
@@ -113,14 +125,11 @@ test("planRecurrence - clamps month ends and leap days", () => {
   );
 });
 
-test("planRecurrence - defaults to the current time as the base", () => {
-  vi.useFakeTimers();
-  try {
-    vi.setSystemTime(new Date(2026, 0, 1, 12));
-    expect(planRecurrence("2d")).toEqual({
-      nextDue: new Date(2026, 0, 3, 12),
-    });
-  } finally {
-    vi.useRealTimers();
-  }
+test("isValidRecurrence - validates storable rec values", () => {
+  expect(isValidRecurrence("+2d")).toEqual(true);
+  expect(isValidRecurrence("9999y")).toEqual(true);
+  expect(isValidRecurrence(2)).toEqual(false);
+  expect(isValidRecurrence("0d")).toEqual(false);
+  expect(isValidRecurrence("10000d")).toEqual(false);
+  expect(isValidRecurrence("1D")).toEqual(false);
 });

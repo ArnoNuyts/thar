@@ -1,17 +1,16 @@
 import { isBefore, isSameDay, isValid, startOfDay } from "date-fns";
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
-import { formatDateTag, parseDateTag, scanTodoPrefix } from "./dates.ts";
+import {
+  formatDateTag,
+  isValidTodoDate,
+  parseDateTag,
+  scanTodoPrefix,
+} from "./dates.ts";
 import { CONTEXT_REGEX, PROJECT_REGEX } from "./patterns.ts";
 import { isValidRecurrence, planRecurrence } from "./recurrence.ts";
 
 export { isValidRecurrence, MAX_RECURRENCE_AMOUNT } from "./recurrence.ts";
-
-const isValidTodoDate = (date: Date): boolean => {
-  if (!isValid(date)) return false;
-  const year = date.getFullYear();
-  return year >= 1 && year <= 9999;
-};
 
 const TAG_REGEX = /(^|\s)(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
 
@@ -159,7 +158,7 @@ export class Todo {
     });
 
     if (next._state === TodoStateEnum.done && next._tags.rec) {
-      const plan = planRecurrence(next._tags.rec);
+      const plan = planRecurrence(next._tags.rec, new Date());
       if ("error" in plan) {
         return { updated: next, recurrenceError: plan.error };
       }
