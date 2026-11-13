@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
 import {
   calculateScrollOffset,
+  findTodoRow,
   getNavigableRow,
   guesstimateSelection,
   validateSelection,
@@ -155,6 +156,50 @@ test("validateSelection: keeps a valid cursor", () => {
   expect(validateSelection(todos[1].id, indexes, undefined, 0)).toEqual(
     todos[1].id,
   );
+});
+
+test("validateSelection: keeps a valid cursor through the lastIndex fast path", () => {
+  const todos = todosOf("Todo 1", "Todo 2");
+  const indexes = indexesFor(todos);
+  const row = indexes.findIndex(
+    (entry) => entry.type === IndexType.todo && entry.todo.id === todos[1].id,
+  );
+
+  expect(validateSelection(todos[1].id, indexes, undefined, row)).toEqual(
+    todos[1].id,
+  );
+});
+
+test("validateSelection: ignores a stale lastIndex pointing at another todo", () => {
+  const todos = todosOf("Todo 1", "Todo 2");
+  const indexes = indexesFor(todos);
+
+  // The fast path must verify the row's id instead of trusting the position.
+  expect(validateSelection(todos[0].id, indexes, undefined, 2)).toEqual(
+    todos[0].id,
+  );
+});
+
+test("findTodoRow: returns lastIndex when it holds the cursor", () => {
+  const todos = todosOf("Todo 1", "Todo 2");
+  const indexes = indexesFor(todos);
+
+  expect(findTodoRow(indexes, todos[1].id, 2)).toEqual(2);
+});
+
+test("findTodoRow: scans when lastIndex points at a header", () => {
+  const todos = todosOf("Todo 1", "Todo 2");
+  const indexes = indexesFor(todos);
+
+  expect(findTodoRow(indexes, todos[1].id, 0)).toEqual(2);
+});
+
+test("findTodoRow: returns -1 for missing ids", () => {
+  const todos = todosOf("Todo 1");
+  const indexes = indexesFor(todos);
+
+  expect(findTodoRow(indexes, undefined, 0)).toEqual(-1);
+  expect(findTodoRow(indexes, new Todo("Not visible").id, 1)).toEqual(-1);
 });
 
 test("validateSelection: restores the cursor by hash", () => {

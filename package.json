@@ -1,6 +1,6 @@
 {
   "name": "@arnoarnoarno/thar",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A keyboard-driven todo.txt TUI for the terminal",
   "keywords": [
     "cli",
@@ -28,22 +28,27 @@
   "files": [
     "bin",
     "dist/*.js",
+    "dist/*.d.ts",
     "README.md",
     "LICENSE"
   ],
   "type": "module",
+  "types": "./dist/main.d.ts",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "start": "vite-node main.tsx",
     "dev": "vite-node main.tsx",
-    "build": "vite build",
+    "build": "vite build && npm run build:types",
+    "build:types": "node scripts/build-types.mjs",
     "prepack": "npm run build",
     "prepublishOnly": "npm run check && npm test",
     "package:check": "npm pack --dry-run",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench:list": "vite-node scripts/benchmark-list.tsx",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint .",
     "fmt": "oxfmt .",
@@ -62,7 +67,7 @@
     "@types/react": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "ink-testing-library": "^4.0.0",
-    "oxfmt": "^0.74.0",
+    "oxfmt": "^0.78.0",
     "oxlint": "^1.89.0",
     "react-doctor": "^0.9.18",
     "typescript": "^7.0.2",

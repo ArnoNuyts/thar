@@ -12,6 +12,10 @@ describe("parseCliArgs", () => {
       file: DEFAULT_FILENAME,
       help: false,
       version: false,
+      noUpdateCheck: false,
+      update: false,
+      updateCheckOnly: false,
+      updateYes: false,
     });
   });
 
@@ -59,6 +63,40 @@ describe("parseCliArgs", () => {
       "Only one todo file may be specified.",
     );
   });
+
+  test("accepts --no-update-check as a TUI flag", () => {
+    expect(parseCliArgs(["--no-update-check"]).noUpdateCheck).toBe(true);
+    expect(parseCliArgs(["--no-update-check", "work.txt"]).noUpdateCheck).toBe(
+      true,
+    );
+    expect(parseCliArgs(["work.txt", "--no-update-check"]).noUpdateCheck).toBe(
+      true,
+    );
+  });
+
+  test("parses the update subcommand", () => {
+    expect(parseCliArgs(["update"])).toMatchObject({
+      update: true,
+      updateCheckOnly: false,
+      updateYes: false,
+    });
+    expect(parseCliArgs(["update", "--check"])).toMatchObject({
+      update: true,
+      updateCheckOnly: true,
+      updateYes: false,
+    });
+    expect(parseCliArgs(["update", "--yes"])).toMatchObject({
+      update: true,
+      updateCheckOnly: false,
+      updateYes: true,
+    });
+    expect(parseCliArgs(["update", "-y", "--check"])).toMatchObject({
+      update: true,
+      updateCheckOnly: true,
+      updateYes: true,
+    });
+    expect(parseCliArgs(["update", "--version"]).version).toBe(true);
+  });
 });
 
 test("formatUsage includes the version, usage and options", () => {
@@ -69,4 +107,6 @@ test("formatUsage includes the version, usage and options", () => {
   expect(usage).toContain("--file <path>");
   expect(usage).toContain("--help");
   expect(usage).toContain("--version");
+  expect(usage).toContain("update");
+  expect(usage).toContain("--no-update-check");
 });

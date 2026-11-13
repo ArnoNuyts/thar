@@ -6,19 +6,15 @@ import { SetDateModal } from "./SetDateModal.tsx";
 import { SetPriorityModal } from "./SetPriorityModal.tsx";
 import { SetRecurrenceModal } from "./SetRecurrenceModal.tsx";
 import { MultiSelectMenu, TodoMenu } from "./TodoMenu.tsx";
-import type { ModalId } from "../contexts/modal-context.tsx";
-
-/**
- * Modal ids rendered without extra data. `confirm-modal` is excluded because
- * it renders from `modalData` instead.
- */
-export type GenericModalId = Exclude<ModalId, "confirm-modal">;
+import { UpdateModal } from "./UpdateModal.tsx";
+import type { GenericModalId } from "../contexts/modal-context.tsx";
 
 /**
  * Maps every generic modal id to the component that renders it.
  *
  * The `Record<GenericModalId, ...>` type makes the map exhaustive: adding a
- * new id to `ModalId` without adding an entry here fails `deno check`.
+ * new id to `GenericModalId` without adding an entry here fails
+ * `npm run typecheck`.
  */
 export const modalRegistry: Record<GenericModalId, ComponentType> = {
   "create-todo": CreateTodoModal,
@@ -31,4 +27,5 @@ export const modalRegistry: Record<GenericModalId, ComponentType> = {
   "set-priority": SetPriorityModal,
   "add-project": () => <AddTagContextModal type="project" />,
   "add-context": () => <AddTagContextModal type="context" />,
+  "update-modal": UpdateModal,
 };

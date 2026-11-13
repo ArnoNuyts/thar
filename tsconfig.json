@@ -29,7 +29,6 @@
     "scripts/**/*.tsx",
     "unit-tests/**/*.ts",
     "unit-tests/**/*.tsx",
-    "vite.config.ts",
-    "vite.sea.config.ts"
+    "vite.config.ts"
   ]
 }

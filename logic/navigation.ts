@@ -166,6 +166,28 @@ export function guesstimateSelection(
 }
 
 /**
+ * Find the row for a todo ID. `lastIndex` is almost always the cursor row, so
+ * checking it first keeps navigation O(1) instead of scanning the whole index
+ * on every keypress; the scan only happens when the index changed underneath.
+ */
+export const findTodoRow = (
+  indexes: IndexEntry[],
+  id: symbol | undefined,
+  lastIndex = 0,
+): number => {
+  if (id === undefined) return -1;
+
+  const candidate = indexes[lastIndex];
+  if (candidate?.type === IndexType.todo && candidate.todo.id === id) {
+    return lastIndex;
+  }
+
+  return indexes.findIndex(
+    (entry) => entry.type === IndexType.todo && entry.todo.id === id,
+  );
+};
+
+/**
  * Validate the current selection. If invalid, find a fallback.
  * Returns the validated/fallback cursor ID.
  */
@@ -177,19 +199,12 @@ export function validateSelection(
 ): symbol | undefined {
   if (indexes.length === 0) return undefined;
 
-  const firstTodoIndex = indexes.findIndex(
-    (entry) => entry.type === IndexType.todo,
-  );
-  if (firstTodoIndex === -1) return undefined;
-
-  // Check if current selection is valid
-  const isValid =
-    cursorId !== undefined &&
-    indexes.some(
-      (entry) => entry.type === IndexType.todo && entry.todo.id === cursorId,
-    );
-
-  if (isValid) return cursorId;
+  // Fast path: the cursor row is stable during navigation, so verify it by ID
+  // before scanning. findTodoRow still falls back to a full scan when the
+  // index changed underneath.
+  if (findTodoRow(indexes, cursorId, lastIndex) !== -1) {
+    return cursorId;
+  }
 
   // Fallback 1: Match by hash (handle file reload)
   if (lastHash) {

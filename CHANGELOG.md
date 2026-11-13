@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-13
+
+### Added
+
+- Non-blocking update checks against the npm registry, with a footer badge
+  when a newer version is available, a one-time notice per version, and a modal
+  to skip that version or update on exit.
+- `thar update [--check] [--yes]`, plus `-v`/`--version` and
+  `--no-update-check` CLI flags.
+- Type declaration file for the package entry point, so the published package
+  reports its types to editors and npm.
+- Navigation benchmark (`npm run bench:list`) for measuring list keypress
+  latency, React render work, and Ink output cost.
+
+### Changed
+
+- Publish with provenance by default via `publishConfig.provenance`, so a
+  release can no longer drop its SLSA attestation.
+- Improve list navigation responsiveness: rows and the scrollbar are memoized,
+  navigation bookkeeping avoids full-list scans on every keypress, and Ink's
+  render throttle is raised from its 30 fps default so keypresses are not held
+  for a frame window.
+
+### Fixed
+
+- Date-dependent state such as due and overdue markers now refreshes at
+  midnight instead of only at startup.
+
 ## [0.5.0] - 2026-11-12
 
 First public release.
@@ -20,5 +48,6 @@ First public release.
 - Undo/redo, copy/paste, archive to `done.txt`, and external file watching.
 - npm package for Node.js 22.12 and newer.
 
-[Unreleased]: https://github.com/ArnoNuyts/thar/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/ArnoNuyts/thar/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/ArnoNuyts/thar/releases/tag/v0.6.0
 [0.5.0]: https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0

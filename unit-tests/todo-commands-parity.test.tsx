@@ -20,11 +20,7 @@ import { TodoList } from "../components/TodoList.tsx";
 import { MultiSelectMenu, TodoMenu } from "../components/TodoMenu.tsx";
 
 import { FocusProvider } from "../contexts/focus-context.tsx";
-import {
-  isConfirmModalData,
-  ModalProvider,
-  useModal,
-} from "../contexts/modal-context.tsx";
+import { ModalProvider, useModal } from "../contexts/modal-context.tsx";
 import {
   NavigationContextType,
   NavigationProvider,
@@ -32,6 +28,7 @@ import {
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import { UpdateProvider } from "../contexts/update-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 
 const NavigationWrapper = ({ children }: { children: React.ReactNode }) => {
@@ -47,7 +44,7 @@ const ModalHost = () => {
   const { activeModal, modalData } = useModal();
   return (
     <>
-      {activeModal === "confirm-modal" && isConfirmModalData(modalData) && (
+      {activeModal === "confirm-modal" && modalData && (
         <ConfirmModal
           title={modalData.title}
           message={modalData.message}
@@ -76,33 +73,35 @@ const renderHarness = (
   let focusedTag: string | undefined;
   const result = render(
     <ToasterProvider>
-      <MockTodoProvider
-        initialTodos={initialTodos}
-        onTodosChange={onTodosChange}
-      >
-        <FocusProvider>
-          <SuggestionProvider>
-            <SearchProvider>
-              <NavigationWrapper>
-                <ModalProvider>
-                  <Box flexDirection="column" height={25} position="relative">
-                    <TodoList />
-                    <ActionBar />
-                    <ModalHost />
-                    <NavController onNav={(value) => (nav = value)} />
-                    <SelectionStateObserver
-                      onSelectionChange={(state) =>
-                        (selectedCount = state.rangeIds.size)
-                      }
-                    />
-                    <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
-                  </Box>
-                </ModalProvider>
-              </NavigationWrapper>
-            </SearchProvider>
-          </SuggestionProvider>
-        </FocusProvider>
-      </MockTodoProvider>
+      <UpdateProvider options={{ enabled: false }}>
+        <MockTodoProvider
+          initialTodos={initialTodos}
+          onTodosChange={onTodosChange}
+        >
+          <FocusProvider>
+            <SuggestionProvider>
+              <SearchProvider>
+                <NavigationWrapper>
+                  <ModalProvider>
+                    <Box flexDirection="column" height={25} position="relative">
+                      <TodoList />
+                      <ActionBar />
+                      <ModalHost />
+                      <NavController onNav={(value) => (nav = value)} />
+                      <SelectionStateObserver
+                        onSelectionChange={(state) =>
+                          (selectedCount = state.rangeIds.size)
+                        }
+                      />
+                      <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
+                    </Box>
+                  </ModalProvider>
+                </NavigationWrapper>
+              </SearchProvider>
+            </SuggestionProvider>
+          </FocusProvider>
+        </MockTodoProvider>
+      </UpdateProvider>
     </ToasterProvider>,
   );
 
