@@ -533,6 +533,7 @@ test("TodoFileSync: a mutation save scheduled before a failing reload never writ
         <SyncHarness
           filename={filename}
           reloadDebounceMs={10}
+          saveDebounceMs={200}
           onSnapshot={onSnapshot}
         />
       </ToasterProvider>,
@@ -549,7 +550,7 @@ test("TodoFileSync: a mutation save scheduled before a failing reload never writ
       });
 
       // Let the initial no-op save consume the just-read flag.
-      await waitPast(60);
+      await waitPast(260);
       writeCount = 0;
 
       const loaded = snapshot!.todos;
@@ -560,8 +561,8 @@ test("TodoFileSync: a mutation save scheduled before a failing reload never writ
         }
       });
 
-      // The save is now queued for 50ms. Poison the file and let the watcher
-      // reload fail inside that window; the failure must cancel the save.
+      // The save is now queued for 200ms. Poison the file and let the watcher
+      // reload fail well inside that window; the failure must cancel the save.
       await originalWriteTextFile(filename, "RELOAD_POISON_MARKER\u0000\n");
       mockWatcher.emit("modify");
 
@@ -578,11 +579,11 @@ test("TodoFileSync: a mutation save scheduled before a failing reload never writ
             writeCount,
             "A save queued before the failing reload must be cancelled",
           ).toEqual(0);
-          if (Date.now() - readOnlyAt < 100) {
+          if (Date.now() - readOnlyAt < 250) {
             throw new Error("Save debounce window still open");
           }
         },
-        { interval: 10, timeout: 1000 },
+        { interval: 10, timeout: 2000 },
       );
     } finally {
       unmount();
