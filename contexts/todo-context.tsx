@@ -146,7 +146,10 @@ export const TodoProvider = ({
   children,
 }: {
   filename: string;
-  /** File access port; defaults to the real filesystem repository. */
+  /**
+   * File access port; defaults to the real filesystem repository. Must be
+   * referentially stable across renders because it is an effect dependency.
+   */
   repository?: TodoFileRepository;
   children?: React.ReactNode;
 }) => {

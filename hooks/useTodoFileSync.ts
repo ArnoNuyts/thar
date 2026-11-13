@@ -16,7 +16,10 @@ export interface TodoFileSyncOptions {
   todos: Todos;
   onLoad: (todos: Todos) => void;
   showToaster: (message: string) => void;
-  /** File access port; defaults to the real filesystem repository. */
+  /**
+   * File access port; defaults to the real filesystem repository. Must be
+   * referentially stable across renders because it is an effect dependency.
+   */
   repository?: TodoFileRepository;
   /** Test seam: shortens the save debounce without changing production flow. */
   saveDebounceMs?: number;

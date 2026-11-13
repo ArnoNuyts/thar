@@ -17,6 +17,7 @@ type FakeRepository = {
   loadCalls: string[];
   saveCalls: { filename: string; todos: Todos }[];
   watchCalls: string[];
+  setTexts: (texts: string[]) => void;
 };
 
 /**
@@ -28,17 +29,20 @@ const createFakeRepository = (initialTexts: string[] = []): FakeRepository => {
   const loadCalls: string[] = [];
   const saveCalls: { filename: string; todos: Todos }[] = [];
   const watchCalls: string[] = [];
-  const initialTodos = initialTexts.map((text) => new Todo(text));
+  let storedTexts = [...initialTexts];
 
   return {
     watcher,
     loadCalls,
     saveCalls,
     watchCalls,
+    setTexts: (texts) => {
+      storedTexts = [...texts];
+    },
     repository: {
       load: async (filename) => {
         loadCalls.push(filename);
-        return [...initialTodos];
+        return storedTexts.map((text) => new Todo(text));
       },
       save: async (filename, todos) => {
         saveCalls.push({ filename, todos });
@@ -83,17 +87,44 @@ const SyncHarness = ({
   return createElement(Text, null, "SyncHarness");
 };
 
+const ToasterProbe = ({
+  onMessage,
+}: {
+  onMessage: (message: string) => void;
+}) => {
+  const { toasterMessage } = useToaster();
+  useEffect(() => {
+    if (toasterMessage) onMessage(toasterMessage);
+  }, [toasterMessage, onMessage]);
+  return createElement(Text, null, toasterMessage ?? "");
+};
+
 const renderSyncHarness = (
   repository: TodoFileRepository,
   onSnapshot: (snapshot: SyncSnapshot) => void,
+  onToast: (message: string) => void = () => {},
 ) =>
   render(
     createElement(
       ToasterProvider,
       null,
       createElement(SyncHarness, { repository, onSnapshot }),
+      createElement(ToasterProbe, { onMessage: onToast }),
     ),
   );
+
+/** Unmount, then prove the sync hook closed the injected watcher. */
+const unmountAndExpectWatcherClosed = async (
+  unmount: () => void,
+  watcher: MockWatcher,
+) => {
+  unmount();
+  try {
+    await waitFor(() => expect(watcher.isClosed).toEqual(true));
+  } finally {
+    watcher.close();
+  }
+};
 
 test("TodoFileRepository: useTodoFileSync loads and watches through the injected repository", async () => {
   const fake = createFakeRepository(["Existing todo"]);
@@ -117,11 +148,10 @@ test("TodoFileRepository: useTodoFileSync loads and watches through the injected
     expect(snapshot!.todos[0].text).toEqual("Existing todo");
 
     // The initial read is a save no-op, so the repository must stay untouched.
-    await waitPast(30);
+    await waitPast(60);
     expect(fake.saveCalls).toEqual([]);
   } finally {
-    unmount();
-    fake.watcher.close();
+    await unmountAndExpectWatcherClosed(unmount, fake.watcher);
   }
 });
 
@@ -142,7 +172,7 @@ test("TodoFileRepository: useTodoFileSync saves mutations through the injected r
     });
 
     // Let the initial load's no-op save pass before mutating.
-    await waitPast(30);
+    await waitPast(60);
     snapshot!.setTodos([...snapshot!.todos, new Todo("Added todo")]);
 
     await waitFor(() => {
@@ -156,19 +186,23 @@ test("TodoFileRepository: useTodoFileSync saves mutations through the injected r
     ]);
     expect(fake.loadCalls).toEqual(["todos.txt"]);
   } finally {
-    unmount();
-    fake.watcher.close();
+    await unmountAndExpectWatcherClosed(unmount, fake.watcher);
   }
 });
 
 test("TodoFileRepository: useTodoFileSync reloads on watcher events through the injected repository", async () => {
   const fake = createFakeRepository(["Existing todo"]);
+  const messages: string[] = [];
   let snapshot: SyncSnapshot | undefined;
   const onSnapshot = (next: SyncSnapshot) => {
     snapshot = next;
   };
 
-  const { unmount } = renderSyncHarness(fake.repository, onSnapshot);
+  const { unmount } = renderSyncHarness(
+    fake.repository,
+    onSnapshot,
+    (message) => messages.push(message),
+  );
 
   try {
     await waitFor(() => {
@@ -178,16 +212,23 @@ test("TodoFileRepository: useTodoFileSync reloads on watcher events through the 
     });
 
     fake.loadCalls.length = 0;
+    fake.setTexts(["Updated todo"]);
     fake.watcher.emit("modify");
 
     await waitFor(() => {
       if (fake.loadCalls.length !== 1) throw new Error("Not reloaded yet");
+      if (snapshot?.todos[0]?.text !== "Updated todo") {
+        throw new Error("Reloaded data not applied yet");
+      }
+      if (!messages.includes("File reloaded")) {
+        throw new Error("Reload toast not shown yet");
+      }
     });
     expect(fake.loadCalls).toEqual(["todos.txt"]);
     expect(fake.watchCalls).toEqual(["todos.txt"]);
+    expect(messages).toContain("File reloaded");
   } finally {
-    unmount();
-    fake.watcher.close();
+    await unmountAndExpectWatcherClosed(unmount, fake.watcher);
   }
 });
 
@@ -237,7 +278,6 @@ test("TodoProvider: forwards the repository prop to the sync hook", async () => 
       "Provider todo",
     ]);
   } finally {
-    unmount();
-    fake.watcher.close();
+    await unmountAndExpectWatcherClosed(unmount, fake.watcher);
   }
 });

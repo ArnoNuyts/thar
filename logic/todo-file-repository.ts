@@ -22,6 +22,7 @@ export interface TodoFileRepository {
  */
 export const createTodoFileRepository = (): TodoFileRepository => ({
   load: (filename) => readTodosFromFile(filename),
+  // The port keeps the resource first; the helper takes (todos, filename).
   save: (filename, todos) => writeTodosToFile(todos, filename),
   watch: (filename) => Runtime.watchFs(filename),
 });
