@@ -3,6 +3,7 @@ import { memo, useMemo, useRef } from "react";
 import { useModal } from "../contexts/modal-context.tsx";
 import { useNavigation } from "../contexts/navigation-context.tsx";
 import { useSearch } from "../contexts/search-context.tsx";
+import { useUpdate } from "../contexts/update-context.tsx";
 import { ExtendedKey, useFocusedInput } from "../hooks/useFocusedInput.ts";
 import { useMouseInput } from "../hooks/useMouseInput.ts";
 import { useTodoCommands } from "../hooks/useTodoCommands.ts";
@@ -270,6 +271,7 @@ export const TodoList = () => {
 
   const { openModal, activeModal } = useModal();
   const { focusRef, searchQuery, isSearchFocused } = useSearch();
+  const { isUpdateAvailable } = useUpdate();
   const commands = useTodoCommands();
 
   const todo = getSelectedTodo();
@@ -322,6 +324,11 @@ export const TodoList = () => {
           break;
         case "n":
           openModal("create-todo");
+          break;
+        case "u":
+          if (isUpdateAvailable) {
+            openModal("update-modal");
+          }
           break;
         case "z":
           commands.undo();

@@ -19,7 +19,8 @@ export type ModalId =
   | "set-priority"
   | "confirm-modal"
   | "add-project"
-  | "add-context";
+  | "add-context"
+  | "update-modal";
 
 export interface ConfirmModalData {
   title: string;

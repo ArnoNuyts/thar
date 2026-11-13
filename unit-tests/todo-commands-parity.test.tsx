@@ -32,6 +32,7 @@ import {
 import { SearchProvider } from "../contexts/search-context.tsx";
 import { SuggestionProvider } from "../contexts/suggestion-context.tsx";
 import { ToasterProvider } from "../contexts/toaster-context.tsx";
+import { UpdateProvider } from "../contexts/update-context.tsx";
 import { useTodo } from "../contexts/todo-context.tsx";
 
 const NavigationWrapper = ({ children }: { children: React.ReactNode }) => {
@@ -76,33 +77,35 @@ const renderHarness = (
   let focusedTag: string | undefined;
   const result = render(
     <ToasterProvider>
-      <MockTodoProvider
-        initialTodos={initialTodos}
-        onTodosChange={onTodosChange}
-      >
-        <FocusProvider>
-          <SuggestionProvider>
-            <SearchProvider>
-              <NavigationWrapper>
-                <ModalProvider>
-                  <Box flexDirection="column" height={25} position="relative">
-                    <TodoList />
-                    <ActionBar />
-                    <ModalHost />
-                    <NavController onNav={(value) => (nav = value)} />
-                    <SelectionStateObserver
-                      onSelectionChange={(state) =>
-                        (selectedCount = state.rangeIds.size)
-                      }
-                    />
-                    <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
-                  </Box>
-                </ModalProvider>
-              </NavigationWrapper>
-            </SearchProvider>
-          </SuggestionProvider>
-        </FocusProvider>
-      </MockTodoProvider>
+      <UpdateProvider options={{ enabled: false }}>
+        <MockTodoProvider
+          initialTodos={initialTodos}
+          onTodosChange={onTodosChange}
+        >
+          <FocusProvider>
+            <SuggestionProvider>
+              <SearchProvider>
+                <NavigationWrapper>
+                  <ModalProvider>
+                    <Box flexDirection="column" height={25} position="relative">
+                      <TodoList />
+                      <ActionBar />
+                      <ModalHost />
+                      <NavController onNav={(value) => (nav = value)} />
+                      <SelectionStateObserver
+                        onSelectionChange={(state) =>
+                          (selectedCount = state.rangeIds.size)
+                        }
+                      />
+                      <FocusObserver onFocused={(tag) => (focusedTag = tag)} />
+                    </Box>
+                  </ModalProvider>
+                </NavigationWrapper>
+              </SearchProvider>
+            </SuggestionProvider>
+          </FocusProvider>
+        </MockTodoProvider>
+      </UpdateProvider>
     </ToasterProvider>,
   );
 
