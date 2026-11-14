@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext } from "react";
+import { createContext, ReactNode, useContext, useEffect } from "react";
 import { Todo } from "../logic/todo.ts";
 import type { Todos } from "../logic/Todos.ts";
 import type { IndexEntry } from "../logic/indexes.ts";
@@ -50,8 +50,11 @@ export const NavigationProvider = ({
 }) => {
   const { value, selectedTodo } = useNavigationState(todos, listHeightForTest);
 
-  // Keep the imperative ref in sync during render, as before the extraction.
-  navigationSelectedTodoRef.current = selectedTodo;
+  // Keep the imperative ref in sync after commit; writing it during render
+  // would be a side effect of rendering.
+  useEffect(() => {
+    navigationSelectedTodoRef.current = selectedTodo;
+  }, [selectedTodo]);
 
   return (
     <NavigationContext.Provider value={value}>

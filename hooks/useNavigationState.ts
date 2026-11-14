@@ -81,7 +81,9 @@ export const useNavigationState = (
     if (activeState === state) return;
 
     // Only commit if state has not changed since this reconciliation, so a
-    // newer update from an event handler is never clobbered.
+    // newer update from an event handler is never clobbered. This has to run
+    // after render: committing during render would re-enter reconciliation.
+    // eslint-disable-next-line react/set-state-in-effect -- reconciled nav state is committed here by design
     setState((prev) => (prev === state ? activeState : prev));
   }, [activeState, state]);
 

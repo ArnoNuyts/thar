@@ -1,8 +1,10 @@
 export const COLORS = {
   background: "#181818",
+  modalBackground: "#262626",
   foreground: "#EEECE5",
   white: "#FFFFFF",
   muted: "#676560",
+  modalMuted: "#8A8880",
   inverseForeground: "#141210",
   inverseBackground: "#ECECEC",
   primary: "#F4BF75",

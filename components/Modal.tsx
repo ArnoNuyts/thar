@@ -74,7 +74,7 @@ export const Modal = ({
           borderTop={false}
           padding={1}
           flexDirection="column"
-          backgroundColor={COLORS.background}
+          backgroundColor={COLORS.modalBackground}
         >
           {children}
         </Box>

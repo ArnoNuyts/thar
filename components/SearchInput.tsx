@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Text } from "ink";
 import { ControlledTextInput } from "./ControlledTextInput.tsx";
 import { useSuggestion } from "../contexts/suggestion-context.tsx";
@@ -28,6 +28,9 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
   } = useNavigation();
   const [cursorPos, setCursorPos] = useState(searchQuery.length);
   const tagSources = useTagSources(todos);
+  // The handler is created before `useFocusedInput` returns `blur`, so read it
+  // through a ref instead of capturing the binding while it initializes.
+  const blurRef = useRef<() => void>(() => {});
 
   const { isFocused, focus, blur } = useFocusedInput(
     (_input, key) => {
@@ -66,7 +69,7 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
 
       if (key.return) {
         // Unfocus but keep filter active
-        blur();
+        blurRef.current();
         return;
       }
 
@@ -74,12 +77,16 @@ export const SearchInput = ({ todos }: { todos: Todos }) => {
         // Clear filter and unfocus
         setSearchQuery("");
         setCursorPos(0);
-        blur();
+        blurRef.current();
         return;
       }
     },
     { tag: "search-input" },
   );
+
+  useEffect(() => {
+    blurRef.current = blur;
+  }, [blur]);
 
   // Register focus function with context ref after commit so we never write to
   // the ref during render.

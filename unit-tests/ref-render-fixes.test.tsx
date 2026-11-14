@@ -163,3 +163,12 @@ test("TodoProvider: the todo count ref is only assigned outside render", async (
   );
   expect(source.match(/todoCountRef\.current =/g)).toHaveLength(1);
 });
+
+test("NavigationProvider: the selected todo ref is only assigned outside render", async () => {
+  const source = await Runtime.readTextFile("contexts/navigation-context.tsx");
+
+  expect(source).toMatch(
+    /useEffect\(\(\) => \{\s*navigationSelectedTodoRef\.current = selectedTodo;\s*\}, \[selectedTodo\]\);/,
+  );
+  expect(source.match(/navigationSelectedTodoRef\.current =/g)).toHaveLength(1);
+});
