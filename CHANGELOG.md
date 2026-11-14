@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-14
+
 ### Changed
 
 - Modal dialogs now use a slightly lighter background than the todo list, so
   they stand out from the content behind them.
 - Unselected modal button labels use a brighter muted tone so they stay legible
   on the new dialog background.
+- Enable React lint rules in Oxlint, add a rule that requires date-fns for
+  calendar math, and gate pull requests on React Doctor findings.
 
 ## [0.6.0] - 2026-11-13
 
@@ -55,6 +59,7 @@ First public release.
 - Undo/redo, copy/paste, archive to `done.txt`, and external file watching.
 - npm package for Node.js 22.12 and newer.
 
-[Unreleased]: https://github.com/ArnoNuyts/thar/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/ArnoNuyts/thar/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/ArnoNuyts/thar/releases/tag/v0.6.1
 [0.6.0]: https://github.com/ArnoNuyts/thar/releases/tag/v0.6.0
 [0.5.0]: https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0
