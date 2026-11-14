@@ -1,3 +1,4 @@
+import { addDays, addMonths, addWeeks, addYears, format } from "date-fns";
 import { expect, test, vi } from "vitest";
 
 import {
@@ -50,19 +51,13 @@ test("setRecurrence - rejects values the strict parser would refuse", () => {
   ).toEqual(`${MAX_RECURRENCE_AMOUNT}d`);
 });
 
-const formatDate = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
+const formatDate = (date: Date) => format(date, "yyyy-MM-dd");
 
 test("toggleState - daily recurrence", () => {
   const todo = new Todo("todo rec:1d");
   const { recurring } = todo.toggleState();
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrow = addDays(new Date(), 1);
 
   expect(recurring?.tags.due).toEqual(formatDate(tomorrow));
 });
@@ -71,8 +66,7 @@ test("toggleState - weekly recurrence", () => {
   const todo = new Todo("todo rec:1w");
   const { recurring } = todo.toggleState();
 
-  const nextWeek = new Date();
-  nextWeek.setDate(nextWeek.getDate() + 7);
+  const nextWeek = addWeeks(new Date(), 1);
 
   expect(recurring?.tags.due).toEqual(formatDate(nextWeek));
 });
@@ -81,8 +75,7 @@ test("toggleState - monthly recurrence", () => {
   const todo = new Todo("todo rec:1m");
   const { recurring } = todo.toggleState();
 
-  const nextMonth = new Date();
-  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  const nextMonth = addMonths(new Date(), 1);
 
   expect(recurring!.tags.due).toEqual(formatDate(nextMonth));
 });
@@ -91,8 +84,7 @@ test("toggleState - yearly recurrence", () => {
   const todo = new Todo("todo rec:1y");
   const { recurring } = todo.toggleState();
 
-  const nextYear = new Date();
-  nextYear.setFullYear(nextYear.getFullYear() + 1);
+  const nextYear = addYears(new Date(), 1);
 
   expect(recurring?.tags.due).toEqual(formatDate(nextYear));
 });

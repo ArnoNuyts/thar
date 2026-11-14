@@ -9,6 +9,16 @@
         "rules": ["react-doctor/no-pass-data-to-parent"]
       },
       {
+        // A controlled Button.Group clamps a shrinking child list and must tell
+        // its parent; there is no render-time way to notify a parent of that.
+        "files": ["components/Button.tsx"],
+        "rules": [
+          "react-doctor/no-pass-data-to-parent",
+          "react-doctor/no-pass-live-state-to-parent",
+          "react-doctor/no-prop-callback-in-effect"
+        ]
+      },
+      {
         // These modules intentionally expose small helpers, guards and types
         // alongside their components for tests and sibling modules.
         "files": [
