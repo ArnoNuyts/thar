@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Modal dialogs now use a slightly lighter background than the todo list, so
+  they stand out from the content behind them.
+- Unselected modal button labels use a brighter muted tone so they stay legible
+  on the new dialog background.
+
 ## [0.6.0] - 2026-11-13
 
 ### Added
