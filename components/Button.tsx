@@ -72,7 +72,11 @@ const ButtonGroup = ({
 
   const [internalIndex, setInternalIndex] = useState(defaultSelectedIndex);
   const isControlled = selectedIndex !== undefined;
-  const activeIndex = isControlled ? selectedIndex : internalIndex;
+  const requestedIndex = isControlled ? selectedIndex : internalIndex;
+  // Clamp during render so a shrinking child list cannot leave the selection
+  // pointing past the last button.
+  const lastIndex = Math.max(0, buttonChildren.length - 1);
+  const activeIndex = Math.min(Math.max(requestedIndex, 0), lastIndex);
   const activeIndexRef = useRef(activeIndex);
 
   useLayoutEffect(() => {
@@ -80,12 +84,11 @@ const ButtonGroup = ({
   });
 
   useEffect(() => {
-    if (buttonChildren.length === 0) return;
-    if (activeIndex < buttonChildren.length) return;
-    const next = buttonChildren.length - 1;
-    if (!isControlled) setInternalIndex(next);
-    onSelectedIndexChange?.(next);
-  }, [activeIndex, buttonChildren.length, isControlled, onSelectedIndexChange]);
+    if (activeIndex === requestedIndex) return;
+    // A controlled parent needs to hear that its index was clamped. The
+    // uncontrolled index is left alone so growing the list restores it.
+    onSelectedIndexChange?.(activeIndex);
+  }, [activeIndex, requestedIndex, onSelectedIndexChange]);
 
   const setIndex = (next: number) => {
     if (buttonChildren.length === 0) return;

@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -113,10 +114,9 @@ export const UpdateProvider = ({
   // The provider owns a snapshot of its configuration. Treating it as
   // immutable keeps every action referentially stable across unrelated
   // renders (the context-value stability tests rely on this).
-  const optionsRef = useRef(options);
-  const config = optionsRef.current;
-  const descriptorRef = useRef(
-    config.installDescriptor ?? getDefaultInstallDescriptor(),
+  const [config] = useState(options);
+  const [descriptor] = useState(
+    () => config.installDescriptor ?? getDefaultInstallDescriptor(),
   );
 
   const app = useApp();
@@ -134,8 +134,7 @@ export const UpdateProvider = ({
     config.initialState?.skippedVersion,
   );
   const [installKind, setInstallKind] = useState<InstallKind>(
-    config.initialState?.installKind ??
-      detectInstallKind(descriptorRef.current),
+    config.initialState?.installKind ?? detectInstallKind(descriptor),
   );
 
   const lastNotifiedRef = useRef<string | undefined>(undefined);
@@ -149,8 +148,7 @@ export const UpdateProvider = ({
     };
   }, []);
 
-  const platform =
-    config.platform ?? descriptorRef.current.platform ?? Runtime.platform;
+  const platform = config.platform ?? descriptor.platform ?? Runtime.platform;
   const updateCommand = useMemo(
     () => getInstallCommand(installKind, platform),
     [installKind, platform],
@@ -168,12 +166,12 @@ export const UpdateProvider = ({
 
       lastNotifiedRef.current = result.latest;
       showToaster(`Update available: v${result.latest} · press u`);
-      await mutateUpdateCache(cachePathFor(optionsRef.current), (cache) => ({
+      await mutateUpdateCache(cachePathFor(config), (cache) => ({
         ...cache,
         lastNotified: result.latest,
       }));
     },
-    [showToaster],
+    [config, showToaster],
   );
 
   const checkForUpdates = useCallback(
@@ -183,7 +181,7 @@ export const UpdateProvider = ({
       if (checkInFlightRef.current) return checkInFlightRef.current;
 
       const run = (async () => {
-        const current = optionsRef.current;
+        const current = config;
         const enabled = current.enabled ?? true;
         if (!enabled && !checkOptions?.force) return;
 
@@ -231,11 +229,17 @@ export const UpdateProvider = ({
         checkInFlightRef.current = null;
       }
     },
-    [currentVersion, notify],
+    [config, currentVersion, notify],
   );
 
+  // Keep the scheduled check off the effect's dependency list: the check
+  // callback changes whenever a dependency such as the toaster does.
+  const runScheduledCheck = useEffectEvent(() => {
+    void checkForUpdates();
+  });
+
   useEffect(() => {
-    const current = optionsRef.current;
+    const current = config;
     if (current.enabled === false) return;
 
     const jitterMs = current.jitterMs ?? 5_000;
@@ -245,27 +249,27 @@ export const UpdateProvider = ({
       (current.autoCheckDelayMs ?? 2_000) + random * jitterMs,
     );
     const timer = setTimeout(() => {
-      void checkForUpdates();
+      runScheduledCheck();
     }, delay);
     Runtime.unrefTimer(timer);
 
     return () => clearTimeout(timer);
-  }, [checkForUpdates]);
+  }, [config]);
 
   const skipVersion = useCallback(() => {
     if (!latestVersion) return;
     setSkippedVersion(latestVersion);
 
-    void mutateUpdateCache(cachePathFor(optionsRef.current), (cache) => ({
+    void mutateUpdateCache(cachePathFor(config), (cache) => ({
       ...cache,
       skipped: latestVersion,
     }));
-  }, [latestVersion]);
+  }, [config, latestVersion]);
 
   const prepareInstall = useCallback(async () => {
     if (installKind !== "unknown") return;
 
-    const current = optionsRef.current;
+    const current = config;
     const lookup =
       current.globalRootLookup ??
       (() =>
@@ -274,11 +278,11 @@ export const UpdateProvider = ({
     if (!root) return;
 
     const nextKind = detectInstallKind({
-      ...descriptorRef.current,
+      ...descriptor,
       nodeModulesGlobalRoot: root,
     });
     if (nextKind !== "unknown") setInstallKind(nextKind);
-  }, [installKind]);
+  }, [config, descriptor, installKind]);
 
   const startSelfUpdate = useCallback((): boolean => {
     if (!latestVersion || !updateCommand.canSelfUpdate) return false;

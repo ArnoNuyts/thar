@@ -29,6 +29,18 @@ const npxDescriptor = {
   platform: "linux" as const,
 };
 
+const Probe = ({
+  onUpdate,
+}: {
+  onUpdate?: (value: UpdateContextType) => void;
+}) => {
+  const value = useUpdate();
+  useEffect(() => {
+    onUpdate?.(value);
+  });
+  return null;
+};
+
 const Harness = ({
   onUpdate,
 }: {
@@ -40,17 +52,9 @@ const Harness = ({
     openModal("update-modal");
   }, [openModal]);
 
-  const Probe = () => {
-    const value = useUpdate();
-    useEffect(() => {
-      onUpdate?.(value);
-    });
-    return null;
-  };
-
   return (
     <Box flexDirection="column" height={24} width={101}>
-      <Probe />
+      <Probe onUpdate={onUpdate} />
       {activeModal === "update-modal" && <UpdateModal />}
     </Box>
   );
