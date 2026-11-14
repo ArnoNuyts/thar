@@ -1,3 +1,4 @@
+import { addDays, startOfDay } from "date-fns";
 import { useEffect, useState } from "react";
 
 /** Local calendar-day key; changes exactly once per day in the local timezone. */
@@ -6,11 +7,7 @@ export const getTodayKey = (now: Date = new Date()): string =>
 
 /** Milliseconds from `now` until the next local midnight (DST-aware). */
 export const msUntilNextDay = (now: Date): number => {
-  const nextMidnight = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1,
-  );
+  const nextMidnight = addDays(startOfDay(now), 1);
   return Math.max(1, nextMidnight.getTime() - now.getTime());
 };
 

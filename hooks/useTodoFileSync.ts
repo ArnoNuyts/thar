@@ -71,6 +71,9 @@ export const useTodoFileSync = ({
     // Saving it would truncate the real file when the read is slow (the save
     // debounce is shorter than a slow disk access).
     hasLoadedFileRef.current = false;
+    // Switching files must clear the previous file's read-only state; it is
+    // not derivable from the new filename.
+    // eslint-disable-next-line react/set-state-in-effect -- resets per-file read state
     setLoadError(undefined);
     repository
       .load(filename)
@@ -96,7 +99,9 @@ export const useTodoFileSync = ({
     };
   }, [filename, repository, setLoadError, onLoad, showToaster]);
 
-  // Save effect
+  // Save effect. The debounced writer intentionally reads refs and the clock
+  // when it fires after commit, so the React render rules do not apply here.
+  /* eslint-disable react/refs, react/purity -- the debounced writer runs after commit, not during render */
   const saveTodos = useMemo(
     () =>
       debounce(async (currentTodos: Todos) => {
@@ -127,6 +132,7 @@ export const useTodoFileSync = ({
       }, saveDebounceMs),
     [filename, repository, saveDebounceMs, showToaster],
   );
+  /* eslint-enable react/refs, react/purity */
 
   // Cancel a pending save only when the debounced function is replaced (for
   // example when `filename` changes) or the sync hook unmounts. Ordinary todo

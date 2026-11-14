@@ -187,6 +187,8 @@ type SelectionRef = { current: symbol | undefined };
 
 const SelectionProbe = ({ target }: { target: SelectionRef }) => {
   const { selectedTodoId } = useNavigation();
+  // Benchmark probe: records the selection on every render by design.
+  // eslint-disable-next-line react/immutability -- measurement probe, not app state
   target.current = selectedTodoId;
   return null;
 };

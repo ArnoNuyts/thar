@@ -386,6 +386,24 @@ export const TodoList = () => {
     { autoFocus: true, tag: "todo-list" },
   );
 
+  // Calculate the maximum number of digits needed for numbering. Only the
+  // todo entries carry a number, and indexes only change when the visible set
+  // changes, so this must not be recomputed on every navigation key. Declared
+  // before the input handlers below so their callbacks never reference a
+  // binding that is still being initialized.
+  const maxDigits = useMemo(() => {
+    let totalTodoCount = 0;
+    for (const entry of indexes) {
+      if (entry.type === IndexType.todo) totalTodoCount++;
+    }
+    return totalTodoCount.toString().length;
+  }, [indexes]);
+
+  // Rows are memoized, but overdue styling depends on today's date. Fold the
+  // day into the row key so the visible rows refresh when midnight passes,
+  // without re-rendering them on every keypress.
+  const todayKey = useTodayKey();
+
   useMouseInput(
     (event) => {
       if (activeModal) return;
@@ -444,22 +462,6 @@ export const TodoList = () => {
     },
     { isActive: true },
   );
-
-  // Calculate the maximum number of digits needed for numbering. Only the
-  // todo entries carry a number, and indexes only change when the visible set
-  // changes, so this must not be recomputed on every navigation key.
-  const maxDigits = useMemo(() => {
-    let totalTodoCount = 0;
-    for (const entry of indexes) {
-      if (entry.type === IndexType.todo) totalTodoCount++;
-    }
-    return totalTodoCount.toString().length;
-  }, [indexes]);
-
-  // Rows are memoized, but overdue styling depends on today's date. Fold the
-  // day into the row key so the visible rows refresh when midnight passes,
-  // without re-rendering them on every keypress.
-  const todayKey = useTodayKey();
 
   return (
     <Box flexGrow={0} height={listHeight} backgroundColor={COLORS.background}>
