@@ -85,7 +85,7 @@ pub fn run(args: &[String]) -> ExitCode {
     let today = today_local();
     let mut app = thar_tui::App::new(options.file.clone(), loaded.todos, today);
     app.load_error = loaded.error;
-    app.read_only = !options.write || app.load_error.is_some();
+    app.read_only = !options.write;
 
     if app.read_only {
         match run_tui(&mut app) {

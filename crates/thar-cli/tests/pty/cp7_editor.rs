@@ -43,7 +43,7 @@ fn the_create_modal_types_applies_a_suggestion_and_saves() {
     // the modal, so it would race with the capture.
     session.send(b"write the port +th");
     session.wait_text("» write the port +th");
-    session.wait_text("│  +thar");
+    session.wait_text("│   +thar");
 
     // The first `Enter` applies the highlighted suggestion, not the form.
     session.send(ENTER);

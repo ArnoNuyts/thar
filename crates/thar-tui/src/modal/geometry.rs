@@ -73,10 +73,13 @@ pub fn resolve(terminal: Rect, width: ModalWidth, body_rows: u16) -> ModalRect {
         height,
     );
     let body_height = height.saturating_sub(TOP_CHROME + BOTTOM_CHROME);
+    // The overlay draws `Borders::ALL` on `area`; the body must sit inside the
+    // left and right border columns, or every screen erases its own frame and
+    // mouse columns disagree with the painted cells.
     let body = Rect::new(
-        area.x,
+        area.x.saturating_add(1),
         area.y.saturating_add(TOP_CHROME),
-        area.width,
+        area.width.saturating_sub(2).max(1),
         body_height.min(body_rows),
     );
     ModalRect { area, body }
@@ -133,6 +136,9 @@ mod tests {
         assert_eq!(rect.area.y, 10);
         assert_eq!(rect.body.y, 10 + TOP_CHROME);
         assert_eq!(rect.body.height, 6);
+        assert_eq!(rect.body.x, rect.area.x + 1);
+        assert_eq!(rect.body.width, rect.area.width - 2);
+        assert!(rect.body.x + rect.body.width <= rect.area.x + rect.area.width);
     }
 
     #[test]
