@@ -70,8 +70,9 @@ export const useNavigationState = (
   const today = useMemo(() => todayDateKey(todayKey), [todayKey]);
 
   const indexes: IndexEntry[] = useMemo(() => {
-    // `THAR_CORE=rust` may build the rows in Rust; the value is `undefined`
-    // in `ts` mode, when the package or export is missing, and on any error.
+    // The Rust core builds the rows by default (CP5); the value is `undefined`
+    // in `THAR_CORE=ts`, when the package or export is missing, and on any
+    // error, in which case the TypeScript pipeline below runs.
     const coreRows = buildRowsWithCore(todos, searchQuery, showHidden, today);
     if (coreRows) return coreRows;
 

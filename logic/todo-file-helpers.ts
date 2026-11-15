@@ -4,7 +4,6 @@ import {
   getCoreMode,
   parseTodosWithCore,
   serializeTodosWithCore,
-  shadowCheckTodoFile,
   todayFromClock,
 } from "./core-wasm.ts";
 import {
@@ -77,13 +76,12 @@ export async function readTodosFromFile(
     throw new TodoFileTooLargeError(actualBytes, limits.maxFileBytes);
   }
 
-  // CP3b2c: `THAR_CORE=rust` parses with the Rust core and rebuilds the list
-  // from the parsed records, without a second parse. `parseTodosWithCore`
-  // returns `undefined` for `ts` mode (before any package load), every adapter
-  // failure, and any record/count/order mismatch, in which case the TypeScript
-  // reader below runs exactly as before. A legitimate limit/control rejection
-  // is thrown from inside as the same `TodoFileValidationError` the validator
-  // below would throw.
+  // The Rust core is the default read path since CP5. `parseTodosWithCore`
+  // returns `undefined` for `THAR_CORE=ts` (before any package load), every
+  // adapter failure, and any record/count/order mismatch, in which case the
+  // TypeScript reader below runs exactly as it did before the port. A
+  // legitimate limit/control rejection is thrown from inside as the same
+  // `TodoFileValidationError` the validator below would throw.
   if (getCoreMode() === "rust") {
     const coreTodos = parseTodosWithCore(data, todayFromClock(), limits);
     if (coreTodos) return coreTodos;
@@ -92,19 +90,6 @@ export async function readTodosFromFile(
   const todos = validateTodoFileContent(data, limits)
     .filter((x) => x.trim())
     .map((x) => new Todo(x));
-
-  // Development-only differential check against the Rust core; a no-op unless
-  // THAR_SHADOW=1. It never changes `todos` and never throws (see
-  // `logic/core-wasm.ts`), so the TypeScript result stays the app's state. The
-  // effective limits are passed through: Rust must judge this file by the same
-  // `THAR_MAX_*` values the TypeScript reader just used.
-  //
-  // In rust mode the read path already parsed with the Rust core, so the shadow
-  // check is superseded: it would parse a second time, and there is no separate
-  // TypeScript result to compare against.
-  if (getCoreMode() !== "rust") {
-    shadowCheckTodoFile(data, todos, limits);
-  }
 
   return todos;
 }
@@ -140,9 +125,9 @@ export const writeTodosToFile = async (
   writeOptions: WriteOptions | undefined = undefined,
 ) => {
   // The TypeScript serializer is always computed: it is the oracle the CP4
-  // dual-write gate compares against and the text written when the Rust path is
-  // off, unavailable, or disagrees. In `ts` mode this is the only serialization
-  // that happens (the adapter returns before loading anything).
+  // dual-write gate compares against and the text written when Rust is
+  // unavailable, disabled, or disagrees. In `THAR_CORE=ts` this is the only
+  // serialization that happens (the adapter returns before loading anything).
   const tsText = serializeTodosForWrite(todos);
   const data = chooseWriteText(todos, tsText);
   const limits = getReadLimits();
@@ -185,12 +170,14 @@ const firstByteDifference = (left: Buffer, right: Buffer): number => {
 
 /**
  * Pick the text to write: the TypeScript oracle, or Rust's copy of the same
- * bytes when `THAR_CORE=rust` and the two agree exactly.
+ * bytes when the two agree exactly.
  *
- * The rule is deliberately narrow:
+ * This dual serialization is a deliberate CP5 deviation from the PLAN's
+ * "remove dual-write" line: it is the data-safety belt until CP8 removes the
+ * TypeScript writer. The rule is deliberately narrow:
  *
- * - `ts` mode, an unavailable adapter, a thrown error, a malformed envelope and
- *   any rejection (including a guard rejection) all keep `tsText`;
+ * - `THAR_CORE=ts`, an unavailable adapter, a thrown error, a malformed
+ *   envelope and any rejection (including a guard rejection) all keep `tsText`;
  * - Rust's text is **compared**, not written: when
  *   `Buffer.from(rust).equals(Buffer.from(ts))` the TypeScript bytes still go to
  *   disk. A byte compare, not a string compare, because the two strings can be

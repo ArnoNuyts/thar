@@ -218,13 +218,24 @@ const errorFiles = Object.entries(expected.files).filter(
   ([, file]) => file.kind === "error",
 );
 
+/**
+ * The corpus expectations are the TypeScript oracle's output, so this file
+ * pins `THAR_CORE=ts` for its whole run: since CP5 the app defaults to Rust,
+ * and a Rust parse here would compare Rust against itself instead of the
+ * reader the expectations were recorded from.
+ */
+const savedCoreMode = process.env.THAR_CORE;
+
 beforeAll(() => {
+  process.env.THAR_CORE = "ts";
   vi.useFakeTimers();
   vi.setSystemTime(new Date(CLOCK));
 });
 
 afterAll(() => {
   vi.useRealTimers();
+  if (savedCoreMode === undefined) delete process.env.THAR_CORE;
+  else process.env.THAR_CORE = savedCoreMode;
 });
 
 describe("corpus layout", () => {
