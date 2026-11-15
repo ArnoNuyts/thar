@@ -26,7 +26,10 @@ import {
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
 import { readTodosFromFile } from "../logic/todo-file-helpers.ts";
-import { isEnglishCollator } from "../utils/collation-locale.ts";
+import {
+  defaultCollatorLocale,
+  isEnglishCollator,
+} from "../utils/collation-locale.ts";
 import { Runtime } from "../utils/runtime.ts";
 import { restoreRuntimeMocks } from "./test-utils.ts";
 
@@ -81,6 +84,10 @@ const fakePackage = async (
   await Runtime.writeTextFile(path, body);
   setEnv("THAR_CORE_WASM", path);
   resetCoreBridgeForTests();
+  // The adapter's row path refuses non-English host collators. Every fake in
+  // this file behaves as if it ran on the pinned en-US order, so the suite
+  // stays host-locale independent; guard tests override this explicitly.
+  setCollatorLocaleForTests("en-US");
   return path;
 };
 
@@ -1218,52 +1225,53 @@ test.skipIf(!existsSync(REAL_PACKAGE))(
  * match `crates/thar-wasm` (a `views`-only regression is rejected with
  * `INVALID_INPUT` and falls back, so `entries` would be `undefined` here).
  *
- * Skipped in the Node matrix, where `pkg/` does not exist.
+ * Skipped in the Node matrix, where `pkg/` does not exist, and on a host whose
+ * default collator is not English, because the TypeScript oracle used below
+ * sorts with the host locale while the Rust core pins en-US.
  */
-test.skipIf(!existsSync(REAL_PACKAGE))(
-  "the built package builds rows through the real loader",
-  () => {
-    setEnv("THAR_CORE", "rust");
-    setEnv("THAR_CORE_WASM", undefined);
-    resetCoreBridgeForTests();
-    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+test.skipIf(
+  !existsSync(REAL_PACKAGE) || !isEnglishCollator(defaultCollatorLocale()),
+)("the built package builds rows through the real loader", () => {
+  setEnv("THAR_CORE", "rust");
+  setEnv("THAR_CORE_WASM", undefined);
+  resetCoreBridgeForTests();
+  const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
 
-    const todos = [
-      new Todo("beta one @work"),
-      new Todo("alpha two @work"),
-      new Todo("gamma plain h:1"),
-      new Todo("delta plain"),
-    ];
+  const todos = [
+    new Todo("beta one @work"),
+    new Todo("alpha two @work"),
+    new Todo("gamma plain h:1"),
+    new Todo("delta plain"),
+  ];
 
-    // Empty query: hidden todos are filtered, contexts are grouped and the
-    // uncategorised `None` header is present.
-    const entries = buildRowsWithCore(todos, "", false, "2026-11-15");
-    const expected = createIndexes(
-      filterBySearch(filterHidden(sortByImportance(todos)), ""),
-    );
+  // Empty query: hidden todos are filtered, contexts are grouped and the
+  // uncategorised `None` header is present.
+  const entries = buildRowsWithCore(todos, "", false, "2026-11-15");
+  const expected = createIndexes(
+    filterBySearch(filterHidden(sortByImportance(todos)), ""),
+  );
 
-    // Not the fallback: the adapter returned rows instead of `undefined`.
-    expect(entries).toBeDefined();
-    expect(debug).not.toHaveBeenCalled();
-    expect(entries?.map((entry) => entry.type)).toEqual(
-      expected.map((entry) => entry.type),
-    );
-    const todoTexts = (list: typeof expected) =>
-      list
-        .filter((entry) => entry.type === IndexType.todo)
-        .map((entry) => entry.todo.text);
-    expect(todoTexts(entries ?? [])).toEqual(todoTexts(expected));
-    expect(entries?.[0]).toEqual({
-      type: IndexType.context,
-      contextName: "None",
-      todoCount: 1,
-    });
+  // Not the fallback: the adapter returned rows instead of `undefined`.
+  expect(entries).toBeDefined();
+  expect(debug).not.toHaveBeenCalled();
+  expect(entries?.map((entry) => entry.type)).toEqual(
+    expected.map((entry) => entry.type),
+  );
+  const todoTexts = (list: typeof expected) =>
+    list
+      .filter((entry) => entry.type === IndexType.todo)
+      .map((entry) => entry.todo.text);
+  expect(todoTexts(entries ?? [])).toEqual(todoTexts(expected));
+  expect(entries?.[0]).toEqual({
+    type: IndexType.context,
+    contextName: "None",
+    todoCount: 1,
+  });
 
-    // Host-normalized terms and views are used: only `alpha two` matches.
-    const searched = buildRowsWithCore(todos, "ALPHA", false, "2026-11-15");
-    expect(todoTexts(searched ?? [])).toEqual(["alpha two @work"]);
-    // `showHidden` reaches the core.
-    const shown = buildRowsWithCore(todos, "", true, "2026-11-15");
-    expect(todoTexts(shown ?? [])).toContain("gamma plain");
-  },
-);
+  // Host-normalized terms and views are used: only `alpha two` matches.
+  const searched = buildRowsWithCore(todos, "ALPHA", false, "2026-11-15");
+  expect(todoTexts(searched ?? [])).toEqual(["alpha two @work"]);
+  // `showHidden` reaches the core.
+  const shown = buildRowsWithCore(todos, "", true, "2026-11-15");
+  expect(todoTexts(shown ?? [])).toContain("gamma plain");
+});

@@ -299,9 +299,13 @@ export const createGeneratedLines = (
   ] as const;
 
   const lines: string[] = [];
-  // Reserve the last slot for the final-sigma probe below, so `count` is the
-  // list length the read limit sees (the benchmark runs at the 10 000 cap).
-  for (let index = 0; index < count - 1; index++) {
+  // The probe is part of the list, so `count` is the list length the read limit
+  // sees (the benchmark runs at the 10 000 cap). Asking for zero lines yields
+  // zero lines; otherwise the probe occupies the last slot.
+  const generated = Math.max(0, Math.trunc(count));
+  if (generated === 0) return lines;
+
+  for (let index = 0; index < generated - 1; index++) {
     // Every seventh line repeats the previous one so equal-key stability and
     // duplicate detection are exercised.
     if (index > 0 && index % 7 === 0) {
