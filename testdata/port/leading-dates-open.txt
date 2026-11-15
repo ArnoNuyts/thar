@@ -5,6 +5,7 @@
 2023-13-01 month thirteen is not a todo date
 2023-02-29 2023 is not a leap year
 2023-04-31 april has thirty days
+2023-01-32 day thirty two is not a todo date
 2023-1-1 unpadded month and day are not date tokens
 2024-02-29 leap day is a valid creation date
 2023-05-04

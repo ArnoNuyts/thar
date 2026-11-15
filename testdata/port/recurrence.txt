@@ -8,4 +8,6 @@ rec:10000d above the maximum
 rec:abc not a recurrence value
 rec:1D uppercase unit is rejected
 rec:1d rec:2w duplicate rec becomes an array
+due:2026-11-01 rec:2d the due date does not move the next due date
+due:2026-12-31 rec:1m the month copy uses the completion time
 x 2024-01-01 2023-12-31 rec:1w done recurring line

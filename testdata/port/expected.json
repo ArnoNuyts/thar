@@ -103,6 +103,49 @@
         }
       ]
     },
+    "bom.txt": {
+      "rawBytes": 42,
+      "kind": "todos",
+      "todoCount": 2,
+      "serialized": {
+        "sha256": "f82b3782fa6b8a25772b903ef3e74ae4953358ab59485814f85d12e46e8e3b48",
+        "bytes": 35
+      },
+      "todos": [
+        {
+          "text": "first todo after a BOM",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "first todo after a BOM",
+          "hash": "first todo after a BOM"
+        },
+        {
+          "text": "second todo",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "second todo",
+          "hash": "second todo"
+        }
+      ]
+    },
     "control-bel.txt": {
       "rawBytes": 10,
       "kind": "error",
@@ -249,7 +292,7 @@
       "kind": "todos",
       "todoCount": 17,
       "serialized": {
-        "sha256": "a385cdc3f7aba5cdd1805865d3513572b20ccee1c5876d2b4406b01959ca57eb",
+        "sha256": "19d0d3a313f6710bf4ce9eefa5e51acc0636b164686d38447904d9be56ddbdf4",
         "bytes": 709
       },
       "todos": [
@@ -485,13 +528,13 @@
           "creationDate": null,
           "projects": [],
           "contexts": [],
-          "tags": [["t", "2023-02-29"]],
+          "tags": [["t", "2027-02-29"]],
           "isDone": false,
           "isHidden": false,
           "isVisibleInOverview": true,
           "isOverdue": false,
-          "toString": "invalid threshold is visible t:2023-02-29",
-          "hash": "invalid threshold is visible t:2023-02-29"
+          "toString": "invalid threshold is visible t:2027-02-29",
+          "hash": "invalid threshold is visible t:2027-02-29"
         },
         {
           "text": "t: a key with no value means visible",
@@ -540,6 +583,81 @@
         "bytes": 1
       },
       "todos": []
+    },
+    "invalid-utf8.txt": {
+      "rawBytes": 154,
+      "kind": "todos",
+      "todoCount": 4,
+      "serialized": {
+        "sha256": "d6f608c0ed5d851ed285227a00338233151094392a5062b54d775f4852bd8cb7",
+        "bytes": 159
+      },
+      "todos": [
+        {
+          "text": "caf� latin-1 byte becomes a replacement character",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "caf� latin-1 byte becomes a replacement character",
+          "hash": "caf� latin-1 byte becomes a replacement character"
+        },
+        {
+          "text": "� leading invalid byte stays in the text",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "� leading invalid byte stays in the text",
+          "hash": "� leading invalid byte stays in the text"
+        },
+        {
+          "text": "truncated � sequence at the end",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "truncated � sequence at the end",
+          "hash": "truncated � sequence at the end"
+        },
+        {
+          "text": "plain ascii line is unchanged",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "plain ascii line is unchanged",
+          "hash": "plain ascii line is unchanged"
+        }
+      ]
     },
     "large-10000.txt": {
       "rawBytes": 344779,
@@ -1001,12 +1119,12 @@
       ]
     },
     "leading-dates-open.txt": {
-      "rawBytes": 419,
+      "rawBytes": 464,
       "kind": "todos",
-      "todoCount": 10,
+      "todoCount": 11,
       "serialized": {
-        "sha256": "7742af994832fe2423507014234e34c77c43f37822bb576eed69411427d9f16e",
-        "bytes": 419
+        "sha256": "db1abaed4b681217d5a81317e33a265cb1aeb578fd956e7a7a168915016386e2",
+        "bytes": 464
       },
       "todos": [
         {
@@ -1122,6 +1240,22 @@
           "hash": "2023-04-31 april has thirty days"
         },
         {
+          "text": "2023-01-32 day thirty two is not a todo date",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "2023-01-32 day thirty two is not a todo date",
+          "hash": "2023-01-32 day thirty two is not a todo date"
+        },
+        {
           "text": "2023-1-1 unpadded month and day are not date tokens",
           "state": "todo",
           "priority": null,
@@ -1178,7 +1312,25 @@
       "serialized": {
         "sha256": "2fe2af3b4fdcdf0a1fdd76661ba8675274513c91b99ecca6d2f1e1e82fc70fa5",
         "bytes": 8193
-      }
+      },
+      "todos": [
+        {
+          "text": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ab",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ab",
+          "hash": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ab"
+        }
+      ]
     },
     "no-trailing-newline.txt": {
       "rawBytes": 68,
@@ -1672,6 +1824,11 @@
         "sha256": "bc7f42913a2b5d07d17ac30c2bad6dfb770aed5fc16999f8ff3693be650f3bce",
         "bytes": 2518
       },
+      "sortedIndexes": [
+        8, 26, 48, 27, 6, 10, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44, 33,
+        50, 16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43, 12, 5,
+        9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+      ],
       "todos": [
         {
           "text": "Plan Q1 goals +work @office",
@@ -2504,12 +2661,12 @@
       ]
     },
     "recurrence.txt": {
-      "rawBytes": 308,
+      "rawBytes": 437,
       "kind": "todos",
-      "todoCount": 11,
+      "todoCount": 13,
       "serialized": {
-        "sha256": "076ba2298b384ff3e8e34ac11fc15208c4f224474fdcf76a156c776bdc472364",
-        "bytes": 304
+        "sha256": "16cac91b40267b1984a7dfb913e6ef529f79babd6be72f43f310b18cae81dafb",
+        "bytes": 433
       },
       "todos": [
         {
@@ -2673,6 +2830,44 @@
           "hash": "duplicate rec becomes an array rec:1d,2w"
         },
         {
+          "text": "the due date does not move the next due date",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [
+            ["due", "2026-11-01"],
+            ["rec", "2d"]
+          ],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": true,
+          "toString": "the due date does not move the next due date due:2026-11-01 rec:2d",
+          "hash": "the due date does not move the next due date due:2026-11-01 rec:2d"
+        },
+        {
+          "text": "the month copy uses the completion time",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [
+            ["due", "2026-12-31"],
+            ["rec", "1m"]
+          ],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "the month copy uses the completion time due:2026-12-31 rec:1m",
+          "hash": "the month copy uses the completion time due:2026-12-31 rec:1m"
+        },
+        {
           "text": "done recurring line",
           "state": "done",
           "priority": null,
@@ -2687,6 +2882,210 @@
           "isOverdue": false,
           "toString": "x 2024-01-01 2023-12-31 done recurring line rec:1w",
           "hash": "x 2024-01-01 2023-12-31 done recurring line rec:1w"
+        }
+      ]
+    },
+    "sort-order.txt": {
+      "rawBytes": 369,
+      "kind": "todos",
+      "todoCount": 12,
+      "serialized": {
+        "sha256": "d68b77dfc15f98ae02cf6da2a2ed8feeb507da7d8ad14bcb1d1cbf3dc870c845",
+        "bytes": 369
+      },
+      "sortedIndexes": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+      "todos": [
+        {
+          "text": "priority A with context @work",
+          "state": "todo",
+          "priority": "A",
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": ["work"],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "(A) priority A with context @work",
+          "hash": "(A) priority A with context @work"
+        },
+        {
+          "text": "plain open without context",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "plain open without context",
+          "hash": "plain open without context"
+        },
+        {
+          "text": "done without context",
+          "state": "done",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": true,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "x done without context",
+          "hash": "x done without context"
+        },
+        {
+          "text": "done with context @work",
+          "state": "done",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": ["work"],
+          "tags": [],
+          "isDone": true,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "x done with context @work",
+          "hash": "x done with context @work"
+        },
+        {
+          "text": "overdue without context",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [["due", "2020-01-01"]],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": true,
+          "toString": "overdue without context due:2020-01-01",
+          "hash": "overdue without context due:2020-01-01"
+        },
+        {
+          "text": "plain open with context @home",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": ["home"],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "plain open with context @home",
+          "hash": "plain open with context @home"
+        },
+        {
+          "text": "open with context @alpha",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": ["alpha"],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "open with context @alpha",
+          "hash": "open with context @alpha"
+        },
+        {
+          "text": "priority B with context @alpha",
+          "state": "todo",
+          "priority": "B",
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": ["alpha"],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "(B) priority B with context @alpha",
+          "hash": "(B) priority B with context @alpha"
+        },
+        {
+          "text": "priority A with context @alpha",
+          "state": "todo",
+          "priority": "A",
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": ["alpha"],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "(A) priority A with context @alpha",
+          "hash": "(A) priority A with context @alpha"
+        },
+        {
+          "text": "overdue with context @alpha",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": ["alpha"],
+          "tags": [["due", "2020-01-01"]],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": true,
+          "toString": "overdue with context @alpha due:2020-01-01",
+          "hash": "overdue with context @alpha due:2020-01-01"
+        },
+        {
+          "text": "brain dump duplicate line",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "brain dump duplicate line",
+          "hash": "brain dump duplicate line"
+        },
+        {
+          "text": "brain dump duplicate line",
+          "state": "todo",
+          "priority": null,
+          "completionDate": null,
+          "creationDate": null,
+          "projects": [],
+          "contexts": [],
+          "tags": [],
+          "isDone": false,
+          "isHidden": false,
+          "isVisibleInOverview": true,
+          "isOverdue": false,
+          "toString": "brain dump duplicate line",
+          "hash": "brain dump duplicate line"
         }
       ]
     },

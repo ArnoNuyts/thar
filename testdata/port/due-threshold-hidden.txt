@@ -12,6 +12,6 @@ h:1 h:0 duplicate h is an array and still hides
 t:2026-11-20 future threshold hides from the overview
 t:2026-11-15 today threshold is visible
 t:2020-01-01 past threshold is visible
-t:2023-02-29 invalid threshold is visible
+t:2027-02-29 invalid threshold is visible
 t: a key with no value means visible
 due:2020-01-01 h:1 t:2026-11-20 hidden and overdue at once
