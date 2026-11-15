@@ -479,41 +479,18 @@ fn copy(app: &mut App, text: &str) {
 }
 
 fn paste(app: &mut App) {
-    let text = match thar_store::clipboard::paste() {
-        Ok(text) => text,
-        Err(error) => {
-            app.push_toast(format!("Paste failed: {error}"));
-            return;
+    match thar_store::clipboard::paste() {
+        Ok(text) => {
+            if text
+                .lines()
+                .any(|line| line.chars().any(|character| !is_safe_todo_char(character)))
+            {
+                app.push_toast("Paste failed: a line contains a control character");
+                return;
+            }
+            app.receive_clipboard(&text);
         }
-    };
-
-    let lines: Vec<String> = text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_owned)
-        .collect();
-
-    if lines.is_empty() {
-        return;
-    }
-    if lines.len() > MAX_PASTE_TODOS {
-        app.push_toast(format!(
-            "Too many todos in one paste; the limit is {MAX_PASTE_TODOS}"
-        ));
-        return;
-    }
-    if lines
-        .iter()
-        .any(|line| line.chars().any(|character| !is_safe_todo_char(character)))
-    {
-        app.push_toast("Paste failed: a line contains a control character");
-        return;
-    }
-
-    let added = app.add_todos(&lines);
-    if !added.is_empty() && app.writable() {
-        app.push_toast(format!("Pasted {} todo(s)", added.len()));
+        Err(error) => app.push_toast(format!("Paste failed: {error}")),
     }
 }
 
