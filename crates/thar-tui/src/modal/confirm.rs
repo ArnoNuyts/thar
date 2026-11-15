@@ -133,12 +133,13 @@ impl ConfirmModal {
 
     /// Content width shared by wrapping and rendering.
     ///
-    /// The modal box keeps one border column plus one padding column on each
-    /// side, so the usable text is four columns narrower than the box.
+    /// The modal box keeps one outer padding column, one accent-bar column and
+    /// one padding column on each side, so the usable text is five columns
+    /// narrower than the box.
     fn content_width(&self) -> u16 {
         self.width_for()
             .resolve(self.terminal_width)
-            .saturating_sub(4)
+            .saturating_sub(5)
     }
 
     fn button_row(&self) -> u16 {
@@ -281,7 +282,13 @@ impl Modal for ConfirmModal {
                 let Some(column) = self.relative_column(rect, mouse) else {
                     return Outcome::Continue;
                 };
-                let index = if column < rect.body.width / 2 { 0 } else { 1 };
+                let content_column = column.saturating_sub(1);
+                let content_width = rect.body.width.saturating_sub(2);
+                let index = if content_column < content_width / 2 {
+                    0
+                } else {
+                    1
+                };
                 self.hovered = Some(index);
                 self.selected = index;
                 self.activate(index)
@@ -463,7 +470,7 @@ mod tests {
         let button_y = rect.body.y + modal.button_row();
         let left = MouseInput {
             kind: MouseKind::LeftClick,
-            x: rect.area.x + 2,
+            x: rect.area.x + 3,
             y: button_y + 1,
             shift: false,
         };

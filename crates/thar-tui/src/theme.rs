@@ -50,8 +50,8 @@ pub const TAG_CONTEXT: Color = PRIMARY;
 /// `+project` tag colour.
 pub const TAG_PROJECT: Color = INFO;
 
-/// Background of a modal surface.
-pub const MODAL_BACKGROUND: Color = rgb(0x202020);
+/// Background of a modal surface (`COLORS.modalBackground`).
+pub const MODAL_BACKGROUND: Color = rgb(0x262626);
 /// Background of a selected row in a menu or calendar.
 pub const SELECTED_BACKGROUND: Color = rgb(0x3A3A3A);
 /// Background of a primary button.

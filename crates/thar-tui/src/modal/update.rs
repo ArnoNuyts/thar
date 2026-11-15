@@ -197,7 +197,7 @@ impl UpdateModal {
     fn content_width(&self) -> u16 {
         self.width_for()
             .resolve(self.terminal_width)
-            .saturating_sub(4)
+            .saturating_sub(5)
     }
 
     fn button_row(&self) -> u16 {
@@ -256,8 +256,8 @@ impl UpdateModal {
     /// Proportional action index for a relative cell column.
     fn index_at(&self, rect: ModalRect, column: u16) -> usize {
         let actions = self.actions().len().max(1);
-        let width = usize::from(rect.body.width.max(1));
-        let column = usize::from(column);
+        let width = usize::from(rect.body.width.saturating_sub(2).max(1));
+        let column = usize::from(column.saturating_sub(1));
         (column * actions / width).min(actions - 1)
     }
 

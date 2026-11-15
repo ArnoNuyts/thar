@@ -160,6 +160,21 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
                 if contents.trim().is_empty() {
                     continue;
                 }
+                // Draw vertical bars as rectangles. The mono fallback font's
+                // `┃` is shorter than the 20px cell, so a run of them reads as
+                // a dashed line instead of the solid accent bar a terminal
+                // paints. A rect also keeps single `│` borders continuous.
+                if let Some(width) = vertical_bar_width(contents) {
+                    svg.push_str(&format!(
+                        "    <rect x=\"{}\" y=\"{}\" width=\"{width}\" height=\"{CELL_HEIGHT}\" fill=\"{}\" />\n",
+                        MARGIN
+                            + u32::from(*column) * CELL_WIDTH
+                            + (CELL_WIDTH - width) / 2,
+                        MARGIN + u32::from(row) * CELL_HEIGHT,
+                        hex(run.foreground),
+                    ));
+                    continue;
+                }
                 svg.push_str(&format!(
                     "    <text x=\"{}\" y=\"{}\" {attributes} xml:space=\"preserve\">{}</text>\n",
                     MARGIN + u32::from(*column) * CELL_WIDTH,
@@ -172,6 +187,18 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
 
     svg.push_str("  </g>\n</svg>\n");
     svg
+}
+
+/// Width of a vertical bar glyph, or `None` for ordinary text.
+///
+/// `┃` (U+2503) is the thick accent bar; `│` (U+2502) is the single box border
+/// used by the suggestion popup.
+fn vertical_bar_width(contents: &str) -> Option<u32> {
+    match contents {
+        "┃" => Some(5),
+        "│" => Some(1),
+        _ => None,
+    }
 }
 
 /// One run of cells that share a foreground, background, bold and dim.
@@ -344,7 +371,7 @@ fn cp6_paste_fix_screenshot() {
 mod tests {
     use std::num::NonZeroU16;
 
-    use super::runs;
+    use super::{runs, vertical_bar_width};
 
     fn cells(input: &str, cols: u16) -> Vec<(u16, String)> {
         let mut parser = vt100::Parser::new(
@@ -368,6 +395,13 @@ mod tests {
         );
         assert_eq!(cells[0].1, "日");
         assert_eq!(cells[3].1, "a");
+    }
+
+    #[test]
+    fn vertical_bars_are_drawn_as_continuous_rects() {
+        assert_eq!(vertical_bar_width("┃"), Some(5));
+        assert_eq!(vertical_bar_width("│"), Some(1));
+        assert_eq!(vertical_bar_width("|"), None);
     }
 
     #[test]

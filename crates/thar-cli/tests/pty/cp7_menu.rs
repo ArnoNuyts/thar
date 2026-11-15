@@ -202,7 +202,7 @@ fn cp7_menu_screenshot() {
 }
 
 #[test]
-fn the_delete_confirmation_at_80x24_keeps_a_pad_before_the_right_border() {
+fn the_delete_confirmation_at_80x24_uses_the_left_bar_chrome() {
     let directory = TempDir::new("cp7-modal-padding-80");
     let path = directory.write("todo.txt", b"one\ntwo\n");
     let mut session = Session::open_write_sized(&path, 80, 24);
@@ -213,18 +213,29 @@ fn the_delete_confirmation_at_80x24_keeps_a_pad_before_the_right_border() {
     session.wait_text("Delete Todo");
 
     let snapshot = session.snapshot();
-    let line = snapshot
+    let title = snapshot
         .text
         .lines()
-        .find(|line| line.contains("delete this"))
-        .unwrap_or_else(|| panic!("no wrapped message:\n{}", snapshot.text));
+        .find(|line| line.contains("Delete Todo"))
+        .unwrap_or_else(|| panic!("no title row:\n{}", snapshot.text));
     assert!(
-        line.trim_end().ends_with("this │"),
-        "the message touches the right border: {line:?}"
+        title.trim_start_matches(' ').starts_with("┃ Delete Todo"),
+        "the title is not a primary chip after the accent bar: {title:?}"
     );
+    for glyph in ['│', '┌', '┐', '└', '┘'] {
+        assert!(
+            !snapshot.text.contains(glyph),
+            "box glyph {glyph} in:\n{}",
+            snapshot.text
+        );
+    }
     assert!(
-        !line.contains("this│"),
-        "no pad before the border: {line:?}"
+        snapshot
+            .text
+            .lines()
+            .any(|line| line.contains("this todo?")),
+        "the wrapped message is missing:\n{}",
+        snapshot.text
     );
 
     session.send(b"\x1b");
