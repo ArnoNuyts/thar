@@ -170,14 +170,9 @@ export class Todo {
    */
   static fromParts(parts: TodoParts): Todo {
     const next = Object.create(Todo.prototype) as Todo;
-    // `id` is readonly on the instance; define it here instead of assigning
-    // through the constructor, which would have to parse `text` again.
-    Object.defineProperty(next, "id", {
-      value: Symbol(String(nextTodoId++)),
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    });
+    // `id` is readonly for callers; this factory is the one place that assigns
+    // it without going through the constructor (which would parse `text`).
+    (next as { id: symbol }).id = Symbol(String(nextTodoId++));
     next._text = parts.text;
     next._state = parts.state;
     next._priority = parts.priority;

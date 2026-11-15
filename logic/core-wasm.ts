@@ -32,6 +32,7 @@ import {
   TodoLineCountLimitError,
   TodoLineLengthLimitError,
 } from "./limits.ts";
+import { CONTEXT_REGEX, PROJECT_REGEX } from "./patterns.ts";
 import { filterBySearch, filterHidden, sortByImportance } from "./Todos.ts";
 import type { Todos } from "./Todos.ts";
 import { Todo, type TodoParts } from "./todo.ts";
@@ -61,8 +62,11 @@ import { Todo, type TodoParts } from "./todo.ts";
  * All five are defensive: a missing, unbuildable or broken package, a
  * malformed envelope, an absent export, a rejected `today`, and a host collation
  * locale the Rust sort does not implement all resolve to `undefined` plus at
- * most one debug log. Nothing here may throw into the TUI, and nothing here
- * writes to the todo file. Debug lines never include the parse input: a todo
+ * most one debug log. The one deliberate exception is a proven read rejection:
+ * {@link parseTodosWithCore} throws the same `TodoFileValidationError` the
+ * TypeScript reader would have thrown, so invalid files keep their exact user
+ * error. Nothing else may throw into the TUI, and nothing here writes to the
+ * todo file. Debug lines never include the parse input: a todo
  * line is its own `hash`, so a Node `JSON.parse` snippet would leak content.
  * For the same reason a row-builder or serializer failure logs only the error
  * class or the typed error code, never the todo list or the request body.
@@ -552,6 +556,27 @@ const nonBlankLineCount = (text: string): number =>
     .reduce((count, line) => (line.trim().length > 0 ? count + 1 : count), 0);
 
 /**
+ * The `@context` or `+project` names the constructor would find in `text`.
+ *
+ * The serialized line cannot show these fields directly (they are part of the
+ * body, not tags), so the runtime round-trip guard re-derives them with the same
+ * patterns the constructor uses. Without this, a package that agrees on bytes
+ * but disagrees on `projects`/`contexts` would silently change `createIndexes`
+ * grouping.
+ */
+const derivedNames = (text: string, pattern: RegExp): Set<string> => {
+  const names = new Set<string>();
+  for (const match of text.matchAll(pattern)) {
+    const name = match.groups?.name;
+    if (name !== undefined) names.add(name);
+  }
+  return names;
+};
+
+const sameNames = (left: Set<string>, right: Set<string>): boolean =>
+  left.size === right.size && [...left].every((name) => right.has(name));
+
+/**
  * Map a Rust rejection back to the exact TypeScript error.
  *
  * The numeric fields are re-checked by regenerating the TypeScript message: a
@@ -566,6 +591,8 @@ const coreValidationError = (
   let mapped: TodoFileValidationError;
   switch (error.code) {
     case "FILE_TOO_LARGE":
+      // Defence in depth: both callers check the decoded byte count before
+      // asking Rust, so this mapping is unreachable in production today.
       if (
         !isPositiveInteger(error.actualBytes) ||
         !isPositiveInteger(error.maxBytes)
@@ -653,7 +680,11 @@ export const parseTodosWithCore = (
   if (!parsed.ok) {
     const mapped = coreValidationError(parsed.error);
     if (mapped) throw mapped;
-    logParseFallback(`rejected ${parsed.error.name}/${parsed.error.code}`);
+    // Envelope strings are only type-checked, so bound them like every other
+    // diagnostic instead of echoing an arbitrarily long package value.
+    const name = parsed.error.name.slice(0, 32);
+    const code = parsed.error.code.slice(0, 32);
+    logParseFallback(`rejected ${name}/${code}`);
     return undefined;
   }
 
@@ -670,7 +701,9 @@ export const parseTodosWithCore = (
     const record = parsed.todos[index];
     if (record.id !== index) {
       logParseFallback(
-        `parseFile record ${index} has load id ${String(record.id)}`,
+        record.id === undefined
+          ? `parseFile record ${index} is missing its load id`
+          : `parseFile record ${index} has load id ${String(record.id)}`,
       );
       return undefined;
     }
@@ -682,6 +715,17 @@ export const parseTodosWithCore = (
     const todo = Todo.fromParts(parts);
     if (todo.toString() !== record.toString || todo.getHash() !== record.hash) {
       logParseFallback(`parseFile record ${index} does not round-trip`);
+      return undefined;
+    }
+    // `projects`/`contexts` are body fields, so the byte round-trip above
+    // cannot see a disagreement. Re-derive them with the constructor's patterns.
+    if (
+      !sameNames(derivedNames(record.text, PROJECT_REGEX), todo.projects) ||
+      !sameNames(derivedNames(record.text, CONTEXT_REGEX), todo.contexts)
+    ) {
+      logParseFallback(
+        `parseFile record ${index} has inconsistent projects/contexts`,
+      );
       return undefined;
     }
     todos.push(todo);

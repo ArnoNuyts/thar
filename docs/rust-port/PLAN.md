@@ -517,6 +517,13 @@ parse, no log.
   byte-identically, and an unprovable rejection all keep the TypeScript result
   after one bounded, content-free debug line. `THAR_SHADOW` is superseded in
   rust mode: the read path already parsed with Rust, so it does not parse twice.
+- **Runtime grouping guard.** A byte round-trip cannot see `projects`/`contexts`
+  (they are body fields, not tags), so the adapter re-derives both name sets
+  from `record.text` with the constructor's `PROJECT_REGEX`/`CONTEXT_REGEX` and
+  rejects a record whose sets differ. Without this, a package built from another
+  commit could silently change `createIndexes` grouping.
+- **WASM size** after the parse surface: **84 632 bytes raw / 37 328 bytes
+  gzip** (+443 / +138 over CP4; budget 250 KB / 100 KB).
 - **Contract evidence.** `tools/port/parse.ts` + `parse-cli.ts`: **28 records /
   3 931 057 bytes, 0 diffs** for both the self candidate and the wired WASM
   candidate (20 parseable fixtures including `large-10000.txt`, plus CP1's eight
@@ -980,7 +987,8 @@ batch core measures 49 568 bytes raw / 22 200 bytes gzip after wasm-opt, so the
 Phase 2 target (≤ 100 KB raw / ≤ 40 KB gzip) is already met; the workflow keeps
 the 250 KB / 100 KB ceiling until the CP3 row and command surface lands, then
 tightens the constants and the README together. After CP3b2b it is 81 831 /
-35 986, and after CP4's write surface 84 189 / 37 190.
+35 986, after CP4's write surface 84 189 / 37 190, and after CP3b2c's parse
+surface 84 632 / 37 328.
 
 ### 9.2 Add in later phases
 

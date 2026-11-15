@@ -1568,6 +1568,17 @@ module.exports = {
           reason: "malformed",
         },
         {
+          name: "wrong-projects",
+          response: {
+            ok: true,
+            todos: [
+              { ...baseRecords[0], projects: ["different"] },
+              baseRecords[1],
+            ],
+          },
+          reason: "inconsistent projects/contexts",
+        },
+        {
           name: "missing-flags",
           response: {
             ok: true,
