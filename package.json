@@ -58,7 +58,8 @@
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt --check .",
     "check": "npm run typecheck && npm run lint && npm run fmt:check",
-    "doctor": "react-doctor ."
+    "doctor": "react-doctor .",
+    "bench:rows": "vite-node scripts/bench-rows.ts"
   },
   "dependencies": {
     "chalk": "^6.0.1",
