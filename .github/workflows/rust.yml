@@ -19,6 +19,16 @@ on:
       - "logic/core-wasm.ts"
       - "logic/limits.ts"
       - "unit-tests/core-wasm.test.ts"
+      # The rows contract runs the production pipeline, so its real
+      # dependencies must trigger this job too; a change in any of them can
+      # break the oracle without touching tools/port/**.
+      - "logic/indexes.ts"
+      - "logic/Todos.ts"
+      - "logic/todo.ts"
+      - "logic/todo-file-validation.ts"
+      - "utils/search-utils.ts"
+      - "types/enums.ts"
+      - "unit-tests/port-rows.test.ts"
       # The wasm job runs `npm ci`, `vitest` and `vite-node`, so dependency,
       # lockfile and Vite/TypeScript config changes can break it. Path filters
       # are workflow-level, so a Node-only dependency bump re-runs the cargo
@@ -40,6 +50,13 @@ on:
       - "logic/core-wasm.ts"
       - "logic/limits.ts"
       - "unit-tests/core-wasm.test.ts"
+      - "logic/indexes.ts"
+      - "logic/Todos.ts"
+      - "logic/todo.ts"
+      - "logic/todo-file-validation.ts"
+      - "utils/search-utils.ts"
+      - "types/enums.ts"
+      - "unit-tests/port-rows.test.ts"
       # Keep in sync with the push filter above.
       - "package.json"
       - "package-lock.json"
