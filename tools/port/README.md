@@ -12,6 +12,7 @@ here.
   `tools/port/adapter.ts` (parse/serialize adapter + mutations),
   `tools/port/compare.ts` (diff engine), `tools/port/golden.ts` (CP0 check).
 - Tests: [`unit-tests/port-contract.test.ts`](../../unit-tests/port-contract.test.ts).
+- WASM candidate (CP2b): `tools/port/candidates/wasm.mjs`.
 
 ## Commands
 
@@ -31,6 +32,10 @@ npx vite-node tools/port/contract.ts --check --candidate "cargo run --bin contra
 npx vite-node tools/port/contract.ts --check --candidate-file candidate.jsonl
 
 npm run port:selftest                       # seeded-bug proof
+
+# CP2b: the Rust core compiled to WASM as the candidate (needs wasm-pack)
+wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg
+npm run port:contract:wasm                  # golden + the WASM candidate
 ```
 
 `npm run port:contract` prints npm's own `> thar@0.6.1 port:contract` banner on
@@ -251,6 +256,41 @@ instead of decoding to U+FFFD and blaming the JSON.
 At CP2 the Rust crate can either implement the same CLI or write a precomputed
 JSONL file that is compared with `--candidate-file`.
 
+### WASM candidate (CP2b)
+
+`tools/port/candidates/wasm.mjs` is a plain Node ESM candidate over the Rust
+core; no build step and no TypeScript loader:
+
+```sh
+wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg
+npm run port:contract:wasm
+# equivalent:
+npx vite-node tools/port/contract.ts --check --verify-golden \
+  --candidate "node tools/port/candidates/wasm.mjs"
+```
+
+- It loads `crates/thar-wasm/pkg/thar_wasm.js` (resolved from the repository
+  root, not the working directory) and exits 1 with the build command when the
+  package is missing, so a forgotten `wasm-pack build` is never mistaken for a
+  contract mismatch.
+- Fixtures are read as raw bytes and decoded with `Buffer#toString("utf8")`
+  (lossy), exactly like the reader; the raw-file SHA-256 comes from
+  `node:crypto` over those bytes.
+- `--clock` supplies the pinned day for `isOverdue`/`isVisibleInOverview`
+  (`YYYY-MM-DD` prefix); an invalid value is a candidate error, not a panic.
+- The three read limits come from `THAR_MAX_FILE_BYTES`,
+  `THAR_MAX_READ_TODOS` and `THAR_MAX_LINE_CHARS` with the production defaults
+  and validation, and are passed to `parseFileWithLimits` so a candidate running
+  with different limits cannot match.
+- The whole-file `serialized` field is derived from the records as CP1 defines
+  it: `todos.map(toString).join("\n") + "\n"`. The write-time control-character
+  guard is not part of that definition (see "Coverage limits").
+
+`npm run port:contract:check -- --candidate "…"` cannot be used for this: that
+script already passes `--candidate-self`, and the CLI accepts exactly one
+candidate selector. Use `port:contract:wasm` (or drop `--candidate-self` from an
+explicit `vite-node` invocation).
+
 ## Seeded bugs (`tools/port/self-test.mjs`)
 
 Mutations are applied in `tools/port/adapter.ts` — in the harness's
@@ -308,7 +348,13 @@ oracle on this corpus, not that it is a complete port.
 
 `.github/workflows/ci.yml` has a `port-contract` job (ubuntu-latest, 10 minute
 timeout) that runs `npm ci`, `npm run port:contract:check` and
-`npm run port:selftest`. It is independent of the existing matrix jobs.
+`npm run port:selftest`. It is independent of the existing matrix jobs and is
+the oracle.
+
+`.github/workflows/rust.yml`'s `wasm` job builds `thar-wasm`, enforces the size
+budget, runs the Node smoke test, then runs `npm ci` and
+`npm run port:contract:wasm`. The Node matrix does not require Rust or a built
+`pkg/`; the WASM job is the only place the candidate runs in CI.
 
 ## Maintaining
 

@@ -51,6 +51,7 @@
     "bench:list": "vite-node scripts/benchmark-list.tsx",
     "port:contract": "vite-node tools/port/contract.ts",
     "port:contract:check": "vite-node tools/port/contract.ts --check --verify-golden --candidate-self",
+    "port:contract:wasm": "vite-node tools/port/contract.ts --check --verify-golden --candidate \"node tools/port/candidates/wasm.mjs\"",
     "port:selftest": "node tools/port/self-test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint .",
