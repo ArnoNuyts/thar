@@ -15,8 +15,12 @@ thar-core.workspace = true
 wasm-bindgen.workspace = true
 
 # wasm-pack 0.13.1 bundles binaryen 117, whose defaults predate the post-MVP
-# features rustc 1.99 emits (bulk memory first). Enable them explicitly so
-# `wasm-pack build` works on every machine without a newer binaryen.
+# features rustc 1.99 emits (bulk memory first). Enable them explicitly so the
+# bundled fallback optimizer works on every machine.
+#
+# These flags only apply to that bundled fallback: wasm-pack uses a system
+# `wasm-opt` when one is on `PATH`, and CI installs binaryen from apt. Keep both
+# paths working, because a developer without binaryen gets the bundled one.
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = [
   "-O",

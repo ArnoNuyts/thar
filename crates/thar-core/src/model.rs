@@ -10,20 +10,48 @@
 //! - tag keys keep insertion order and duplicate keys become
 //!   [`TagValue::Many`];
 //! - tags are stripped from the text and serialized at the end.
+//!
+//! Everything here takes `&str` that is already decoded. The Node reader decodes
+//! file bytes with [`String::from_utf8_lossy`], so invalid UTF-8 reaches this
+//! module as `U+FFFD` and is treated as ordinary text; the crate never rejects
+//! it. Keeping that boundary lossy is what makes the corpus byte-parity hold
+//! for `invalid-utf8.txt`.
+//!
+//! TODO(CP3): the immutable setters (`toggle`, `set_due`, `set_priority`, …) are
+//! deliberately not here yet. When CP2b/CP3 adds them, keep them encapsulated
+//! (private fields, `fn(self) -> Self` builders) rather than exposing mutable
+//! fields, so `dates_in_text`/`completion_date_in_text` cannot be desynchronized
+//! from the text by a caller.
 
 use core::fmt;
+use core::fmt::Write as _;
 
 use crate::date::TodoDate;
-use crate::js::js_trim;
-use crate::model::TagValue::{Many, One};
+use crate::js::{is_js_whitespace, js_trim};
 use crate::scan::{ScannedTag, scan_contexts, scan_prefix, scan_projects, scan_tags};
+use TagValue::{Many, One};
 
 /// Stable todo identifier, assigned by parse/load order.
 ///
-/// The TypeScript app uses `symbol` ids today; the adapter maps between the two
-/// during the incremental phase.
+/// Encapsulated like the other value newtypes: the adapter converts it to a JS
+/// number at the boundary. The TypeScript app uses `symbol` ids today; the
+/// adapter maps between the two during the incremental phase.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TodoId(pub u64);
+pub struct TodoId(u64);
+
+impl TodoId {
+    /// Wrap a load-order index.
+    #[must_use]
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    /// The numeric id, safe to hand to JavaScript as a `number`.
+    #[must_use]
+    pub const fn value(self) -> u64 {
+        self.0
+    }
+}
 
 /// Completion state of a todo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -36,44 +64,31 @@ pub enum State {
 
 impl State {
     /// True for [`State::Done`].
+    #[must_use]
     pub const fn is_done(self) -> bool {
         matches!(self, Self::Done)
     }
 }
 
-impl fmt::Display for State {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::Todo => "todo",
-            Self::Done => "done",
-        })
-    }
-}
-
 /// A validated `(A)` .. `(Z)` priority.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Priority(u8);
+pub struct Priority(char);
 
 impl Priority {
     /// Build a priority from an uppercase ASCII letter.
+    #[must_use = "a rejected letter is a deliberate None"]
     pub const fn new(letter: char) -> Option<Self> {
-        let letter = letter as u32;
-        if letter >= 'A' as u32 && letter <= 'Z' as u32 {
-            Some(Self(letter as u8))
+        if letter.is_ascii_uppercase() {
+            Some(Self(letter))
         } else {
             None
         }
     }
 
     /// The letter, always `A`..`Z`.
+    #[must_use]
     pub const fn as_char(self) -> char {
-        self.0 as char
-    }
-}
-
-impl fmt::Display for Priority {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_char())
+        self.0
     }
 }
 
@@ -101,6 +116,7 @@ impl TagValue {
     }
 
     /// The value when the key occurs exactly once.
+    #[must_use = "a repeated key is a deliberate None"]
     pub fn as_single(&self) -> Option<&str> {
         match self {
             Self::One(value) => Some(value),
@@ -110,26 +126,15 @@ impl TagValue {
 
     /// Append a duplicate occurrence, converting `One` into `Many`.
     fn push_value(&mut self, value: String) {
-        if let Self::Many(values) = self {
-            values.push(value);
-            return;
-        }
-        if let Self::One(first) = self {
-            let first = core::mem::take(first);
-            *self = Self::Many(vec![first, value]);
-        }
-    }
-}
-
-impl fmt::Display for TagValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (index, value) in self.values().enumerate() {
-            if index > 0 {
-                f.write_str(",")?;
+        match self {
+            Self::Many(values) => values.push(value),
+            Self::One(first) => {
+                // One `match` instead of two sequential `if let`s: reaching
+                // this arm proves the value is `One`.
+                let first = core::mem::take(first);
+                *self = Self::Many(vec![first, value]);
             }
-            f.write_str(value)?;
         }
-        Ok(())
     }
 }
 
@@ -171,8 +176,11 @@ impl Todo {
     /// Parse one raw line.
     ///
     /// This never fails: every `&str` is accepted, including control
-    /// characters and blank lines. File-level policy (limits, CRLF, rejected
-    /// controls) lives in [`crate::validate_file_content`].
+    /// characters and blank lines. The input must already be decoded text (the
+    /// Node reader decodes file bytes lossily, so invalid UTF-8 is `U+FFFD`
+    /// here). File-level policy (limits, CRLF, rejected controls) lives in
+    /// [`crate::validate_file_content`].
+    #[must_use]
     pub fn parse_line(line: &str, id: TodoId) -> Self {
         let prefix = scan_prefix(line);
         let date_section = &line[prefix.date_start_index..];
@@ -241,9 +249,12 @@ impl Todo {
         self.projects = scan_projects(text);
         self.contexts = scan_contexts(text);
 
-        let (scanned, stripped) = scan_tags(text);
+        // `scan_tags` owns the stripped copy, so trim it in place instead of
+        // allocating a second `String` for the trimmed slice.
+        let (scanned, mut stripped) = scan_tags(text);
         self.tags = collect_tags(scanned);
-        self.text = js_trim(&stripped).to_owned();
+        trim_in_place(&mut stripped);
+        self.text = stripped;
     }
 
     /// Serialize back to a `todo.txt` line.
@@ -251,48 +262,18 @@ impl Todo {
     /// Order: `x `, `(P) `, completion date (unless it is in the text),
     /// creation date (unless the dates are in the text), text, and one leading
     /// space plus the space-joined tags when any tag exists.
+    ///
+    /// This is exactly [`Display`](fmt::Display) for [`Todo`]; the method stays
+    /// because it reads better at call sites and names the domain operation.
+    #[must_use]
     pub fn serialize(&self) -> String {
         let mut line = String::with_capacity(self.text.len() + 32);
-
-        if self.state.is_done() {
-            line.push_str("x ");
-        }
-        if let Some(priority) = self.priority {
-            line.push('(');
-            line.push(priority.as_char());
-            line.push_str(") ");
-        }
-        if !self.completion_date_in_text
-            && let Some(date) = self.completion_date
-        {
-            line.push_str(&date.to_string());
-            line.push(' ');
-        }
-        if !self.dates_in_text
-            && let Some(date) = self.creation_date
-        {
-            line.push_str(&date.to_string());
-            line.push(' ');
-        }
-
-        line.push_str(&self.text);
-
-        if !self.tags.is_empty() {
-            line.push(' ');
-            for (index, (key, value)) in self.tags.iter().enumerate() {
-                if index > 0 {
-                    line.push(' ');
-                }
-                line.push_str(key);
-                line.push(':');
-                line.push_str(&value.to_string());
-            }
-        }
-
+        write!(&mut line, "{self}").expect("writing to a String cannot fail");
         line
     }
 
     /// True for completed todos.
+    #[must_use]
     pub fn is_done(&self) -> bool {
         self.state.is_done()
     }
@@ -301,6 +282,7 @@ impl Todo {
     ///
     /// A repeated `h` key is always hidden, matching the array-valued tag
     /// behaviour in the TypeScript model.
+    #[must_use]
     pub fn is_hidden(&self) -> bool {
         match self.tag("h") {
             None => false,
@@ -312,6 +294,7 @@ impl Todo {
     /// True when `due` is a valid date and `due <= today`.
     ///
     /// A missing, malformed, or array-valued `due` tag is never overdue.
+    #[must_use]
     pub fn is_overdue(&self, today: TodoDate) -> bool {
         self.date_tag("due").is_some_and(|due| due <= today)
     }
@@ -319,17 +302,25 @@ impl Todo {
     /// True when the `t` (threshold) tag does not hide the todo.
     ///
     /// A missing or malformed threshold does not hide the todo.
+    #[must_use]
     pub fn is_passed_threshold(&self, today: TodoDate) -> bool {
         self.date_tag("t")
             .is_none_or(|threshold| threshold <= today)
     }
 
     /// True when the todo is neither hidden nor inside its threshold window.
+    #[must_use]
     pub fn is_visible_in_overview(&self, today: TodoDate) -> bool {
         !self.is_hidden() && self.is_passed_threshold(today)
     }
 
     /// Look up a tag by key; the first occurrence wins.
+    ///
+    /// TODO(CP3): this is a linear scan per lookup, so a line with many tags
+    /// costs O(tags²) across `is_hidden`/`is_overdue`/`is_passed_threshold`.
+    /// Replace the `Vec<(String, TagValue)>` with an insertion-ordered
+    /// key→index map once row building does the same lookups per frame.
+    #[must_use = "a missing tag is meaningful"]
     pub fn tag(&self, key: &str) -> Option<&TagValue> {
         self.tags
             .iter()
@@ -340,6 +331,7 @@ impl Todo {
     /// Parse the tag `key` as a strict `YYYY-MM-DD` date.
     ///
     /// Array-valued tags are not dates.
+    #[must_use = "an absent or array-valued tag is a deliberate None"]
     pub fn date_tag(&self, key: &str) -> Option<TodoDate> {
         self.tag(key)
             .and_then(TagValue::as_single)
@@ -347,9 +339,64 @@ impl Todo {
     }
 
     /// Identity of the todo, identical to its serialized line.
+    #[must_use]
     pub fn hash(&self) -> String {
         self.serialize()
     }
+}
+
+impl fmt::Display for Todo {
+    /// The canonical `todo.txt` line, written without intermediate `String`s.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.state.is_done() {
+            f.write_str("x ")?;
+        }
+        if let Some(priority) = self.priority {
+            write!(f, "({}) ", priority.as_char())?;
+        }
+        if !self.completion_date_in_text
+            && let Some(date) = self.completion_date
+        {
+            write!(f, "{date} ")?;
+        }
+        if !self.dates_in_text
+            && let Some(date) = self.creation_date
+        {
+            write!(f, "{date} ")?;
+        }
+
+        f.write_str(&self.text)?;
+
+        if !self.tags.is_empty() {
+            f.write_str(" ")?;
+            for (index, (key, value)) in self.tags.iter().enumerate() {
+                if index > 0 {
+                    f.write_str(" ")?;
+                }
+                f.write_str(key)?;
+                f.write_str(":")?;
+                for (value_index, value) in value.values().enumerate() {
+                    if value_index > 0 {
+                        f.write_str(",")?;
+                    }
+                    f.write_str(value)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Trim JavaScript whitespace from both ends of an owned string in place.
+fn trim_in_place(text: &mut String) {
+    let Some(start) = text.find(|character| !is_js_whitespace(character)) else {
+        text.clear();
+        return;
+    };
+    let end = text.trim_end_matches(is_js_whitespace).len();
+    text.truncate(end);
+    text.drain(..start);
 }
 
 /// Group scanned tags into insertion-ordered values.
@@ -372,13 +419,14 @@ fn collect_tags(scanned: Vec<ScannedTag<'_>>) -> Vec<(String, TagValue)> {
 /// Serialize todos exactly as the file writer does: lines joined by `\n` plus
 /// one trailing newline. Serializing no todos yields `"\n"`, matching
 /// `lines.join("\n") + "\n"` in `logic/todo-file-helpers.ts`.
+#[must_use]
 pub fn serialize_file(todos: &[Todo]) -> String {
     let mut output = String::new();
     for (index, todo) in todos.iter().enumerate() {
         if index > 0 {
             output.push('\n');
         }
-        output.push_str(&todo.serialize());
+        write!(&mut output, "{todo}").expect("writing to a String cannot fail");
     }
     output.push('\n');
     output
@@ -390,7 +438,7 @@ mod tests {
     use crate::date::TodoDate;
 
     fn parse(line: &str) -> Todo {
-        Todo::parse_line(line, TodoId(0))
+        Todo::parse_line(line, TodoId::new(0))
     }
 
     fn today() -> TodoDate {
@@ -557,6 +605,32 @@ mod tests {
     }
 
     #[test]
+    fn js_whitespace_and_bom_are_trimmed_but_nel_is_text() {
+        // `bom.txt`: the BOM is not stripped by the reader, only by trim.
+        let bom = parse("\u{FEFF}first todo after a BOM");
+        assert_eq!(bom.text, "first todo after a BOM");
+        assert_eq!(bom.serialize(), "first todo after a BOM");
+
+        // The rest of the JS `\s` set behaves like `String.prototype.trim()`.
+        for whitespace in ["\u{00A0}", "\u{2003}", "\u{3000}", "\u{2029}"] {
+            let todo = parse(&format!(
+                "{whitespace}text with{whitespace}tag:x{whitespace}"
+            ));
+            assert_eq!(todo.text, "text with", "whitespace {whitespace:?}");
+            assert_eq!(
+                todo.tags,
+                vec![("tag".to_owned(), TagValue::One("x".to_owned()))]
+            );
+            assert_eq!(todo.serialize(), "text with tag:x");
+        }
+
+        // U+0085 (NEL) is not ECMAScript whitespace, so it stays in the text.
+        let nel = parse("\u{0085}kept\u{0085}");
+        assert_eq!(nel.text, "\u{0085}kept\u{0085}");
+        assert_eq!(nel.serialize(), "\u{0085}kept\u{0085}");
+    }
+
+    #[test]
     fn tabs_survive_inside_text() {
         let todo = parse("tab\tinside\tline");
         assert_eq!(todo.text, "tab\tinside\tline");
@@ -572,7 +646,7 @@ mod tests {
 
     #[test]
     fn ids_are_kept() {
-        let todo = Todo::parse_line("task", TodoId(42));
-        assert_eq!(todo.id, TodoId(42));
+        let todo = Todo::parse_line("task", TodoId::new(42));
+        assert_eq!(todo.id, TodoId::new(42));
     }
 }

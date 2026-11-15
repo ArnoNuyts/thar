@@ -17,7 +17,7 @@ fn format_code_point(code_point: u32) -> String {
 /// The variants mirror the four `TodoFileValidationError` subclasses in
 /// `logic/limits.ts`. `code` is the stable machine-readable code and `name`
 /// matches the TypeScript class name so the corpus can assert both.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoreError {
     /// The file is larger than `max_file_bytes` (`FILE_TOO_LARGE`).
     FileTooLarge {
@@ -54,6 +54,7 @@ pub enum CoreError {
 
 impl CoreError {
     /// Stable machine-readable error code, identical to the TS `code` field.
+    #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
             Self::FileTooLarge { .. } => "FILE_TOO_LARGE",
@@ -63,7 +64,12 @@ impl CoreError {
         }
     }
 
-    /// TypeScript class name, used by the corpus expectations.
+    /// TypeScript class name, kept only for adapter compatibility.
+    ///
+    /// The Rust error type is the source of truth; `name` exists so the CP1
+    /// contract and the transitional TS adapter can assert the original class
+    /// name. Nothing in `thar-core` branches on it.
+    #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
             Self::FileTooLarge { .. } => "TodoFileTooLargeError",

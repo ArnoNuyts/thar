@@ -23,22 +23,9 @@ pub struct TodoDate {
 }
 
 impl TodoDate {
-    /// Smallest representable date (`0001-01-01`).
-    pub const MIN: Self = Self {
-        year: 1,
-        month: 1,
-        day: 1,
-    };
-
-    /// Largest representable date (`9999-12-31`).
-    pub const MAX: Self = Self {
-        year: 9999,
-        month: 12,
-        day: 31,
-    };
-
     /// Build a date, returning `None` for an invalid calendar day or a year
     /// outside 1..=9999.
+    #[must_use = "an invalid calendar day is a deliberate None"]
     pub const fn new(year: u16, month: u8, day: u8) -> Option<Self> {
         if year == 0 || year > 9999 {
             return None;
@@ -56,6 +43,7 @@ impl TodoDate {
     ///
     /// Leading or trailing whitespace is not accepted, and neither is an
     /// unpadded month or day (`2023-1-1`).
+    #[must_use = "a malformed date is a deliberate None"]
     pub fn parse(value: &str) -> Option<Self> {
         let bytes = value.as_bytes();
         if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
@@ -70,23 +58,21 @@ impl TodoDate {
     }
 
     /// Calendar year (1..=9999).
+    #[must_use]
     pub const fn year(self) -> u16 {
         self.year
     }
 
     /// Calendar month (1..=12).
+    #[must_use]
     pub const fn month(self) -> u8 {
         self.month
     }
 
     /// Day of month (1..=31).
+    #[must_use]
     pub const fn day(self) -> u8 {
         self.day
-    }
-
-    /// Format as `YYYY-MM-DD`, the only shape written back to a todo line.
-    pub fn format(self) -> String {
-        self.to_string()
     }
 }
 
@@ -179,14 +165,22 @@ mod tests {
 
     #[test]
     fn year_bounds_are_inclusive() {
-        assert_eq!(TodoDate::parse("0001-01-01"), Some(TodoDate::MIN));
-        assert_eq!(TodoDate::parse("9999-12-31"), Some(TodoDate::MAX));
+        let earliest = TodoDate::parse("0001-01-01").expect("year 1 is valid");
+        assert_eq!(
+            (earliest.year(), earliest.month(), earliest.day()),
+            (1, 1, 1)
+        );
+        let latest = TodoDate::parse("9999-12-31").expect("year 9999 is valid");
+        assert_eq!(
+            (latest.year(), latest.month(), latest.day()),
+            (9999, 12, 31)
+        );
     }
 
     #[test]
     fn formats_single_digit_parts() {
         let date = TodoDate::new(7, 3, 4).expect("valid");
-        assert_eq!(date.format(), "0007-03-04");
+        assert_eq!(date.to_string(), "0007-03-04");
     }
 
     #[test]

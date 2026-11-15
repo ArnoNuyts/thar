@@ -1,11 +1,13 @@
 //! File-level read validation, matching `logic/todo-file-validation.ts`.
 //!
 //! The reader works on decoded text: the host has already enforced the byte
-//! size (and can call [`validate_file_bytes`] again after decoding). This
-//! module checks the physical line count, each line's length in UTF-16 code
-//! units, and the rejected control characters. It also applies the CRLF rule:
-//! exactly one `\r` is stripped from an LF-terminated line, while a `\r` at
-//! end-of-file or inside a line is rejected.
+//! size (and can call [`validate_file_bytes`] again after decoding). Decoding is
+//! lossy on the Node side — `String::from_utf8_lossy`, so invalid bytes are
+//! `U+FFFD` — and this module therefore only ever sees valid UTF-8. It checks
+//! the physical line count, each line's length in UTF-16 code units, and the
+//! rejected control characters. It also applies the CRLF rule: exactly one `\r`
+//! is stripped from an LF-terminated line, while a `\r` at end-of-file or inside
+//! a line is rejected.
 //!
 //! Blank lines are returned as-is; the loader filters them. Keeping them makes
 //! line numbers in errors match the file, exactly like the TS implementation.
@@ -29,6 +31,7 @@ const fn is_rejected_control(code_point: char) -> bool {
 ///
 /// This is the loader's `line.trim()` filter: a file with only blank lines
 /// loads as zero todos, and those lines do not get ids.
+#[must_use]
 pub fn is_blank_line(line: &str) -> bool {
     js_trim(line).is_empty()
 }
@@ -37,6 +40,12 @@ pub fn is_blank_line(line: &str) -> bool {
 ///
 /// The host checks the on-disk size before reading and calls this again with
 /// the decoded length, because a file can grow between `stat` and `read`.
+///
+/// # Errors
+///
+/// Returns [`CoreError::FileTooLarge`] when `actual_bytes` is over
+/// `limits.max_file_bytes`.
+#[must_use = "the size check must be handled"]
 pub fn validate_file_bytes(actual_bytes: u64, limits: &ReadLimits) -> Result<(), CoreError> {
     if actual_bytes > limits.max_file_bytes {
         return Err(CoreError::FileTooLarge {
@@ -53,6 +62,18 @@ pub fn validate_file_bytes(actual_bytes: u64, limits: &ReadLimits) -> Result<(),
 /// so `"a\n"` is one line and `"a\nb"` is two. The returned vector includes the
 /// phantom empty entry produced by a trailing newline, matching
 /// `String.prototype.split("\n")` in the oracle.
+///
+/// `data` must already be decoded text: the Node reader uses
+/// `String::from_utf8_lossy`, so invalid UTF-8 arrives as `U+FFFD`. That keeps
+/// the byte-size limit and the UTF-16 length limit meaningful for a lossy
+/// decode, and it is why this function never rejects invalid UTF-8 itself.
+///
+/// # Errors
+///
+/// Returns [`CoreError::TooManyLines`], [`CoreError::LineTooLong`], or
+/// [`CoreError::ControlCharacter`] for the first line that violates the
+/// mirrored TypeScript policy.
+#[must_use = "the validated lines must be used"]
 pub fn validate_file_content<'a>(
     data: &'a str,
     limits: &ReadLimits,

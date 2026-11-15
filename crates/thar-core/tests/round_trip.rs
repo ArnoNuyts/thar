@@ -5,12 +5,15 @@
 //! every tag to the end (comma-joining duplicate keys). Normalizing a raw line
 //! can expose a marker that leading whitespace had hidden, so the interesting
 //! contract is a bounded fixed point: after at most a couple of passes,
-//! serializing is byte-idempotent. The TypeScript oracle behaves the same way.
+//! serializing is byte-idempotent. Whether the TypeScript oracle agrees in
+//! general is CP1's differential-harness claim; this test only pins the corpus
+//! and a deterministic generated set, it does not assert oracle equivalence.
 //!
 //! These tests pin that contract over every committed fixture line (which must
 //! stabilize immediately) and over 1 000 deterministic pseudo-random lines
 //! built from the interesting `todo.txt` fragments. No `rand` crate: a tiny LCG
-//! keeps the corpus reproducible.
+//! keeps the corpus reproducible. Fixture bytes are decoded lossily, exactly
+//! like the Node reader, so `invalid-utf8.txt` participates as `U+FFFD` text.
 
 use std::fs;
 use std::path::PathBuf;
@@ -40,10 +43,10 @@ struct Canonical {
 
 /// Parse and serialize until the output stops changing.
 fn canonicalize(raw: &str) -> Canonical {
-    let mut line = Todo::parse_line(raw, TodoId(0)).serialize();
+    let mut line = Todo::parse_line(raw, TodoId::new(0)).serialize();
 
     for passes in 1..=MAX_PASSES {
-        let next = Todo::parse_line(&line, TodoId(0));
+        let next = Todo::parse_line(&line, TodoId::new(0));
         let next_line = next.serialize();
         if next_line == line {
             return Canonical {
@@ -64,7 +67,7 @@ fn assert_stable(raw: &str) -> Canonical {
 
     // The canonical line must parse to the canonical todo and serialize back
     // to the same bytes.
-    let reparsed = Todo::parse_line(&canonical.line, TodoId(0));
+    let reparsed = Todo::parse_line(&canonical.line, TodoId::new(0));
     assert_eq!(
         reparsed, canonical.todo,
         "canonical form of {raw:?} parses differently"
@@ -105,7 +108,10 @@ fn every_fixture_line_is_already_canonical() {
         if path.extension().and_then(|extension| extension.to_str()) != Some("txt") {
             continue;
         }
-        let data = fs::read_to_string(&path).expect("fixture is valid UTF-8");
+        // The Node reader decodes lossily; `fs::read_to_string` would reject
+        // `invalid-utf8.txt` before the fixed-point contract is checked.
+        let bytes = fs::read(&path).expect("read fixture");
+        let data = String::from_utf8_lossy(&bytes);
 
         for line in data.split('\n') {
             let canonical = assert_stable(line);
@@ -236,6 +242,6 @@ fn generated_lines_are_accepted_by_the_file_parser() {
     assert!(!todos.is_empty(), "expected at least one non-blank line");
     assert!(todos.len() <= 1_000);
     for (index, todo) in todos.iter().enumerate() {
-        assert_eq!(todo.id, TodoId(index as u64));
+        assert_eq!(todo.id, TodoId::new(index as u64));
     }
 }

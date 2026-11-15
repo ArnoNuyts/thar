@@ -25,13 +25,21 @@
 //!   never duplicates it.
 //! - Serialization never loses a tag or reorders one.
 //!
+//! # Decoding boundary
+//!
+//! Everything above the byte layer takes `&str`, never bytes. The Node reader
+//! decodes with `String::from_utf8_lossy`, exactly like the TypeScript oracle,
+//! so invalid UTF-8 reaches this crate as `U+FFFD` and the crate never rejects
+//! it. Callers that read files themselves must do the same lossy decode; the
+//! corpus pins that (`invalid-utf8.txt`).
+//!
 //! # Example
 //!
 //! ```
 //! use thar_core::{Todo, TodoId};
 //!
 //! let line = "x (A) 2024-03-02 fixed the bug +thar due:2024-03-01";
-//! let todo = Todo::parse_line(line, TodoId(0));
+//! let todo = Todo::parse_line(line, TodoId::new(0));
 //! assert_eq!(todo.text, "fixed the bug +thar");
 //! assert_eq!(todo.serialize(), line);
 //! ```
@@ -68,6 +76,17 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// `logic/todo-file-helpers.ts`: validate the text, drop blank lines, and parse
 /// the rest. Byte-size limits and file I/O stay with the caller; use
 /// [`validate_file_bytes`] for the size rule.
+///
+/// `data` is already-decoded text (lossy `U+FFFD` for invalid UTF-8, as the
+/// Node reader does), never raw bytes.
+///
+/// # Errors
+///
+/// Returns the first file-level violation from [`validate_file_content`]:
+/// [`CoreError::TooManyLines`], [`CoreError::LineTooLong`], or
+/// [`CoreError::ControlCharacter`]. Parse errors are not possible: every
+/// non-blank line becomes one [`Todo`].
+#[must_use = "the parsed todos are the result; ignoring them parses for nothing"]
 pub fn parse_file(data: &str, limits: &ReadLimits) -> Result<Vec<Todo>, CoreError> {
     let lines = validate_file_content(data, limits)?;
     let mut todos = Vec::new();
@@ -76,7 +95,7 @@ pub fn parse_file(data: &str, limits: &ReadLimits) -> Result<Vec<Todo>, CoreErro
         if is_blank_line(line) {
             continue;
         }
-        let id = TodoId(todos.len() as u64);
+        let id = TodoId::new(todos.len() as u64);
         todos.push(Todo::parse_line(line, id));
     }
 
@@ -93,8 +112,8 @@ mod tests {
         assert_eq!(todos.len(), 2);
         assert_eq!(todos[0].text, "one");
         assert_eq!(todos[1].text, "two");
-        assert_eq!(todos[0].id.0, 0);
-        assert_eq!(todos[1].id.0, 1);
+        assert_eq!(todos[0].id.value(), 0);
+        assert_eq!(todos[1].id.value(), 1);
     }
 
     #[test]

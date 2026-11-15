@@ -19,6 +19,11 @@ use crate::model::Priority;
 ///
 /// Leading date tokens are only consumed by the caller when they are valid and
 /// unambiguous; otherwise the raw text is kept so the line round-trips.
+///
+/// TODO(CP3): this allocates two `Vec`s per line (`date_tokens` and
+/// `invalid_date_tokens`). Parsing measures 12.7 ms per 10 000 lines; the
+/// intended fix is a fixed `[Option<&str>; 2]` for the date tokens plus an
+/// invalid-date count/flag, so the parse path stops allocating.
 #[derive(Debug)]
 pub(crate) struct Prefix<'a> {
     /// The line starts with the `x` done marker and at least one whitespace.
