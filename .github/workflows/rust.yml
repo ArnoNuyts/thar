@@ -1,0 +1,144 @@
+name: Rust
+
+# Path-filtered so the existing Node pipeline is unaffected while the Rust
+# port lands incrementally. The branch list matches docs/rust-port/rust.yml;
+# pull requests are filtered by path only.
+on:
+  push:
+    branches: ["main", "release/next", "feature/rust-port"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "crates/**"
+      - "testdata/port/**"
+      - ".github/workflows/rust.yml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "crates/**"
+      - "testdata/port/**"
+      - ".github/workflows/rust.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: fmt, clippy, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --all-features
+
+  wasm:
+    name: wasm package + size budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@wasm-pack
+
+      # wasm-pack 0.13 bundles its own (older) wasm-opt and the crate metadata
+      # passes the feature flags it needs. The system binaryen is the manual
+      # size-pass tool for the core and the future release workflow.
+      - name: Install binaryen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+          wasm-opt --version
+
+      - name: Build WASM package (Node target)
+        run: wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg
+
+      - name: Check WASM size budget
+        run: |
+          set -euo pipefail
+          wasm="crates/thar-wasm/pkg/thar_wasm_bg.wasm"
+          raw="$(stat -c%s "$wasm")"
+          gzip="$(gzip -9 -c "$wasm" | wc -c)"
+          echo "raw_bytes=$raw" | tee wasm-size.txt
+          echo "gzip_bytes=$gzip" | tee -a wasm-size.txt
+
+          max_raw=$((250 * 1024))
+          max_gzip=$((100 * 1024))
+          if [ "$raw" -gt "$max_raw" ]; then
+            echo "::error::WASM core is ${raw} bytes, over the ${max_raw}-byte budget"
+            exit 1
+          fi
+          if [ "$gzip" -gt "$max_gzip" ]; then
+            echo "::error::WASM core is ${gzip} bytes gzipped, over the ${max_gzip}-byte budget"
+            exit 1
+          fi
+
+      - name: Smoke test in Node
+        run: |
+          node - <<'NODE'
+          const assert = require("node:assert/strict");
+          const core = require("./crates/thar-wasm/pkg/thar_wasm.js");
+
+          assert.equal(core.recordCount("one\ntwo\n"), 2);
+          assert.equal(core.recordCount(""), 0);
+          assert.equal(core.recordCount("a\n\nb\n"), 2);
+          const version = core.coreVersion();
+          assert.equal(typeof version, "string");
+          assert.notEqual(version.length, 0);
+          console.log(`wasm smoke ok (core ${version})`);
+          NODE
+
+      - name: Upload WASM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: thar-wasm
+          path: |
+            crates/thar-wasm/pkg/**
+            wasm-size.txt
+          retention-days: 14
