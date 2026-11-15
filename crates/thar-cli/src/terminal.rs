@@ -193,7 +193,9 @@ impl TerminalSession {
                 return Ok(());
             }
 
-            self.sync_cursor(app)?;
+            // The search cursor is painted as an inverse cell by the view, so
+            // the terminal's own cursor stays hidden on every frame.
+            self.terminal.hide_cursor()?;
 
             let timeout = next_poll_timeout(app, Instant::now());
             if event::poll(timeout)? {
@@ -238,15 +240,6 @@ impl TerminalSession {
             // local day, rebuilding overdue/threshold verdicts exactly once.
             app.set_today(today_local());
         }
-    }
-
-    fn sync_cursor(&mut self, app: &App) -> io::Result<()> {
-        if app.search_focused {
-            self.terminal.show_cursor()?;
-        } else {
-            self.terminal.hide_cursor()?;
-        }
-        Ok(())
     }
 }
 

@@ -3,6 +3,8 @@
 //! The crate is split so each layer can be tested without a terminal:
 //!
 //! - [`app`] owns the state and the read-only invariant;
+//! - [`display`] escapes control characters before anything reaches the
+//!   terminal;
 //! - [`list`] builds the owned row model from the `thar-core` domain;
 //! - [`nav`] moves the cursor, selection, and viewport;
 //! - [`input`] maps crossterm keys/mouse events to commands and applies them;
@@ -24,6 +26,7 @@
 #![deny(missing_docs)]
 
 pub mod app;
+pub mod display;
 pub mod input;
 pub mod layout;
 pub mod list;
