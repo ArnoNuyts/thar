@@ -1,10 +1,11 @@
 # Thar Rust port — implementation plan
 
 - **Branch:** `feature/rust-port` (long-lived integration branch)
-- **Status:** Plan + checkpoint ladder. CP0 (corpus, baseline) and CP1's
-  contract inputs are in; CP2a adds the `thar-core` crate, the `thar-wasm`
-  scaffold, and the Rust CI workflow. See §4, §5 and §9.1 for what exists
-  today.
+- **Status:** Plan + checkpoint ladder. CP0 (corpus, baseline), CP1 (contract
+  harness + candidate protocol) and CP2 (workspace, `thar-core`, the WASM batch
+  surface, the read-only `THAR_SHADOW` check) are in. CP2b closes CP2's
+  WASM/contract half; the seven-day real-file dogfood and the decisions CP3
+  depends on are still open. See §4, §5 and §9.1 for what exists today.
 - **Date:** 2026-11-15
 - **Related:** [`scripts/benchmark-list.tsx`](../../scripts/benchmark-list.tsx),
   [`docs/update-mechanism.md`](../update-mechanism.md), [`AGENTS.md`](../../AGENTS.md)
@@ -121,9 +122,9 @@ benchmark report.
 
 ## 4. Architecture
 
-The tree below is the target layout. CP2a has landed the workspace,
-`thar-core` and the `thar-wasm` scaffold; `thar-tui`, `thar-cli` and
-`thar-testdata` are still deferred to Phases 4–6.
+The tree below is the target layout. CP2 has landed the workspace,
+`thar-core` and the real `thar-wasm` batch surface (CP2a/CP2b);
+`thar-tui`, `thar-cli` and `thar-testdata` are still deferred to Phases 4–6.
 
 ```text
 Cargo.toml                  workspace
@@ -179,14 +180,17 @@ Coarse, batch-oriented boundary. One call per file load or search, not one
 call per row/field:
 
 ```rust
-// Shape only; exact types land in Phase 2.
-parse_file(text: &str) -> ParsedFile;             // todos + diagnostics
-serialize_file(todos: &[TodoDto]) -> String;
-build_rows(todos: &[TodoDto], query: &str,
-           show_hidden: bool, today: Today) -> Vec<Row>;
-apply_command(todos: &[TodoDto], ids: &[u64],
-              command: Command, today: Today) -> BatchResult;
+parse_file(text: &str, today: &str) -> String;   // JSON envelope, default limits
+parse_file_with_limits(text, today, max_file_bytes: u32,
+                       max_read_todos: u32, max_line_chars: u32) -> String;
+core_version() -> String;
 ```
+
+Both parse calls return either `{"ok":true,"todos":[…]}` or
+`{"ok":false,"error":{…}}`; a record is exactly the CP1/`expected.json` field
+set, in that order. The whole-file write shape is derived as CP1 defines it
+(`todos.map(toString).join("\n") + "\n"`), so there is no second crossing.
+`build_rows`, `apply_command` and the sort/filter surface arrive with CP3.
 
 Strings cross the boundary once per batch. Avoid per-row string getters; they
 would erase the benefit and add marshalling overhead.
@@ -300,6 +304,38 @@ recorded. Do not start the next checkpoint while one is red.
     whether to commit those fixtures.
   - A corpus fixture for JS-whitespace/`U+FEFF` trimming and the 8 192-unit
     astral boundary is a CP0 follow-up. Rust unit tests cover both today.
+
+#### CP2b — WASM batch API, contract candidate, adapter, shadow
+
+- `thar-wasm` now exports the real batch surface: `parseFile(text, today)` and
+  `parseFileWithLimits(text, today, maxFileBytes, maxReadTodos, maxLineChars)`
+  return the CP1 JSON envelope, plus `coreVersion()`. The `recordCount` scaffold
+  is gone. JSON is written by hand (no `serde`), so field order is part of the
+  code and the module stays far inside the size budget.
+- `tools/port/candidates/wasm.mjs` is a plain-Node candidate over the built
+  package: raw bytes, lossy UTF-8 decode, `node:crypto` hashes, production read
+  limits from the environment, and the CP1 error record shape.
+- `logic/core-wasm.ts` is the dev-only adapter (`parseFileWithCore`) and the
+  `THAR_SHADOW=1` check. It loads the package with `createRequire` and a runtime
+  path, so the build, the test matrix and `npm run check` never require Rust or
+  a built `pkg/`. Any failure degrades to "TypeScript only" with at most one
+  debug line.
+- Shadow records are content-free: counts, todo indexes, 16-hex-digit SHA-256
+  digests of the serialized lines, and the serialized-file digests. A todo line
+  _is_ its own `hash`, so raw lines are never written. The log is
+  `<cache>/thar/shadow.log` (`THAR_SHADOW_LOG` overrides), capped at 64 KiB by
+  truncating the file before an append would exceed it.
+- `THAR_CORE=ts|rust` is read but inert at CP2: both values keep the TypeScript
+  implementation as the source of truth, and a test pins that. CP3 is the switch.
+- Evidence at landing: 0 contract diffs over 28 fixtures / 3 432 008 contract
+  bytes (including `large-10000.txt`, `bom.txt`, `invalid-utf8.txt`);
+  WASM 49 568 bytes raw / 22 200 bytes gzip after wasm-opt; `npm test` and
+  `npm run check` green with and without `pkg/`; shadow smoke over the whole
+  corpus with 0 mismatches and no log file created.
+- Still open for the CP2 gate: seven days of real files with `THAR_SHADOW=1`,
+  then a review of the bounded cache file. The recorded gaps above (no
+  `isPassedThreshold` in `expected.json`, no committed limit-error fixtures)
+  stay open — CP2b deliberately does not add `testdata/port/**` fixtures.
 
 ### CP3 — Rust read path opt-in
 
@@ -428,12 +464,13 @@ Deliverables:
 - [x] This plan and the checkpoint ladder (§5).
 - [x] `testdata/port/` corpus and exact-byte characterization tests.
 - [x] `docs/rust-port/baseline.md` with benchmark/startup/memory baselines.
-- [ ] TS-only differential harness with a seeded-bug proof.
-- [ ] Node CI job that runs the harness.
+- [x] TS-only differential harness with a seeded-bug proof.
+- [x] Node CI job that runs the harness.
 
-The Cargo workspace was deliberately deferred out of Phase 0; CP2a has since
-landed it with `thar-core` and the `thar-wasm` scaffold (§4). The differential
-harness (CP1) is still the missing half of this phase.
+The Cargo workspace was deliberately deferred out of Phase 0; CP2a landed it
+with `thar-core` and CP2b added the real WASM batch surface (§4). CP1's harness
+landed with CP2b's base and the WASM candidate now runs against it in the Rust
+workflow.
 
 Exit criteria: the harness catches a seeded parser mutation, the corpus covers
 every rule in §7, and `npm test` + `npm run check` are green.
@@ -627,7 +664,7 @@ The Rust workflow is installed at
 copy, so it cannot drift from a draft. It is path-filtered (`Cargo.toml`,
 `Cargo.lock`, `rust-toolchain.toml`, `crates/**`, `testdata/port/**`, the
 workflow itself) so the Node pipeline is unaffected. CP2a ran it green with the
-`thar-core` + `thar-wasm` scaffold.
+`thar-core` + `thar-wasm` scaffold; CP2b adds the CP1 contract run.
 
 Jobs:
 
@@ -643,8 +680,10 @@ Jobs:
   - runs `wasm-pack build crates/thar-wasm --release --target nodejs
     --out-dir pkg --locked`;
   - enforces the size budget: **≤ 250 KB raw, ≤ 100 KB gzip**;
-  - runs a Node smoke test (`recordCount`, `coreVersion`) against the built
-    package;
+  - runs a Node smoke test (`parseFile` ok/rejected envelopes, `coreVersion`)
+    against the built package;
+  - runs the CP1 contract against the WASM candidate (`npm ci` then
+    `npm run port:contract:wasm`) after the package is built;
   - uploads `pkg/**` and `wasm-size.txt` as the `thar-wasm` artifact
     (14 days).
 
@@ -656,9 +695,11 @@ wasm-pack finds the license text and ships it in `pkg/` without a duplicate
 copy to maintain.
 
 Why a size gate: the incremental path only makes sense if the core stays
-small enough to ship inside the npm package or fetch cheaply. The budget is
-generous for the scaffold and should be tightened after Phase 2 (target
-≤ 100 KB raw / ≤ 40 KB gzip for the real core).
+small enough to ship inside the npm package or fetch cheaply. The real CP2b
+batch core measures 49 568 bytes raw / 22 200 bytes gzip after wasm-opt, so the
+Phase 2 target (≤ 100 KB raw / ≤ 40 KB gzip) is already met; the workflow keeps
+the 250 KB / 100 KB ceiling until the CP3 row and command surface lands, then
+tightens the constants and the README together.
 
 ### 9.2 Add in later phases
 
