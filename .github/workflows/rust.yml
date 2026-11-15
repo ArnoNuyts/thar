@@ -19,6 +19,7 @@ on:
       - "logic/core-wasm.ts"
       - "logic/limits.ts"
       - "unit-tests/core-wasm.test.ts"
+      - "unit-tests/todo-from-parts.test.ts"
       # CP4: the write contract's oracle is the production writer, and the
       # data-safety suite drives the real package through the atomic replace.
       - "logic/todo-file-helpers.ts"
@@ -67,6 +68,7 @@ on:
       - "logic/core-wasm.ts"
       - "logic/limits.ts"
       - "unit-tests/core-wasm.test.ts"
+      - "unit-tests/todo-from-parts.test.ts"
       # CP4: the write contract's oracle is the production writer, and the
       # data-safety suite drives the real package through the atomic replace.
       - "logic/todo-file-helpers.ts"
@@ -234,7 +236,7 @@ jobs:
         # `todo-file-write-safety.test.ts` includes the real-package corpus
         # round-trip, so the byte-compared dual write runs against this build.
         run: |
-          npx vitest run unit-tests/core-wasm.test.ts unit-tests/todo-file-write-safety.test.ts
+          npx vitest run unit-tests/core-wasm.test.ts unit-tests/todo-from-parts.test.ts unit-tests/todo-file-write-safety.test.ts
 
       # The CP1 oracle stays the Node `port-contract` job; this run proves the
       # Rust candidate agrees with it over the whole corpus, including the
@@ -254,6 +256,13 @@ jobs:
       # `port-contract` job.
       - name: CP4 write contract parity (WASM candidate)
         run: npm run port:contract:write:wasm
+
+      # CP3b2c: the wired `THAR_CORE=rust` read path (`parseFile` records ->
+      # `Todo.fromParts` -> serialize) against the TypeScript reader over every
+      # fixture, including the rejection records. The TS-only half (lossless
+      # factory + mutation proof) runs in the Node `port-contract` job.
+      - name: CP3b2c parse contract parity (WASM candidate)
+        run: npm run port:contract:parse:wasm
 
       - name: Upload WASM package
         uses: actions/upload-artifact@v4

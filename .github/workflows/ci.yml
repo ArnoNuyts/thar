@@ -90,6 +90,12 @@ jobs:
       - name: Write contract (oracle, candidate protocol, mutation proof)
         run: npm run port:contract:write
 
+      # CP3b2c: the parse contract, TS-only here. The self candidate proves
+      # `Todo.fromParts` is lossless and the seeded reconstruction mutations are
+      # caught; the wired WASM read path runs in the rust workflow.
+      - name: Parse contract (factory, candidate protocol, mutation proof)
+        run: npm run port:contract:parse
+
   doctor:
     runs-on: ubuntu-latest
     timeout-minutes: 15
