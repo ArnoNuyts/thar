@@ -1,0 +1,6 @@
+tab	inside	line
+x	tab after the done marker
+	leading tab is trimmed from the text
+(A)	tab after the priority
+2023-05-04	tab after the creation date
+trailing tab is trimmed	

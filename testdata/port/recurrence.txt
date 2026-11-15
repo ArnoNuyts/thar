@@ -1,0 +1,11 @@
+rec:1d daily
+rec:2w weekly
+rec:3m monthly
+rec:1y yearly
+rec:+1d explicit plus is accepted
+rec:0d zero is out of range
+rec:10000d above the maximum
+rec:abc not a recurrence value
+rec:1D uppercase unit is rejected
+rec:1d rec:2w duplicate rec becomes an array
+x 2024-01-01 2023-12-31 rec:1w done recurring line

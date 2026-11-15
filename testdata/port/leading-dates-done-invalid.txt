@@ -1,0 +1,4 @@
+x 2023-05-04 2023-02-29 second date is invalid so both stay literal
+x 2023-02-29 impossible completion date stays literal
+x 0000-01-01 year zero completion date stays literal
+x 2023-05-04 2023-05-05

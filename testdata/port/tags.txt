@@ -1,0 +1,12 @@
+alpha:one single tag
+beta:one beta:two duplicate key becomes an array
+Due:2026-01-01 uppercase key is distinct from due
+due:2026-01-01 lowercase due is a date tag
+h1:1 digits are not allowed in tag keys
+a_b:1 underscores are not allowed in tag keys
+empty: a key with no value is not a tag
+http://example.com is scanned as a tag
+due:2025-01-01 tag at the start of a line
+note:hello,world! punctuation stays in the value
+eq:a=b=c equals signs stay in the value
+x task:value tag after a done marker

@@ -1,0 +1,3 @@
+First line
+Second line @home
+Last line has no newline due:2024-01-01

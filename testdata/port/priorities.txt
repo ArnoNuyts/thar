@@ -1,0 +1,10 @@
+(A) highest priority
+(Z) lowest letter priority
+(a) lowercase is not a priority
+(AB) two letters is not a priority
+(A)
+(A) 
+(A) overdue priority +work due:2020-01-01
+(B) 2024-03-01 priority and creation date
+x (A) 2024-03-02 done with priority and completion date
+(C) +project @context due:2020-01-01 h:1
