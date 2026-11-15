@@ -9,7 +9,9 @@
 //! The CLI surface mirrors `logic/cli.ts` for the flags CP6 supports:
 //! `-f/--file`, `-h/--help`, `-v/--version`, `--no-update-check`, and `--`.
 //! `update` is recognized and rejected with a bounded message: self-update is
-//! a distribution concern (CP8), not a CP6 feature.
+//! a distribution concern (CP8), not a CP6 feature. An invalid `THAR_MAX_*`
+//! override is fatal with exit code 2, matching the TypeScript
+//! `InvalidLimitError`; it never silently falls back to a default.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -21,7 +23,7 @@ pub mod terminal;
 use std::process::ExitCode;
 
 pub use cli::{CliError, CliOptions, DEFAULT_FILENAME, format_usage, parse_cli_args};
-pub use file::{LoadError, LoadedFile, get_read_limits, load};
+pub use file::{LoadError, LoadedFile, get_read_limits, load, load_with_limits, read_limits_from};
 pub use terminal::{run_tui, today_local};
 
 /// Crate version, also printed by `thar-rs --version`.
@@ -58,8 +60,14 @@ pub fn run(args: &[String]) -> ExitCode {
     let loaded = match load(&options.file) {
         Ok(loaded) => loaded,
         Err(error) => {
+            // An invalid THAR_MAX_* override is a usage error (the TypeScript
+            // InvalidLimitError path); every other load failure is exit 1.
+            let code = match error {
+                LoadError::InvalidLimit(_) => 2,
+                _ => 1,
+            };
             eprintln!("thar-rs: {error}");
-            return ExitCode::from(1);
+            return ExitCode::from(code);
         }
     };
 
