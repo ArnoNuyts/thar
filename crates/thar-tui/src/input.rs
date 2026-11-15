@@ -4,16 +4,25 @@
 //! minus every command that needs a modal or a write: those keys are mapped to
 //! [`Command::Rejected`] so the press is acknowledged with one bounded toast
 //! instead of being silently ignored. Navigation, search, the hidden-view
-//! toggle and scrolling are fully functional.
+//! toggle, scrolling and the mouse are fully functional.
 //!
 //! The mapping is a pure function of the key plus focus state, and [`apply`] is
 //! a pure state transition over [`App`], so unit tests drive both without a
-//! terminal.
+//! terminal. Mouse coordinates are the ones `thar-cli` produces: 1-based
+//! terminal cells, converted through the shared [`crate::layout::Layout`].
+//!
+//! # Search parity
+//!
+//! While the search bar has focus, `SearchInput.tsx` intercepts Up/Down,
+//! PageUp/PageDown, Home and End *before* the text editor sees them, so those
+//! keys navigate the todo list instead of moving the query cursor. Only
+//! Left/Right, Backspace and Delete edit the query; Enter keeps the filter and
+//! blurs, Escape clears the filter and blurs.
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::App;
-use crate::layout::checkbox_columns;
+use crate::layout::{action_item_at, checkbox_columns};
 use crate::nav;
 
 /// Message shown for every key that would modify `todo.txt`.
@@ -44,8 +53,11 @@ pub enum Command {
     /// Move the query cursor right.
     SearchRight,
     /// Move the query cursor to the start.
+    ///
+    /// Kept for callers that edit the query directly. CP6's keymap does not
+    /// bind it: Home navigates the todo list, like the Ink handler.
     SearchHome,
-    /// Move the query cursor to the end.
+    /// Move the query cursor to the end (see [`Command::SearchHome`]).
     SearchEnd,
     /// Move the todo cursor up one row.
     Up,
@@ -55,10 +67,18 @@ pub enum Command {
     ContextUp,
     /// Move to the next context group.
     ContextDown,
+    /// Extend the selection to the previous context group.
+    ExtendContextUp,
+    /// Extend the selection to the next context group.
+    ExtendContextDown,
     /// Move five rows up.
     PageUp,
     /// Move five rows down.
     PageDown,
+    /// Extend the selection five rows up.
+    ExtendPageUp,
+    /// Extend the selection five rows down.
+    ExtendPageDown,
     /// Select the first todo row.
     Home,
     /// Select the last todo row.
@@ -82,8 +102,8 @@ pub enum Command {
 /// Translate a key press into a command.
 ///
 /// `search_focused` is the only piece of context the keymap needs: the search
-/// bar owns printable input and the cursor-editing keys, while the list owns
-/// the rest.
+/// bar owns printable input and query editing, while the list owns navigation.
+/// Ctrl+C quits in both modes.
 #[must_use]
 pub fn command_for_key(key: KeyEvent, search_focused: bool) -> Option<Command> {
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
@@ -98,26 +118,27 @@ pub fn command_for_key(key: KeyEvent, search_focused: bool) -> Option<Command> {
 }
 
 fn search_key(key: KeyEvent) -> Option<Command> {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+
     match key.code {
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Command::Quit),
-        KeyCode::Char(ch) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-            Some(Command::SearchInsert(ch))
-        }
+        KeyCode::Char(ch) if !ctrl => Some(Command::SearchInsert(ch)),
         KeyCode::Backspace => Some(Command::SearchBackspace),
         KeyCode::Delete => Some(Command::SearchDelete),
         KeyCode::Left => Some(Command::SearchLeft),
         KeyCode::Right => Some(Command::SearchRight),
-        KeyCode::Home => Some(Command::SearchHome),
-        KeyCode::End => Some(Command::SearchEnd),
-        KeyCode::Enter => Some(Command::SearchBlur),
-        KeyCode::Esc => Some(Command::SearchClear),
         KeyCode::Up if shift => Some(Command::ExtendUp),
         KeyCode::Down if shift => Some(Command::ExtendDown),
         KeyCode::Up => Some(Command::Up),
         KeyCode::Down => Some(Command::Down),
+        KeyCode::PageUp if shift => Some(Command::ExtendPageUp),
+        KeyCode::PageDown if shift => Some(Command::ExtendPageDown),
         KeyCode::PageUp => Some(Command::PageUp),
         KeyCode::PageDown => Some(Command::PageDown),
+        KeyCode::Home => Some(Command::Home),
+        KeyCode::End => Some(Command::End),
+        KeyCode::Enter => Some(Command::SearchBlur),
+        KeyCode::Esc => Some(Command::SearchClear),
         _ => None,
     }
 }
@@ -127,14 +148,16 @@ fn list_key(key: KeyEvent) -> Option<Command> {
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
 
     match key.code {
-        KeyCode::Up if ctrl && shift => Some(Command::Rejected(READ_ONLY_MESSAGE)),
-        KeyCode::Down if ctrl && shift => Some(Command::Rejected(READ_ONLY_MESSAGE)),
+        KeyCode::Up if ctrl && shift => Some(Command::ExtendContextUp),
+        KeyCode::Down if ctrl && shift => Some(Command::ExtendContextDown),
         KeyCode::Up if ctrl => Some(Command::ContextUp),
         KeyCode::Down if ctrl => Some(Command::ContextDown),
         KeyCode::Up if shift => Some(Command::ExtendUp),
         KeyCode::Down if shift => Some(Command::ExtendDown),
         KeyCode::Up => Some(Command::Up),
         KeyCode::Down => Some(Command::Down),
+        KeyCode::PageUp if shift => Some(Command::ExtendPageUp),
+        KeyCode::PageDown if shift => Some(Command::ExtendPageDown),
         KeyCode::PageUp => Some(Command::PageUp),
         KeyCode::PageDown => Some(Command::PageDown),
         KeyCode::Home => Some(Command::Home),
@@ -143,7 +166,9 @@ fn list_key(key: KeyEvent) -> Option<Command> {
         KeyCode::Char('/') => Some(Command::SearchFocus),
         KeyCode::Char('q') => Some(Command::Quit),
         KeyCode::Char('H') => Some(Command::ToggleHiddenView),
-        // The rest of the list keymap either opens a modal or writes.
+        // The rest of the list keymap either opens a modal or writes. A-F is
+        // the priority keymap; every other uppercase letter is not a command
+        // in the Ink list either.
         KeyCode::Char(' ')
         | KeyCode::Char('x')
         | KeyCode::Char('n')
@@ -160,7 +185,7 @@ fn list_key(key: KeyEvent) -> Option<Command> {
         | KeyCode::Char('h')
         | KeyCode::Char('+')
         | KeyCode::Char('@')
-        | KeyCode::Char('A'..='Z')
+        | KeyCode::Char('A'..='F')
         | KeyCode::Delete
         | KeyCode::Enter => Some(Command::Rejected(READ_ONLY_MESSAGE)),
         _ => None,
@@ -194,10 +219,14 @@ pub struct MouseInput {
 }
 
 /// A pending click, used for the 350 ms double-click window.
+///
+/// Every left click records its position; only a click that landed on a todo
+/// row carries its id. A following click counts as a double-click when it is
+/// within [`DOUBLE_CLICK_WINDOW`] and repeats either the todo or the cell.
 #[derive(Clone, Copy, Debug)]
 pub struct LastClick {
-    /// Clicked todo id.
-    pub todo_id: thar_core::TodoId,
+    /// Clicked todo id, or `None` when the click did not land on a todo row.
+    pub todo_id: Option<thar_core::TodoId>,
     /// 1-based column.
     pub x: u16,
     /// 1-based row.
@@ -207,7 +236,12 @@ pub struct LastClick {
 }
 
 /// Apply a mouse event, returning the click to remember for double-click
-/// detection (or `None` when the event was not a row click).
+/// detection (or `None` when the event was not a left click).
+///
+/// Wheel events scroll the viewport only while the list owns focus. A left
+/// click on the action bar maps the clicked segment to its command; a click on
+/// a todo row selects it (shift extends) and focuses the list; clicks on
+/// headers, the search bar and empty space are ignored.
 pub fn handle_mouse(
     app: &mut App,
     mouse: MouseInput,
@@ -216,82 +250,108 @@ pub fn handle_mouse(
 ) -> (Option<LastClick>, Option<Command>) {
     match mouse.kind {
         MouseKind::WheelUp => {
+            if app.search_focused {
+                return (last_click, None);
+            }
             nav::scroll(app, -1);
             (last_click, None)
         }
         MouseKind::WheelDown => {
+            if app.search_focused {
+                return (last_click, None);
+            }
             nav::scroll(app, 1);
             (last_click, None)
         }
         MouseKind::Move => (last_click, None),
-        MouseKind::LeftClick => {
-            let Some(relative) = app.layout().row_at(mouse.y.saturating_sub(1)) else {
-                return (last_click, None);
-            };
-            let row = app.offset + relative;
-            let Some(entry) = app.rows().get(row) else {
-                return (last_click, None);
-            };
-            let Some(todo_index) = entry.todo_index() else {
-                return (last_click, None);
-            };
-            let Some(id) = app.todo_at(todo_index).map(|todo| todo.id) else {
-                return (last_click, None);
-            };
-
-            nav::select_row(app, row, mouse.shift);
-
-            let double = last_click.is_some_and(|previous| {
-                (previous.todo_id == id || (previous.x == mouse.x && previous.y == mouse.y))
-                    && now.saturating_duration_since(previous.at) <= DOUBLE_CLICK_WINDOW
-            });
-            // The list is read-only: a double-click on the checkbox or the
-            // text acknowledges the edit intent without writing.
-            let command = double.then_some(Command::Rejected(READ_ONLY_MESSAGE));
-
-            (
-                Some(LastClick {
-                    todo_id: id,
-                    x: mouse.x,
-                    y: mouse.y,
-                    at: now,
-                }),
-                command,
-            )
-        }
+        MouseKind::LeftClick => left_click(app, mouse, last_click, now),
     }
+}
+
+/// Handle a left click and return the click record plus any command.
+fn left_click(
+    app: &mut App,
+    mouse: MouseInput,
+    last_click: Option<LastClick>,
+    now: std::time::Instant,
+) -> (Option<LastClick>, Option<Command>) {
+    let layout = app.layout();
+    let screen_row = mouse.y.saturating_sub(1);
+    let record = LastClick {
+        todo_id: None,
+        x: mouse.x,
+        y: mouse.y,
+        at: now,
+    };
+
+    if screen_row == layout.action_row() {
+        let command = match action_item_at(mouse.x.saturating_sub(1)) {
+            Some("q") => Some(Command::Quit),
+            Some("/") => Some(Command::SearchFocus),
+            Some(_) => Some(Command::Rejected(READ_ONLY_MESSAGE)),
+            None => None,
+        };
+        return (last_click, command);
+    }
+
+    let Some(relative) = layout.row_at(screen_row) else {
+        return (Some(record), None);
+    };
+    let row = app.offset + relative;
+    let Some(entry) = app.rows().get(row) else {
+        return (Some(record), None);
+    };
+    let Some(todo_index) = entry.todo_index() else {
+        return (Some(record), None);
+    };
+    let Some(id) = app.todo_at(todo_index).map(|todo| todo.id) else {
+        return (Some(record), None);
+    };
+
+    // The Ink list focuses the list on any row click, which blurs the search
+    // input without clearing its filter.
+    app.search_focused = false;
+    nav::select_row(app, row, mouse.shift);
+
+    let double = !mouse.shift
+        && last_click.is_some_and(|previous| {
+            now.saturating_duration_since(previous.at) <= DOUBLE_CLICK_WINDOW
+                && (previous.todo_id == Some(id)
+                    || (previous.x == mouse.x && previous.y == mouse.y))
+        });
+
+    // The list is read-only: a double-click on the checkbox or on the text
+    // acknowledges the toggle/edit intent with one toast and writes nothing.
+    (
+        Some(LastClick {
+            todo_id: Some(id),
+            ..record
+        }),
+        double.then_some(Command::Rejected(READ_ONLY_MESSAGE)),
+    )
 }
 
 /// Apply one command to the app state.
 pub fn apply(app: &mut App, command: Command) {
     match command {
         Command::Quit => app.should_quit = true,
-        Command::SearchFocus => app.search_focused = true,
-        Command::SearchBlur => app.search_focused = false,
+        Command::SearchFocus => {
+            app.search_focused = true;
+            app.clamp_offset();
+        }
+        Command::SearchBlur => {
+            app.search_focused = false;
+            app.clamp_offset();
+        }
         Command::SearchClear => {
             app.search_focused = false;
-            app.set_query("");
+            app.query.clear();
+            app.query_cursor = 0;
+            nav::rebuild(app);
         }
         Command::SearchInsert(ch) => insert_query_char(app, ch),
-        Command::SearchBackspace => {
-            let cursor = app.query_cursor.min(app.query.chars().count());
-            if cursor > 0 {
-                let mut chars: Vec<char> = app.query.chars().collect();
-                chars.remove(cursor - 1);
-                app.query = chars.into_iter().collect();
-                app.query_cursor = cursor - 1;
-                app.rebuild_list();
-            }
-        }
-        Command::SearchDelete => {
-            let cursor = app.query_cursor.min(app.query.chars().count());
-            let mut chars: Vec<char> = app.query.chars().collect();
-            if cursor < chars.len() {
-                chars.remove(cursor);
-                app.query = chars.into_iter().collect();
-                app.rebuild_list();
-            }
-        }
+        Command::SearchBackspace => backspace_query(app),
+        Command::SearchDelete => delete_query(app),
         Command::SearchLeft => {
             app.query_cursor = app.query_cursor.saturating_sub(1);
         }
@@ -304,13 +364,17 @@ pub fn apply(app: &mut App, command: Command) {
         Command::Down => nav::move_cursor(app, 1, false),
         Command::ContextUp => nav::move_context(app, -1, false),
         Command::ContextDown => nav::move_context(app, 1, false),
+        Command::ExtendContextUp => nav::move_context(app, -1, true),
+        Command::ExtendContextDown => nav::move_context(app, 1, true),
         Command::PageUp => nav::move_cursor(app, -5, false),
         Command::PageDown => nav::move_cursor(app, 5, false),
+        Command::ExtendPageUp => nav::move_cursor(app, -5, true),
+        Command::ExtendPageDown => nav::move_cursor(app, 5, true),
         Command::Home => nav::select_first(app),
         Command::End => nav::select_last(app),
         Command::ScrollUp => nav::scroll(app, -1),
         Command::ScrollDown => nav::scroll(app, 1),
-        Command::ToggleHiddenView => app.toggle_hidden_view(),
+        Command::ToggleHiddenView => nav::toggle_hidden_view(app),
         Command::ClearRange => nav::clear_range(app),
         Command::ExtendUp => nav::move_cursor(app, -1, true),
         Command::ExtendDown => nav::move_cursor(app, 1, true),
@@ -318,10 +382,11 @@ pub fn apply(app: &mut App, command: Command) {
     }
 }
 
-/// Is the cursor column on the checkbox of a todo row?
+/// Is the 1-based terminal column on the checkbox of a todo row?
 ///
-/// Used by the double-click path; exported so the mouse tests can pin the same
-/// column window the renderer draws.
+/// The window comes from [`checkbox_columns`], the same table the renderer and
+/// the Ink list use, so a prefix change cannot leave the double-click checkbox
+/// test pointing at the wrong columns.
 #[must_use]
 pub fn clicked_checkbox(app: &App, x: u16) -> bool {
     let columns = checkbox_columns(app.max_todo_number_digits());
@@ -334,7 +399,29 @@ fn insert_query_char(app: &mut App, ch: char) {
     chars.insert(cursor, ch);
     app.query = chars.into_iter().collect();
     app.query_cursor = cursor + 1;
-    app.rebuild_list();
+    nav::rebuild(app);
+}
+
+fn backspace_query(app: &mut App) {
+    let cursor = app.query_cursor.min(app.query.chars().count());
+    if cursor == 0 {
+        return;
+    }
+    let mut chars: Vec<char> = app.query.chars().collect();
+    chars.remove(cursor - 1);
+    app.query = chars.into_iter().collect();
+    app.query_cursor = cursor - 1;
+    nav::rebuild(app);
+}
+
+fn delete_query(app: &mut App) {
+    let cursor = app.query_cursor.min(app.query.chars().count());
+    let mut chars: Vec<char> = app.query.chars().collect();
+    if cursor < chars.len() {
+        chars.remove(cursor);
+        app.query = chars.into_iter().collect();
+        nav::rebuild(app);
+    }
 }
 
 #[cfg(test)]

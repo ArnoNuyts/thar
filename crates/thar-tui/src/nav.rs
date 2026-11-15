@@ -3,30 +3,38 @@
 //! These are the native equivalents of the pure helpers in
 //! `logic/navigation.ts` (and `thar-core::nav`), expressed over the owned
 //! [`ListRow`] model. The row model is the navigation model: context headers
-//! are skipped by row stepping, and they count for the viewport and for mouse
-//! hit-testing.
+//! are skipped by row stepping, they count for the viewport, and a shift range
+//! is contiguous over todo rows only. The uncategorised `"None"` header is a
+//! row like any other, so every row index here already accounts for it.
+//!
+//! [`scroll_to`] is a direct use of [`thar_core::calculate_scroll_offset`], the
+//! ported `calculateScrollOffset`: the offset keeps the cursor and as much of
+//! the shift range as possible visible, with one row of padding.
+//!
+//! [`rebuild`] and [`toggle_hidden_view`] are the `reconcileNavState` half of
+//! `hooks/useNavigationState.ts`. They are needed because the [`App`] rebuild
+//! only knows how to drop a cursor, while the hook keeps the old row as an
+//! anchor: the replacement cursor is the nearest visible todo forward from the
+//! old row, then backward.
 //!
 //! This module has no terminal or clock dependency; the event loop and the
 //! tests drive it with plain calls.
 
-use thar_core::TodoId;
+use thar_core::{SelectionRange, TodoId, calculate_scroll_offset};
 
 use crate::app::App;
 use crate::list::ListRow;
 
-/// Scroll padding kept around the cursor when the list scrolls, matching
-/// `calculateScrollOffset`'s one-row padding.
-pub const SCROLL_PADDING: usize = 1;
-
 /// Select the todo at `row`, optionally extending the shift-selection.
+///
+/// Selecting without shift clears the anchor and the range, matching
+/// `setSelectedTodoId(id)`. A shift selection with no anchor uses the previous
+/// cursor as the anchor, so the first shift step covers both rows.
 pub fn select_row(app: &mut App, row: usize, shift: bool) {
     let Some(entry) = app.rows().get(row) else {
         return;
     };
-    let Some(todo_index) = entry.todo_index() else {
-        return;
-    };
-    let Some(id) = app.todo_at(todo_index).map(|todo| todo.id) else {
+    let Some(id) = row_todo_id(app, entry) else {
         return;
     };
 
@@ -40,21 +48,15 @@ pub fn select_row(app: &mut App, row: usize, shift: bool) {
     }
 
     app.cursor = Some(id);
-    ensure_visible(app, row);
+    scroll_to(app, row);
 }
 
 /// Move `step` rows, skipping context headers.
+///
+/// Crossing a list boundary lands on the first (backward) or last (forward)
+/// todo row, never on a header.
 pub fn move_cursor(app: &mut App, step: isize, shift: bool) {
-    let Some(current) = app.cursor.and_then(|id| app.row_for(id)) else {
-        if let Some(first) = app.first_todo_id() {
-            app.cursor = Some(first);
-            if let Some(row) = app.row_for(first) {
-                ensure_visible(app, row);
-            }
-        }
-        return;
-    };
-
+    let current = app.cursor.and_then(|id| app.row_for(id)).unwrap_or(0);
     let Some(row) = navigable_row(app, current, step) else {
         return;
     };
@@ -80,8 +82,10 @@ pub fn select_last(app: &mut App) {
 }
 
 /// Move to the first todo of the next (`direction = 1`) or previous (`-1`)
-/// context group. The first group's first todo is the fallback for a cursor
-/// that is already above the first header.
+/// context group.
+///
+/// The group must directly follow its header; an empty group is not entered,
+/// matching the oracle's loop that stops at the next header.
 pub fn move_context(app: &mut App, direction: isize, shift: bool) {
     let Some(current) = app.cursor.and_then(|id| app.row_for(id)) else {
         return;
@@ -109,17 +113,19 @@ pub fn move_context(app: &mut App, direction: isize, shift: bool) {
         return;
     };
 
-    let target = app.rows()[target_header + 1..]
-        .iter()
-        .position(|row| row.is_todo())
-        .map(|offset| target_header + 1 + offset);
-
-    if let Some(row) = target {
-        select_row(app, row, shift);
+    if app
+        .rows()
+        .get(target_header + 1)
+        .is_some_and(ListRow::is_todo)
+    {
+        select_row(app, target_header + 1, shift);
     }
 }
 
 /// Scroll the viewport by one row without moving the cursor.
+///
+/// The viewport is clamped to `0..=max_offset`, so a wheel event at either end
+/// is a no-op.
 pub fn scroll(app: &mut App, direction: isize) {
     let max = app.max_offset();
     let next = if direction < 0 {
@@ -136,8 +142,93 @@ pub fn clear_range(app: &mut App) {
     app.range.clear();
 }
 
-/// Row reached by stepping from `current`, skipping headers; crossing a
-/// boundary falls back to the first/last todo row.
+/// Rebuild the row model after a query change and reconcile the selection.
+///
+/// This is the filter half of `reconcileNavState`: a cursor that is still
+/// visible stays; otherwise the nearest todo forward from the old row wins,
+/// then the nearest one backward. A range is cleared as a whole as soon as one
+/// of its ids is filtered out, so a selection never silently shrinks.
+pub fn rebuild(app: &mut App) {
+    let previous = Previous::capture(app);
+    app.rebuild_list();
+    previous.reconcile(app);
+}
+
+/// Toggle the hidden view and reconcile the selection like [`rebuild`].
+pub fn toggle_hidden_view(app: &mut App) {
+    let previous = Previous::capture(app);
+    app.toggle_hidden_view();
+    previous.reconcile(app);
+}
+
+/// Navigation metadata captured before the row model is rebuilt.
+struct Previous {
+    cursor: Option<TodoId>,
+    anchor: Option<TodoId>,
+    range: Vec<TodoId>,
+    row: usize,
+}
+
+impl Previous {
+    fn capture(app: &App) -> Self {
+        Self {
+            cursor: app.cursor,
+            anchor: app.anchor,
+            range: app.range.clone(),
+            row: app.cursor.and_then(|id| app.row_for(id)).unwrap_or(0),
+        }
+    }
+
+    /// Restore the cursor and range over the rebuilt row model.
+    fn reconcile(self, app: &mut App) {
+        app.cursor = match self.cursor {
+            Some(id) if app.row_for(id).is_some() => Some(id),
+            _ => validate_cursor(app, self.row),
+        };
+
+        if self.range.iter().all(|id| app.row_for(*id).is_some()) {
+            app.range = self.range;
+            app.anchor = self.anchor;
+        } else {
+            app.range.clear();
+            app.anchor = None;
+        }
+
+        match app.cursor.and_then(|id| app.row_for(id)) {
+            Some(row) => scroll_to(app, row),
+            None => app.clamp_offset(),
+        }
+    }
+}
+
+/// Fallback cursor for a list whose selection disappeared.
+///
+/// Port of the row half of `validateSelection`: from the old row (clamped to
+/// the new row count) search forward for a todo row, then backward. The
+/// oracle's hash step restores a cursor after a file reload; a filter rebuild
+/// keeps the same todos, so there is nothing for it to match here.
+fn validate_cursor(app: &App, last_row: usize) -> Option<TodoId> {
+    let rows = app.rows();
+    if rows.is_empty() {
+        return None;
+    }
+
+    let target = last_row.min(rows.len() - 1);
+    rows[target..]
+        .iter()
+        .find_map(|row| row_todo_id(app, row))
+        .or_else(|| {
+            rows[..target]
+                .iter()
+                .rev()
+                .find_map(|row| row_todo_id(app, row))
+        })
+}
+
+/// Row reached by stepping from `current`, skipping headers.
+///
+/// Port of `getNavigableRow`: a move that crosses the list boundary falls back
+/// to the first (backward) or last (forward) todo row.
 fn navigable_row(app: &App, current: usize, step: isize) -> Option<usize> {
     if app.rows().is_empty() {
         return None;
@@ -164,6 +255,51 @@ fn navigable_row(app: &App, current: usize, step: isize) -> Option<usize> {
     Some(row)
 }
 
+/// Keep `row` and the active shift range visible.
+///
+/// `calculate_scroll_offset` already includes the one-row padding and the
+/// "show the whole range when it fits" rule; this wrapper only resolves the
+/// range ids to row bounds. With no list rows on screen (a terminal shorter
+/// than the chrome) there is nothing to scroll, so the offset is left alone.
+fn scroll_to(app: &mut App, row: usize) {
+    let height = app.visible_height();
+    if height == 0 {
+        app.clamp_offset();
+        return;
+    }
+
+    let range = app.range.clone();
+    let selection = selection_range_rows(app, &range, row);
+    app.offset = calculate_scroll_offset(row, selection, app.offset, height, app.rows().len());
+    app.clamp_offset();
+}
+
+/// First and last rows covered by `range`, always including `fallback`.
+///
+/// Port of `getSelectionRangeRows`: range ids that are not visible in the
+/// current row model are ignored rather than treated as a position.
+fn selection_range_rows(app: &App, range: &[TodoId], fallback: usize) -> SelectionRange {
+    let mut selection = SelectionRange {
+        min: fallback,
+        max: fallback,
+    };
+
+    if range.is_empty() {
+        return selection;
+    }
+
+    for (index, row) in app.rows().iter().enumerate() {
+        if let Some(id) = row_todo_id(app, row)
+            && range.contains(&id)
+        {
+            selection.min = selection.min.min(index);
+            selection.max = selection.max.max(index);
+        }
+    }
+
+    selection
+}
+
 /// All todo ids between two ids (inclusive), following row order.
 fn range_between(app: &App, left: TodoId, right: TodoId) -> Vec<TodoId> {
     let Some(left_row) = app.row_for(left) else {
@@ -180,26 +316,15 @@ fn range_between(app: &App, left: TodoId, right: TodoId) -> Vec<TodoId> {
 
     app.rows()[start..=end]
         .iter()
-        .filter_map(|row| row.todo_index())
-        .filter_map(|index| app.todo_at(index))
-        .map(|todo| todo.id)
+        .filter_map(|row| row_todo_id(app, row))
         .collect()
 }
 
-/// Keep `row` visible with one row of padding where possible.
-fn ensure_visible(app: &mut App, row: usize) {
-    let height = app.visible_height();
-    if height == 0 {
-        return;
-    }
-    let padding = SCROLL_PADDING.min(height / 2);
-
-    if row < app.offset + padding {
-        app.offset = row.saturating_sub(padding);
-    } else if row + padding >= app.offset + height {
-        app.offset = (row + padding + 1).saturating_sub(height);
-    }
-    app.clamp_offset();
+/// Todo id behind a todo row, or `None` for a header.
+fn row_todo_id(app: &App, row: &ListRow) -> Option<TodoId> {
+    row.todo_index()
+        .and_then(|index| app.todo_at(index))
+        .map(|todo| todo.id)
 }
 
 #[cfg(test)]
