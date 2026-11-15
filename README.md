@@ -43,28 +43,61 @@ Supports projects (`+project`), contexts (`@context`), priorities, due dates,
 threshold dates, recurrence, and hidden todos. Run `thar --help` for options
 and see the [todo.txt format](https://github.com/todotxt/todo.txt) for tags.
 
-## Rust port (development)
+## Rust core
 
-The `todo.txt` domain is being ported to Rust in `crates/` and loaded through
-WebAssembly. Nothing in the shipped app changes yet: the TypeScript
-implementation is still the source of truth, no `wasm` package is published, and
-both variables below are development-only.
+Thar's `todo.txt` domain (parsing, sorting/search/indexing, row building and
+serialization) runs on a Rust core compiled to WebAssembly. The WASM is built
+from `crates/thar-wasm`, shipped inside the npm package at
+`crates/thar-wasm/pkg/`, and used by default.
+
+The write path still serializes with the TypeScript implementation and
+byte-compares the Rust result against it before saving: if the two ever
+disagree, the TypeScript bytes are written and one diagnostic line says so.
+Nothing is lost and the file never contains a mix.
+
+| Variable         | Effect                                                                                                                                                                                                               |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `THAR_CORE=ts`   | Escape hatch for one release: use the TypeScript core only. Loads no WASM package and behaves exactly like the pre-port app.                                                                                         |
+| `THAR_CORE=rust` | Explicit default. Any value other than `ts` selects the Rust core.                                                                                                                                                   |
+| `THAR_CORE_WASM` | Development-only: explicit path to another `thar_wasm.js`. Resolved with `path.resolve`, so a relative value is relative to the working directory; unset, only the module-relative `crates/thar-wasm/pkg/` is tried. |
+| `THAR_MAX_*`     | Read limits (`THAR_MAX_FILE_BYTES`, `THAR_MAX_READ_TODOS`, `THAR_MAX_LINE_CHARS`). They are passed to the Rust parser, so both implementations judge a file the same way.                                            |
+
+The Rust core is defensive by design. A missing or broken package, an absent
+export, a malformed answer, a host collation locale other than `en-US`, or any
+disagreement with the TypeScript implementation falls back to the TypeScript
+path with **one bounded, content-free `console.debug` line**. Startup never
+throws, and an invalid todo file still reports its exact validation error.
+
+The Rust sort implements the `en-US`/ICU ordering that the app has always used.
+On a host whose default collator differs, the main list falls back to the
+TypeScript ordering for that session so contexts keep their expected order;
+writing does not sort, so it is unaffected.
+
+### Building from source
 
 ```sh
-wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg
+npm ci
+npm run build      # TypeScript bundle; works without Rust
+npm start          # dev run; works without Rust (falls back to TypeScript)
 ```
 
-| Variable          | Effect                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `THAR_CORE=ts`    | Default. Only value that is live today; `rust` is read but behaves identically until CP3.                                                                                                                                                                                                                                                                                                                  |
-| `THAR_SHADOW=1`   | After each successful load, parse the same text with the Rust core and compare per-todo `toString`/`hash` and the serialized file. Off by default; never changes state, saves or toasts. One record is appended **per load** that differs (a file that keeps disagreeing appends on every load; the 64 KiB cap eventually drops the oldest records), while the `console.warn` summary is once per process. |
-| `THAR_SHADOW_LOG` | Shadow log path. Default `<cache>/thar/shadow.log` (`$XDG_CACHE_HOME`, `~/Library/Caches`, `%LOCALAPPDATA%`, else `~/.cache`). Records counts, line indexes and 16-hex-digit SHA-256 digests only — never todo text. Capped at 64 KiB; the file is truncated before an append would exceed the cap.                                                                                                        |
-| `THAR_CORE_WASM`  | Dev-only escape hatch: explicit path to another `thar_wasm.js`. Resolved with `path.resolve`, so a relative value is relative to the working directory; unset, only the module-relative `crates/thar-wasm/pkg/` is tried.                                                                                                                                                                                  |
+Running from source without a built WASM package is supported: the app logs one
+line and uses the TypeScript core. To get the Rust core locally, or to produce
+an npm tarball, you need Rust 1.99.1 and `wasm-pack`:
 
-A missing or broken package disables the Rust path silently (one `console.debug`
-line), so the app and its tests work in a clean checkout without Rust. See
-[`docs/rust-port/PLAN.md`](docs/rust-port/PLAN.md) and
-[`tools/port/README.md`](tools/port/README.md).
+```sh
+npm run build:wasm   # wasm-pack build ... --out-dir pkg --locked
+npm run build
+```
+
+`npm pack` and `npm publish` run `prepack`, which builds the WASM and then the
+TypeScript bundle, so both toolchains are required for packaging. The WASM is
+kept within a 250 KB raw / 100 KB gzip budget enforced in CI.
+
+See [`docs/rust-port/PLAN.md`](docs/rust-port/PLAN.md) and
+[`tools/port/README.md`](tools/port/README.md) for the porting checkpoints and
+the offline differential harness (`npm run port:contract*`), which stays in CI
+as the TypeScript oracle even though the runtime comparison is gone.
 
 ## License
 
