@@ -319,11 +319,15 @@ recorded. Do not start the next checkpoint while one is red.
   limits from the environment, and the CP1 error record shape.
 - `logic/core-wasm.ts` is the dev-only adapter (`parseFileWithCore`) and the
   `THAR_SHADOW=1` check. It loads the package with `createRequire` and a
-  module-relative runtime path (never `process.cwd()`), so the build, the test
-  matrix and `npm run check` never require Rust or a built `pkg/`, and an
-  unrelated working directory cannot shadow the checkout's package. Any failure
-  degrades to "TypeScript only" with at most one debug line that never quotes
-  the input.
+  module-relative runtime path; there is no `process.cwd()` candidate, so the
+  build, the test matrix and `npm run check` never require Rust or a built
+  `pkg/`, and an unrelated working directory cannot shadow the checkout's
+  package. `THAR_CORE_WASM` is a **dev-only escape hatch** for pointing the
+  adapter at another build, and it is resolved with `path.resolve`, so a
+  _relative_ value is still relative to `process.cwd()`. The working directory
+  therefore only decides where an explicitly named package lives — it can never
+  cause a package to be picked up implicitly. Any failure degrades to
+  "TypeScript only" with at most one debug line that never quotes the input.
 - The shadow check passes the effective `ReadLimits` of the load to
   `parseFileWithLimits`, so a `THAR_MAX_*` override cannot produce a spurious
   `FILE_TOO_LARGE`/`LINE_TOO_LONG` rejection.
