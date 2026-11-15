@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vitest";
-import { isValid } from "date-fns";
+import { isValid } from "date-fns/isValid";
 
 import { scanTodoPrefix, formatDateTag } from "../logic/dates.ts";
 import { Todo } from "../logic/todo.ts";

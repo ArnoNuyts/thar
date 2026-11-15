@@ -1,11 +1,8 @@
 import { expect, test } from "vitest";
-import {
-  format,
-  formatDate,
-  lightFormat,
-  startOfTomorrow,
-  startOfYesterday,
-} from "date-fns";
+import { format, formatDate } from "date-fns/format";
+import { lightFormat } from "date-fns/lightFormat";
+import { startOfTomorrow } from "date-fns/startOfTomorrow";
+import { startOfYesterday } from "date-fns/startOfYesterday";
 
 import { Todo } from "../logic/todo.ts"; // Adjust the path as needed
 import { TodoStateEnum } from "../types/enums.ts";

@@ -1,4 +1,7 @@
-import { addDays, addMonths, addWeeks, addYears } from "date-fns";
+import { addDays } from "date-fns/addDays";
+import { addMonths } from "date-fns/addMonths";
+import { addWeeks } from "date-fns/addWeeks";
+import { addYears } from "date-fns/addYears";
 import { isValidTodoDate } from "./dates.ts";
 
 const RECURRENCE_REGEX = /^\+?(\d+)([dwmy])$/;

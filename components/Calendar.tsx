@@ -1,19 +1,17 @@
-import {
-  addDays,
-  addMonths,
-  addWeeks,
-  eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
-  format,
-  isSameDay,
-  isSameMonth,
-  startOfMonth,
-  startOfWeek,
-  subDays,
-  subMonths,
-  subWeeks,
-} from "date-fns";
+import { addDays } from "date-fns/addDays";
+import { addMonths } from "date-fns/addMonths";
+import { addWeeks } from "date-fns/addWeeks";
+import { eachDayOfInterval } from "date-fns/eachDayOfInterval";
+import { endOfMonth } from "date-fns/endOfMonth";
+import { endOfWeek } from "date-fns/endOfWeek";
+import { format } from "date-fns/format";
+import { isSameDay } from "date-fns/isSameDay";
+import { isSameMonth } from "date-fns/isSameMonth";
+import { startOfMonth } from "date-fns/startOfMonth";
+import { startOfWeek } from "date-fns/startOfWeek";
+import { subDays } from "date-fns/subDays";
+import { subMonths } from "date-fns/subMonths";
+import { subWeeks } from "date-fns/subWeeks";
 import { Box, Text } from "ink";
 import { useInput } from "../hooks/useInput.ts";
 import { useState } from "react";

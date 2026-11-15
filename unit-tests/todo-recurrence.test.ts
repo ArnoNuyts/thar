@@ -1,4 +1,8 @@
-import { addDays, addMonths, addWeeks, addYears, format } from "date-fns";
+import { addDays } from "date-fns/addDays";
+import { addMonths } from "date-fns/addMonths";
+import { addWeeks } from "date-fns/addWeeks";
+import { addYears } from "date-fns/addYears";
+import { format } from "date-fns/format";
 import { expect, test, vi } from "vitest";
 
 import {

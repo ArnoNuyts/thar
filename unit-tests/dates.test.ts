@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
-import { addMonths, format } from "date-fns";
+import { addMonths } from "date-fns/addMonths";
+import { format } from "date-fns/format";
 
 import { dateForOption, formatDateTag, parseDateTag } from "../logic/dates.ts";
 

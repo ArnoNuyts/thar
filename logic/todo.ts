@@ -1,4 +1,7 @@
-import { isBefore, isSameDay, isValid, startOfDay } from "date-fns";
+import { isBefore } from "date-fns/isBefore";
+import { isSameDay } from "date-fns/isSameDay";
+import { isValid } from "date-fns/isValid";
+import { startOfDay } from "date-fns/startOfDay";
 import { TodoStateEnum } from "../types/enums.ts";
 import { UpperCaseLetter } from "../types/types.ts";
 import {

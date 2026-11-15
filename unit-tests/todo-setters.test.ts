@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { format } from "date-fns";
+import { format } from "date-fns/format";
 
 import { Todo } from "../logic/todo.ts";
 import { TodoStateEnum } from "../types/enums.ts";
