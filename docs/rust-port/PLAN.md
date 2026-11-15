@@ -1,9 +1,10 @@
 # Thar Rust port — implementation plan
 
 - **Branch:** `feature/rust-port` (long-lived integration branch)
-- **Status:** Plan + checkpoint ladder. The Rust crates and the Rust CI
-  workflow are deliberately deferred until CP2 (see §5); this branch currently
-  contains no Rust code.
+- **Status:** Plan + checkpoint ladder. CP0 (corpus, baseline) and CP1's
+  contract inputs are in; CP2a adds the `thar-core` crate, the `thar-wasm`
+  scaffold, and the Rust CI workflow. See §4, §5 and §9.1 for what exists
+  today.
 - **Date:** 2026-11-15
 - **Related:** [`scripts/benchmark-list.tsx`](../../scripts/benchmark-list.tsx),
   [`docs/update-mechanism.md`](../update-mechanism.md), [`AGENTS.md`](../../AGENTS.md)
@@ -120,9 +121,9 @@ benchmark report.
 
 ## 4. Architecture
 
-The tree below is the target layout. No crate exists on this branch yet: the
-workspace is added at CP2, after the freeze corpus and differential harness
-are in place.
+The tree below is the target layout. CP2a has landed the workspace,
+`thar-core` and the `thar-wasm` scaffold; `thar-tui`, `thar-cli` and
+`thar-testdata` are still deferred to Phases 4–6.
 
 ```text
 Cargo.toml                  workspace
@@ -135,6 +136,11 @@ crates/
   thar-testdata/            (Phase 1) shared fixtures/golden files (optional)
 docs/rust-port/PLAN.md      this file
 ```
+
+`thar-core` is dependency-free (dev-dependencies only: `serde`, `serde_json`,
+`sha2` for the corpus tests). `thar-wasm` is a `cdylib`/`rlib` with
+`wasm-bindgen`. Both crates `#![forbid(unsafe_code)]` and
+`#![deny(missing_docs)]`.
 
 ### `thar-core`
 
@@ -275,8 +281,8 @@ recorded. Do not start the next checkpoint while one is red.
 ### CP2 — First crate, read-only shadow (no behaviour change)
 
 - Add the Cargo workspace, `thar-core`, `thar-wasm`, and `rust-toolchain.toml`.
-- Copy `docs/rust-port/rust.yml` to `.github/workflows/rust.yml` and make the
-  Rust job green before writing domain code.
+- Install `.github/workflows/rust.yml` from the validated commands in §9.1 and
+  make the Rust job green before writing domain code.
 - Implement parse/serialize in `thar-core`; run the CP1 contract against it.
 - Add `THAR_SHADOW=1` (dev only): the app still uses TS for everything, but
   parses with Rust after load and records mismatches (case IDs and hashes, not
@@ -285,11 +291,28 @@ recorded. Do not start the next checkpoint while one is red.
   ≤ 250 KB raw / ≤ 100 KB gzip; TS fallback works if WASM fails to load.
 - Rollback: delete the crate and the Rust workflow; nothing user-visible
   changed.
+- Recorded gaps after the CP2a review (do not silently drop):
+  - `expected.json` has no `isPassedThreshold` field. The Rust parity test
+    pins the value for every committed `t:` todo until CP1/CP2b adds the field
+    to `unit-tests/port-corpus.test.ts`.
+  - `FILE_TOO_LARGE` / `TOO_MANY_LINES` / `LINE_TOO_LONG` are generated
+    TypeScript-side only; the Rust corpus cannot pin them until CP2b decides
+    whether to commit those fixtures.
+  - A corpus fixture for JS-whitespace/`U+FEFF` trimming and the 8 192-unit
+    astral boundary is a CP0 follow-up. Rust unit tests cover both today.
 
 ### CP3 — Rust read path opt-in
 
 - `THAR_CORE=rust` uses Rust for parse + sort/filter/index/search and row
   building. Writes still go through the TS serializer.
+- Address the CP2a perf TODOs before this checkpoint ships: the prefix scanner
+  allocates two `Vec`s per line (12.7 ms per 10 000-line parse; intended fix:
+  fixed `[Option<&str>; 2]` plus an invalid-date flag) and tag lookup is a
+  linear scan (O(tags²) per todo across the predicates; intended fix:
+  insertion-ordered key→index map).
+- Keep the immutable setters encapsulated (`fn(self) -> Self` builders, no
+  public mutable fields) so the `dates_in_text` / `completion_date_in_text`
+  round-trip flags cannot be desynchronized from `text`.
 - On any WASM init/parse error: log once, fall back to TS, keep running.
   Never surface a raw Rust error in the TUI.
 - Gate: corpus and randomized lists produce byte-identical rows and
@@ -403,13 +426,14 @@ Estimates are for one experienced developer; parallelisable across two.
 Deliverables:
 
 - [x] This plan and the checkpoint ladder (§5).
-- [ ] `testdata/port/` corpus and exact-byte characterization tests.
+- [x] `testdata/port/` corpus and exact-byte characterization tests.
 - [x] `docs/rust-port/baseline.md` with benchmark/startup/memory baselines.
 - [ ] TS-only differential harness with a seeded-bug proof.
 - [ ] Node CI job that runs the harness.
 
-Crates are deliberately deferred: **no Cargo workspace in Phase 0**. The first
-crate lands at CP2, after the corpus and harness can prove it correct.
+The Cargo workspace was deliberately deferred out of Phase 0; CP2a has since
+landed it with `thar-core` and the `thar-wasm` scaffold (§4). The differential
+harness (CP1) is still the missing half of this phase.
 
 Exit criteria: the harness catches a seeded parser mutation, the corpus covers
 every rule in §7, and `npm test` + `npm run check` are green.
@@ -596,35 +620,40 @@ or on demand until the parser is stable.
 
 ## 9. CI/CD
 
-### 9.1 Status: draft, not active
+### 9.1 Status: installed and active
 
-No Rust workflow is installed yet. The draft lives at
-[`docs/rust-port/rust.yml`](rust.yml) and is copied to
-`.github/workflows/rust.yml` at CP2, when the first crate exists. The commands
-were validated locally on 2026-11-15 (scaffold: 16 129 bytes raw / 7 437 bytes
-gzip), but the workflow itself has not run on GitHub.
-
-When activated it is path-filtered (`Cargo.toml`, `Cargo.lock`,
-`rust-toolchain.toml`, `crates/**`, the workflow itself) so the Node pipeline
-is unaffected.
+The Rust workflow is installed at
+[`.github/workflows/rust.yml`](../../.github/workflows/rust.yml); it is the only
+copy, so it cannot drift from a draft. It is path-filtered (`Cargo.toml`,
+`Cargo.lock`, `rust-toolchain.toml`, `crates/**`, `testdata/port/**`, the
+workflow itself) so the Node pipeline is unaffected. CP2a ran it green with the
+`thar-core` + `thar-wasm` scaffold.
 
 Jobs:
 
-- **test** (ubuntu): `cargo fmt --all --check`, `cargo clippy --workspace
-  --all-targets --all-features -- -D warnings`, `cargo test --workspace
-  --all-features`.
+- **test** (ubuntu): `cargo fmt --all --check`, `cargo clippy --locked
+  --workspace --all-targets --all-features -- -D warnings`, `cargo test
+  --locked --workspace --all-features`.
 - **wasm** (ubuntu):
   - installs Rust 1.99.1 + `wasm32-unknown-unknown` (`dtolnay/rust-toolchain`);
   - caches with `Swatinem/rust-cache@v2` (key `wasm`);
   - installs `wasm-pack` via `taiki-e/install-action@wasm-pack`;
-  - installs `binaryen` (`wasm-opt`) from apt;
+  - installs `binaryen` (`wasm-opt`) from apt, which wasm-pack prefers over its
+    bundled optimizer;
   - runs `wasm-pack build crates/thar-wasm --release --target nodejs
-    --out-dir pkg`;
+    --out-dir pkg --locked`;
   - enforces the size budget: **≤ 250 KB raw, ≤ 100 KB gzip**;
   - runs a Node smoke test (`recordCount`, `coreVersion`) against the built
     package;
   - uploads `pkg/**` and `wasm-size.txt` as the `thar-wasm` artifact
     (14 days).
+
+`--locked` fails the build when `Cargo.lock` is stale; `cargo fmt` has no such
+flag because it does not resolve dependencies.
+
+`crates/thar-wasm/LICENSE` is a symlink to the repository `LICENSE`, so
+wasm-pack finds the license text and ships it in `pkg/` without a duplicate
+copy to maintain.
 
 Why a size gate: the incremental path only makes sense if the core stays
 small enough to ship inside the npm package or fetch cheaply. The budget is
