@@ -3,9 +3,9 @@
 //! This is a manual asset generator, not a CI test: it is `#[ignore]`d and
 //! never runs in the normal suite. It spawns `thar-rs` on a 100x30 PTY with
 //! [`FIXTURE`], waits for the first complete frame, and turns the parsed
-//! `vt100` screen into an SVG with one coloured text run per style run, then
-//! rasterizes that SVG to PNG. The image is what the terminal actually drew;
-//! nothing is mocked or re-laid-out.
+//! `vt100` screen into an SVG with one text element per cell, then rasterizes
+//! that SVG to PNG. The image is what the terminal actually drew; nothing is
+//! mocked or re-laid-out.
 //!
 //! Run it from the repository root:
 //!
@@ -141,7 +141,7 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
         }
 
         for run in &runs {
-            if run.text.trim().is_empty() {
+            if run.cells.is_empty() {
                 continue;
             }
             let mut attributes = format!("fill=\"{}\"", hex(run.foreground));
@@ -155,17 +155,16 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
             // glyph having exactly CELL_WIDTH advance; box-drawing characters
             // in the fallback font do not, so a long border drifts and the
             // corner lands left of the vertical edge. Positioning each glyph
-            // keeps the SVG faithful to the cell grid.
-            for (offset, character) in run.text.chars().enumerate() {
-                if character == ' ' {
+            // by the cell column keeps the SVG faithful to the grid.
+            for (column, contents) in &run.cells {
+                if contents.trim().is_empty() {
                     continue;
                 }
-                let column = u32::from(run.start) + u32::try_from(offset).unwrap_or(0);
                 svg.push_str(&format!(
                     "    <text x=\"{}\" y=\"{}\" {attributes} xml:space=\"preserve\">{}</text>\n",
-                    MARGIN + column * CELL_WIDTH,
+                    MARGIN + u32::from(*column) * CELL_WIDTH,
                     MARGIN + u32::from(row) * CELL_HEIGHT + BASELINE,
-                    escape(&character.to_string())
+                    escape(contents)
                 ));
             }
         }
@@ -178,7 +177,10 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
 /// One run of cells that share a foreground, background, bold and dim.
 struct Run {
     start: u16,
-    text: String,
+    /// Exclusive end column, including the continuation cells of wide glyphs.
+    end: u16,
+    /// The contents of each non-continuation cell, with its real column.
+    cells: Vec<(u16, String)>,
     foreground: [u8; 3],
     background: [u8; 3],
     bold: bool,
@@ -186,10 +188,9 @@ struct Run {
 }
 
 impl Run {
-    /// Width in terminal cells. The fixture is ASCII, so one `char` is one
-    /// cell; a wide character would need its continuation cell skipped.
+    /// Width in terminal cells.
     fn width(&self) -> u32 {
-        u32::try_from(self.text.chars().count()).unwrap_or(0)
+        u32::from(self.end.saturating_sub(self.start))
     }
 }
 
@@ -202,7 +203,11 @@ fn runs(screen: &vt100::Screen, row: u16, cols: u16) -> Vec<Run> {
         };
         let contents = cell.contents();
         if contents.is_empty() {
-            // The continuation cell of a wide character.
+            // The continuation cell of a wide character: the run's painted
+            // background covers it, but there is no glyph to emit.
+            if let Some(run) = runs.last_mut() {
+                run.end = col.saturating_add(1);
+            }
             continue;
         }
 
@@ -218,10 +223,14 @@ fn runs(screen: &vt100::Screen, row: u16, cols: u16) -> Vec<Run> {
                 && run.dim == cell.dim()
         });
         match continuation {
-            Some(run) => run.text.push_str(contents),
+            Some(run) => {
+                run.cells.push((col, contents.to_owned()));
+                run.end = col.saturating_add(1);
+            }
             None => runs.push(Run {
                 start: col,
-                text: contents.to_owned(),
+                end: col.saturating_add(1),
+                cells: vec![(col, contents.to_owned())],
                 foreground,
                 background,
                 bold: cell.bold(),
@@ -329,4 +338,42 @@ fn cp6_paste_fix_screenshot() {
         0,
         "the screenshot run must exit cleanly"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroU16;
+
+    use super::runs;
+
+    fn cells(input: &str, cols: u16) -> Vec<(u16, String)> {
+        let mut parser = vt100::Parser::new(
+            NonZeroU16::new(2).expect("rows"),
+            NonZeroU16::new(cols).expect("cols"),
+            0,
+        );
+        parser.process(input.as_bytes());
+        runs(parser.screen(), 0, cols)
+            .into_iter()
+            .flat_map(|run| run.cells)
+            .collect()
+    }
+
+    #[test]
+    fn wide_characters_keep_their_real_columns() {
+        let cells = cells("日本語abc", 10);
+        assert_eq!(
+            cells.iter().map(|(col, _)| *col).collect::<Vec<_>>(),
+            [0, 2, 4, 6, 7, 8]
+        );
+        assert_eq!(cells[0].1, "日");
+        assert_eq!(cells[3].1, "a");
+    }
+
+    #[test]
+    fn a_combining_sequence_stays_in_one_cell() {
+        let cells = cells("e\u{301}x", 4);
+        assert_eq!(cells[0], (0, "e\u{301}".to_owned()));
+        assert_eq!(cells[1], (1, "x".to_owned()));
+    }
 }
