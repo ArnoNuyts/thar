@@ -70,7 +70,7 @@ pub fn format_usage(version: &str) -> String {
         "  --no-update-check     Accepted for CLI parity".to_owned(),
         String::new(),
         "This binary is read-only: it never creates, saves, or archives todos.".to_owned(),
-        "Press x inside the app for the command menu.".to_owned(),
+        "Editing, the command menu and the modals arrive with CP7.".to_owned(),
     ]
     .join("\n")
 }

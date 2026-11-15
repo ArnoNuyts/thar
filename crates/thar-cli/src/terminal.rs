@@ -40,8 +40,9 @@ const MIN_POLL: Duration = Duration::from_millis(1);
 
 /// Test-only trigger that panics after the session has entered.
 ///
-/// A later PTY test sets this to `1` to prove the panic hook restores the
-/// terminal. It is inert unless the value is exactly `1`.
+/// A PTY test sets this to `1` to prove the panic hook restores the terminal.
+/// It is inert unless the value is exactly `1`, and the trigger is compiled
+/// out of release builds.
 const PANIC_ENV: &str = "THAR_TUI_PANIC";
 
 /// A panic hook owned by the session so it can be restored after the TUI exits.
@@ -166,7 +167,10 @@ impl TerminalSession {
             previous_hook: Some(shared),
         };
 
-        if panic_trigger_requested() {
+        // Debug builds only: the PTY suite needs a deterministic panic, but a
+        // release binary must never crash because an environment variable is
+        // set. CI runs the PTY tests in the development profile.
+        if cfg!(debug_assertions) && panic_trigger_requested() {
             panic!("{PANIC_ENV}=1: deliberately panicking to test terminal restore");
         }
 
@@ -297,9 +301,11 @@ fn paste_into_search(app: &mut App, text: &str) {
     if !app.search_focused {
         return;
     }
-    for character in text.chars().filter(|character| is_pastable(*character)) {
-        input::apply(app, input::Command::SearchInsert(character));
-    }
+    let text: String = text
+        .chars()
+        .filter(|character| is_pastable(*character))
+        .collect();
+    input::insert_query_text(app, &text);
 }
 
 #[cfg(test)]

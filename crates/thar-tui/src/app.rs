@@ -15,7 +15,7 @@
 
 use std::time::{Duration, Instant};
 
-use thar_core::{ReadLimits, Todo, TodoDate, TodoId};
+use thar_core::{Todo, TodoDate, TodoId};
 
 use crate::layout::Layout;
 use crate::list::{ListModel, ListRow};
@@ -51,6 +51,9 @@ pub struct App {
     pub views: Vec<OwnedView>,
     /// The current row model (sorted, filtered, searched, grouped).
     pub list: ListModel,
+    /// Row index for each load-order todo id, or `None` when filtered out.
+    /// Kept in step with `list` by [`App::recompute_rows`].
+    row_of: Vec<Option<usize>>,
     /// Local calendar day used by the overdue and threshold rules.
     pub today: TodoDate,
     /// Current search query, before normalization.
@@ -89,13 +92,13 @@ impl App {
     #[must_use]
     pub fn new(filename: impl Into<String>, todos: Vec<Todo>, today: TodoDate) -> Self {
         let views: Vec<OwnedView> = todos.iter().map(view_for).collect();
-        let list = ListModel::build(&todos, &views, "", false, today);
 
         let mut app = Self {
             filename: filename.into(),
             todos,
             views,
-            list,
+            list: ListModel::default(),
+            row_of: Vec::new(),
             today,
             query: String::new(),
             query_cursor: 0,
@@ -112,8 +115,9 @@ impl App {
             should_quit: false,
             read_only: true,
         };
+        app.recompute_rows();
         app.cursor = app.first_todo_id();
-        app.clamp_offset();
+        crate::nav::reflow(&mut app);
         app
     }
 
@@ -124,12 +128,10 @@ impl App {
         self.views = self.todos.iter().map(view_for).collect();
         self.range.clear();
         self.anchor = None;
-        self.rebuild_list();
-        self.cursor = self
-            .cursor
-            .filter(|id| self.row_for(*id).is_some())
-            .or_else(|| self.first_todo_id());
-        self.clamp_offset();
+        self.cursor = None;
+        self.recompute_rows();
+        self.cursor = self.first_todo_id();
+        crate::nav::reflow(self);
     }
 
     /// Current terminal size and rows.
@@ -145,7 +147,12 @@ impl App {
     }
 
     /// Rebuild the row model from the current todos, views, query and flags.
-    pub fn rebuild_list(&mut self) {
+    ///
+    /// Only the rows and the id-to-row map change; selection and scrolling are
+    /// reconciled by [`crate::nav::rebuild`], which is the single
+    /// `reconcileNavState` implementation. Calling this directly would leave a
+    /// cursor pointing at a row that no longer exists.
+    pub(crate) fn recompute_rows(&mut self) {
         self.list = ListModel::build(
             &self.todos,
             &self.views,
@@ -153,40 +160,34 @@ impl App {
             self.show_hidden,
             self.today,
         );
-        self.cursor = self
-            .cursor
-            .filter(|id| self.row_for(*id).is_some())
-            .or_else(|| self.first_todo_id());
-        let visible: Vec<usize> = self
-            .list
-            .rows
-            .iter()
-            .filter_map(ListRow::todo_index)
-            .collect();
-        self.range = self
-            .range
-            .iter()
-            .copied()
-            .filter(|id| visible.contains(&usize::try_from(id.value()).unwrap_or(usize::MAX)))
-            .collect();
+
+        self.row_of = vec![None; self.todos.len()];
+        for (row, entry) in self.list.rows.iter().enumerate() {
+            if let Some(index) = entry.todo_index()
+                && let Some(slot) = self.row_of.get_mut(index)
+            {
+                *slot = Some(row);
+            }
+        }
+
         self.clamp_offset();
     }
 
-    /// Replace the query and move the cursor to its end.
+    /// Replace the query, move the cursor to its end, and reconcile selection.
     pub fn set_query(&mut self, query: impl Into<String>) {
         self.query = query.into();
         self.query_cursor = self.query.chars().count();
-        self.rebuild_list();
+        crate::nav::rebuild(self);
     }
 
-    /// Toggle the hidden-todo view and toast the new state.
+    /// Toggle the hidden-todo view, reconcile selection, and toast the state.
     ///
     /// The message describes the state the user is leaving, matching the Ink
     /// app's `showHidden ? "Hidden todos hidden" : "Hidden todos shown"`.
     pub fn toggle_hidden_view(&mut self) {
         let was_showing = self.show_hidden;
         self.show_hidden = !self.show_hidden;
-        self.rebuild_list();
+        crate::nav::rebuild(self);
         self.push_toast(if was_showing {
             "Hidden todos hidden"
         } else {
@@ -213,12 +214,16 @@ impl App {
     }
 
     /// Row index for a todo id, if it is visible.
+    ///
+    /// `row_of` is rebuilt in O(rows) by [`App::recompute_rows`], so this stays
+    /// O(1) even when a shift range holds thousands of ids.
     #[must_use]
     pub fn row_for(&self, id: TodoId) -> Option<usize> {
-        self.list
-            .rows
-            .iter()
-            .position(|row| row.todo_index() == Some(self.index_of(id)))
+        let index = self.index_of(id);
+        self.todos
+            .get(index)
+            .filter(|todo| todo.id == id)
+            .and_then(|_| self.row_of.get(index).copied().flatten())
     }
 
     /// Load-order index of a todo id, if the id is in range.
@@ -302,33 +307,18 @@ impl App {
         self.offset = self.offset.min(self.max_offset());
     }
 
-    /// Keep the cursor row inside the viewport.
+    /// Update the terminal size and re-derive the scroll offset.
     ///
-    /// This is the TUI's simple equivalent of the Ink app's scroll-padding
-    /// rule; the full range-aware version arrives with the navigation parity
-    /// work in [`crate::nav`].
-    pub fn ensure_cursor_visible(&mut self) {
-        let Some(row) = self.cursor.and_then(|id| self.row_for(id)) else {
-            return;
-        };
-        let height = self.visible_height();
-        if height == 0 {
-            return;
-        }
-        if row < self.offset {
-            self.offset = row;
-        } else if row >= self.offset + height {
-            self.offset = row + 1 - height;
-        }
-        self.clamp_offset();
-    }
-
-    /// Update the terminal size and keep the offset valid.
+    /// The event loop calls this before every draw; an unchanged size must be a
+    /// no-op, otherwise reflowing would pull a wheel-scrolled viewport back to
+    /// the cursor on every frame.
     pub fn resize(&mut self, width: u16, height: u16) {
+        if width == self.width && height == self.height {
+            return;
+        }
         self.width = width;
         self.height = height;
-        self.clamp_offset();
-        self.ensure_cursor_visible();
+        crate::nav::reflow(self);
     }
 
     /// Set today's date, rebuilding the overdue/threshold verdicts only when
@@ -338,8 +328,7 @@ impl App {
             return;
         }
         self.today = today;
-        self.rebuild_list();
-        self.ensure_cursor_visible();
+        crate::nav::rebuild(self);
     }
 
     /// Show a bounded toast now.
@@ -389,7 +378,3 @@ impl App {
         self.todos.len()
     }
 }
-
-/// Limits accepted by [`App::new`]'s loader. Kept here so the CLI and tests
-/// share the same default.
-pub const READ_LIMITS: ReadLimits = ReadLimits::DEFAULT;

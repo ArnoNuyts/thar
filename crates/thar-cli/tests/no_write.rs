@@ -1,8 +1,9 @@
 //! The read-only guarantee at the source level.
 //!
 //! A runtime test can only prove the paths it exercises. This test scans every
-//! Rust source file in `src/**` and fails if a write-capable API appears, so
-//! the CP6 binary cannot accidentally link a writer later.
+//! Rust source file in the `thar-cli` and `thar-tui` crates and fails if a
+//! write-capable API appears, so the CP6 binary cannot accidentally link a
+//! writer later. `thar-core` has no I/O at all.
 
 use std::path::{Path, PathBuf};
 
@@ -37,21 +38,28 @@ fn rust_sources(directory: &Path, found: &mut Vec<PathBuf>) {
 }
 
 #[test]
-fn the_crate_source_contains_no_write_path() {
-    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+fn the_tui_crates_contain_no_write_path() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut sources = Vec::new();
-    rust_sources(&source_root, &mut sources);
-    assert!(
-        !sources.is_empty(),
-        "no sources under {}",
-        source_root.display()
-    );
+    for relative in ["src", "../thar-tui/src"] {
+        let root = crate_root.join(relative);
+        let before = sources.len();
+        rust_sources(&root, &mut sources);
+        assert!(
+            sources.len() > before,
+            "no sources under {}",
+            root.display()
+        );
+    }
 
     let mut found_read = false;
     for path in &sources {
         let source = std::fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
-        if source.contains("fs::read") || source.contains("fs::metadata") {
+        if source.contains("File::open")
+            || source.contains("fs::read")
+            || source.contains("fs::metadata")
+        {
             found_read = true;
         }
         for forbidden in FORBIDDEN {

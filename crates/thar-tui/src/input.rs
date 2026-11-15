@@ -120,9 +120,12 @@ pub fn command_for_key(key: KeyEvent, search_focused: bool) -> Option<Command> {
 fn search_key(key: KeyEvent) -> Option<Command> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+    let alt = key
+        .modifiers
+        .intersects(KeyModifiers::ALT | KeyModifiers::META);
 
     match key.code {
-        KeyCode::Char(ch) if !ctrl => Some(Command::SearchInsert(ch)),
+        KeyCode::Char(ch) if !ctrl && !alt => Some(Command::SearchInsert(ch)),
         KeyCode::Backspace => Some(Command::SearchBackspace),
         KeyCode::Delete => Some(Command::SearchDelete),
         KeyCode::Left => Some(Command::SearchLeft),
@@ -146,6 +149,9 @@ fn search_key(key: KeyEvent) -> Option<Command> {
 fn list_key(key: KeyEvent) -> Option<Command> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+    let alt = key
+        .modifiers
+        .intersects(KeyModifiers::ALT | KeyModifiers::META);
 
     match key.code {
         KeyCode::Up if ctrl && shift => Some(Command::ExtendContextUp),
@@ -163,9 +169,9 @@ fn list_key(key: KeyEvent) -> Option<Command> {
         KeyCode::Home => Some(Command::Home),
         KeyCode::End => Some(Command::End),
         KeyCode::Esc => Some(Command::ClearRange),
-        KeyCode::Char('/') => Some(Command::SearchFocus),
-        KeyCode::Char('q') => Some(Command::Quit),
-        KeyCode::Char('H') => Some(Command::ToggleHiddenView),
+        KeyCode::Char('/') if !ctrl && !alt => Some(Command::SearchFocus),
+        KeyCode::Char('q') if !ctrl && !alt => Some(Command::Quit),
+        KeyCode::Char('H') if !ctrl && !alt => Some(Command::ToggleHiddenView),
         // The rest of the list keymap either opens a modal or writes. A-F is
         // the priority keymap; every other uppercase letter is not a command
         // in the Ink list either.
@@ -185,9 +191,9 @@ fn list_key(key: KeyEvent) -> Option<Command> {
         | KeyCode::Char('h')
         | KeyCode::Char('+')
         | KeyCode::Char('@')
-        | KeyCode::Char('A'..='F')
         | KeyCode::Delete
         | KeyCode::Enter => Some(Command::Rejected(READ_ONLY_MESSAGE)),
+        KeyCode::Char('A'..='F') if !ctrl && !alt => Some(Command::Rejected(READ_ONLY_MESSAGE)),
         _ => None,
     }
 }
@@ -331,17 +337,36 @@ fn left_click(
     )
 }
 
+/// Insert pasted text at the query cursor and rebuild once.
+///
+/// The terminal filters characters before calling this; doing one rebuild for
+/// the whole paste keeps a long bracketed paste from re-sorting the list per
+/// character.
+pub fn insert_query_text(app: &mut App, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    let cursor = app.query_cursor.min(app.query.chars().count());
+    let mut chars: Vec<char> = app.query.chars().collect();
+    for character in text.chars() {
+        chars.insert(cursor, character);
+    }
+    app.query = chars.into_iter().collect();
+    app.query_cursor = cursor + text.chars().count();
+    nav::rebuild(app);
+}
+
 /// Apply one command to the app state.
 pub fn apply(app: &mut App, command: Command) {
     match command {
         Command::Quit => app.should_quit = true,
         Command::SearchFocus => {
             app.search_focused = true;
-            app.clamp_offset();
+            nav::reflow(app);
         }
         Command::SearchBlur => {
             app.search_focused = false;
-            app.clamp_offset();
+            nav::reflow(app);
         }
         Command::SearchClear => {
             app.search_focused = false;

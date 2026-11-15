@@ -5,7 +5,7 @@
 //! key/mouse decoding and the ratatui backend are all exercised end to end.
 //! Assertions read the parsed `vt100` screen and target stable text (todo
 //! text, context headers, action-bar labels) rather than whole-screen
-//! goldens, because the view styling has its own workstream.
+//! goldens; the view styling is pinned separately by `thar-tui/tests/golden.rs`.
 //!
 //! portable-pty is Unix-focused (it has a Windows backend, but CI only runs
 //! these tests on Linux and macOS), so the target compiles to an empty crate
@@ -19,7 +19,7 @@ mod session;
 mod support;
 
 use session::{Session, TIMEOUT};
-use support::TempDir;
+use support::{TempDir, modified};
 
 /// Fixture for the initial-screen, keyboard and mouse tests.
 ///
@@ -135,6 +135,37 @@ fn initial_screen_shows_the_list_action_bar_and_read_only_badge() {
         focused.contains("water the plants"),
         "unexpected initial cursor row: {focused:?}"
     );
+}
+
+#[test]
+fn a_real_pty_session_leaves_the_file_and_directory_untouched() {
+    let directory = TempDir::new("pty-read-only");
+    let path = directory.write("todo.txt", FIXTURE.as_bytes());
+    let before_bytes = std::fs::read(&path).expect("read before");
+    let before_mtime = modified(&path);
+    let before_entries = directory.entries();
+
+    let mut session = Session::open(&path);
+    session.wait_text("READ-ONLY");
+
+    // Every mutating key must be acknowledged without touching the file: the
+    // first one shows the bounded read-only toast.
+    session.send(b" ");
+    session.wait_text("Read-only: thar-rs cannot modify todo.txt");
+    for key in [b"x".as_slice(), b"n", b"e", b"z", b"v", b"@"] {
+        session.send(key);
+    }
+    session.send(b"q");
+    let status = session.wait_exit(TIMEOUT);
+    assert_eq!(status.exit_code(), 0);
+
+    assert_eq!(
+        std::fs::read(&path).expect("read after"),
+        before_bytes,
+        "a PTY session must not change the todo file"
+    );
+    assert_eq!(modified(&path), before_mtime, "mtime changed");
+    assert_eq!(directory.entries(), before_entries, "directory changed");
 }
 
 #[test]

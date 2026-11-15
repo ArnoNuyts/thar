@@ -6,7 +6,7 @@
 //! padding below (or above) the cursor when the range allows it.
 
 use thar_core::{Todo, TodoDate, TodoId};
-use thar_tui::{App, nav};
+use thar_tui::{App, input, nav};
 
 fn app_with(lines: &[&str], width: u16, height: u16) -> App {
     let todos = lines
@@ -158,6 +158,31 @@ fn a_one_row_list_scrolls_to_the_last_row() {
     assert_eq!(cursor_row(&app), 5);
     assert_eq!(app.offset, 5);
     assert_eq!(app.offset, app.max_offset());
+}
+
+#[test]
+fn focusing_or_blurring_search_reflows_the_cursor_into_the_list() {
+    // 80x10 has 8 list rows; the two-row search bar leaves 6. Reflowing only
+    // the old offset would leave the last row two rows below the viewport.
+    let mut app = with_tasks(40, 80, 10);
+    nav::select_last(&mut app);
+    let row = cursor_row(&app);
+    assert!(row < app.offset + app.visible_height());
+
+    input::apply(&mut app, input::Command::SearchFocus);
+    assert_eq!(app.visible_height(), 6);
+    let row = cursor_row(&app);
+    assert!(
+        row >= app.offset && row < app.offset + app.visible_height(),
+        "row {row} is outside {}..{}",
+        app.offset,
+        app.offset + app.visible_height()
+    );
+
+    input::apply(&mut app, input::Command::SearchBlur);
+    assert_eq!(app.visible_height(), 8);
+    let row = cursor_row(&app);
+    assert!(row >= app.offset && row < app.offset + app.visible_height());
 }
 
 #[test]

@@ -299,7 +299,7 @@ fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
                 )),
                 Line::from(""),
                 Line::from(Span::styled(
-                    "Press 'n' to create a new todo.",
+                    "Read-only build: creating and editing are not available.",
                     Style::default()
                         .fg(theme::MUTED)
                         .add_modifier(Modifier::DIM),
@@ -326,11 +326,12 @@ fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
         ]
     };
 
+    let line_count = lines.len();
     frame.render_widget(
         Paragraph::new(lines)
             .alignment(Alignment::Center)
             .style(Style::default().fg(theme::FOREGROUND).bg(theme::BACKGROUND)),
-        centred_vertically(area, layout.list_height as usize),
+        centred_vertically(area, line_count),
     );
 }
 

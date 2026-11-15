@@ -779,8 +779,10 @@ workspace; the Ink app, `bin/thar.js` and the npm entry point are untouched.
   hook, and the draw/event loop) and `main.rs`.
 - Read-only proof: no write API is linked; mutating keys answer with one
   bounded toast; a missing file is reported and is not created; a directory
-  argument fails cleanly. `tests/read_only.rs` and `tests/no_write.rs` keep the
-  file byte- and mtime-identical across a TUI run.
+  argument fails cleanly. `tests/pty/main.rs` asserts a real PTY session leaves
+  the file bytes, mtime and directory entries untouched; `tests/read_only.rs`
+  covers the non-TTY startup paths, and `tests/no_write.rs` scans both
+  `thar-cli/src` and `thar-tui/src` for write-capable APIs.
 - PTY evidence (`crates/thar-cli/tests/pty`, `portable-pty` + `vt100` as
   dev-dependencies only; 100×30, `TERM=xterm-256color`, polling waits and no
   fixed sleeps):

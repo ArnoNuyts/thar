@@ -20,6 +20,8 @@
 //! This module has no terminal or clock dependency; the event loop and the
 //! tests drive it with plain calls.
 
+use std::collections::HashSet;
+
 use thar_core::{SelectionRange, TodoId, calculate_scroll_offset};
 
 use crate::app::App;
@@ -150,15 +152,27 @@ pub fn clear_range(app: &mut App) {
 /// of its ids is filtered out, so a selection never silently shrinks.
 pub fn rebuild(app: &mut App) {
     let previous = Previous::capture(app);
-    app.rebuild_list();
+    app.recompute_rows();
     previous.reconcile(app);
 }
 
 /// Toggle the hidden view and reconcile the selection like [`rebuild`].
 pub fn toggle_hidden_view(app: &mut App) {
-    let previous = Previous::capture(app);
     app.toggle_hidden_view();
-    previous.reconcile(app);
+}
+
+/// Re-derive the scroll offset for the current viewport.
+///
+/// The Ink hook re-runs reconciliation whenever `listHeight` changes (focusing
+/// or blurring the search bar changes it by two rows), so the caller must
+/// reflow rather than only clamping the old offset. A cursor row drives the
+/// range-aware [`calculate_scroll_offset`]; with no cursor the offset is simply
+/// clamped.
+pub fn reflow(app: &mut App) {
+    match app.cursor.and_then(|id| app.row_for(id)) {
+        Some(row) => scroll_to(app, row),
+        None => app.clamp_offset(),
+    }
 }
 
 /// Navigation metadata captured before the row model is rebuilt.
@@ -288,9 +302,13 @@ fn selection_range_rows(app: &App, range: &[TodoId], fallback: usize) -> Selecti
         return selection;
     }
 
+    // A shift range can hold ten thousand ids. Hashing once keeps the scan of
+    // the row model O(rows) instead of O(rows x range); the visible list is
+    // usually far smaller than the range.
+    let selected: HashSet<TodoId> = range.iter().copied().collect();
     for (index, row) in app.rows().iter().enumerate() {
         if let Some(id) = row_todo_id(app, row)
-            && range.contains(&id)
+            && selected.contains(&id)
         {
             selection.min = selection.min.min(index);
             selection.max = selection.max.max(index);

@@ -13,8 +13,8 @@
 //! invalid UTF-8 becomes `U+FFFD`, exactly like `String::from_utf8_lossy` on
 //! the Node side.
 
-use std::fs;
-use std::io;
+use std::fs::File;
+use std::io::{self, Read};
 
 use thar_core::{CoreError, ReadLimits, Todo, parse_file, validate_file_bytes};
 
@@ -90,22 +90,37 @@ pub fn load(path: &str) -> Result<LoadedFile, LoadError> {
 ///
 /// See [`load`].
 pub fn load_with_limits(path: &str, limits: &ReadLimits) -> Result<LoadedFile, LoadError> {
-    // Reject an oversized file before reading it into memory, like the
-    // TypeScript reader's `stat` check. The check is repeated below against
-    // the bytes that were actually read.
-    match fs::metadata(path) {
-        Ok(metadata) => validate_file_bytes(metadata.len(), limits)?,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(missing_file()),
-        Err(error) => return Err(LoadError::Io(error)),
-    }
-
-    let bytes = match fs::read(path) {
-        Ok(bytes) => bytes,
-        // The file can disappear between metadata and read; treat that race
-        // like any other missing file instead of creating one.
+    let mut file = match File::open(path) {
+        Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(missing_file()),
         Err(error) => return Err(LoadError::Io(error)),
     };
+
+    // Read one byte past the limit instead of trusting `metadata().len()`: a
+    // FIFO or a growing file reports a small (or zero) length, and a stat ->
+    // read race must not turn into an unbounded allocation. `take` caps the
+    // buffer even when the file keeps growing underneath us.
+    let limit = limits.max_file_bytes;
+    let mut bytes = Vec::new();
+    file.by_ref()
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(LoadError::Io)?;
+
+    if bytes.len() as u64 > limit {
+        // Report the real size when the file's metadata can still tell it;
+        // otherwise the capped length is the only bound available.
+        let actual = file
+            .metadata()
+            .map(|metadata| metadata.len())
+            .unwrap_or(bytes.len() as u64)
+            .max(bytes.len() as u64);
+        return Err(CoreError::FileTooLarge {
+            actual_bytes: actual,
+            max_bytes: limit,
+        }
+        .into());
+    }
 
     validate_file_bytes(bytes.len() as u64, limits)?;
 

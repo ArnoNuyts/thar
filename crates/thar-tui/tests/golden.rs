@@ -173,6 +173,24 @@ fn one_hundred_and_twenty_by_forty_scrolls_with_a_track() {
 }
 
 #[test]
+fn the_empty_state_is_vertically_centred() {
+    let mut app = app(&[]);
+    app.resize(80, 12);
+    let backend = draw(&app, 80, 12);
+    let screen = screen_lines(&backend);
+
+    // The list area is 10 rows (12 minus the two action-bar rows) and the
+    // welcome block is four lines, so it starts at row (10 - 4) / 2 = 3.
+    let quote = screen
+        .iter()
+        .position(|line| line.contains("I love deadlines"))
+        .expect("welcome quote");
+    assert_eq!(quote, 3, "{screen:#?}");
+    assert!(screen.iter().any(|line| line.contains("Douglas Adams")));
+    assert!(screen.iter().any(|line| line.contains("Read-only build")));
+}
+
+#[test]
 fn the_hidden_indicator_and_hidden_rows_share_the_same_view() {
     let mut app = fixture();
     app.resize(80, 24);

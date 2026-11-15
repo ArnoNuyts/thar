@@ -1,16 +1,17 @@
-//! End-to-end read-only proof for the built binary.
+//! Read-only proof for the binary's non-TTY startup paths.
 //!
-//! A successful load reaches the TUI, so the child is stopped with the test-only
-//! `THAR_TUI_PANIC=1` trigger (or by the terminal setup failure when the test
-//! runs without a TTY). Either way the process exits without any code path that
-//! can write, and the file/directory must be byte- and mtime-identical.
+//! `Command::output()` gives the child no terminal, so these tests stop before
+//! the event loop: they cover the loader and terminal-setup failure paths, and
+//! prove those never create or change a file. The real interactive session is
+//! covered by `tests/pty/main.rs`, which asserts bytes and mtime after a PTY
+//! run.
 
 mod support;
 
 use support::{TempDir, modified, stderr, thar};
 
 #[test]
-fn a_tui_run_leaves_the_file_content_and_mtime_untouched() {
+fn a_non_tty_startup_leaves_the_file_content_and_mtime_untouched() {
     let dir = TempDir::new("read-only-file");
     let path = dir.write("todo.txt", b"one @home\nx 2026-11-01 done\n");
     let before_bytes = std::fs::read(&path).expect("read before");
