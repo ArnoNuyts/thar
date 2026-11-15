@@ -19,6 +19,14 @@ on:
       - "logic/core-wasm.ts"
       - "logic/limits.ts"
       - "unit-tests/core-wasm.test.ts"
+      # CP4: the write contract's oracle is the production writer, and the
+      # data-safety suite drives the real package through the atomic replace.
+      - "logic/todo-file-helpers.ts"
+      - "utils/runtime.ts"
+      # The write contract's guard probes call `findUnsafeTodoTextCodePoint`.
+      - "logic/control-characters.ts"
+      - "unit-tests/port-write.test.ts"
+      - "unit-tests/todo-file-write-safety.test.ts"
       # The rows contract runs the production pipeline, so its real
       # dependencies must trigger this job too; a change in any of them can
       # break the oracle without touching tools/port/**.
@@ -50,6 +58,14 @@ on:
       - "logic/core-wasm.ts"
       - "logic/limits.ts"
       - "unit-tests/core-wasm.test.ts"
+      # CP4: the write contract's oracle is the production writer, and the
+      # data-safety suite drives the real package through the atomic replace.
+      - "logic/todo-file-helpers.ts"
+      - "utils/runtime.ts"
+      # The write contract's guard probes call `findUnsafeTodoTextCodePoint`.
+      - "logic/control-characters.ts"
+      - "unit-tests/port-write.test.ts"
+      - "unit-tests/todo-file-write-safety.test.ts"
       - "logic/indexes.ts"
       - "logic/Todos.ts"
       - "logic/todo.ts"
@@ -196,7 +212,11 @@ jobs:
       # adapter against the package this job just built (it also covers the
       # fake-package tests, which must keep passing next to a real one).
       - name: Adapter tests against the built package
-        run: npx vitest run unit-tests/core-wasm.test.ts
+        # `core-wasm.test.ts` covers the parse/rows/serialize adapters;
+        # `todo-file-write-safety.test.ts` includes the real-package corpus
+        # round-trip, so the byte-compared dual write runs against this build.
+        run: |
+          npx vitest run unit-tests/core-wasm.test.ts unit-tests/todo-file-write-safety.test.ts
 
       # The CP1 oracle stays the Node `port-contract` job; this run proves the
       # Rust candidate agrees with it over the whole corpus, including the
@@ -209,6 +229,13 @@ jobs:
       # `port-contract` job.
       - name: CP3b rows contract parity (WASM candidate)
         run: npm run port:contract:rows:wasm
+
+      # CP4: `serialize_file` against `serializeTodosForWrite` over every
+      # parseable fixture's structured records, including the write-time guard
+      # probes. The TS-only half (mutation proof) runs in the Node
+      # `port-contract` job.
+      - name: CP4 write contract parity (WASM candidate)
+        run: npm run port:contract:write:wasm
 
       - name: Upload WASM package
         uses: actions/upload-artifact@v4

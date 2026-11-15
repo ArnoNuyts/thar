@@ -14,10 +14,15 @@ here.
   `tools/port/candidate.ts` (shared candidate protocol).
 - Rows contract (CP3b1): `tools/port/rows.ts` (oracle, import-safe),
   `tools/port/rows-cli.ts` (CLI), `tools/port/bench-rows.ts` (perf).
+- Write contract (CP4): `tools/port/write.ts` (oracle, import-safe),
+  `tools/port/write-cli.ts` (CLI).
 - Tests: [`unit-tests/port-contract.test.ts`](../../unit-tests/port-contract.test.ts),
-  [`unit-tests/port-rows.test.ts`](../../unit-tests/port-rows.test.ts).
+  [`unit-tests/port-rows.test.ts`](../../unit-tests/port-rows.test.ts),
+  [`unit-tests/port-write.test.ts`](../../unit-tests/port-write.test.ts),
+  [`unit-tests/todo-file-write-safety.test.ts`](../../unit-tests/todo-file-write-safety.test.ts).
 - WASM candidate (CP2b): `tools/port/candidates/wasm.mjs`.
 - WASM rows candidate (CP3b1): `tools/port/candidates/wasm-rows.mjs`.
+- WASM write candidate (CP4): `tools/port/candidates/wasm-write.mjs`.
 
 ## Commands
 
@@ -46,6 +51,10 @@ npm run port:contract:wasm                  # golden + the WASM candidate
 npm run port:contract:rows                  # TS only: candidate protocol + self-check
 npm run port:contract:rows:wasm             # the WASM candidate (needs pkg/)
 npx vite-node tools/port/bench-rows.ts      # perf table (needs pkg/)
+
+# CP4: the write contract (serialize over WASM, byte-compared)
+npm run port:contract:write                 # TS only: candidate protocol + mutation proof
+npm run port:contract:write:wasm            # the WASM candidate (needs pkg/)
 ```
 
 `npm run port:contract` prints npm's own `> thar@0.6.1 port:contract` banner on
@@ -487,6 +496,107 @@ work is done here. The deferred optimization phase would add:
 
 The stateless `buildRows` stays the differential contract's entry point.
 
+## Write contract (CP4)
+
+The write path is `serializeTodosForWrite`, the serializer inside
+`writeTodosToFile`:
+
+```ts
+todos.map((todo) => todo.toString()).join("\n") + "\n";
+```
+
+CP4 also runs the same lines through `thar-wasm`'s `serializeFile` and writes the
+Rust text only when the bytes are identical. The contract pins that boundary.
+
+- Oracle: `tools/port/write.ts` (import-safe builder) + `tools/port/write-cli.ts`
+  (CLI).
+- Candidate: `tools/port/candidates/wasm-write.mjs`.
+- Tests: [`unit-tests/port-write.test.ts`](../../unit-tests/port-write.test.ts);
+  the data-safety matrix is
+  [`unit-tests/todo-file-write-safety.test.ts`](../../unit-tests/todo-file-write-safety.test.ts).
+
+```sh
+npm run port:contract:write        # TS only: determinism + candidate protocol + mutation proof
+npm run port:contract:write:wasm   # the WASM candidate (needs crates/thar-wasm/pkg)
+```
+
+### Record format
+
+One compact JSON object per fixture, bytewise by name, with the guard probes in
+the same order:
+
+```json
+{ "fixture": "tags.txt", "kind": "todos", "todoCount": 12,
+  "serialized": { "sha256": "…", "bytes": 491 } }
+{ "fixture": "guard-nul", "kind": "rejected", "lineNumber": 2, "codePoint": 0 }
+```
+
+- `kind: "todos"` is the exact file text the writer would produce: per-record
+  `toString`, joined with `"\n"`, plus **one trailing `"\n"`**. An empty todo
+  list is `"\n"` (one byte), never `""`, because `[].join("\n") + "\n"` is
+  `"\n"`; `empty.txt` pins it.
+- `kind: "rejected"` is the write-time guard: the first line with a rejected
+  control code point and the first such code point on it. The TypeScript error
+  calls the 1-based line `lineNumber`, the Rust envelope calls it `index`; the
+  candidate maps it so both sides emit the same record.
+- Only the SHA-256 and the byte length cross the contract, not the text: a
+  one-byte change (the dropped trailing newline) is still a diff, and the file
+  never appears in a commit or a log.
+
+### Candidate protocol
+
+```sh
+node tools/port/candidates/wasm-write.mjs --manifest <file> --out <file>
+```
+
+The manifest carries the **structured records** the app's adapter sends
+(`coreTodoRecord`: text, state, priority, both dates, projects, contexts, tags
+including array-valued duplicates, and both round-trip flags). The candidate
+does not read the corpus and does not re-derive the DTO: for each entry it calls
+`serializeFile({"todos":[…]})` once and writes the record shape above. A request
+the oracle accepted but the candidate rejects is a loud candidate error, not a
+contract mismatch; a missing `pkg/` is a loud failure too.
+
+### Self-check
+
+`--selftest` builds a reduced contract twice (the bytes must be identical),
+asserts the guard probes are rejected, and requires the comparator to catch every
+seeded mutation. The mutations edit the oracle's own serialized bytes, never
+`logic/**`:
+
+| Mutation                | Simulated bug                                                     | Caught on                               |
+| ----------------------- | ----------------------------------------------------------------- | --------------------------------------- |
+| `drop-trailing-newline` | serializer forgets the final `"\n"` (`join` without the `+ "\n"`) | every fixture                           |
+| `swap-date-order`       | completed line writes creation before completion date             | `leading-dates-done.txt`, `unicode.txt` |
+| `drop-last-tag`         | serializer loses a tag instead of writing it last                 | `tags.txt`                              |
+
+### Coverage
+
+The **23 records / 3 566 bytes** are 20 parseable corpus fixtures (including the
+empty list, CRLF, BOM, invalid UTF-8 and the 10 000-todo file) plus 3 synthetic
+guard probes: `guard-nul` (control character on line 2, with a second one beside
+it), `guard-esc` (line 1, `U+001B`) and `guard-tab` (the allow case). The WASM
+candidate reproduces all 23 with **0 diffs**.
+
+The eight rejection fixtures are skipped by the same narrowed catch as the rows
+contract, and a unit test asserts the skipped set is exactly CP1's eight
+`kind: "error"` records.
+
+The self-candidate (`--candidate-self`) renders the manifest records in
+TypeScript and must reproduce the oracle bytes for every fixture. That is the
+DTO round-trip proof: if `coreTodoRecord` lost an array-valued tag or a
+round-trip flag, the rendering would differ. It is **not** a second domain
+implementation — no dates are computed and no text is scanned, only the
+documented prefix/tag order — and it is not the oracle: the oracle is the
+production writer over its own `Todo` objects.
+
+The data-safety suite next to it (`todo-file-write-safety.test.ts`) proves the
+dual write against real `fs`: TypeScript bytes on a mismatch, one bounded log,
+the same `TodoControlCharacterError`, one append, and an atomic replace that
+survives an injected `ENOSPC`, an injected rename failure, a read-only
+directory, a concurrent external edit and a child process that crashes before the
+rename. See `docs/rust-port/PLAN.md` §5 CP4 for the matrix.
+
 ## Seeded bugs (`tools/port/self-test.mjs`)
 
 Mutations are applied in `tools/port/adapter.ts` — in the harness's
@@ -528,12 +638,14 @@ oracle on this corpus, not that it is a complete port.
 - **Write-time validation.** The oracle's `serialized` field is produced by the
   production `serializeTodosForWrite` (the serializer inside `writeTodosToFile`),
   so that exact code path — including its write-time control-character guard —
-  runs for every fixture. No fixture makes the guard throw, though: a port that
-  skips write-time validation still matches, because parsed todos are always
-  safe to serialize. CP2 must implement the write-time rules
-  (`TodoControlCharacterError`, the line-length/line-count re-validation and
-  the byte-size guard in `writeTodosToFile`) on its own evidence, such as the
-  CP0 tests in `unit-tests/port-corpus.test.ts`.
+  runs for every fixture. No corpus fixture makes the guard throw, so CP4's
+  write contract adds two synthetic probes (`guard-nul` on line 2, `guard-esc`
+  on line 1) plus the allow case (`guard-tab`); both sides must name the same
+  1-based line and code point. The line-length/line-count and byte-size
+  re-validation in `writeTodosToFile` is **not** in the contract: the writer
+  applies it to the chosen text, and
+  [`unit-tests/todo-file-write-safety.test.ts`](../../unit-tests/todo-file-write-safety.test.ts)
+  owns the file-level behaviour (atomic replace, limits, failure paths).
 - **Byte-size guard.** `tools/port/build.ts` mirrors the reader's post-read
   byte check (`readTodosFromFile`), not `writeTodosToFile`'s write-size guard;
   committed fixtures are far below 1 MiB.
@@ -552,25 +664,34 @@ oracle on this corpus, not that it is a complete port.
 
 `.github/workflows/ci.yml` has a `port-contract` job (ubuntu-latest, 10 minute
 timeout) that runs `npm ci`, `npm run port:contract:check`,
-`npm run port:selftest` and the TS-only half of the rows contract
-(`npm run port:contract:rows`). It is independent of the existing matrix jobs
+`npm run port:selftest`, the TS-only half of the rows contract
+(`npm run port:contract:rows`) and the TS-only half of the write contract
+(`npm run port:contract:write`). It is independent of the existing matrix jobs
 and is the oracle.
 
 `.github/workflows/rust.yml`'s `wasm` job builds `thar-wasm`, enforces the size
 budget, runs the Node smoke test, then runs `npm ci` and
-`npm run port:contract:wasm` and the rows contract against the WASM candidate
-(`npm run port:contract:rows:wasm`). Its path filter includes `crates/**`,
-`testdata/port/**`, `tools/port/**`, `logic/core-wasm.ts`, `logic/limits.ts`,
-`unit-tests/core-wasm.test.ts` and `package.json`, so a change to either
-candidate, either adapter or their tests re-runs WASM parity. The rows oracle
-imports real production modules, so CP3b2b widened that filter to include
-`logic/indexes.ts`, `logic/Todos.ts`, `logic/todo.ts`,
+`npm run port:contract:wasm`, the rows contract against the WASM candidate
+(`npm run port:contract:rows:wasm`) and the write contract against the WASM
+candidate (`npm run port:contract:write:wasm`). It also runs
+`unit-tests/core-wasm.test.ts` and `unit-tests/todo-file-write-safety.test.ts`
+against the package it just built, which is where the real-package corpus
+round-trip and the byte-compared dual write are proven. Its path filter includes
+`crates/**`, `testdata/port/**`, `tools/port/**`, `logic/core-wasm.ts`,
+`logic/limits.ts`, `logic/todo-file-helpers.ts`, `utils/runtime.ts`,
+`unit-tests/core-wasm.test.ts`, `unit-tests/port-write.test.ts`,
+`unit-tests/todo-file-write-safety.test.ts` and `package.json`, so a change to
+either candidate, either adapter, the writer or their tests re-runs WASM parity.
+The rows oracle imports real production modules, so CP3b2b widened that filter to
+include `logic/indexes.ts`, `logic/Todos.ts`, `logic/todo.ts`,
 `logic/todo-file-validation.ts`, `utils/search-utils.ts`, `types/enums.ts` and
-`unit-tests/port-rows.test.ts` as well; a change to just one of those now
-re-runs the rows contract. The Node matrix does not require Rust or a built
+`unit-tests/port-rows.test.ts` as well; CP4 added the writer
+(`logic/todo-file-helpers.ts`) and the atomic replace (`utils/runtime.ts`). A
+change to just one of those now re-runs the relevant contract. The Node matrix
+does not require Rust or a built
 `pkg/`; the wasm job is the only place the WASM candidates run in CI. (The
 Node `test` job in `ci.yml` has no path filters and always runs
-`unit-tests/port-rows.test.ts`.)
+`unit-tests/port-rows.test.ts` and `unit-tests/port-write.test.ts`.)
 
 The rows diff lines name the record they belong to — `fixture [record 12
 query="MILK" showHidden=false] rows[3].index` — because two records of one
