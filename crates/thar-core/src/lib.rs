@@ -60,6 +60,7 @@
 
 mod date;
 mod error;
+mod input;
 mod js;
 mod limits;
 mod model;
@@ -75,6 +76,11 @@ pub use date::{
     start_of_month, start_of_week_monday, weekday,
 };
 pub use error::CoreError;
+pub use input::{
+    TodoInputError, TodoInputErrorCode, validate_default_batch, validate_todo_batch,
+    validate_todo_text, validate_utf16,
+};
+pub use js::{is_js_whitespace, js_trim};
 pub use limits::{
     DEFAULT_MAX_FILE_BYTES, DEFAULT_MAX_LINE_CHARS, DEFAULT_MAX_READ_TODOS, MAX_PASTE_TODOS,
     MAX_TODO_CHARS, MAX_TODOS, ReadLimits,

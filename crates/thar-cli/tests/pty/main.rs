@@ -19,6 +19,7 @@ mod session;
 mod support;
 
 mod cp7_calendar;
+mod cp7_editor;
 mod cp7_menu;
 mod cp7_write;
 
