@@ -223,6 +223,11 @@ impl TerminalSession {
                 if app.dirty {
                     flush_save(app, store.as_deref_mut());
                 }
+                if app.dirty {
+                    return Err(io::Error::other(
+                        "unsaved changes: the last save failed; the file was left untouched",
+                    ));
+                }
                 return Ok(());
             }
 
@@ -322,7 +327,14 @@ pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()
 /// Write the dirty list now and record the outcome on the app.
 fn flush_save(app: &mut App, store: Option<&mut SaveGuard>) {
     let Some(store) = store else {
-        app.mark_saved();
+        if app.read_only {
+            app.mark_saved();
+        } else {
+            // A write-enabled app must never report a successful save without
+            // a store. This is a programming error, not a user error, but it
+            // still must not drop the edit silently.
+            app.mark_save_failed("no write store is attached");
+        }
         return;
     };
     match store.save(&app.todos) {
@@ -338,7 +350,6 @@ fn process_effects(app: &mut App, mut store: Option<&mut SaveGuard>) {
             Effect::ArchiveCompleted => archive(app, store.as_deref_mut()),
             Effect::Copy(text) => copy(app, &text),
             Effect::Paste => paste(app),
-            Effect::SaveFailed(message) => app.push_toast(message),
         }
     }
 }
@@ -375,7 +386,16 @@ fn copy(app: &mut App, text: &str) {
 
 fn paste(app: &mut App) {
     match thar_store::clipboard::paste() {
-        Ok(text) => app.receive_clipboard(&text),
+        Ok(text) => {
+            if text
+                .lines()
+                .any(|line| line.chars().any(|character| !is_safe_todo_char(character)))
+            {
+                app.push_toast("Paste failed: a line contains a control character");
+                return;
+            }
+            app.receive_clipboard(&text);
+        }
         Err(error) => app.push_toast(format!("Paste failed: {error}")),
     }
 }
@@ -407,6 +427,14 @@ fn is_pastable(character: char) -> bool {
         character,
         '\u{0000}'..='\u{001F}' | '\u{007F}'..='\u{009F}' | '\u{2028}' | '\u{2029}'
     )
+}
+
+/// True for a character the file writer accepts in todo text.
+///
+/// The writer rejects every C0/C1 control and the two Unicode line separators,
+/// but allows a tab (it is ordinary text inside a todo line).
+fn is_safe_todo_char(character: char) -> bool {
+    character == '\t' || is_pastable(character)
 }
 
 /// Bracketed paste into the focused surface.
@@ -443,12 +471,22 @@ fn paste_into_focused(app: &mut App, text: &str) {
         ));
         return;
     }
+    if lines
+        .iter()
+        .any(|line| line.chars().any(|character| !is_safe_todo_char(character)))
+    {
+        app.push_toast("Paste failed: a line contains a control character");
+        return;
+    }
     let _ = app.add_todos(&lines);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{is_pastable, panic_value_is_trigger, today_local, until_next_local_midnight};
+    use super::{
+        is_pastable, is_safe_todo_char, panic_value_is_trigger, today_local,
+        until_next_local_midnight,
+    };
     use std::time::Duration;
 
     #[test]
@@ -500,5 +538,14 @@ mod tests {
         assert!(!is_pastable('\u{001B}'));
         assert!(!is_pastable('\u{007F}'));
         assert!(!is_pastable('\u{2028}'));
+    }
+
+    #[test]
+    fn todo_paste_allows_tab_but_not_other_controls() {
+        assert!(is_safe_todo_char('a'));
+        assert!(is_safe_todo_char('\t'));
+        assert!(!is_safe_todo_char('\n'));
+        assert!(!is_safe_todo_char('\u{001B}'));
+        assert!(!is_safe_todo_char('\u{2029}'));
     }
 }

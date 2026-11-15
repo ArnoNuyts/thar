@@ -1,6 +1,6 @@
 [package]
 name = "thar-tui"
-description = "Read-only ratatui front end for Thar: row model, navigation, input, and views"
+description = "ratatui front end for Thar: row model, navigation, input, modals and views"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

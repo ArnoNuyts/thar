@@ -6,12 +6,13 @@
 //! so the whole app can be driven by `TestBackend` + synthetic events without a
 //! real terminal.
 //!
-//! # Read-only invariant
+//! # Read-only and write modes
 //!
-//! CP6's binary links no writer. `App` has no save path and no history; the
-//! mutating keys are rejected in [`crate::input`] with one bounded toast.
-//! [`App::read_only`] exists so the action bar can show the `READ-ONLY` badge
-//! and so CP7 can flip it when `--write` lands.
+//! The binary is read-only unless `--write` is passed. In read-only mode the
+//! mutating keys are rejected in [`crate::input`] with one bounded toast. In
+//! write mode they call the mutation API here, which records one undo step per
+//! command and schedules a debounced save. The actual filesystem write lives
+//! in `thar-cli`/`thar-store`; this crate only queues [`Effect`]s.
 
 use std::time::{Duration, Instant};
 
@@ -31,6 +32,9 @@ pub const SAVE_DEBOUNCE: Duration = Duration::from_millis(50);
 /// Lines above which a clipboard paste asks for confirmation, matching
 /// `useTodoCommands`.
 pub const PASTE_CONFIRM_THRESHOLD: usize = 10;
+
+/// Backoff before retrying a failed save.
+pub const SAVE_RETRY: Duration = Duration::from_secs(1);
 
 /// Toast shown when a write-enabled session lost its file.
 pub const NOT_SAVED_MESSAGE: &str = "Not saved: read-only";
@@ -114,6 +118,8 @@ pub struct App {
     pub dirty_at: Option<Instant>,
     /// The last save failure, kept until the next successful save.
     pub save_error: Option<String>,
+    /// Earliest time to retry a failed save.
+    save_retry_at: Option<Instant>,
     /// Host effects produced by a command and drained by the event loop.
     pub effects: Vec<Effect>,
 }
@@ -127,8 +133,6 @@ pub enum Effect {
     Copy(String),
     /// Read the clipboard and add its lines as todos.
     Paste,
-    /// Show a bounded toast and, when set, kept as the save error.
-    SaveFailed(String),
 }
 
 impl App {
@@ -170,6 +174,7 @@ impl App {
             dirty: false,
             dirty_at: None,
             save_error: None,
+            save_retry_at: None,
             effects: Vec::new(),
         };
         app.recompute_rows();
@@ -196,6 +201,7 @@ impl App {
         self.dirty = false;
         self.dirty_at = None;
         self.save_error = None;
+        self.modals.close();
         self.recompute_rows();
         self.cursor = self.first_todo_id();
         crate::nav::reflow(self);
@@ -282,8 +288,9 @@ impl App {
 
     /// Row index for a todo id, if it is visible.
     ///
-    /// `row_of` is rebuilt in O(rows) by [`App::recompute_rows`], so this stays
-    /// O(1) even when a shift range holds thousands of ids.
+    /// `row_of` is indexed in O(1) by the todo's current vector position; the
+    /// position lookup itself is O(n) because ids are stable and no longer
+    /// equal their index.
     #[must_use]
     pub fn row_for(&self, id: TodoId) -> Option<usize> {
         let index = self.index_of(id);
@@ -490,6 +497,7 @@ impl App {
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
         self.dirty_at = Some(Instant::now());
+        self.save_retry_at = None;
     }
 
     /// Finish a mutation: reconcile the row model and schedule a save.
@@ -750,9 +758,19 @@ impl App {
     }
 
     /// Deadline of the pending debounced save.
+    ///
+    /// A failed save keeps the list dirty and pushes the deadline out by
+    /// [`SAVE_RETRY`], so a transient filesystem error retries instead of
+    /// silently dropping the edit.
     #[must_use]
     pub fn save_deadline(&self) -> Option<Instant> {
-        self.dirty_at.map(|at| at + SAVE_DEBOUNCE)
+        let debounce = self.dirty_at.map(|at| at + SAVE_DEBOUNCE);
+        match (debounce, self.save_retry_at) {
+            (Some(debounce), Some(retry)) => Some(debounce.max(retry)),
+            (Some(debounce), None) => Some(debounce),
+            (None, Some(retry)) => Some(retry),
+            (None, None) => None,
+        }
     }
 
     /// Poll timeout until the pending save, for the event loop.
@@ -775,16 +793,23 @@ impl App {
     pub fn mark_saved(&mut self) {
         self.dirty = false;
         self.dirty_at = None;
+        self.save_retry_at = None;
         self.save_error = None;
     }
 
-    /// Record a save failure and show it once.
+    /// Record a save failure, keep the list dirty, and schedule a retry.
+    ///
+    /// The toast is shown once per distinct message; a retrying save on the
+    /// same error does not spam the action bar.
     pub fn mark_save_failed(&mut self, message: impl Into<String>) {
         let message = message.into();
-        self.dirty = false;
-        self.dirty_at = None;
+        let changed = self.save_error.as_deref() != Some(message.as_str());
+        self.dirty = true;
+        self.save_retry_at = Some(Instant::now() + SAVE_RETRY);
         self.save_error = Some(message.clone());
-        self.push_toast(format!("Save failed: {message}"));
+        if changed {
+            self.push_toast(format!("Save failed: {message}"));
+        }
     }
 
     /// Route a key press to the active modal.
@@ -1147,5 +1172,19 @@ mod tests {
     fn the_update_model_is_absent_by_default() {
         let app = app(&["one"]);
         assert!(app.update_model.is_none());
+    }
+
+    #[test]
+    fn a_failed_save_stays_dirty_and_retries_after_the_backoff() {
+        let mut app = app(&["one"]);
+        app.toggle_ids(&[app.todos[0].id]);
+        app.mark_save_failed("disk full");
+        assert!(app.dirty, "a failed save must not drop the edit");
+        assert_eq!(app.save_error.as_deref(), Some("disk full"));
+        assert!(!app.save_due(Instant::now()));
+        assert!(app.save_due(Instant::now() + super::SAVE_RETRY + Duration::from_millis(1)));
+        app.mark_saved();
+        assert!(!app.dirty);
+        assert!(app.save_error.is_none());
     }
 }

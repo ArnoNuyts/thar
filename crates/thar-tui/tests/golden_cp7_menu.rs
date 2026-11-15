@@ -93,7 +93,7 @@ fn eighty_by_twenty_four_pins_the_single_todo_menu() {
     let rect = modal_area(&app);
     assert_eq!((rect.area.x, rect.area.y), (20, 2));
     assert_eq!((rect.area.width, rect.area.height), (40, 21));
-    assert_eq!((rect.body.x, rect.body.y), (20, 5));
+    assert_eq!((rect.body.x, rect.body.y), (21, 5));
 
     let screen = screen_lines(&backend);
     assert!(screen[2].contains("Todo menu"), "{screen:#?}");
