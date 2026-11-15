@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -19,18 +19,26 @@ import {
   shadowCheckTodoFile,
   shadowLogPath,
 } from "../logic/core-wasm.ts";
+import { formatDateTag } from "../logic/dates.ts";
 import { createIndexes } from "../logic/indexes.ts";
+import {
+  TodoControlCharacterError,
+  TodoFileTooLargeError,
+  TodoFileValidationError,
+  TodoLineCountLimitError,
+  TodoLineLengthLimitError,
+} from "../logic/limits.ts";
 import {
   filterBySearch,
   filterHidden,
   sortByImportance,
 } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
-import { IndexType } from "../types/enums.ts";
 import {
   readTodosFromFile,
   serializeTodosForWrite,
 } from "../logic/todo-file-helpers.ts";
+import { IndexType } from "../types/enums.ts";
 import {
   defaultCollatorLocale,
   isEnglishCollator,
@@ -1315,6 +1323,554 @@ describe("shadow log path", () => {
   });
 });
 
+/**
+ * CP3b2c: the wired `THAR_CORE=rust` read path.
+ *
+ * The fake package returns the records a real `parseFile` would return for the
+ * same file (built here from the TypeScript `Todo` objects, independently of
+ * `coreTodoRecord`), so these tests prove the reconstruction, the error
+ * mapping and every fallback without a `pkg/` build. The real package is
+ * exercised by the tests after `REAL_PACKAGE` below.
+ */
+describe("THAR_CORE=rust read path", () => {
+  const TS_LINES = [
+    "x (A) 2024-03-02 2024-03-01 done beta:one beta:two @work +thar",
+    "plain task",
+    "2023-04-31 april has thirty days",
+    "x 2023-02-29 impossible completion date stays literal",
+    "(B) priority café 🚀",
+    "due:2026-11-14 open",
+  ];
+
+  /** The record `thar-wasm` emits for one already-parsed todo. */
+  const rustRecord = (todo: Todo, id: number) => ({
+    text: todo.text,
+    state: todo.isDone() ? "done" : "todo",
+    priority: todo.priority ?? null,
+    completionDate:
+      todo.completionDate === undefined
+        ? null
+        : formatDateTag(todo.completionDate),
+    creationDate:
+      todo.creationDate === undefined ? null : formatDateTag(todo.creationDate),
+    projects: [...todo.projects],
+    contexts: [...todo.contexts],
+    tags: Object.entries(todo.tags).map(([key, value]) => [key, value]),
+    isDone: todo.isDone(),
+    isHidden: todo.isHidden(),
+    isVisibleInOverview: todo.isVisibleInOverview(),
+    isOverdue: todo.isOverdue(),
+    toString: todo.toString(),
+    hash: todo.getHash(),
+    datesInText: todo.datesInText,
+    completionDateInText: todo.completionDateInText,
+    id,
+  });
+
+  const rustEnvelope = (todos: readonly Todo[]) =>
+    JSON.stringify({
+      ok: true,
+      todos: todos.map((todo, id) => rustRecord(todo, id)),
+    });
+
+  // `require` caches by path, so each fixed envelope gets its own file name.
+  let packageCount = 0;
+
+  /** A package that answers every parse with one fixed JSON envelope. */
+  const recordingPackage = async (dir: string, response: string) => {
+    packageCount++;
+    return fakePackage(
+      dir,
+      `const response = ${JSON.stringify(response)};
+module.exports = {
+  coreVersion: () => "0.3.0-test",
+  parseFile: () => response,
+  parseFileWithLimits: () => response,
+};
+`,
+      `thar_wasm_${packageCount}.cjs`,
+    );
+  };
+
+  /** Write `text`, then read it through the TS reader as the oracle. */
+  const writeAndReadTs = async (dir: string, name: string, text: string) => {
+    const filename = join(dir, name);
+    await Runtime.writeTextFile(filename, text);
+    setEnv("THAR_CORE", "ts");
+    const todos = await readTodosFromFile(filename);
+    return { filename, todos };
+  };
+
+  const view = (todos: readonly Todo[]) =>
+    todos.map((todo) => ({
+      text: todo.text,
+      state: todo.state,
+      priority: todo.priority,
+      completionDate: todo.completionDate?.getTime(),
+      creationDate: todo.creationDate?.getTime(),
+      projects: [...todo.projects],
+      contexts: [...todo.contexts],
+      tags: { ...todo.tags },
+      datesInText: todo.datesInText,
+      completionDateInText: todo.completionDateInText,
+      isDone: todo.isDone(),
+      isHidden: todo.isHidden(),
+      isVisibleInOverview: todo.isVisibleInOverview(),
+      isOverdue: todo.isOverdue(),
+      toString: todo.toString(),
+      hash: todo.getHash(),
+    }));
+
+  test("rebuilds the same todos, fields and order as the TypeScript reader", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+      const cases: { name: string; text: string }[] = [
+        { name: "crlf.txt", text: `${TS_LINES.join("\r\n")}\r\n` },
+        { name: "no-newline.txt", text: TS_LINES.join("\n") },
+        {
+          name: "blank-lines.txt",
+          text: `\n${TS_LINES[0]}\n  \n\t${TS_LINES[1]}\n`,
+        },
+        { name: "empty.txt", text: "" },
+      ];
+
+      for (const item of cases) {
+        const { filename, todos: expected } = await writeAndReadTs(
+          dir,
+          item.name,
+          item.text,
+        );
+        await recordingPackage(dir, rustEnvelope(expected));
+
+        setEnv("THAR_CORE", "rust");
+        const actual = await readTodosFromFile(filename);
+
+        expect(actual.map((todo) => todo.toString())).toEqual(
+          expected.map((todo) => todo.toString()),
+        );
+        expect(view(actual)).toEqual(view(expected));
+        expect(actual.every((todo) => todo instanceof Todo)).toBe(true);
+        expect(new Set(actual.map((todo) => todo.id)).size).toBe(actual.length);
+      }
+      expect(debug).not.toHaveBeenCalled();
+    });
+  });
+
+  test("keeps the real Todo instances mutable and immutable by contract", async () => {
+    await withTempDir(async (dir) => {
+      vi.spyOn(console, "debug").mockImplementation(() => {});
+      const { filename, todos } = await writeAndReadTs(
+        dir,
+        "todo.txt",
+        `${TS_LINES.join("\n")}\n`,
+      );
+      await recordingPackage(dir, rustEnvelope(todos));
+
+      setEnv("THAR_CORE", "rust");
+      const actual = await readTodosFromFile(filename);
+      const first = actual[0];
+      const second = actual[1];
+
+      const reprioritised = first.setPriority("C");
+      expect(reprioritised).not.toBe(first);
+      expect(reprioritised.id).toBe(first.id);
+      expect(first.priority).toBe("A");
+      expect(reprioritised.priority).toBe("C");
+
+      const toggled = second.toggleState();
+      expect(toggled.updated).not.toBe(second);
+      expect(second.isDone()).toBe(false);
+      expect(toggled.updated.isDone()).toBe(true);
+
+      const due = second.setDue(new Date(2026, 10, 20));
+      expect(second.tags.due).toBeUndefined();
+      expect(due.tags.due).toBe("2026-11-20");
+    });
+  });
+
+  test("maps each Rust rejection to the same TypeScript error", async () => {
+    await withTempDir(async (dir) => {
+      vi.spyOn(console, "debug").mockImplementation(() => {});
+      const { filename } = await writeAndReadTs(dir, "todo.txt", "one\n");
+
+      const cases: TodoFileValidationError[] = [
+        new TodoFileTooLargeError(2_000, 1_024),
+        new TodoLineCountLimitError(3, 2),
+        new TodoLineLengthLimitError(2, 5, 4),
+        new TodoControlCharacterError(2, 0),
+      ];
+
+      for (const expected of cases) {
+        // `Error#message` is non-enumerable, so the wire error copies the
+        // enumerable own fields (name, code, line/length/…) and adds it.
+        const fields: Record<string, unknown> = Object.fromEntries(
+          Object.entries(expected),
+        );
+        const error = { ...fields, message: expected.message };
+        await recordingPackage(dir, JSON.stringify({ ok: false, error }));
+
+        setEnv("THAR_CORE", "rust");
+        let thrown: unknown;
+        try {
+          await readTodosFromFile(filename);
+        } catch (error) {
+          thrown = error;
+        }
+
+        expect(thrown, expected.code).toBeInstanceOf(expected.constructor);
+        expect(thrown).toMatchObject({
+          name: expected.name,
+          code: expected.code,
+          message: expected.message,
+        });
+        for (const [key, value] of Object.entries(fields)) {
+          if (key === "name" || key === "code") continue;
+          expect((thrown as Record<string, unknown>)[key]).toBe(value);
+        }
+      }
+    });
+  });
+
+  test("falls back once, content-free, on every unexpected record", async () => {
+    await withTempDir(async (dir) => {
+      const secret = "SECRET-TOKEN-never-log-me";
+      const { filename, todos } = await writeAndReadTs(
+        dir,
+        "todo.txt",
+        `${secret}\nsecond\n`,
+      );
+      const baseRecords = todos.map((todo, id) => rustRecord(todo, id));
+
+      const variants: { name: string; response: unknown; reason: string }[] = [
+        {
+          name: "wrong-count",
+          response: { ok: true, todos: baseRecords.slice(0, 1) },
+          reason: "1 record(s) for 2 line(s)",
+        },
+        {
+          name: "wrong-order",
+          response: {
+            ok: true,
+            todos: [baseRecords[1], baseRecords[0]],
+          },
+          reason: "load id",
+        },
+        {
+          name: "bad-date",
+          response: {
+            ok: true,
+            todos: [
+              { ...baseRecords[0], creationDate: "2024-13-01" },
+              baseRecords[1],
+            ],
+          },
+          reason: "malformed",
+        },
+        {
+          name: "wrong-projects",
+          response: {
+            ok: true,
+            todos: [
+              { ...baseRecords[0], projects: ["different"] },
+              baseRecords[1],
+            ],
+          },
+          reason: "inconsistent projects/contexts",
+        },
+        {
+          name: "missing-flags",
+          response: {
+            ok: true,
+            todos: [
+              (({ datesInText: _dropped, ...rest }) => rest)(baseRecords[0]),
+              baseRecords[1],
+            ],
+          },
+          reason: "malformed",
+        },
+        {
+          name: "wrong-text",
+          response: {
+            ok: true,
+            todos: [{ ...baseRecords[0], text: "different" }, baseRecords[1]],
+          },
+          reason: "does not round-trip",
+        },
+        {
+          name: "unmappable-rejection",
+          response: {
+            ok: false,
+            error: {
+              name: "TodoControlCharacterError",
+              code: "CONTROL_CHARACTER",
+              lineNumber: 1,
+              codePoint: 0,
+              // A bounded message the TypeScript class would never produce.
+              message: "bounded",
+            },
+          },
+          reason: "",
+        },
+        {
+          name: "malformed-envelope",
+          response: {},
+          reason: "malformed parseFile",
+        },
+      ];
+
+      for (const variant of variants) {
+        const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+        await recordingPackage(dir, JSON.stringify(variant.response));
+        setEnv("THAR_CORE", "rust");
+        resetCoreBridgeForTests();
+
+        const actual = await readTodosFromFile(filename);
+
+        // Every fallback keeps the TypeScript result.
+        expect(
+          actual.map((todo) => todo.toString()),
+          variant.name,
+        ).toEqual(todos.map((todo) => todo.toString()));
+        expect(debug, variant.name).toHaveBeenCalledTimes(1);
+        const logged = String(debug.mock.calls[0]?.[0]);
+        expect(logged, variant.name).toContain("thar core:");
+        if (variant.reason.length > 0) {
+          expect(logged, variant.name).toContain(variant.reason);
+        }
+        expect(logged, variant.name).not.toContain(secret);
+        debug.mockRestore();
+      }
+    });
+  });
+
+  test("a wrong rejection message falls back and still throws the real error", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const filename = join(dir, "nul.txt");
+      await Runtime.writeTextFile(filename, "one\n\u0000two\n");
+      await recordingPackage(
+        dir,
+        JSON.stringify({
+          ok: false,
+          error: {
+            name: "TodoControlCharacterError",
+            code: "CONTROL_CHARACTER",
+            lineNumber: 2,
+            codePoint: 0,
+            message: "a package with a stale message",
+          },
+        }),
+      );
+
+      setEnv("THAR_CORE", "rust");
+      let thrown: unknown;
+      try {
+        await readTodosFromFile(filename);
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(TodoControlCharacterError);
+      expect(thrown).toMatchObject({
+        code: "CONTROL_CHARACTER",
+        lineNumber: 2,
+        codePoint: 0,
+        message:
+          "Todo file line 2 contains the control character U+0000. " +
+          "Remove control characters from the file. Nothing was changed.",
+      });
+      expect(debug).toHaveBeenCalledTimes(1);
+      expect(String(debug.mock.calls[0]?.[0])).not.toContain("one");
+    });
+  });
+
+  test("a missing package falls back to TypeScript with one log", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const { filename, todos } = await writeAndReadTs(
+        dir,
+        "todo.txt",
+        "one\ntwo\n",
+      );
+
+      setEnv("THAR_CORE", "rust");
+      setEnv("THAR_CORE_WASM", join(dir, "not-built", "thar_wasm.js"));
+      resetCoreBridgeForTests();
+      const actual = await readTodosFromFile(filename);
+
+      expect(actual.map((todo) => todo.toString())).toEqual(
+        todos.map((todo) => todo.toString()),
+      );
+      expect(debug).toHaveBeenCalledTimes(1);
+      expect(String(debug.mock.calls[0]?.[0])).toContain(
+        "WASM package not built",
+      );
+    });
+  });
+
+  test("ts and unset modes never load the package", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const { filename, todos } = await writeAndReadTs(
+        dir,
+        "todo.txt",
+        "one\ntwo\n",
+      );
+      // A path that does not exist: loading it in ts mode would log.
+      setEnv("THAR_CORE_WASM", join(dir, "never", "thar_wasm.js"));
+
+      for (const mode of ["ts", undefined] as const) {
+        setEnv("THAR_CORE", mode);
+        resetCoreBridgeForTests();
+        const actual = await readTodosFromFile(filename);
+        expect(actual.map((todo) => todo.toString())).toEqual(
+          todos.map((todo) => todo.toString()),
+        );
+      }
+      expect(debug).not.toHaveBeenCalled();
+    });
+  });
+
+  test("does not run the shadow check in rust mode", async () => {
+    await withTempDir(async (dir) => {
+      const log = join(dir, "shadow.log");
+      const counter = join(dir, "calls.txt");
+      const filename = join(dir, "todo.txt");
+      await Runtime.writeTextFile(filename, "one\ntwo\n");
+      const todos = ["one", "two"].map((line) => new Todo(line));
+      setEnv("THAR_SHADOW", "1");
+      setEnv("THAR_SHADOW_LOG", log);
+
+      const response = rustEnvelope(todos);
+      await fakePackage(
+        dir,
+        `const fs = require("node:fs");
+const response = ${JSON.stringify(response)};
+module.exports = {
+  coreVersion: () => "0.3.0-test",
+  parseFile: () => response,
+  parseFileWithLimits: () => {
+    fs.appendFileSync(${JSON.stringify(counter)}, "x");
+    return response;
+  },
+};
+`,
+      );
+      vi.spyOn(console, "debug").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      setEnv("THAR_CORE", "rust");
+      const actual = await readTodosFromFile(filename);
+
+      expect(actual.map((todo) => todo.toString())).toEqual(
+        todos.map((todo) => todo.toString()),
+      );
+      // Exactly one parse: the wired read path, not a shadow comparison too.
+      expect(readFileSync(counter, "utf8")).toBe("x");
+      expect(existsSync(log)).toBe(false);
+    });
+  });
+
+  test("invalid UTF-8 decodes lossily on both sides", async () => {
+    await withTempDir(async (dir) => {
+      vi.spyOn(console, "debug").mockImplementation(() => {});
+      const filename = join(dir, "invalid-utf8.txt");
+      writeFileSync(filename, Buffer.from([0x66, 0xff, 0x6f, 0x0a, 0x62]));
+
+      setEnv("THAR_CORE", "ts");
+      const expected = await readTodosFromFile(filename);
+      await recordingPackage(dir, rustEnvelope(expected));
+
+      setEnv("THAR_CORE", "rust");
+      const actual = await readTodosFromFile(filename);
+
+      expect(actual.map((todo) => todo.toString())).toEqual(
+        expected.map((todo) => todo.toString()),
+      );
+      expect(actual.map((todo) => todo.text)).toEqual(
+        expected.map((todo) => todo.text),
+      );
+    });
+  });
+
+  test("over-limit files report the same error in both modes", async () => {
+    await withTempDir(async (dir) => {
+      const limits = {
+        maxFileBytes: 1_024,
+        maxReadTodos: 2,
+        maxLineChars: 4,
+      };
+      const filename = join(dir, "todo.txt");
+      await Runtime.writeTextFile(filename, "too long\none\n");
+
+      setEnv("THAR_CORE", "ts");
+      const tsError = await readTodosFromFile(filename, limits).catch(
+        (error: unknown) => error,
+      );
+
+      // The fake package enforces the same limits and returns the real
+      // `thar-wasm` error envelope, including the message.
+      await fakePackage(
+        dir,
+        `const fail = (name, code, fields, message) => JSON.stringify({
+  ok: false,
+  error: { name, code, ...fields, message },
+});
+module.exports = {
+  coreVersion: () => "0.3.0-test",
+  parseFile: () => fail("TodoLineLengthLimitError", "LINE_TOO_LONG", {
+    lineNumber: 1,
+    length: 8,
+    maxLineChars: 4,
+  }, "Todo file line 1 is 8 characters; the limit is 4. Shorten the line or raise THAR_MAX_LINE_CHARS. Nothing was changed."),
+  parseFileWithLimits: () => fail("TodoLineLengthLimitError", "LINE_TOO_LONG", {
+    lineNumber: 1,
+    length: 8,
+    maxLineChars: 4,
+  }, "Todo file line 1 is 8 characters; the limit is 4. Shorten the line or raise THAR_MAX_LINE_CHARS. Nothing was changed."),
+};
+`,
+      );
+      setEnv("THAR_CORE", "rust");
+      vi.spyOn(console, "debug").mockImplementation(() => {});
+      const rustError = await readTodosFromFile(filename, limits).catch(
+        (error: unknown) => error,
+      );
+
+      expect(rustError).toBeInstanceOf(TodoLineLengthLimitError);
+      expect(rustError).toMatchObject({
+        name: (tsError as TodoFileValidationError).name,
+        code: (tsError as TodoFileValidationError).code,
+        message: (tsError as TodoFileValidationError).message,
+        lineNumber: 1,
+        length: 8,
+        maxLineChars: 4,
+      });
+    });
+  });
+
+  test("the TypeScript validator is still the judge for a rejected file", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const filename = join(dir, "nul.txt");
+      await Runtime.writeTextFile(filename, "one\n\u0000two\n");
+      await recordingPackage(dir, JSON.stringify({ ok: true, todos: [] }));
+      setEnv("THAR_CORE", "rust");
+
+      let thrown: unknown;
+      try {
+        await readTodosFromFile(filename);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(TodoControlCharacterError);
+      expect(thrown).toMatchObject({ lineNumber: 2, codePoint: 0 });
+      expect(debug).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
 const REAL_PACKAGE = join(
   process.cwd(),
   "crates",
@@ -1343,6 +1899,131 @@ test.skipIf(!existsSync(REAL_PACKAGE))(
       ["alpha", "one"],
       ["beta", ["one", "two"]],
     ]);
+  },
+);
+
+/**
+ * CP3b2c: the wired read path against the **real** package the wasm CI job
+ * just built.
+ *
+ * The fake-package tests above prove the reconstruction and the mapping; this
+ * proves the record field names and the flag/id additions match
+ * `crates/thar-wasm`. Skipped in the Node matrix, where `pkg/` does not exist.
+ */
+test.skipIf(!existsSync(REAL_PACKAGE))(
+  "the built package parses through the wired rust read path",
+  async () => {
+    setEnv("THAR_CORE", "rust");
+    setEnv("THAR_CORE_WASM", undefined);
+    resetCoreBridgeForTests();
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    const text =
+      "x (A) 2024-03-02 2024-03-01 done beta:one beta:two @work +thar\r\n" +
+      "plain task\r\n" +
+      "\r\n" +
+      "2023-04-31 april has thirty days\r\n" +
+      "x 2023-02-29 impossible completion date stays literal\r\n" +
+      "x 2023-05-04 2023-02-29 second date is invalid\r\n" +
+      "2024-01-01";
+
+    const dir = await Runtime.makeTempDir();
+    try {
+      const rustFile = join(dir, "rust.txt");
+      const tsFile = join(dir, "ts.txt");
+      await Runtime.writeTextFile(rustFile, text);
+      await Runtime.writeTextFile(tsFile, text);
+
+      const rust = await readTodosFromFile(rustFile);
+      setEnv("THAR_CORE", "ts");
+      resetCoreBridgeForTests();
+      const ts = await readTodosFromFile(tsFile);
+
+      expect(rust.map((todo) => todo.toString())).toEqual(
+        ts.map((todo) => todo.toString()),
+      );
+      expect(rust.map((todo) => todo.text)).toEqual(
+        ts.map((todo) => todo.text),
+      );
+      expect(rust.map((todo) => todo.datesInText)).toEqual(
+        ts.map((todo) => todo.datesInText),
+      );
+      expect(rust.map((todo) => todo.completionDateInText)).toEqual(
+        ts.map((todo) => todo.completionDateInText),
+      );
+      expect(rust.map((todo) => todo.tags)).toEqual(
+        ts.map((todo) => todo.tags),
+      );
+      expect(debug).not.toHaveBeenCalled();
+    } finally {
+      await Runtime.remove(dir, { recursive: true });
+    }
+  },
+);
+
+test.skipIf(!existsSync(REAL_PACKAGE))(
+  "the built package maps read errors to the TypeScript error",
+  async () => {
+    setEnv("THAR_CORE_WASM", undefined);
+    resetCoreBridgeForTests();
+    const dir = await Runtime.makeTempDir();
+    try {
+      const nulFile = join(dir, "nul.txt");
+      await Runtime.writeTextFile(nulFile, "one\n\u0000two\n");
+
+      setEnv("THAR_CORE", "ts");
+      resetCoreBridgeForTests();
+      const tsError = await readTodosFromFile(nulFile).catch(
+        (error: unknown) => error,
+      );
+
+      setEnv("THAR_CORE", "rust");
+      resetCoreBridgeForTests();
+      vi.spyOn(console, "debug").mockImplementation(() => {});
+      const rustError = await readTodosFromFile(nulFile).catch(
+        (error: unknown) => error,
+      );
+
+      expect(rustError).toBeInstanceOf(TodoControlCharacterError);
+      expect(rustError).toMatchObject({
+        name: (tsError as TodoControlCharacterError).name,
+        code: (tsError as TodoControlCharacterError).code,
+        message: (tsError as TodoControlCharacterError).message,
+        lineNumber: 2,
+        codePoint: 0,
+      });
+
+      // An over-long line maps the same way, with the effective limits.
+      const longFile = join(dir, "long.txt");
+      await Runtime.writeTextFile(longFile, "too long\n");
+      const limits = {
+        maxFileBytes: 1_024,
+        maxReadTodos: 10,
+        maxLineChars: 4,
+      };
+      setEnv("THAR_CORE", "ts");
+      resetCoreBridgeForTests();
+      const tsLong = await readTodosFromFile(longFile, limits).catch(
+        (error: unknown) => error,
+      );
+      setEnv("THAR_CORE", "rust");
+      resetCoreBridgeForTests();
+      const rustLong = await readTodosFromFile(longFile, limits).catch(
+        (error: unknown) => error,
+      );
+
+      expect(rustLong).toBeInstanceOf(TodoLineLengthLimitError);
+      expect(rustLong).toMatchObject({
+        name: (tsLong as TodoLineLengthLimitError).name,
+        code: (tsLong as TodoLineLengthLimitError).code,
+        message: (tsLong as TodoLineLengthLimitError).message,
+        lineNumber: 1,
+        length: 8,
+        maxLineChars: 4,
+      });
+    } finally {
+      await Runtime.remove(dir, { recursive: true });
+    }
   },
 );
 

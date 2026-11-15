@@ -16,6 +16,35 @@ const TAG_REGEX = /(^|\s)(?<key>[A-Za-z]+):(?<value>[^\s]+)/g;
 
 let nextTodoId = 0;
 
+/**
+ * The parsed pieces of one todo, used to rebuild a `Todo` at a boundary.
+ *
+ * This is the TypeScript side of `thar_core::TodoParts`: every field is
+ * already normalized (typed state, valid calendar dates, unique projects and
+ * contexts, insertion-ordered tags), so {@link Todo.fromParts} can restore the
+ * todo without re-parsing the serialized line. Re-parsing would be lossy: an
+ * array-valued tag (`beta:one beta:two`) serializes as `beta:one,two`, and the
+ * two round-trip flags are not visible in the line at all.
+ */
+export interface TodoParts {
+  /** Body text, already trimmed and with tags removed. */
+  text: string;
+  state: TodoStateEnum;
+  priority: UpperCaseLetter | undefined;
+  completionDate: Date | undefined;
+  creationDate: Date | undefined;
+  /** Projects in first-occurrence order. */
+  projects: readonly string[];
+  /** Contexts in first-occurrence order. */
+  contexts: readonly string[];
+  /** Tags in insertion order; repeated keys stay grouped as arrays. */
+  tags: Readonly<Record<string, string | readonly string[]>>;
+  /** True when leading date tokens stayed in `text`. */
+  datesInText: boolean;
+  /** True when the completion date is already the literal leading token. */
+  completionDateInText: boolean;
+}
+
 export class Todo {
   readonly id: symbol;
   private _text: string = "";
@@ -125,6 +154,45 @@ export class Todo {
     }
 
     this.internalParseText(text);
+  }
+
+  /**
+   * Rebuild a todo from already-parsed parts, without re-parsing `text`.
+   *
+   * This is the inverse of the constructor for a boundary that already holds
+   * typed fields (the WASM parse records, or CP4's structured write request).
+   * It takes ownership of the validated parts and deep-copies the mutable ones
+   * (dates, sets, tag arrays), so a caller cannot alias state into the todo.
+   *
+   * The factory is intentionally not a public setter: callers still mutate
+   * through the immutable `with()`-based setters, and `id` keeps the same
+   * per-load identity semantics as `new Todo(line)`.
+   */
+  static fromParts(parts: TodoParts): Todo {
+    const next = Object.create(Todo.prototype) as Todo;
+    // `id` is readonly for callers; this factory is the one place that assigns
+    // it without going through the constructor (which would parse `text`).
+    (next as { id: symbol }).id = Symbol(String(nextTodoId++));
+    next._text = parts.text;
+    next._state = parts.state;
+    next._priority = parts.priority;
+    next._completionDate =
+      parts.completionDate === undefined
+        ? undefined
+        : new Date(parts.completionDate.getTime());
+    next._creationDate =
+      parts.creationDate === undefined
+        ? undefined
+        : new Date(parts.creationDate.getTime());
+    next._projects = new Set(parts.projects);
+    next._contexts = new Set(parts.contexts);
+    next._tags = {};
+    for (const [key, value] of Object.entries(parts.tags)) {
+      next._tags[key] = typeof value === "string" ? value : [...value];
+    }
+    next._datesInText = parts.datesInText;
+    next._completionDateInText = parts.completionDateInText;
+    return next;
   }
 
   /**

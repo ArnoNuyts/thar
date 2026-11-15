@@ -1,6 +1,12 @@
 import { Runtime } from "../utils/runtime.ts";
 import { findUnsafeTodoTextCodePoint } from "./control-characters.ts";
-import { serializeTodosWithCore, shadowCheckTodoFile } from "./core-wasm.ts";
+import {
+  getCoreMode,
+  parseTodosWithCore,
+  serializeTodosWithCore,
+  shadowCheckTodoFile,
+  todayFromClock,
+} from "./core-wasm.ts";
 import {
   getReadLimits,
   type ReadLimits,
@@ -71,6 +77,18 @@ export async function readTodosFromFile(
     throw new TodoFileTooLargeError(actualBytes, limits.maxFileBytes);
   }
 
+  // CP3b2c: `THAR_CORE=rust` parses with the Rust core and rebuilds the list
+  // from the parsed records, without a second parse. `parseTodosWithCore`
+  // returns `undefined` for `ts` mode (before any package load), every adapter
+  // failure, and any record/count/order mismatch, in which case the TypeScript
+  // reader below runs exactly as before. A legitimate limit/control rejection
+  // is thrown from inside as the same `TodoFileValidationError` the validator
+  // below would throw.
+  if (getCoreMode() === "rust") {
+    const coreTodos = parseTodosWithCore(data, todayFromClock(), limits);
+    if (coreTodos) return coreTodos;
+  }
+
   const todos = validateTodoFileContent(data, limits)
     .filter((x) => x.trim())
     .map((x) => new Todo(x));
@@ -80,7 +98,13 @@ export async function readTodosFromFile(
   // `logic/core-wasm.ts`), so the TypeScript result stays the app's state. The
   // effective limits are passed through: Rust must judge this file by the same
   // `THAR_MAX_*` values the TypeScript reader just used.
-  shadowCheckTodoFile(data, todos, limits);
+  //
+  // In rust mode the read path already parsed with the Rust core, so the shadow
+  // check is superseded: it would parse a second time, and there is no separate
+  // TypeScript result to compare against.
+  if (getCoreMode() !== "rust") {
+    shadowCheckTodoFile(data, todos, limits);
+  }
 
   return todos;
 }

@@ -55,6 +55,10 @@ npx vite-node tools/port/bench-rows.ts      # perf table (needs pkg/)
 # CP4: the write contract (serialize over WASM, byte-compared)
 npm run port:contract:write                 # TS only: candidate protocol + mutation proof
 npm run port:contract:write:wasm            # the WASM candidate (needs pkg/)
+
+# CP3b2c: the parse contract (parseFile -> Todo.fromParts -> serialize)
+npm run port:contract:parse                 # TS only: lossless factory + mutation proof
+npm run port:contract:parse:wasm            # the wired THAR_CORE=rust read path (needs pkg/)
 ```
 
 `npm run port:contract` prints npm's own `> thar@0.6.1 port:contract` banner on
@@ -599,6 +603,107 @@ survives an injected `ENOSPC`, an injected rename failure, a read-only
 directory, a concurrent external edit and a child process that crashes before the
 rename. See `docs/rust-port/PLAN.md` §5 CP4 for the matrix.
 
+## Parse contract (CP3b2c)
+
+CP3b2c wires `THAR_CORE=rust` into `readTodosFromFile`: one `parseFile` call
+replaces `validateTodoFileContent → filter(blank) → new Todo(line)`. The
+contract pins that reconstruction:
+
+```ts
+parse_file records → Todo.fromParts → serializeTodosForWrite
+```
+
+against the TypeScript reader over every corpus fixture, and includes the
+rejection records so read-error parity is part of the contract.
+
+- Oracle and candidates: `tools/port/parse.ts`; CLI: `tools/port/parse-cli.ts`.
+- Tests: [`unit-tests/todo-from-parts.test.ts`](../../unit-tests/todo-from-parts.test.ts)
+  (the factory over every parseable corpus line) and the read-path tests in
+  [`unit-tests/core-wasm.test.ts`](../../unit-tests/core-wasm.test.ts).
+
+```sh
+npm run port:contract:parse        # TS only: lossless factory + mutation proof
+npm run port:contract:parse:wasm   # the wired THAR_CORE=rust read path (needs pkg/)
+```
+
+### Record format
+
+One compact JSON object per fixture, with the CP1 fixture order:
+
+```json
+{
+  "fixture": "tags.txt",
+  "sha256": "…",
+  "kind": "todos",
+  "clockLocal": "2026-11-15T12:00:00",
+  "readLimits": {
+    "maxFileBytes": 1048576,
+    "maxReadTodos": 10000,
+    "maxLineChars": 8192
+  },
+  "todoCount": 12,
+  "serialized": { "sha256": "…", "bytes": 491 },
+  "todos": [
+    {
+      "text": "ship +thar",
+      "state": "todo",
+      "priority": "A",
+      "completionDate": null,
+      "creationDate": "2024-03-01",
+      "projects": ["thar"],
+      "contexts": [],
+      "tags": [["beta", ["one", "two"]]],
+      "datesInText": false,
+      "completionDateInText": false,
+      "isDone": false,
+      "isHidden": false,
+      "isVisibleInOverview": true,
+      "isOverdue": false,
+      "toString": "…",
+      "hash": "…"
+    }
+  ]
+}
+```
+
+`kind: "error"` carries the same name/code/numeric-fields/message record the CP1
+contract pins; the candidate must reject the same fixture with the same error.
+
+### The two candidates
+
+- `--candidate-self` projects every oracle `Todo` back to a parse record
+  (`coreTodoRecord` plus the derived getters and the load id), runs the
+  production `parseRecordToTodoParts` normalizer, and rebuilds it with
+  `Todo.fromParts`. It is the lossless-factory proof and needs no package.
+- `--candidate-wasm` calls `parseTodosWithCore`, the wired read path. A fallback
+  to TypeScript is a **harness error**, not a pass: the contract must prove the
+  Rust path ran, not just that a todo list came back.
+
+### Fallback and error mapping
+
+`--selftest` builds the reduced contract twice (byte-identical), requires the
+self candidate to equal the oracle, and requires the comparator to catch every
+seeded reconstruction bug:
+
+| Mutation                | Simulated bug                                | Caught on                        |
+| ----------------------- | -------------------------------------------- | -------------------------------- |
+| `drop-last-tag`         | reconstruction loses a tag                   | `tags.txt`                       |
+| `swap-dates`            | completion and creation date slots exchanged | `leading-dates-done.txt`         |
+| `lose-round-trip-flags` | flags reset because the line was re-parsed   | `leading-dates-done-invalid.txt` |
+| `reverse-records`       | records lose file order                      | `crlf.txt`                       |
+
+The read path itself falls back to the TypeScript reader (one bounded,
+content-free log) on a missing package, a malformed envelope, a thrown error, a
+record count that differs from the non-blank line count, a load id that is not
+its array position, a record that cannot be rebuilt byte-identically, or a
+rejection whose numeric fields/message the TypeScript error cannot reproduce. A
+mappable rejection is thrown as the same `TodoFileValidationError` class, message
+and fields the validator would have thrown.
+
+Coverage: **28 records / 3 931 057 bytes, 0 diffs** for both the self and the
+WASM candidate (20 parseable fixtures including the 10 000-todo file, plus CP1's
+eight rejection fixtures compared as error records).
+
 ## Seeded bugs (`tools/port/self-test.mjs`)
 
 Mutations are applied in `tools/port/adapter.ts` — in the harness's
@@ -657,28 +762,37 @@ oracle on this corpus, not that it is a complete port.
 - **Serialization of DTO-built todos.** The rows contract feeds the parse
   records back through `buildRows`; the two round-trip flags
   (`datesInText`, `completionDateInText`) are not in the CP1 record set, so the
-  contract's candidate leaves them `false`. Row building does not read them
-  (only `toString` does), so the omission cannot change a row. The **app's**
-  adapter (CP3b2b) does send the real flags from its own `Todo` objects, so CP4
-  can rebuild an exact todo from a row request.
+  rows candidate leaves them `false`. Row building does not read them (only
+  `toString` does), so the omission cannot change a row. The **app's** adapter
+  (CP3b2b) sends the real flags from its own `Todo` objects, so CP4 can rebuild
+  an exact todo from a row request.
+- **CP1 records stay frozen.** Since CP3b2c, `parseFile` records carry three
+  fields beyond the CP1 set — `datesInText`, `completionDateInText` and the
+  load-order `id` — because the read path rebuilds the todo without a second
+  parse and rejects a reordered envelope. `tools/port/candidates/wasm.mjs`
+  projects exactly the 14 CP1 fields, so the corpus contract is unchanged; the
+  parse contract above covers the extra fields.
 
 ## CI
 
 `.github/workflows/ci.yml` has a `port-contract` job (ubuntu-latest, 10 minute
 timeout) that runs `npm ci`, `npm run port:contract:check`,
 `npm run port:selftest`, the TS-only half of the rows contract
-(`npm run port:contract:rows`) and the TS-only half of the write contract
-(`npm run port:contract:write`). It is independent of the existing matrix jobs
+(`npm run port:contract:rows`), the TS-only half of the write contract
+(`npm run port:contract:write`) and the TS-only half of the parse contract
+(`npm run port:contract:parse`). It is independent of the existing matrix jobs
 and is the oracle.
 
 `.github/workflows/rust.yml`'s `wasm` job builds `thar-wasm`, enforces the size
 budget, runs the Node smoke test, then runs `npm ci` and
 `npm run port:contract:wasm`, the rows contract against the WASM candidate
-(`npm run port:contract:rows:wasm`) and the write contract against the WASM
-candidate (`npm run port:contract:write:wasm`). It also runs
-`unit-tests/core-wasm.test.ts` and `unit-tests/todo-file-write-safety.test.ts`
-against the package it just built, which is where the real-package corpus
-round-trip and the byte-compared dual write are proven. Its path filter includes
+(`npm run port:contract:rows:wasm`), the write contract against the WASM
+candidate (`npm run port:contract:write:wasm`) and the parse contract against
+the wired read path (`npm run port:contract:parse:wasm`). It also runs
+`unit-tests/core-wasm.test.ts`, `unit-tests/todo-from-parts.test.ts` and
+`unit-tests/todo-file-write-safety.test.ts` against the package it just built,
+which is where the real-package parse/rows/serialize round-trips and the
+byte-compared dual write are proven. Its path filter includes
 `crates/**`, `testdata/port/**`, `tools/port/**`, `logic/core-wasm.ts`,
 `logic/limits.ts`, `logic/todo-file-helpers.ts`, `utils/runtime.ts`,
 `unit-tests/core-wasm.test.ts`, `unit-tests/port-write.test.ts`,

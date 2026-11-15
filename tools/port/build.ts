@@ -125,7 +125,7 @@ const NUMERIC_ERROR_FIELDS = [
  * Build the rejection record for one fixture. Numeric fields are copied in a
  * fixed order and omitted when absent; `message` always comes last.
  */
-const contractError = (error: Error): ContractError => {
+export const contractError = (error: Error): ContractError => {
   const source = error as Error & Record<string, unknown>;
   const numeric: Partial<ContractError> = {};
   for (const field of NUMERIC_ERROR_FIELDS) {

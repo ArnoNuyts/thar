@@ -9,8 +9,10 @@
   setters, sort/filter/search, rows, navigation) and pins it to the TypeScript
   oracle without wiring it in. CP3b1 adds the Rust row builder, the WASM
   `build_rows` boundary and a live rows contract with perf evidence, still
-  without wiring `THAR_CORE=rust` (that is CP3b2). CP4 adds the
-  `serialize_file` export, the byte-compared dual write and the data-safety
+  without wiring `THAR_CORE=rust` (that is CP3b2). CP3b2c wires the parse half:
+  `THAR_CORE=rust` now reads the file with `parse_file` and rebuilds every todo
+  through `Todo.fromParts`, with the TypeScript reader as the fallback. CP4 adds
+  the `serialize_file` export, the byte-compared dual write and the data-safety
   matrix; `THAR_CORE` stays opt-in and `ts` is still the default. See §4, §5 and
   §9.1 for what exists today.
 - **Date:** 2026-11-15
@@ -195,8 +197,10 @@ core_version() -> String;
 ```
 
 Both parse calls return either `{"ok":true,"todos":[…]}` or
-`{"ok":false,"error":{…}}`; a record is exactly the CP1/`expected.json` field
-set, in that order. The whole-file write shape is derived as CP1 defines it
+`{"ok":false,"error":{…}}`; a record is the CP1/`expected.json` field set in
+that order, followed by the CP3b2c read-path fields `datesInText`,
+`completionDateInText` and `id` (the CP1 contract's candidate projects the
+fourteen CP1 fields only). The whole-file write shape is derived as CP1 defines it
 (`todos.map(toString).join("\n") + "\n"`), so there is no second crossing.
 `build_rows` (CP3b1) takes one structured request — the todo fields (including
 the two round-trip flags), `searchViews` (one host-normalized search view per
@@ -481,6 +485,64 @@ recorded. Do not start the next checkpoint while one is red.
   test in `unit-tests/core-wasm.test.ts` runs in the wasm CI job and skips
   cleanly when `crates/thar-wasm/pkg/` is absent. No user behaviour changes:
   `THAR_CORE` remains opt-in and `ts` stays the default.
+
+#### CP3b2c — parse wired (`THAR_CORE=rust` reads with Rust)
+
+The flag now covers the whole read path: `readTodosFromFile` parses the decoded
+file with one `parseFileWithLimits` call and rebuilds the list from the parsed
+records. `ts`/unset is byte-identical to before: no package load, no extra
+parse, no log.
+
+- **Exact reconstruction.** `Todo.fromParts(parts: TodoParts)` rebuilds a todo
+  from typed fields without re-parsing `text`, including array-valued tags
+  (`beta:one beta:two`) and both round-trip flags. The adapter validates the
+  wire shape in `parseRecordToTodoParts` (priority letter, exact `YYYY-MM-DD`
+  calendar dates, ordered tag pairs, state/`isDone` agreement, `hash ===
+  toString`) and returns `undefined` on anything unexpected.
+- **Envelope additions.** `parse_file` records append `datesInText`,
+  `completionDateInText` and the 0-based load-order `id`. Re-parsing the line
+  cannot recover the flags (12 of the 13 flag-bearing corpus lines are
+  ambiguous from the serialized bytes alone), and an id makes a reordered
+  envelope detectable without a second parse. The CP1 contract is frozen:
+  `tools/port/candidates/wasm.mjs` projects exactly the 14 CP1 fields, so the
+  `wasm` contract stays byte-identical.
+- **Error mapping.** A Rust `ok:false` is mapped back to the same
+  `TodoFileValidationError` subclass by code, and the regenerated TypeScript
+  message must equal the Rust one (so the numeric fields are proven before the
+  error is thrown). An unmappable rejection falls back to the TypeScript
+  validator, which throws the true error; invalid data is never accepted.
+- **Fallback policy.** Missing package/export, malformed envelope, a thrown
+  error, a record count that differs from the file's non-blank line count, a
+  load id that is not its position, a record that does not rebuild
+  byte-identically, and an unprovable rejection all keep the TypeScript result
+  after one bounded, content-free debug line. `THAR_SHADOW` is superseded in
+  rust mode: the read path already parsed with Rust, so it does not parse twice.
+- **Runtime grouping guard.** A byte round-trip cannot see `projects`/`contexts`
+  (they are body fields, not tags), so the adapter re-derives both name sets
+  from `record.text` with the constructor's `PROJECT_REGEX`/`CONTEXT_REGEX` and
+  rejects a record whose sets differ. Without this, a package built from another
+  commit could silently change `createIndexes` grouping.
+- **WASM size** after the parse surface: **84 632 bytes raw / 37 328 bytes
+  gzip** (+443 / +138 over CP4; budget 250 KB / 100 KB).
+- **Contract evidence.** `tools/port/parse.ts` + `parse-cli.ts`: **28 records /
+  3 931 057 bytes, 0 diffs** for both the self candidate and the wired WASM
+  candidate (20 parseable fixtures including `large-10000.txt`, plus CP1's eight
+  rejection fixtures compared as `kind: "error"`). The self-check proves the
+  factory is lossless and deterministic and catches four seeded reconstruction
+  bugs (`drop-last-tag`, `swap-dates`, `lose-round-trip-flags`,
+  `reverse-records`).
+- **Tests.** `unit-tests/todo-from-parts.test.ts` replays every one of the
+  10 185 parseable corpus lines through the production projection and factory
+  (byte-identical `toString`, identical fields, duplicate tags, both flags,
+  invalid leading dates, a body-less date). `unit-tests/core-wasm.test.ts` adds
+  the read-path matrix: rust vs ts over CRLF/blank/empty/no-newline/invalid-UTF-8
+  files, instance mutability and ids, each error mapping, every fallback (count,
+  order, bad date, missing flags, non-round-trip, unmappable/stale rejection,
+  malformed envelope, missing package, one bounded content-free log), `ts` mode
+  never loading the package, and the real `pkg/` parse + error parity that runs
+  in the wasm CI job. Full suite green with and without `pkg/`.
+- **Still `ts` by default.** CP5 flips the default, deletes the dual-write
+  compare and the runtime shadow path, and packages the WASM artifact.
 
 ### CP4 — Rust write path opt-in, byte-compared
 
@@ -925,7 +987,8 @@ batch core measures 49 568 bytes raw / 22 200 bytes gzip after wasm-opt, so the
 Phase 2 target (≤ 100 KB raw / ≤ 40 KB gzip) is already met; the workflow keeps
 the 250 KB / 100 KB ceiling until the CP3 row and command surface lands, then
 tightens the constants and the README together. After CP3b2b it is 81 831 /
-35 986, and after CP4's write surface 84 189 / 37 190.
+35 986, after CP4's write surface 84 189 / 37 190, and after CP3b2c's parse
+surface 84 632 / 37 328.
 
 ### 9.2 Add in later phases
 
