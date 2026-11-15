@@ -1,0 +1,12 @@
+(A) priority A with context @work
+plain open without context
+x done without context
+x done with context @work
+overdue without context due:2020-01-01
+plain open with context @home
+open with context @alpha
+(B) priority B with context @alpha
+(A) priority A with context @alpha
+overdue with context @alpha due:2020-01-01
+brain dump duplicate line
+brain dump duplicate line

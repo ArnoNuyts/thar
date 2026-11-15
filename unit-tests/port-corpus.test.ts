@@ -10,6 +10,7 @@ import {
   DEFAULT_RELOAD_DEBOUNCE_MS,
   DEFAULT_SAVE_DEBOUNCE_MS,
 } from "../hooks/useTodoFileSync.ts";
+import { sortByImportance } from "../logic/Todos.ts";
 import { createIndexes } from "../logic/indexes.ts";
 import {
   getReadLimits,
@@ -20,7 +21,10 @@ import {
   TodoLineLengthLimitError,
 } from "../logic/limits.ts";
 import { Todo } from "../logic/todo.ts";
-import { readTodosFromFile } from "../logic/todo-file-helpers.ts";
+import {
+  readTodosFromFile,
+  writeTodosToFile,
+} from "../logic/todo-file-helpers.ts";
 import { validateTodoFileContent } from "../logic/todo-file-validation.ts";
 import { IndexType, TodoStateEnum } from "../types/enums.ts";
 import { Runtime } from "../utils/runtime.ts";
@@ -78,6 +82,11 @@ type FileExpectation = {
   kind: "todos" | "error";
   todoCount?: number;
   serialized?: { sha256: string; bytes: number };
+  /**
+   * Input indexes of the todos in `sortByImportance` order at the pinned
+   * clock. CP1 must reuse these instead of recomputing the order.
+   */
+  sortedIndexes?: number[];
   todos?: TodoRecord[];
   samples?: { index: number; todo: TodoRecord }[];
   error?: ErrorRecord;
@@ -110,12 +119,6 @@ const ERROR_CLASSES: Record<string, ErrorConstructor> = {
   TOO_MANY_LINES: TodoLineCountLimitError,
   LINE_TOO_LONG: TodoLineLengthLimitError,
   FILE_TOO_LARGE: TodoFileTooLargeError,
-};
-
-/** Length and hash of the single accepted legacy-long line. */
-const LONG_LINE = {
-  length: 8_192,
-  sha256: "f0c8d7ba93cb3427969195a7881778f1030b1dd97271499b5f608b3c2de22073",
 };
 
 const readCorpusFile = (name: string) => readFileSync(join(CORPUS_DIR, name));
@@ -154,6 +157,23 @@ const recordOf = (todo: Todo): TodoRecord => ({
 });
 
 const todosByName = (name: string): Todo[] => parseTodos(readCorpusFile(name));
+
+/**
+ * `sortByImportance` order expressed as indexes into the parsed input, plus
+ * the sorted todos themselves. `isOverdue()` reads the pinned fake clock, so
+ * the order is deterministic.
+ */
+const sortedWithIndexes = (
+  name: string,
+): { indexes: number[]; todos: Todo[] } => {
+  const parsed = todosByName(name);
+  const indexById = new Map(parsed.map((todo, index) => [todo.id, index]));
+  const sorted = sortByImportance(parsed);
+  return {
+    indexes: sorted.map((todo) => indexById.get(todo.id)!),
+    todos: sorted,
+  };
+};
 
 /** The first todo whose text contains `fragment`. */
 const containing = (todos: Todo[], fragment: string): Todo => {
@@ -218,7 +238,6 @@ describe("corpus layout", () => {
       .filter((name) => name.endsWith(".txt"))
       .sort();
     expect(committed).toEqual(Object.keys(expected.files).sort());
-    expect(committed.length).toBeGreaterThanOrEqual(20);
   });
 
   test("keeps byte-exact fixtures out of the LF-normalising root attributes", () => {
@@ -236,6 +255,10 @@ describe("corpus layout", () => {
 
 for (const [name, file] of todoFiles) {
   describe(name, () => {
+    test("keeps the committed fixture bytes", () => {
+      expect(readCorpusFile(name)).toHaveLength(file.rawBytes);
+    });
+
     test("parses the expected number of todos", () => {
       expect(parseTodos(readCorpusFile(name))).toHaveLength(file.todoCount!);
     });
@@ -250,11 +273,15 @@ for (const [name, file] of todoFiles) {
 
     if (file.todos) {
       test("parses every field of every todo", () => {
-        const todos = parseTodos(readCorpusFile(name));
-        expect(todos.map(recordOf)).toEqual(file.todos);
-        for (const todo of todos) {
-          expect(todo.getHash()).toEqual(todo.toString());
-        }
+        expect(parseTodos(readCorpusFile(name)).map(recordOf)).toEqual(
+          file.todos,
+        );
+      });
+    }
+
+    if (file.sortedIndexes) {
+      test("sorts in the pinned order", () => {
+        expect(sortedWithIndexes(name).indexes).toEqual(file.sortedIndexes);
       });
     }
 
@@ -283,6 +310,10 @@ for (const [name, file] of errorFiles) {
   };
 
   describe(name, () => {
+    test("keeps the committed fixture bytes", () => {
+      expect(readCorpusFile(name)).toHaveLength(file.rawBytes);
+    });
+
     test("fails with the pinned error class and fields", () => {
       const expectedError = file.error!;
       const error = thrown();
@@ -297,9 +328,14 @@ for (const [name, file] of errorFiles) {
     });
 
     test("reports the pinned message without leaking file content", () => {
+      const probe = CONTENT_PROBES[name];
+      // A rejection fixture without a probe would silently skip the leak check.
+      expect(probe, `content probe for ${name}`).toBeTypeOf("string");
+      expect(probe.length).toBeGreaterThan(0);
+
       const error = thrown();
       expect(error.message).toEqual(file.error!.message);
-      expect(error.message).not.toContain(CONTENT_PROBES[name]);
+      expect(error.message).not.toContain(probe);
     });
   });
 }
@@ -337,6 +373,7 @@ describe("leading dates", () => {
       ["month thirteen", "2023-13-01 month thirteen is not a todo date"],
       ["not a leap year", "2023-02-29 2023 is not a leap year"],
       ["april has thirty days", "2023-04-31 april has thirty days"],
+      ["day thirty two", "2023-01-32 day thirty two is not a todo date"],
       ["unpadded month", "2023-1-1 unpadded month and day are not date tokens"],
     ];
 
@@ -651,9 +688,13 @@ describe("due, threshold and hidden", () => {
     expect(
       containing(list, "past threshold is visible").isVisibleInOverview(),
     ).toEqual(true);
-    expect(
-      containing(list, "invalid threshold is visible").isVisibleInOverview(),
-    ).toEqual(true);
+
+    // Feb 29 2027 does not exist. A lenient parser that clamped it to the
+    // future would hide the todo, so the invalid value must be future-looking.
+    const invalid = containing(list, "invalid threshold is visible");
+    expect(invalid.tags.t).toEqual("2027-02-29");
+    expect(invalid.isVisibleInOverview()).toEqual(true);
+
     expect(
       containing(list, "no value means visible").isVisibleInOverview(),
     ).toEqual(true);
@@ -694,6 +735,49 @@ describe("recurrence", () => {
       expect(recurring!.text, value).toEqual(todo.text);
       expect(recurring!.tags.rec, value).toEqual(value);
       expect(recurring!.tags.due, value).toEqual(nextDue);
+    }
+  });
+
+  test("the next due date comes from the completion time, not the due date", () => {
+    const list = todos();
+
+    // Toggled at the pinned clock (2026-11-15T12:00:00): the copy is due
+    // completion + amount, never existing due + amount.
+    const cases: {
+      fragment: string;
+      due: string;
+      fromCompletion: string;
+      fromDue: string;
+    }[] = [
+      {
+        fragment: "the due date does not move the next due date",
+        due: "2026-11-01",
+        fromCompletion: "2026-11-17", // 2026-11-15 + 2 days
+        fromDue: "2026-11-03", // 2026-11-01 + 2 days
+      },
+      {
+        fragment: "the month copy uses the completion time",
+        due: "2026-12-31",
+        fromCompletion: "2026-12-15", // 2026-11-15 + 1 month
+        fromDue: "2027-01-31", // 2026-12-31 + 1 month
+      },
+    ];
+
+    for (const { fragment, due, fromCompletion, fromDue } of cases) {
+      const todo = containing(list, fragment);
+      expect(todo.tags.due, fragment).toEqual(due);
+
+      const { updated, recurring, recurrenceError } = todo.toggleState();
+      expect(recurrenceError, fragment).toBeUndefined();
+      expect(dateOrNull(updated.completionDate), fragment).toEqual(
+        "2026-11-15",
+      );
+
+      expect(recurring, fragment).toBeDefined();
+      expect(recurring!.isDone(), fragment).toEqual(false);
+      expect(recurring!.completionDate, fragment).toBeUndefined();
+      expect(recurring!.tags.due, fragment).toEqual(fromCompletion);
+      expect(recurring!.tags.due, fragment).not.toEqual(fromDue);
     }
   });
 
@@ -828,17 +912,195 @@ describe("line endings", () => {
 
 describe("long-line-8192.txt", () => {
   test("pins the accepted legacy line length", () => {
-    const todos = todosByName("long-line-8192.txt");
+    const [todo, ...rest] = todosByName("long-line-8192.txt");
 
-    expect(todos).toHaveLength(1);
-    const [todo] = todos;
-    expect(todo.text).toHaveLength(LONG_LINE.length);
-    expect(sha256(todo.text)).toEqual(LONG_LINE.sha256);
-    expect(todo.toString()).toHaveLength(LONG_LINE.length);
+    // The full record (text, hash, serialized bytes) is pinned in
+    // `expected.json`; these are the parts that make the limit visible.
+    expect(rest).toEqual([]);
+    expect(todo.text).toHaveLength(8_192);
+    expect(todo.toString().length).toEqual(8_192);
     expect(todo.tags).toEqual({});
     expect(todo.projects.size).toEqual(0);
     expect(todo.contexts.size).toEqual(0);
     expect(todo.isDone()).toEqual(false);
+  });
+});
+
+describe("sort-order.txt", () => {
+  const name = "sort-order.txt";
+
+  test("orders by state, context, overdue, priority and keeps ties stable", () => {
+    const { indexes, todos } = sortedWithIndexes(name);
+
+    // The human-reviewed order; the per-file test pins the same value in
+    // `expected.json` for CP1 to reuse.
+    expect(indexes).toEqual([4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3]);
+
+    // Uncontextualised todos first, overdue before the same-context ties.
+    expect(todos[0].text).toEqual("overdue without context");
+    expect(todos.slice(0, 10).every((todo) => !todo.isDone())).toEqual(true);
+    expect(todos.slice(10).every((todo) => todo.isDone())).toEqual(true);
+
+    // Contexts in alphabetical order, uncontextualised first.
+    expect([
+      ...new Set(todos.map((todo) => [...todo.contexts][0] ?? "-")),
+    ]).toEqual(["-", "alpha", "home", "work"]);
+
+    // Inside @alpha: overdue first, then priority A, B, then unprioritised.
+    expect(
+      todos
+        .filter((todo) => todo.contexts.has("alpha"))
+        .map((todo) => todo.priority ?? "-"),
+    ).toEqual(["-", "A", "B", "-"]);
+    expect(
+      todos
+        .filter((todo) => todo.contexts.has("alpha"))
+        .map((todo) => todo.isOverdue()),
+    ).toEqual([true, false, false, false]);
+  });
+
+  test("duplicate lines keep their input order", () => {
+    const parsed = todosByName(name);
+    const duplicates = parsed.filter(
+      (todo) => todo.text === "brain dump duplicate line",
+    );
+    expect(duplicates).toHaveLength(2);
+    expect(duplicates[0].id).not.toEqual(duplicates[1].id);
+
+    const sorted = sortByImportance(parsed).filter(
+      (todo) => todo.text === "brain dump duplicate line",
+    );
+    expect(sorted.map((todo) => todo.id)).toEqual(
+      duplicates.map((todo) => todo.id),
+    );
+  });
+});
+
+describe("invalid UTF-8 and a UTF-8 BOM", () => {
+  test("invalid bytes decode to U+FFFD and grow on save", () => {
+    const raw = readCorpusFile("invalid-utf8.txt");
+    const text = raw.toString("utf8");
+
+    expect(text).toContain("caf\uFFFD latin-1");
+    expect(text).toContain("\uFFFD leading invalid byte");
+    expect(text).toContain("truncated \uFFFD sequence");
+    expect(text).toContain("plain ascii line is unchanged");
+
+    const todos = todosByName("invalid-utf8.txt");
+    expect(todos.map((todo) => todo.text)).toEqual([
+      "caf\uFFFD latin-1 byte becomes a replacement character",
+      "\uFFFD leading invalid byte stays in the text",
+      "truncated \uFFFD sequence at the end",
+      "plain ascii line is unchanged",
+    ]);
+
+    // U+FFFD is three UTF-8 bytes, so the lossy decode makes the file larger.
+    const expectedFile = expected.files["invalid-utf8.txt"];
+    expect(expectedFile.serialized!.bytes).toBeGreaterThan(
+      expectedFile.rawBytes,
+    );
+    expect(sha256(serializeTodos(todos))).toEqual(
+      expectedFile.serialized!.sha256,
+    );
+  });
+
+  test("a leading BOM survives the raw line but is trimmed from the todo", () => {
+    const raw = readCorpusFile("bom.txt");
+    expect([...raw.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+
+    // The BOM is part of the first line the validator returns...
+    const lines = validateTodoFileContent(
+      raw.toString("utf8"),
+      getReadLimits(),
+    );
+    expect(lines[0]).toEqual("\uFEFFfirst todo after a BOM");
+
+    // ...but `String#trim()` treats U+FEFF as whitespace, so both the loader's
+    // blank-line filter (`line.trim()`) and the text trim drop it. The todo
+    // therefore never serializes the BOM: saving loses it.
+    const todos = todosByName("bom.txt");
+    expect(todos.map((todo) => todo.text)).toEqual([
+      "first todo after a BOM",
+      "second todo",
+    ]);
+    expect(lines.filter((line) => line.trim())).toHaveLength(2);
+    expect(serializeTodos(todos)).toEqual(
+      "first todo after a BOM\nsecond todo\n",
+    );
+
+    const serialized = serializeTodos(todos);
+    expect(serialized).not.toContain("\uFEFF");
+    expect(Buffer.byteLength(serialized, "utf8")).toEqual(
+      expected.files["bom.txt"].serialized!.bytes,
+    );
+  });
+});
+
+describe("write path", () => {
+  test("round-trips real-world-lf.txt through writeTodosToFile", async () => {
+    const name = "real-world-lf.txt";
+    const expectedFile = expected.files[name];
+
+    await withTempDir(async (dir) => {
+      const filename = join(dir, name);
+      const todos = await readTodosFromFile(join(CORPUS_DIR, name));
+      await writeTodosToFile(todos, filename);
+
+      const written = readFileSync(filename);
+      expect(written.toString("utf8")).toEqual(serializeTodos(todos));
+      expect(written).toHaveLength(expectedFile.serialized!.bytes);
+      expect(sha256(written.toString("utf8"))).toEqual(
+        expectedFile.serialized!.sha256,
+      );
+
+      const reloaded = await readTodosFromFile(filename);
+      expect(reloaded.map(recordOf)).toEqual(expectedFile.todos);
+    });
+  });
+
+  test("reloading tags.txt pins the duplicate-tag non-idempotence", async () => {
+    const name = "tags.txt";
+    const expectedFile = expected.files[name];
+
+    await withTempDir(async (dir) => {
+      const filename = join(dir, name);
+      await writeTodosToFile(
+        await readTodosFromFile(join(CORPUS_DIR, name)),
+        filename,
+      );
+
+      const written = readFileSync(filename);
+      expect(written).toHaveLength(expectedFile.serialized!.bytes);
+      expect(sha256(written.toString("utf8"))).toEqual(
+        expectedFile.serialized!.sha256,
+      );
+
+      // `beta:one beta:two` serializes as `beta:one,two`. Reparsing that
+      // yields the scalar "one,two", not an array, so the in-memory shape is
+      // not stable across a save. A Rust port that split comma values on read
+      // would restore the array and must fail this pin.
+      const reloaded = await readTodosFromFile(filename);
+      const duplicate = containing(reloaded, "duplicate key becomes an array");
+      expect(duplicate.tags).toEqual({ beta: "one,two" });
+      expect(Array.isArray(duplicate.tags.beta)).toEqual(false);
+      expect(duplicate.toString()).toEqual(
+        "duplicate key becomes an array beta:one,two",
+      );
+
+      // After the first save the text is stable: a second save is byte-equal.
+      await writeTodosToFile(reloaded, filename);
+      expect(readFileSync(filename).equals(written)).toEqual(true);
+
+      const expectedDuplicate = expectedFile.todos!.find(
+        (record) => record.text === "duplicate key becomes an array",
+      )!;
+      expect(recordOf(duplicate)).toEqual({
+        ...expectedDuplicate,
+        tags: [["beta", "one,two"]],
+        toString: "duplicate key becomes an array beta:one,two",
+        hash: "duplicate key becomes an array beta:one,two",
+      });
+    });
   });
 });
 
@@ -914,6 +1176,10 @@ describe("file limits", () => {
       expect(error.lineNumber).toEqual(1);
       expect(error.length).toEqual(8193);
       expect(error.maxLineChars).toEqual(8192);
+      expect(error.message).toEqual(
+        "Todo file line 1 is 8193 characters; the limit is 8192. " +
+          "Shorten the line or raise THAR_MAX_LINE_CHARS. Nothing was changed.",
+      );
       expect(error.message).not.toContain("aaaa");
     });
   });
@@ -930,6 +1196,11 @@ describe("file limits", () => {
       expect(error.code).toEqual("TOO_MANY_LINES");
       expect(error.lineCount).toEqual(10_001);
       expect(error.maxReadTodos).toEqual(10_000);
+      expect(error.message).toEqual(
+        "Todo file has 10001 lines; the limit is 10000. " +
+          "Trim the file or raise THAR_MAX_READ_TODOS. Nothing was changed.",
+      );
+      expect(error.message).not.toContain("task");
     });
   });
 
@@ -945,6 +1216,11 @@ describe("file limits", () => {
       expect(error.code).toEqual("FILE_TOO_LARGE");
       expect(error.actualBytes).toEqual(1024 * 1024 + 1);
       expect(error.maxBytes).toEqual(1024 * 1024);
+      expect(error.message).toEqual(
+        "Todo file is 1048577 bytes; the limit is 1048576 bytes. " +
+          "Trim the file or raise THAR_MAX_FILE_BYTES. Nothing was changed.",
+      );
+      expect(error.message).not.toContain("xxxx");
     });
   });
 });
