@@ -128,12 +128,25 @@ impl ConfirmModal {
 
     /// Message lines at the current terminal width.
     fn message_lines(&self) -> Vec<String> {
-        let width = self.width_for().resolve(self.terminal_width);
-        text::wrap(&self.request.message, width.saturating_sub(4))
+        text::wrap(&self.request.message, self.content_width())
+    }
+
+    /// Content width shared by wrapping and rendering.
+    ///
+    /// The modal box keeps one border column plus one padding column on each
+    /// side, so the usable text is four columns narrower than the box.
+    fn content_width(&self) -> u16 {
+        self.width_for()
+            .resolve(self.terminal_width)
+            .saturating_sub(4)
     }
 
     fn button_row(&self) -> u16 {
-        u16::try_from(self.message_lines().len()).unwrap_or(u16::MAX)
+        // One blank margin row above the buttons, matching the Ink modal's
+        // `buttonRowIndex = lines + 1`.
+        u16::try_from(self.message_lines().len())
+            .unwrap_or(u16::MAX)
+            .saturating_add(1)
     }
 
     fn geometry(&self) -> ModalRect {
@@ -280,7 +293,7 @@ impl Modal for ConfirmModal {
             .fg(theme::FOREGROUND)
             .bg(theme::MODAL_BACKGROUND);
         let content_x = rect.body.x.saturating_add(2);
-        let content_width = rect.body.width.saturating_sub(4);
+        let content_width = self.content_width();
 
         for (index, line) in self.message_lines().iter().enumerate() {
             let offset = u16::try_from(index).unwrap_or(u16::MAX);

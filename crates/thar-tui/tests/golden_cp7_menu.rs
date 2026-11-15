@@ -223,6 +223,35 @@ fn eighty_by_twenty_four_pins_the_delete_confirmation() {
 }
 
 #[test]
+fn eighty_by_twenty_four_wraps_the_single_delete_message_without_truncation() {
+    let mut app = app(&["one"]);
+    app.resize(80, 24);
+    let ids = vec![app.todos[0].id];
+    app.apply_action(thar_tui::Action::Confirm(ConfirmRequest::delete(ids)));
+    let backend = draw(&app, 80, 24);
+    let screen = screen_lines(&backend);
+    let rect = modal_area(&app);
+
+    // The one-todo message is long enough that the old wrap/draw mismatch
+    // truncated its first line. Both halves must reach the screen intact.
+    assert!(
+        screen.iter().any(|line| line.contains("delete this")),
+        "the first wrapped line dropped a character: {screen:#?}"
+    );
+    assert!(
+        screen.iter().any(|line| line.contains("todo?")),
+        "the second wrapped line is missing: {screen:#?}"
+    );
+
+    // One blank margin row above the buttons, matching the Ink modal.
+    let button_row = rect.body.y.saturating_add(3) as usize;
+    assert!(
+        screen[button_row].contains("« Confirm »") && screen[button_row].contains("‹ Cancel ›"),
+        "buttons are not on the row after the message: {screen:#?}"
+    );
+}
+
+#[test]
 fn one_hundred_by_thirty_pins_the_update_screen() {
     let mut app = app(&["one"]);
     app.resize(100, 30);

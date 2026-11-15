@@ -190,12 +190,22 @@ impl UpdateModal {
     }
 
     fn content_lines(&self) -> Vec<String> {
-        let width = self.width_for().resolve(self.terminal_width);
-        text::wrap(&self.model.content(), width.saturating_sub(4))
+        text::wrap(&self.model.content(), self.content_width())
+    }
+
+    /// Content width shared by wrapping and rendering.
+    fn content_width(&self) -> u16 {
+        self.width_for()
+            .resolve(self.terminal_width)
+            .saturating_sub(4)
     }
 
     fn button_row(&self) -> u16 {
-        u16::try_from(self.content_lines().len()).unwrap_or(u16::MAX)
+        // One blank margin row above the buttons, matching the Ink modal's
+        // `buttonRowIndex = lines + 1`.
+        u16::try_from(self.content_lines().len())
+            .unwrap_or(u16::MAX)
+            .saturating_add(1)
     }
 
     fn geometry(&self) -> ModalRect {
@@ -342,7 +352,7 @@ impl Modal for UpdateModal {
             .fg(theme::FOREGROUND)
             .bg(theme::MODAL_BACKGROUND);
         let content_x = rect.body.x.saturating_add(2);
-        let content_width = rect.body.width.saturating_sub(4);
+        let content_width = self.content_width();
 
         for (index, line) in self.content_lines().iter().enumerate() {
             let offset = u16::try_from(index).unwrap_or(u16::MAX);
