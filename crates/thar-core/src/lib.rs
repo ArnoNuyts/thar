@@ -70,7 +70,10 @@ mod rows;
 mod scan;
 mod validation;
 
-pub use date::TodoDate;
+pub use date::{
+    TodoDate, add_days, add_months, add_weeks, add_years, days_in_month, end_of_month,
+    start_of_month, start_of_week_monday, weekday,
+};
 pub use error::CoreError;
 pub use limits::{
     DEFAULT_MAX_FILE_BYTES, DEFAULT_MAX_LINE_CHARS, DEFAULT_MAX_READ_TODOS, MAX_PASTE_TODOS,

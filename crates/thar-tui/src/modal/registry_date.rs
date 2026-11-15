@@ -1,14 +1,19 @@
 //! Due/threshold dates and the calendar (CP7 date workstream).
 //!
-//! This stub returns `None` until that workstream lands; the list keymap still
-//! routes `d`/`t` here, so the host shows one bounded "not available" toast.
+//! The list keymap routes `d`/`t` here. Both screens are built from the current
+//! selection and day, so they can be driven without borrowing the app.
 
 use crate::app::App;
 
+use super::date::{DateKind, SetDateModal};
 use super::{Modal, ModalId};
 
 /// Build a date screen.
 #[must_use]
-pub fn open(_app: &App, _id: ModalId) -> Option<Box<dyn Modal>> {
-    None
+pub fn open(app: &App, id: ModalId) -> Option<Box<dyn Modal>> {
+    match id {
+        ModalId::SetDueDate => Some(Box::new(SetDateModal::new(app, DateKind::Due))),
+        ModalId::SetThresholdDate => Some(Box::new(SetDateModal::new(app, DateKind::Threshold))),
+        _ => None,
+    }
 }
