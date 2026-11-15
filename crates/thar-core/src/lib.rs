@@ -57,7 +57,10 @@ mod error;
 mod js;
 mod limits;
 mod model;
+mod nav;
+mod query;
 mod recurrence;
+mod rows;
 mod scan;
 mod validation;
 
@@ -68,10 +71,18 @@ pub use limits::{
     MAX_TODO_CHARS, MAX_TODOS, ReadLimits,
 };
 pub use model::{Priority, State, TagValue, Todo, TodoId, ToggleResult, serialize_file};
+pub use nav::{
+    SelectionRange, calculate_scroll_offset, clamp, find_todo_row, get_navigable_row,
+    get_selection_range_rows, guesstimate_selection, validate_selection,
+};
+pub use query::{
+    extract_search_terms, filter_by_search, filter_hidden, js_lowercase, sort_by_importance,
+};
 pub use recurrence::{
     MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, RecurrenceUnit, is_valid_recurrence,
     plan_recurrence,
 };
+pub use rows::{NONE_CONTEXT, Row, create_rows};
 pub use validation::{is_blank_line, validate_file_bytes, validate_file_content};
 
 /// Crate version, surfaced through the WASM smoke test.
