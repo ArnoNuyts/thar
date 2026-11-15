@@ -798,8 +798,9 @@ workspace; the Ink app, `bin/thar.js` and the npm entry point are untouched.
     and a double-click inside 350 ms shows the read-only toast;
   - lifecycle: Ctrl+C exits 0 and the raw stream contains the
     leave-alternate-screen, disable-mouse, disable-bracketed-paste and
-    show-cursor sequences; `THAR_TUI_PANIC=1` exits non-zero with the panic
-    message emitted after the same restore sequences;
+    show-cursor sequences; a debug build with `THAR_TUI_PANIC=1` exits non-zero
+    with the panic message emitted after the same restore sequences (the
+    trigger is compiled out of release builds);
   - a missing file in an empty directory renders an empty list and creates
     nothing.
 - CI: `.github/workflows/rust.yml` gains a `pty` job matrixed over
