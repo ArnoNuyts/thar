@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -36,6 +36,8 @@ const ENV_KEYS = [
   "THAR_MAX_READ_TODOS",
   "THAR_MAX_LINE_CHARS",
   "XDG_CACHE_HOME",
+  "LOCALAPPDATA",
+  "HOME",
 ] as const;
 
 const savedEnv = new Map<string, string | undefined>();
@@ -105,6 +107,15 @@ const record = (line: string, fields: Record<string, unknown> = {}) => ({
   ...fields,
 });
 
+/**
+ * A package that enforces the three read limits the way `thar-wasm` does, and
+ * echoes each line as its `toString`/`hash` (`lineSuffix` adds a difference).
+ *
+ * `parseFile` implements the compile-time defaults (1 MiB / 10 000 / 8 192) and
+ * rejects a longer line, so a test that overrides `THAR_MAX_LINE_CHARS` fails
+ * with a spurious `rejected` record if the adapter forgets to pass the
+ * effective limits to `parseFileWithLimits`.
+ */
 const limitAwarePackage = (lineSuffix = "") => `
 const fail = (name, code, fields) => ({
   ok: false,
@@ -208,6 +219,72 @@ describe("WASM adapter fallback", () => {
       expect(parseFileWithCore("one", "2026-11-15")).toBeUndefined();
       expect(debug.mock.calls.at(-1)?.[0]).toContain("malformed parseFile");
     });
+  });
+
+  test("an invalid envelope never echoes its text on debug", async () => {
+    await withTempDir(async (dir) => {
+      // Node's `JSON.parse` message quotes the input; a todo line is its own
+      // hash, so a snippet would leak content.
+      const secret = "SECRET-todo-text-9f43";
+      await fakePackage(
+        dir,
+        `module.exports = {
+  coreVersion: () => "0.2.0-test",
+  parseFile: () => '{"ok":true,"todos":[${secret}',
+  parseFileWithLimits: () => '{"ok":true,"todos":[${secret}',
+};
+`,
+      );
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+      expect(parseFileWithCore(`${secret}\n`, "2026-11-15")).toBeUndefined();
+
+      const logged = debug.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(logged).toContain("SyntaxError");
+      expect(logged).not.toContain(secret);
+    });
+  });
+
+  test("an unrelated working directory cannot plant a package", async () => {
+    const dir = await Runtime.makeTempDir();
+    const originalCwd = process.cwd();
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    try {
+      const planted = join(dir, "crates", "thar-wasm", "pkg", "thar_wasm.js");
+      mkdirSync(dirname(planted), { recursive: true });
+      const plantedEnvelope = JSON.stringify(
+        JSON.stringify({
+          ok: true,
+          todos: [record("planted-cwd-marker")],
+        }),
+      );
+      await Runtime.writeTextFile(
+        planted,
+        `module.exports = {
+  coreVersion: () => "planted",
+  parseFile: () => ${plantedEnvelope},
+  parseFileWithLimits: () => ${plantedEnvelope},
+};
+`,
+      );
+
+      setEnv("THAR_CORE_WASM", undefined);
+      resetCoreBridgeForTests();
+      process.chdir(dir);
+
+      const parsed = parseFileWithCore("one", "2026-11-15");
+      expect(JSON.stringify(parsed ?? null)).not.toContain(
+        "planted-cwd-marker",
+      );
+
+      if (!existsSync(REAL_PACKAGE)) {
+        expect(parsed).toBeUndefined();
+        expect(debug.mock.calls[0]?.[0]).toContain("WASM package not built");
+      }
+    } finally {
+      process.chdir(originalCwd);
+      await Runtime.remove(dir, { recursive: true });
+    }
   });
 
   test("maps the ok envelope with every contract field", async () => {
@@ -529,6 +606,46 @@ describe("shadow log path", () => {
       const explicit = join(dir, "elsewhere", "shadow.log");
       setEnv("THAR_SHADOW_LOG", explicit);
       expect(shadowLogPath()).toBe(explicit);
+    });
+  });
+
+  test("falls back to the platform cache directory without XDG", async () => {
+    await withTempDir(async (dir) => {
+      setEnv("XDG_CACHE_HOME", undefined);
+      setEnv("HOME", dir);
+      const platform = process.platform;
+      const localAppData = join(dir, "LocalAppData");
+      try {
+        Object.defineProperty(process, "platform", {
+          value: "darwin",
+          configurable: true,
+        });
+        expect(shadowLogPath()).toBe(
+          join(dir, "Library", "Caches", "thar", "shadow.log"),
+        );
+
+        Object.defineProperty(process, "platform", {
+          value: "win32",
+          configurable: true,
+        });
+        setEnv("LOCALAPPDATA", localAppData);
+        expect(shadowLogPath()).toBe(join(localAppData, "thar", "shadow.log"));
+        setEnv("LOCALAPPDATA", undefined);
+        expect(shadowLogPath()).toBe(
+          join(dir, "AppData", "Local", "thar", "shadow.log"),
+        );
+
+        Object.defineProperty(process, "platform", {
+          value: "linux",
+          configurable: true,
+        });
+        expect(shadowLogPath()).toBe(join(dir, ".cache", "thar", "shadow.log"));
+      } finally {
+        Object.defineProperty(process, "platform", {
+          value: platform,
+          configurable: true,
+        });
+      }
     });
   });
 });

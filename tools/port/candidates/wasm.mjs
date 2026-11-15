@@ -32,6 +32,12 @@ const DEFAULT_LIMITS = {
   maxLineChars: 8_192,
 };
 
+// TODO(cp2b-followups): `DEFAULT_LIMITS`, `LIMIT_ENV_VARS` and the validation
+// below duplicate `logic/limits.ts` (and the Rust `ReadLimits`). A shared
+// manifest — written by the harness next to the contract, or one small module
+// imported by the candidate — would remove the drift risk. `tools/port/README.md`
+// ("WASM candidate") records the same TODO.
+
 const LIMIT_ENV_VARS = {
   maxFileBytes: "THAR_MAX_FILE_BYTES",
   maxReadTodos: "THAR_MAX_READ_TODOS",
