@@ -446,12 +446,13 @@ pub fn insert_query_text(app: &mut App, text: &str) {
         return;
     }
     let cursor = app.query_cursor.min(app.query.chars().count());
+    let inserted: Vec<char> = text.chars().collect();
     let mut chars: Vec<char> = app.query.chars().collect();
-    for character in text.chars() {
-        chars.insert(cursor, character);
-    }
+    // Splice once: inserting each character at `cursor` would reverse the
+    // pasted run (the cursor must advance between insertions).
+    chars.splice(cursor..cursor, inserted.iter().copied());
     app.query = chars.into_iter().collect();
-    app.query_cursor = cursor + text.chars().count();
+    app.query_cursor = cursor + inserted.len();
     nav::rebuild(app);
 }
 
@@ -460,12 +461,22 @@ pub fn apply(app: &mut App, command: Command) {
     match command {
         Command::Quit => app.should_quit = true,
         Command::SearchFocus => {
+            let was_visible = app.search_visible();
             app.search_focused = true;
-            nav::reflow(app);
+            if app.search_visible() != was_visible {
+                nav::reflow(app);
+            } else {
+                app.clamp_offset();
+            }
         }
         Command::SearchBlur => {
+            let was_visible = app.search_visible();
             app.search_focused = false;
-            nav::reflow(app);
+            if app.search_visible() != was_visible {
+                nav::reflow(app);
+            } else {
+                app.clamp_offset();
+            }
         }
         Command::SearchClear => {
             app.search_focused = false;

@@ -1,6 +1,6 @@
 //! Shared helpers for the `thar-cli` integration tests.
 //!
-//! The read-only guard only scans `src/**`, so tests may create temporary
+//! The read-only guard scans both the `thar-cli` and `thar-tui` sources, so tests may create temporary
 //! files and directories to prove the loader leaves them untouched.
 
 #![allow(dead_code)]
