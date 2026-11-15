@@ -30,10 +30,11 @@
 //! # Rendering
 //!
 //! The input is drawn as `» ` plus the text with the character under the cursor
-//! in an inverse cell, exactly like the Ink input. The suggestion list is drawn
-//! inline between the input and the buttons rather than as a floating overlay,
-//! so [`Modal::body_rows`] can account for it and the centred modal stays
-//! centred. The Save/Cancel row is a pair of bordered boxes.
+//! in an inverse cell, exactly like the Ink input. The suggestion list is a
+//! floating popup owned by [`crate::view::suggestion`]: it is sized to the
+//! longest name and anchored under the typed `+`/`@`, and the modal itself
+//! keeps a fixed body height so it never jumps while the list opens or closes.
+//! The Save/Cancel row is a pair of bordered boxes.
 
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -47,7 +48,7 @@ use crate::app::App;
 use crate::display::sanitize_for_display;
 use crate::editor::Editor;
 use crate::modal::{Action, Modal, ModalId, ModalRect, ModalWidth, Outcome};
-use crate::suggest::{Suggestions, TagKind, TagSources, tag_prefix};
+use crate::suggest::{Anchor, Overlay, Suggestions, TagSources};
 use crate::theme;
 
 /// Help line under the buttons, copied from `ModalTodoInput.tsx` so the Rust
@@ -57,12 +58,10 @@ const HELP_TEXT: &str = "Tab/Shift+Tab = toggle action, Enter = selected action,
 /// The input prompt, two cells wide.
 const PROMPT: &str = "» ";
 
-/// Rows above the buttons when no suggestion is visible: the input, a spacer,
-/// the three bordered-button rows, a spacer and the help line.
+/// Rows in the fixed body: the input, a spacer, the three bordered-button rows,
+/// a spacer and the help line. Suggestions float above this and never change
+/// the height.
 const BASE_ROWS: u16 = 7;
-
-/// Largest number of suggestions drawn at once.
-const MAX_VISIBLE_SUGGESTIONS: usize = 6;
 
 /// Which screen this is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -138,25 +137,7 @@ impl TextModal {
     fn toggle_button(&mut self) {
         self.selected_button = if self.selected_button == 0 { 1 } else { 0 };
     }
-
-    /// The window of suggestion items to draw.
-    fn visible_suggestions(&self) -> (usize, usize) {
-        visible_range(self.suggestions.items().len(), self.suggestions.selected())
-    }
 }
-
-/// The visible slice of a suggestion list.
-///
-/// The whole list is drawn while it is short enough; otherwise the window
-/// scrolls so the highlighted item is the last visible row at most.
-fn visible_range(len: usize, selected: usize) -> (usize, usize) {
-    if len <= MAX_VISIBLE_SUGGESTIONS {
-        return (0, len);
-    }
-    let start = selected.saturating_sub(MAX_VISIBLE_SUGGESTIONS - 1);
-    (start, (start + MAX_VISIBLE_SUGGESTIONS).min(len))
-}
-
 impl Modal for TextModal {
     fn id(&self) -> ModalId {
         match self.mode {
@@ -178,8 +159,7 @@ impl Modal for TextModal {
     }
 
     fn body_rows(&self) -> u16 {
-        let rows = self.suggestions.items().len().min(MAX_VISIBLE_SUGGESTIONS);
-        BASE_ROWS.saturating_add(u16::try_from(rows).unwrap_or(0))
+        BASE_ROWS
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Outcome {
@@ -249,27 +229,51 @@ impl Modal for TextModal {
         render_input(frame, content, row, &self.editor);
         row += 1;
 
-        let (first, last) = self.visible_suggestions();
-        for index in first..last {
-            if let Some(item) = self.suggestions.items().get(index) {
-                render_suggestion(
-                    frame,
-                    content,
-                    row,
-                    item,
-                    self.suggestions.kind(),
-                    index == self.suggestions.selected(),
-                );
-                row += 1;
-            }
-        }
-
         // Spacer, buttons, spacer, help.
         row += 1;
         render_buttons(frame, content, row, self.selected_button);
         row += 3;
         row += 1;
         render_help(frame, content, row);
+    }
+
+    fn suggestion_overlay(&self, rect: ModalRect) -> Option<Overlay<'_>> {
+        if !self.suggestions.is_open() {
+            return None;
+        }
+        let content = content_rect(rect.body);
+        let cursor = self.editor.cursor();
+        let chars = self.editor.chars();
+        let available = usize::from(content.width.saturating_sub(2));
+        if available == 0 {
+            return None;
+        }
+        let (window_start, _) = input_window(chars, cursor, available);
+        let word_start = self.suggestions.start();
+        let before_word = if word_start <= window_start {
+            String::new()
+        } else {
+            chars
+                .get(window_start..word_start.min(chars.len()))
+                .unwrap_or(&[])
+                .iter()
+                .collect()
+        };
+        let width = u16::try_from(Line::from(sanitize_for_display(&before_word)).width())
+            .unwrap_or(u16::MAX);
+        let max_x = content.x.saturating_add(content.width.saturating_sub(1));
+        let x = content
+            .x
+            .saturating_add(u16::try_from(PROMPT.chars().count()).unwrap_or(0))
+            .saturating_add(width)
+            .min(max_x);
+        Some(Overlay {
+            anchor: Anchor {
+                x,
+                y: content.y.saturating_add(1),
+            },
+            suggestions: &self.suggestions,
+        })
     }
 }
 
@@ -281,6 +285,58 @@ fn content_rect(body: Rect) -> Rect {
         body.width.saturating_sub(2),
         body.height,
     )
+}
+
+/// Display width of one character after sanitization.
+fn char_width(character: char) -> usize {
+    Line::from(sanitize_for_display(&character.to_string())).width()
+}
+
+/// Display width of a run of characters in terminal cells.
+fn cells_width(chars: &[char]) -> usize {
+    chars.iter().map(|character| char_width(*character)).sum()
+}
+
+/// The cell-based input window: the first and exclusive last char indexes that
+/// fit `available` terminal cells while keeping the cursor visible.
+///
+/// The editor stores a char index, but rendering and anchoring are in cells.
+/// A CJK glyph is two cells and a sanitized control character can be six, so a
+/// char window would overflow the input row and detach the popup from the
+/// marker.
+fn input_window(chars: &[char], cursor: usize, available: usize) -> (usize, usize) {
+    if available == 0 {
+        return (cursor.min(chars.len()), cursor.min(chars.len()));
+    }
+
+    let cursor = cursor.min(chars.len());
+    let mut start = 0;
+    let mut before = cells_width(&chars[..cursor]);
+    // Leave one cell for the inverse cursor cell.
+    while start < cursor && before.saturating_add(1) > available {
+        before = before.saturating_sub(char_width(chars[start]));
+        start += 1;
+    }
+
+    let mut end = cursor;
+    let mut used = before.saturating_add(1);
+    if let Some(at) = chars.get(cursor) {
+        let width = char_width(*at);
+        if used.saturating_add(width) <= available {
+            used = used.saturating_add(width);
+            end = cursor + 1;
+        }
+    }
+    while end < chars.len() {
+        let width = char_width(chars[end]);
+        if used.saturating_add(width) > available {
+            break;
+        }
+        used = used.saturating_add(width);
+        end += 1;
+    }
+
+    (start, end)
 }
 
 /// One row of the content rectangle, if it is still inside the modal.
@@ -312,19 +368,16 @@ fn render_input(frame: &mut Frame, content: Rect, offset: u16, editor: &Editor) 
         return;
     }
 
-    // Horizontal window: keep the cursor visible, one cell for the blank
-    // cursor when it sits at the end of the text.
-    let start = if cursor >= available {
-        cursor + 1 - available
-    } else {
-        0
-    };
-    let end = chars.len().min(start.saturating_add(available));
+    let (start, end) = input_window(chars, cursor, available);
     let window = chars.get(start..end).unwrap_or(&[]);
 
     let cursor_at = cursor.saturating_sub(start);
     let before: String = window[..cursor_at.min(window.len())].iter().collect();
-    let at = window.get(cursor_at).copied().unwrap_or(' ');
+    let at = chars
+        .get(cursor)
+        .copied()
+        .filter(|_| cursor < end)
+        .unwrap_or(' ');
     let after: String = window[window.len().min(cursor_at.saturating_add(1))..]
         .iter()
         .collect();
@@ -345,41 +398,6 @@ fn render_input(frame: &mut Frame, content: Rect, offset: u16, editor: &Editor) 
         Paragraph::new(Line::from(spans)).style(Style::default().bg(theme::MODAL_BACKGROUND)),
         area,
     );
-}
-
-/// Draw one suggestion row.
-fn render_suggestion(
-    frame: &mut Frame,
-    content: Rect,
-    offset: u16,
-    item: &str,
-    kind: TagKind,
-    selected: bool,
-) {
-    let Some(area) = row_rect(content, offset) else {
-        return;
-    };
-
-    let base = if selected {
-        Style::default()
-            .bg(theme::SELECTED_BACKGROUND)
-            .fg(theme::FOREGROUND)
-    } else {
-        Style::default()
-            .bg(theme::MODAL_BACKGROUND)
-            .fg(theme::FOREGROUND)
-    };
-    let prefix_style = base.fg(match kind {
-        TagKind::Project => theme::TAG_PROJECT,
-        TagKind::Context => theme::TAG_CONTEXT,
-    });
-
-    let line = Line::from(vec![
-        Span::styled("  ", base),
-        Span::styled(tag_prefix(kind).to_string(), prefix_style),
-        Span::styled(sanitize_for_display(item), base),
-    ]);
-    frame.render_widget(Paragraph::new(line).style(base), area);
 }
 
 /// Draw the bordered Save/Cancel row across three body rows.
@@ -559,6 +577,15 @@ mod tests {
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, NONE)
+    }
+
+    fn overlay_open(modal: &dyn Modal) -> bool {
+        let rect = crate::modal::geometry::resolve(
+            ratatui::layout::Rect::new(0, 0, 80, 24),
+            modal.width(),
+            modal.body_rows(),
+        );
+        modal.suggestion_overlay(rect).is_some()
     }
 
     fn app(lines: &[&str]) -> App {
@@ -786,7 +813,8 @@ mod tests {
         let mut modal = super::create(&app);
 
         type_text(&mut *modal, "buy +tha");
-        assert_eq!(modal.body_rows(), super::BASE_ROWS + 2);
+        assert_eq!(modal.body_rows(), super::BASE_ROWS);
+        assert!(overlay_open(&*modal));
 
         // Enter applies the first match instead of submitting.
         assert!(matches!(
@@ -794,10 +822,12 @@ mod tests {
             Outcome::Continue
         ));
         assert_eq!(modal.body_rows(), super::BASE_ROWS);
+        assert!(!overlay_open(&*modal));
 
         // Arrow keys move and wrap the highlight.
         type_text(&mut *modal, "@");
-        assert_eq!(modal.body_rows(), super::BASE_ROWS + 2);
+        assert_eq!(modal.body_rows(), super::BASE_ROWS);
+        assert!(overlay_open(&*modal));
         assert!(matches!(
             modal.handle_key(key(KeyCode::Down)),
             Outcome::Continue
@@ -816,6 +846,7 @@ mod tests {
             Outcome::Continue
         ));
         assert_eq!(modal.body_rows(), super::BASE_ROWS);
+        assert!(!overlay_open(&*modal));
 
         let actions = actions(modal.handle_key(key(KeyCode::Enter)));
         assert_eq!(
@@ -829,12 +860,13 @@ mod tests {
         let app = app(&["one +thar"]);
         let mut modal = super::create(&app);
         type_text(&mut *modal, "+th");
-        assert!(modal.body_rows() > super::BASE_ROWS);
+        assert!(overlay_open(&*modal));
 
         assert!(matches!(
             modal.handle_key(key(KeyCode::Esc)),
             Outcome::Continue
         ));
+        assert!(!overlay_open(&*modal));
         assert_eq!(modal.body_rows(), super::BASE_ROWS);
         assert!(matches!(
             modal.handle_key(key(KeyCode::Esc)),
@@ -861,7 +893,8 @@ mod tests {
         // A paste that starts a tag word opens the list.
         let mut modal = super::create(&app);
         assert!(matches!(modal.handle_paste("+th"), Outcome::Continue));
-        assert_eq!(modal.body_rows(), super::BASE_ROWS + 1);
+        assert!(overlay_open(&*modal));
+        assert_eq!(modal.body_rows(), super::BASE_ROWS);
     }
 
     #[test]
@@ -902,7 +935,18 @@ mod tests {
     }
 
     #[test]
-    fn the_body_grows_with_the_visible_suggestion_window() {
+    fn the_input_window_counts_display_cells_not_chars() {
+        let text = format!("{} +th", "日".repeat(30));
+        let chars: Vec<char> = text.chars().collect();
+        let cursor = chars.len();
+        let (start, end) = super::input_window(&chars, cursor, 36);
+        assert!(start > 0, "the wide prefix must scroll");
+        assert_eq!(end, cursor);
+        assert!(super::cells_width(&chars[start..cursor]) < 36);
+    }
+
+    #[test]
+    fn the_body_stays_fixed_while_the_popup_windows() {
         let mut app = app(&["one"]);
         for index in 0..20 {
             app.todos.push(Todo::parse_line(
@@ -912,20 +956,28 @@ mod tests {
         }
         let mut modal = super::create(&app);
         type_text(&mut *modal, "+project");
-        assert_eq!(
+        assert_eq!(modal.body_rows(), super::BASE_ROWS);
+
+        let rect = crate::modal::geometry::resolve(
+            ratatui::layout::Rect::new(0, 0, 80, 24),
+            modal.width(),
             modal.body_rows(),
-            super::BASE_ROWS + u16::try_from(super::MAX_VISIBLE_SUGGESTIONS).unwrap()
         );
+        let overlay = modal.suggestion_overlay(rect).expect("the popup is open");
+        assert_eq!(overlay.suggestions.items().len(), 20);
 
         assert_eq!(
-            super::visible_range(20, 0),
-            (0, super::MAX_VISIBLE_SUGGESTIONS)
+            crate::suggest::visible_range(20, 0, crate::suggest::MAX_ROWS),
+            (0, crate::suggest::MAX_ROWS)
         );
         assert_eq!(
-            super::visible_range(20, 19),
+            crate::suggest::visible_range(20, 19, crate::suggest::MAX_ROWS),
             (14, 20),
             "the window scrolls to keep the selection visible"
         );
-        assert_eq!(super::visible_range(3, 2), (0, 3));
+        assert_eq!(
+            crate::suggest::visible_range(3, 2, crate::suggest::MAX_ROWS),
+            (0, 3)
+        );
     }
 }

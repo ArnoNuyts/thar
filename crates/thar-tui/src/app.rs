@@ -19,12 +19,14 @@ use std::time::{Duration, Instant};
 use ratatui::crossterm::event::KeyEvent;
 use thar_core::{MAX_PASTE_TODOS, MAX_TODOS, Priority, Todo, TodoDate, TodoId};
 
+use crate::display::sanitize_for_display;
 use crate::history::History;
 use crate::input::MouseInput;
 use crate::layout::Layout;
 use crate::list::{ListModel, ListRow};
 use crate::modal::{self, Action, ConfirmRequest, ModalId, Outcome, Stack, TagKind, UpdateModel};
 use crate::search::{OwnedView, view_for};
+use crate::suggest::{Suggestions, TagSources};
 
 /// Debounce before a mutation is written, matching the Ink app.
 pub const SAVE_DEBOUNCE: Duration = Duration::from_millis(50);
@@ -80,6 +82,10 @@ pub struct App {
     pub query_cursor: usize,
     /// True while the search bar has keyboard focus.
     pub search_focused: bool,
+    /// Filtered project/context suggestions for the search bar.
+    pub search_suggestions: Suggestions,
+    /// Tag sources cached from the current list.
+    tag_sources: TagSources,
     /// True when hidden todos are included in the list.
     pub show_hidden: bool,
     /// Cursor todo.
@@ -140,6 +146,7 @@ impl App {
     #[must_use]
     pub fn new(filename: impl Into<String>, todos: Vec<Todo>, today: TodoDate) -> Self {
         let views: Vec<OwnedView> = todos.iter().map(view_for).collect();
+        let tag_sources = TagSources::collect(&todos);
         let next_id = todos
             .iter()
             .map(|todo| todo.id.value().saturating_add(1))
@@ -156,6 +163,8 @@ impl App {
             query: String::new(),
             query_cursor: 0,
             search_focused: false,
+            search_suggestions: Suggestions::new(),
+            tag_sources,
             show_hidden: false,
             cursor: None,
             anchor: None,
@@ -188,6 +197,8 @@ impl App {
     pub fn set_todos(&mut self, todos: Vec<Todo>) {
         self.todos = todos;
         self.views = self.todos.iter().map(view_for).collect();
+        self.tag_sources = TagSources::collect(&self.todos);
+        self.refresh_search_suggestions();
         self.range.clear();
         self.anchor = None;
         self.cursor = None;
@@ -290,6 +301,7 @@ impl App {
     pub fn set_query(&mut self, query: impl Into<String>) {
         self.query = query.into();
         self.query_cursor = self.query.chars().count();
+        self.refresh_search_suggestions();
         crate::nav::rebuild(self);
     }
 
@@ -542,12 +554,48 @@ impl App {
 
     /// Finish a mutation: reconcile the row model and schedule a save.
     fn finish_mutation(&mut self) {
+        self.tag_sources = TagSources::collect(&self.todos);
+        self.refresh_search_suggestions();
         crate::nav::rebuild(self);
         if self.load_error.is_some() {
             self.push_toast(NOT_SAVED_MESSAGE);
         } else {
             self.mark_dirty();
         }
+    }
+
+    /// Refresh the search bar's suggestion list from the current query.
+    pub fn refresh_search_suggestions(&mut self) {
+        if self.search_focused {
+            self.search_suggestions
+                .update(&self.tag_sources, &self.query, self.query_cursor);
+        } else {
+            self.search_suggestions.clear();
+        }
+    }
+
+    /// Close the search suggestion popup without changing the filter.
+    pub fn clear_search_suggestions(&mut self) {
+        self.search_suggestions.clear();
+    }
+
+    /// The search popup anchor and filtered list, if one should be drawn.
+    #[must_use]
+    pub fn search_overlay(&self, layout: Layout) -> Option<crate::suggest::Overlay<'_>> {
+        if !self.search_focused || !self.search_suggestions.is_open() {
+            return None;
+        }
+        let start = self.search_suggestions.start();
+        let before: String = self.query.chars().take(start).collect();
+        let width = u16::try_from(ratatui::text::Line::from(sanitize_for_display(&before)).width())
+            .unwrap_or(u16::MAX);
+        Some(crate::suggest::Overlay {
+            anchor: crate::suggest::Anchor {
+                x: 3_u16.saturating_add(width),
+                y: layout.search_border_row(),
+            },
+            suggestions: &self.search_suggestions,
+        })
     }
 
     /// Apply `update` to every todo whose id is in `ids`.
@@ -900,6 +948,7 @@ impl App {
 
     /// Open a screen by id.
     pub fn open_modal(&mut self, id: ModalId) {
+        self.clear_search_suggestions();
         match modal::registry::open(self, id) {
             Some(modal) => self.modals.open(modal),
             None => self.push_toast("That screen is not available in this build yet"),

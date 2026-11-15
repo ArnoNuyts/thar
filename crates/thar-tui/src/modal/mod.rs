@@ -215,6 +215,10 @@ pub trait Modal {
     fn handle_mouse(&mut self, _mouse: MouseInput) -> Outcome {
         Outcome::Continue
     }
+    /// Data for a suggestion popup drawn above this modal, if any.
+    fn suggestion_overlay(&self, _rect: ModalRect) -> Option<crate::suggest::Overlay<'_>> {
+        None
+    }
     /// Handle a bracketed paste.
     fn handle_paste(&mut self, _text: &str) -> Outcome {
         Outcome::Continue

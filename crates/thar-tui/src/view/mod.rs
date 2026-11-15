@@ -24,6 +24,7 @@
 
 mod overlay;
 mod scrollbar;
+pub mod suggestion;
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
@@ -65,6 +66,10 @@ pub fn render(frame: &mut Frame, app: &App) {
     }
 
     overlay::render(frame, app);
+
+    if let Some(overlay) = app.search_overlay(layout) {
+        suggestion::render(frame, &overlay, frame.area());
+    }
 }
 
 fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
