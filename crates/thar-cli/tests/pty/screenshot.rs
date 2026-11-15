@@ -151,12 +151,23 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
             if run.dim {
                 attributes.push_str(" fill-opacity=\"0.6\"");
             }
-            svg.push_str(&format!(
-                "    <text x=\"{}\" y=\"{}\" {attributes} xml:space=\"preserve\">{}</text>\n",
-                MARGIN + u32::from(run.start) * CELL_WIDTH,
-                MARGIN + u32::from(row) * CELL_HEIGHT + BASELINE,
-                escape(&run.text)
-            ));
+            // One text element per cell. A single run would depend on every
+            // glyph having exactly CELL_WIDTH advance; box-drawing characters
+            // in the fallback font do not, so a long border drifts and the
+            // corner lands left of the vertical edge. Positioning each glyph
+            // keeps the SVG faithful to the cell grid.
+            for (offset, character) in run.text.chars().enumerate() {
+                if character == ' ' {
+                    continue;
+                }
+                let column = u32::from(run.start) + u32::try_from(offset).unwrap_or(0);
+                svg.push_str(&format!(
+                    "    <text x=\"{}\" y=\"{}\" {attributes} xml:space=\"preserve\">{}</text>\n",
+                    MARGIN + column * CELL_WIDTH,
+                    MARGIN + u32::from(row) * CELL_HEIGHT + BASELINE,
+                    escape(&character.to_string())
+                ));
+            }
         }
     }
 
