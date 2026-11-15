@@ -182,6 +182,7 @@ dependencies = [
 name = "thar-wasm"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "thar-core",
  "wasm-bindgen",
 ]
