@@ -7,8 +7,11 @@
 - **Date:** 2026-11-15
 - **Related:** [`scripts/benchmark-list.tsx`](../../scripts/benchmark-list.tsx),
   [`docs/update-mechanism.md`](../update-mechanism.md), [`AGENTS.md`](../../AGENTS.md)
-- **Target PR base:** `release/next` for completed checkpoints. The long-lived
-  branch is downstream of the release lines and is never a release branch.
+- **Target PR base:** `feature/rust-port` for every checkpoint and port PR.
+  The branch is protected from direct pushes, so all work lands by PR. Release
+  line work still goes through `release/next`; the port branch is downstream
+  and merges into a release line only when a checkpoint is explicitly
+  shippable.
 
 ## 1. Summary
 
@@ -348,8 +351,11 @@ recorded. Do not start the next checkpoint while one is red.
 must never wait for the port.
 
 - **Direction:** merge `release/next` (and any hotfix commit that exists only
-  on `main`) **into** `feature/rust-port`. Never merge the port branch into a
-  release line until a checkpoint is explicitly shippable.
+  on `main`) **into** `feature/rust-port`. Because the port branch is protected
+  from direct pushes, do that sync through a PR from a small sync branch (or
+  from `release/next` when it is a pure fast-forwardable merge). Never merge
+  the port branch into a release line until a checkpoint is explicitly
+  shippable.
 - **Security first:** fix and release on `release/next`/`main` as usual. Once
   the security release is tagged, immediately merge it into the port branch —
   do not wait for the next checkpoint or a weekly sync — and re-run the port
@@ -365,11 +371,13 @@ must never wait for the port.
   replaced the file, port the fix into Rust and record it in
   [`SECURITY-SYNC.md`](SECURITY-SYNC.md). Pure UI fixes stay TS-only until
   CP6, then must be ported before CP8.
-- **Prefer small landings:** CP0 and CP1 touch no behaviour and can land on
-  `release/next` immediately. Land CP2 (shadow, off by default) and CP3/CP4
-  (opt-in flags) once their gates pass, instead of holding all nine checkpoints
-  on one branch. If you prefer a single branch, the forward-merge rule above
-  applies unchanged.
+- **Prefer small landings:** CP0 and CP1 touch no behaviour and land on
+  `feature/rust-port` as small PRs. Land CP2 (shadow, off by default) and
+  CP3/CP4 (opt-in flags) once their gates pass, instead of holding all nine
+  checkpoints in one PR. The forward-merge rule above applies unchanged.
+- **Protected branch:** `feature/rust-port` requires a PR, dismisses stale
+  approvals, blocks force pushes and deletions, and applies to admins too. Do
+  not try to push to it directly; open a PR.
 - One checkpoint per commit (or a tiny PR into this branch), with the gate
   result in the commit message. Tag `rust-port/cpN` after each gate.
 - Keep `npm test` green at every commit. If a checkpoint cannot finish in a

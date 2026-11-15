@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main", "release/next"]
+    branches: ["main", "release/next", "feature/rust-port"]
   pull_request:
-    branches: ["main", "release/next"]
+    branches: ["main", "release/next", "feature/rust-port"]
   workflow_call:
   workflow_dispatch:
 
