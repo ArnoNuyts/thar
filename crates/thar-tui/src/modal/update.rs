@@ -245,14 +245,6 @@ impl UpdateModal {
         }
     }
 
-    /// Relative cell column inside the modal body for a 1-based mouse column.
-    fn relative_column(&self, rect: ModalRect, mouse: MouseInput) -> Option<u16> {
-        let column = mouse.x.checked_sub(1)?;
-        let start = rect.body.x;
-        let end = start.saturating_add(rect.body.width);
-        (start..end).contains(&column).then(|| column - start)
-    }
-
     /// Proportional action index for a relative cell column.
     fn index_at(&self, rect: ModalRect, column: u16) -> usize {
         let actions = self.actions().len().max(1);
@@ -324,8 +316,7 @@ impl Modal for UpdateModal {
         match mouse.kind {
             MouseKind::Move => {
                 self.hovered = if self.on_button_row(rect, mouse) {
-                    self.relative_column(rect, mouse)
-                        .map(|column| self.index_at(rect, column))
+                    geometry::body_column(rect, mouse).map(|column| self.index_at(rect, column))
                 } else {
                     None
                 };
@@ -335,7 +326,7 @@ impl Modal for UpdateModal {
                 if !self.on_button_row(rect, mouse) {
                     return Outcome::Continue;
                 }
-                let Some(column) = self.relative_column(rect, mouse) else {
+                let Some(column) = geometry::body_column(rect, mouse) else {
                     return Outcome::Continue;
                 };
                 let index = self.index_at(rect, column);
@@ -474,7 +465,7 @@ mod tests {
         assert_eq!(modal.id(), ModalId::Update);
         assert_eq!(modal.title(), "Update available");
         assert_eq!(modal.width().resolve(100), 70);
-        // The long release URL wraps at 66 content columns, so the body is five
+        // The long release URL wraps at 65 content columns, so the body is five
         // content lines plus the margin and button rows.
         assert_eq!(modal.body_rows(), 7);
     }
@@ -540,8 +531,8 @@ mod tests {
         let mut modal = UpdateModal::new(model(true), 100, 30);
         let rect = modal.geometry();
         let button_y = rect.body.y + modal.button_row();
-        // 70 wide with three actions: columns 0..=23 update, 24..=46 later,
-        // 47..=69 skip.
+        // 70 wide with three actions over the 65 content columns: 0..=20
+        // update, 21..=41 later, 42..=64 skip.
         let hover = MouseInput {
             kind: MouseKind::Move,
             x: rect.area.x + 50,

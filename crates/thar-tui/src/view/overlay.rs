@@ -17,7 +17,7 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::text::Span;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
 
 use crate::app::App;
@@ -104,7 +104,7 @@ fn render_title(frame: &mut Frame, area: Rect, title: &str) {
 
     let text = format!(" {title} ");
     let available = area.width.saturating_sub(3);
-    let width = u16::try_from(text.chars().count())
+    let width = u16::try_from(Line::from(text.as_str()).width())
         .unwrap_or(u16::MAX)
         .min(available);
     if width == 0 {

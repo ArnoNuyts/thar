@@ -222,12 +222,12 @@ fn the_delete_confirmation_at_80x24_uses_the_left_bar_chrome() {
         title.trim_start_matches(' ').starts_with("┃ Delete Todo"),
         "the title is not a primary chip after the accent bar: {title:?}"
     );
-    for glyph in ['│', '┌', '┐', '└', '┘'] {
-        assert!(
-            !snapshot.text.contains(glyph),
-            "box glyph {glyph} in:\n{}",
-            snapshot.text
-        );
+    // The modal rows are the ones carrying the accent bar. A scrollbar `│`
+    // elsewhere on the screen is a list glyph, not modal chrome.
+    for line in snapshot.text.lines().filter(|line| line.contains('┃')) {
+        for glyph in ['│', '┌', '┐', '└', '┘'] {
+            assert!(!line.contains(glyph), "box glyph {glyph} in: {line:?}");
+        }
     }
     assert!(
         snapshot

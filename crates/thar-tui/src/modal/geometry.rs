@@ -46,6 +46,9 @@ pub struct ModalRect {
     /// The whole modal box, including chrome.
     pub area: Rect,
     /// The body rows, where the screen draws.
+    ///
+    /// Starts after the outer padding and the accent bar, and includes the
+    /// content-padding columns; screens inset one more cell for the text.
     pub body: Rect,
 }
 

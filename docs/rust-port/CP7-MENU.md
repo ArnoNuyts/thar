@@ -149,8 +149,9 @@ Gates: `cargo fmt --all --check`, `cargo clippy --locked --workspace
 - **Skip is session-only.** There is no persisted skipped-version cache yet, so
   the badge/announcement cannot be suppressed across restarts.
 - **Content width matches the rendered Ink box.** The visible Ink content box
-  is `modalWidth - 5`: one outer padding column, the thick accent bar, and one
-  content-padding column on each side. Both the renderer and the mouse map read
+  is `modalWidth - 5`: one outer padding column on each side, the thick accent
+  bar, and one content-padding column on each side. Both the renderer and the
+  mouse map read
   that same width, so rows and clicks stay aligned. Ink's `countWrappedLines`
   helper still measures at `modalWidth - 3`; that helper is wider than the box
   it wraps for, so the Rust port uses the true rendered width instead.

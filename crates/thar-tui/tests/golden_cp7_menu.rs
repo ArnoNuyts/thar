@@ -84,7 +84,7 @@ fn body_row(app: &App, backend: &TestBackend, row: u16) -> String {
 fn assert_modal_pillars(screen: &[String], rect: geometry::ModalRect) {
     let outer_pad = usize::from(rect.area.x);
     let bar = outer_pad + 1;
-    for y in rect.body.y - 1..rect.body.y + rect.body.height {
+    for y in rect.body.y.saturating_sub(1)..rect.body.y + rect.body.height {
         let line: Vec<char> = screen[usize::from(y)].chars().collect();
         assert_eq!(line[outer_pad], ' ', "outer padding at row {y}");
         assert_eq!(line[bar], '┃', "accent bar at row {y}");

@@ -160,18 +160,23 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
                 if contents.trim().is_empty() {
                     continue;
                 }
-                // Draw vertical bars as rectangles. The mono fallback font's
-                // `┃` is shorter than the 20px cell, so a run of them reads as
-                // a dashed line instead of the solid accent bar a terminal
-                // paints. A rect also keeps single `│` borders continuous.
+                // Draw the thick accent bar as a rectangle. The mono fallback
+                // font's `┃` is shorter than the 20px cell, so a run of them
+                // reads as a dashed line instead of the solid bar a terminal
+                // paints. Only the thick bar is special-cased: a literal `│`
+                // in content or a scrollbar must stay real text.
                 if let Some(width) = vertical_bar_width(contents) {
+                    let fill = if run.dim {
+                        format!("fill=\"{}\" fill-opacity=\"0.6\"", hex(run.foreground))
+                    } else {
+                        format!("fill=\"{}\"", hex(run.foreground))
+                    };
                     svg.push_str(&format!(
-                        "    <rect x=\"{}\" y=\"{}\" width=\"{width}\" height=\"{CELL_HEIGHT}\" fill=\"{}\" />\n",
+                        "    <rect x=\"{}\" y=\"{}\" width=\"{width}\" height=\"{CELL_HEIGHT}\" {fill} />\n",
                         MARGIN
                             + u32::from(*column) * CELL_WIDTH
                             + (CELL_WIDTH - width) / 2,
                         MARGIN + u32::from(row) * CELL_HEIGHT,
-                        hex(run.foreground),
                     ));
                     continue;
                 }
@@ -189,16 +194,9 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
     svg
 }
 
-/// Width of a vertical bar glyph, or `None` for ordinary text.
-///
-/// `┃` (U+2503) is the thick accent bar; `│` (U+2502) is the single box border
-/// used by the suggestion popup.
+/// Width of a thick accent bar, or `None` for ordinary text.
 fn vertical_bar_width(contents: &str) -> Option<u32> {
-    match contents {
-        "┃" => Some(5),
-        "│" => Some(1),
-        _ => None,
-    }
+    (contents == "┃").then_some(5)
 }
 
 /// One run of cells that share a foreground, background, bold and dim.
@@ -371,7 +369,7 @@ fn cp6_paste_fix_screenshot() {
 mod tests {
     use std::num::NonZeroU16;
 
-    use super::{runs, vertical_bar_width};
+    use super::{runs, svg, vertical_bar_width};
 
     fn cells(input: &str, cols: u16) -> Vec<(u16, String)> {
         let mut parser = vt100::Parser::new(
@@ -398,10 +396,21 @@ mod tests {
     }
 
     #[test]
-    fn vertical_bars_are_drawn_as_continuous_rects() {
+    fn only_the_thick_bar_is_drawn_as_a_rect() {
         assert_eq!(vertical_bar_width("┃"), Some(5));
-        assert_eq!(vertical_bar_width("│"), Some(1));
+        assert_eq!(vertical_bar_width("│"), None);
         assert_eq!(vertical_bar_width("|"), None);
+
+        let mut parser = vt100::Parser::new(
+            NonZeroU16::new(2).expect("rows"),
+            NonZeroU16::new(4).expect("cols"),
+            0,
+        );
+        parser.process("┃│x".as_bytes());
+        let svg = svg(parser.screen());
+        assert!(svg.contains("width=\"5\""), "{svg}");
+        assert!(!svg.contains(">┃</text>"), "{svg}");
+        assert!(svg.contains(">│</text>"), "{svg}");
     }
 
     #[test]
