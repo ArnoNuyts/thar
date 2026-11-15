@@ -1,0 +1,34 @@
+[package]
+name = "thar-wasm"
+description = "WebAssembly boundary for the Thar core (Node target)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+thar-core.workspace = true
+wasm-bindgen.workspace = true
+
+# wasm-pack 0.13.1 bundles binaryen 117, whose defaults predate the post-MVP
+# features rustc 1.99 emits (bulk memory first). Enable them explicitly so the
+# bundled fallback optimizer works on every machine.
+#
+# These flags only apply to that bundled fallback: wasm-pack uses a system
+# `wasm-opt` when one is on `PATH`, and CI installs binaryen from apt. Keep both
+# paths working, because a developer without binaryen gets the bundled one.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+  "-O",
+  "--strip-debug",
+  "--enable-bulk-memory",
+  "--enable-sign-ext",
+  "--enable-mutable-globals",
+  "--enable-nontrapping-float-to-int",
+  "--enable-multivalue",
+  "--enable-reference-types",
+]
