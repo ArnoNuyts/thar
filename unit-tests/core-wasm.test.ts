@@ -12,6 +12,7 @@ import {
   parseFileWithCore,
   resetCoreBridgeForTests,
   resolveShadowLogPath,
+  setCollatorLocaleForTests,
   setRowBuilderForTests,
   shadowCheckTodoFile,
   shadowLogPath,
@@ -25,6 +26,7 @@ import {
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
 import { readTodosFromFile } from "../logic/todo-file-helpers.ts";
+import { isEnglishCollator } from "../utils/collation-locale.ts";
 import { Runtime } from "../utils/runtime.ts";
 import { restoreRuntimeMocks } from "./test-utils.ts";
 
@@ -406,8 +408,10 @@ describe("buildRowsWithCore", () => {
     todos: {
       text: string;
       tags: [string, string | string[]][];
+      datesInText?: boolean;
+      completionDateInText?: boolean;
     }[];
-    views: { text: string; contexts: string[]; projects: string[] }[];
+    searchViews: { text: string; contexts: string[]; projects: string[] }[];
     terms: string[];
     showHidden: boolean;
     today: string;
@@ -523,6 +527,80 @@ describe("buildRowsWithCore", () => {
     });
   });
 
+  test("a non-en host locale falls back before calling the package", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      await fakePackage(
+        dir,
+        `module.exports = {
+  coreVersion: () => "0.3.0-test",
+  parseFile: () => '{"ok":true,"todos":[]}',
+  parseFileWithLimits: () => '{"ok":true,"todos":[]}',
+  buildRows: () => { throw new Error("must not be called"); },
+};
+`,
+      );
+      setEnv("THAR_CORE", "rust");
+      // After `fakePackage`, which resets the bridge.
+      setCollatorLocaleForTests("da-DK");
+
+      expect(
+        buildRowsWithCore([new Todo("one")], "", false, TODAY),
+      ).toBeUndefined();
+      expect(debug).toHaveBeenCalledTimes(1);
+      expect(String(debug.mock.calls[0]?.[0])).toContain(
+        "locale da-DK, rust rows need en-US",
+      );
+    });
+  });
+
+  test("the en-US collation guard passes and the package is used", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      await fakePackage(
+        dir,
+        `module.exports = {
+  coreVersion: () => "0.3.0-test",
+  parseFile: () => '{"ok":true,"todos":[]}',
+  parseFileWithLimits: () => '{"ok":true,"todos":[]}',
+  buildRows: (input) => {
+    const request = JSON.parse(input);
+    const rows = [{ type: "context", contextName: "None", todoCount: request.todos.length }];
+    request.todos.forEach((_, index) =>
+      rows.push({ type: "todo", index, number: index + 1 }),
+    );
+    return JSON.stringify({ ok: true, rows });
+  },
+};
+`,
+      );
+      setEnv("THAR_CORE", "rust");
+      setCollatorLocaleForTests("en-US");
+
+      const entries = buildRowsWithCore(
+        [new Todo("one"), new Todo("two")],
+        "",
+        false,
+        TODAY,
+      );
+      expect(entries?.map((entry) => entry.type)).toEqual([
+        IndexType.context,
+        IndexType.todo,
+        IndexType.todo,
+      ]);
+      expect(debug).not.toHaveBeenCalled();
+    });
+  });
+
+  test("only English default locales are en-US equivalents", () => {
+    for (const locale of ["en-US", "en", "en-GB", "EN_us"]) {
+      expect(isEnglishCollator(locale), locale).toBe(true);
+    }
+    for (const locale of ["da-DK", "de-DE", "sv-SE", "fr", ""]) {
+      expect(isEnglishCollator(locale), locale).toBe(false);
+    }
+  });
+
   test("maps rows back to the original Todo objects and headers", () => {
     setEnv("THAR_CORE", "rust");
     const todos = [
@@ -586,12 +664,132 @@ describe("buildRowsWithCore", () => {
     // produced the single value `["beta", "one,two"]` here.
     expect(input.todos[0]?.tags).toContainEqual(["beta", ["one", "two"]]);
     expect(input.todos[0]?.text).toBe("aΣ.Α ΜΆΪΟΣ +Thar @Work");
-    expect(input.views[0]?.text).toBe("aσ.α μάϊος +thar @work");
-    expect(input.views[0]?.contexts).toEqual(["work"]);
-    expect(input.views[0]?.projects).toEqual(["thar"]);
+    expect(input.searchViews[0]?.text).toBe("aσ.α μάϊος +thar @work");
+    expect(input.searchViews[0]?.contexts).toEqual(["work"]);
+    expect(input.searchViews[0]?.projects).toEqual(["thar"]);
+    // The document uses the name the Rust decoder requires, never a `views`
+    // alias: a package built from `crates/thar-wasm` rejects the wrong key.
+    expect(Object.keys(input)).toContain("searchViews");
+    expect(Object.keys(input)).not.toContain("views");
     expect(input.terms).toEqual(["milk", "@work"]);
     expect(input.showHidden).toBe(true);
     expect(input.today).toBe(TODAY);
+  });
+
+  test("sends the real round-trip flags for ambiguous and consumed dates", () => {
+    setEnv("THAR_CORE", "rust");
+    // Both shapes live in one source line each: an invalid trailing date keeps
+    // both flags set, a fully valid done line consumes them.
+    const ambiguous = new Todo("x 2024-03-02 2024-13-01 body kept literal");
+    const consumed = new Todo("x 2024-03-02 2024-03-01 body");
+    expect(ambiguous.datesInText).toBe(true);
+    expect(ambiguous.completionDateInText).toBe(true);
+    expect(consumed.datesInText).toBe(false);
+    expect(consumed.completionDateInText).toBe(false);
+
+    const inputs = captureBuilder(() =>
+      rowEnvelope([contextRow("None", 2), todoRow(0, 1), todoRow(1, 2)]),
+    );
+
+    expect(
+      buildRowsWithCore([ambiguous, consumed], "", false, TODAY),
+    ).toHaveLength(3);
+
+    const input = inputs[0];
+    expect(input).toBeDefined();
+    if (!input) return;
+    expect(input.todos[0]).toMatchObject({
+      datesInText: true,
+      completionDateInText: true,
+    });
+    expect(input.todos[1]).toMatchObject({
+      datesInText: false,
+      completionDateInText: false,
+    });
+    // CP4 rebuilds an exact Todo from these records; a lost flag would
+    // duplicate a date on the next write.
+    expect(ambiguous.toString()).toBe(
+      "x 2024-03-02 2024-13-01 body kept literal",
+    );
+  });
+
+  test("a typed rejection logs its code, not a malformed envelope", () => {
+    setEnv("THAR_CORE", "rust");
+    const secret = "SECRET-rejection-body";
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    setRowBuilderForTests(() =>
+      JSON.stringify({
+        ok: false,
+        error: {
+          name: "TodoBuildRowsError",
+          code: "VIEW_COUNT_MISMATCH",
+          message: secret,
+        },
+      }),
+    );
+
+    expect(
+      buildRowsWithCore([new Todo("one")], "", false, TODAY),
+    ).toBeUndefined();
+
+    expect(debug).toHaveBeenCalledTimes(1);
+    const logged = debug.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(logged).toContain(
+      "buildRows rejected (TodoBuildRowsError/VIEW_COUNT_MISMATCH)",
+    );
+    expect(logged).not.toContain("malformed");
+    expect(logged).not.toContain(secret);
+  });
+
+  test("an empty rust result is replaced by the TS rows and logged", () => {
+    setEnv("THAR_CORE", "rust");
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const source = [
+      new Todo("beta one @work"),
+      new Todo("alpha two @work"),
+      new Todo("gamma plain"),
+    ];
+    setRowBuilderForTests(() => rowEnvelope([]));
+
+    const entries = buildRowsWithCore(source, "", false, TODAY);
+    const expected = tsIndexes(source);
+
+    // The gate returns the TypeScript result, so the caller does not recompute
+    // it and never renders an empty list for a non-empty todo list.
+    expect(entries).toEqual(expected);
+    expect(entries?.map((entry) => entry.type)).toEqual([
+      IndexType.context,
+      IndexType.todo,
+      IndexType.context,
+      IndexType.todo,
+      IndexType.todo,
+    ]);
+
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(String(debug.mock.calls[0]?.[0])).toContain("rows empty, ts=5");
+  });
+
+  test("an empty result with an empty TS pipeline is accepted silently", () => {
+    setEnv("THAR_CORE", "rust");
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const inputs = captureBuilder(() => rowEnvelope([]));
+
+    // A query that genuinely matches nothing.
+    expect(
+      buildRowsWithCore(
+        [new Todo("one @work"), new Todo("two")],
+        "zzz",
+        false,
+        TODAY,
+      ),
+    ).toEqual([]);
+    // Everything hidden by the overview rules.
+    expect(
+      buildRowsWithCore([new Todo("hidden h:1")], "", false, TODAY),
+    ).toEqual([]);
+    // Both are legitimate, so the builder ran and nothing was logged.
+    expect(inputs).toHaveLength(2);
+    expect(debug).not.toHaveBeenCalled();
   });
 
   test("a failing or inconsistent builder falls back and logs once", async () => {
@@ -1010,5 +1208,62 @@ test.skipIf(!existsSync(REAL_PACKAGE))(
       ["alpha", "one"],
       ["beta", ["one", "two"]],
     ]);
+  },
+);
+
+/**
+ * CP3b2b: the rows path against the **real** package the wasm CI job just
+ * built. The rest of this file drives a fake through the loader or a seam; this
+ * is the only test that proves the request field names and the response shape
+ * match `crates/thar-wasm` (a `views`-only regression is rejected with
+ * `INVALID_INPUT` and falls back, so `entries` would be `undefined` here).
+ *
+ * Skipped in the Node matrix, where `pkg/` does not exist.
+ */
+test.skipIf(!existsSync(REAL_PACKAGE))(
+  "the built package builds rows through the real loader",
+  () => {
+    setEnv("THAR_CORE", "rust");
+    setEnv("THAR_CORE_WASM", undefined);
+    resetCoreBridgeForTests();
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    const todos = [
+      new Todo("beta one @work"),
+      new Todo("alpha two @work"),
+      new Todo("gamma plain h:1"),
+      new Todo("delta plain"),
+    ];
+
+    // Empty query: hidden todos are filtered, contexts are grouped and the
+    // uncategorised `None` header is present.
+    const entries = buildRowsWithCore(todos, "", false, "2026-11-15");
+    const expected = createIndexes(
+      filterBySearch(filterHidden(sortByImportance(todos)), ""),
+    );
+
+    // Not the fallback: the adapter returned rows instead of `undefined`.
+    expect(entries).toBeDefined();
+    expect(debug).not.toHaveBeenCalled();
+    expect(entries?.map((entry) => entry.type)).toEqual(
+      expected.map((entry) => entry.type),
+    );
+    const todoTexts = (list: typeof expected) =>
+      list
+        .filter((entry) => entry.type === IndexType.todo)
+        .map((entry) => entry.todo.text);
+    expect(todoTexts(entries ?? [])).toEqual(todoTexts(expected));
+    expect(entries?.[0]).toEqual({
+      type: IndexType.context,
+      contextName: "None",
+      todoCount: 1,
+    });
+
+    // Host-normalized terms and views are used: only `alpha two` matches.
+    const searched = buildRowsWithCore(todos, "ALPHA", false, "2026-11-15");
+    expect(todoTexts(searched ?? [])).toEqual(["alpha two @work"]);
+    // `showHidden` reaches the core.
+    const shown = buildRowsWithCore(todos, "", true, "2026-11-15");
+    expect(todoTexts(shown ?? [])).toContain("gamma plain");
   },
 );

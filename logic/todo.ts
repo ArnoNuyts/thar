@@ -59,6 +59,23 @@ export class Todo {
     return this._tags;
   }
 
+  /**
+   * True when leading date tokens stayed in `text`, so serialization must not
+   * prepend the creation date again (round-trip flag).
+   */
+  get datesInText(): boolean {
+    return this._datesInText;
+  }
+
+  /**
+   * True when `completionDate` is already the leading literal token in `text`
+   * (an invalid or ambiguous done line), so serialization must not prepend it
+   * again (round-trip flag).
+   */
+  get completionDateInText(): boolean {
+    return this._completionDateInText;
+  }
+
   constructor(text: string) {
     this.id = Symbol(String(nextTodoId++));
     const prefix = scanTodoPrefix(text);
