@@ -952,11 +952,13 @@ describe("serializeTodosWithCore", () => {
     expect(Object.keys(inputs[0] ?? {})).toContain("todos");
   });
 
-  test("a guard rejection is returned; a malformed one falls back", () => {
+  test("a rejection falls back with its code, once per process", () => {
     setEnv("THAR_CORE", "rust");
     const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
     const todos = [new Todo("one")];
 
+    // The TypeScript guard already accepted this list. A Rust-only rejection
+    // is a divergence, so the adapter falls back instead of throwing.
     setSerializerForTests(() =>
       JSON.stringify({
         ok: false,
@@ -969,24 +971,11 @@ describe("serializeTodosWithCore", () => {
         },
       }),
     );
-    expect(serializeTodosWithCore(todos)).toEqual({
-      ok: false,
-      error: { code: "UNSAFE_CONTROL_CHARACTER", index: 3, codePoint: 0x1b },
-    });
-    // A legitimate rejection is not a fallback: it is not logged either.
-    expect(debug).not.toHaveBeenCalled();
-
-    // The same code without numeric fields cannot be mapped to the TS error.
-    setSerializerForTests(() =>
-      JSON.stringify({
-        ok: false,
-        error: { code: "UNSAFE_CONTROL_CHARACTER" },
-      }),
-    );
+    expect(serializeTodosWithCore(todos)).toBeUndefined();
     expect(serializeTodosWithCore(todos)).toBeUndefined();
     expect(debug).toHaveBeenCalledTimes(1);
     expect(String(debug.mock.calls[0]?.[0])).toContain(
-      "malformed serializeFile envelope",
+      "serializeFile rejected (UNSAFE_CONTROL_CHARACTER)",
     );
   });
 
@@ -1004,7 +993,7 @@ describe("serializeTodosWithCore", () => {
 
       expect(debug).toHaveBeenCalledTimes(1);
       expect(String(debug.mock.calls[0]?.[0])).toContain(
-        "serializeFile is not exported",
+        "serializeFile is missing or not a function",
       );
     });
   });
@@ -2056,14 +2045,16 @@ test.skipIf(!existsSync(REAL_PACKAGE))(
     });
     expect(debug).not.toHaveBeenCalled();
 
-    // The write-time guard is the Rust envelope, with the same line and code
-    // point the TypeScript serializer would name.
+    // The write-time guard is the Rust envelope. The adapter reports its code
+    // once and falls back; the TypeScript guard is what names line and code
+    // point for the user, so a Rust-only rejection never blocks a save.
     expect(
       serializeTodosWithCore([new Todo("safe"), new Todo("nul\u0000")]),
-    ).toEqual({
-      ok: false,
-      error: { code: "UNSAFE_CONTROL_CHARACTER", index: 2, codePoint: 0 },
-    });
+    ).toBeUndefined();
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(String(debug.mock.calls[0]?.[0])).toContain(
+      "serializeFile rejected (UNSAFE_CONTROL_CHARACTER)",
+    );
   },
 );
 

@@ -10,10 +10,7 @@ import {
   serializeTodosWithCore,
   setSerializerForTests,
 } from "../logic/core-wasm.ts";
-import {
-  TodoControlCharacterError,
-  TodoFileValidationError,
-} from "../logic/limits.ts";
+import { TodoFileValidationError } from "../logic/limits.ts";
 import { Todo } from "../logic/todo.ts";
 import {
   readTodosFromFile,
@@ -222,13 +219,14 @@ describe("THAR_CORE=rust dual write", () => {
           JSON.stringify({ ok: false, error: { code: 1 } }),
           "malformed serializeFile envelope",
         ],
-        // A guard rejection without numeric fields cannot be mapped back.
+        // Any typed rejection is reported with its code; the TS oracle text is
+        // still written because the TypeScript guard already accepted the list.
         [
           JSON.stringify({
             ok: false,
             error: { code: "UNSAFE_CONTROL_CHARACTER" },
           }),
-          "malformed serializeFile envelope",
+          "serializeFile rejected (UNSAFE_CONTROL_CHARACTER)",
         ],
         // An unexpected rejection code is reported with its code.
         [
@@ -274,18 +272,20 @@ describe("THAR_CORE=rust dual write", () => {
 
       expect(readBytes(filename)).toEqual(bytesOf("one\n"));
       const logged = debug.mock.calls.map((call) => String(call[0])).join("\n");
-      expect(logged).toContain("serializeFile is not exported");
+      expect(logged).toContain("serializeFile is missing or not a function");
       expect(debug).toHaveBeenCalledTimes(1);
     });
   });
 
-  test("a legitimate guard rejection throws the same error as the TS writer", async () => {
+  test("a Rust-only guard rejection writes the accepted TS text and logs once", async () => {
     await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
       const filename = join(dir, "todos.txt");
       await Runtime.writeTextFile(filename, "Original\n");
       useRustCore();
-      // The todo list is safe (so the TypeScript serializer does not throw),
-      // but the Rust envelope claims the write-time guard refused line 2.
+      // The todo list is safe, so the TypeScript serializer accepted it. A Rust
+      // rejection at this point means the package diverged; blocking the user's
+      // save would be wrong, so the oracle text is written and the code logged.
       setSerializerForTests(() =>
         JSON.stringify({
           ok: false,
@@ -299,23 +299,17 @@ describe("THAR_CORE=rust dual write", () => {
         }),
       );
 
-      const expected = new TodoControlCharacterError(2, 27);
-      let thrown: unknown;
-      try {
-        await writeTodosToFile([new Todo("safe")], filename);
-      } catch (error) {
-        thrown = error;
-      }
+      await expect(
+        writeTodosToFile([new Todo("safe")], filename),
+      ).resolves.toBeUndefined();
 
-      expect(thrown).toBeInstanceOf(TodoControlCharacterError);
-      const error = thrown as TodoControlCharacterError;
-      expect(error.name).toEqual(expected.name);
-      expect(error.code).toEqual(expected.code);
-      expect(error.lineNumber).toEqual(2);
-      expect(error.codePoint).toEqual(27);
-      expect(error.message).toEqual(expected.message);
-      // Nothing was written: the guard runs before the writer is called.
-      expect(readBytes(filename)).toEqual(bytesOf("Original\n"));
+      expect(readBytes(filename)).toEqual(bytesOf("safe\n"));
+      expect(debug).toHaveBeenCalledTimes(1);
+      const logged = String(debug.mock.calls[0]?.[0]);
+      expect(logged).toContain(
+        "serializeFile rejected (UNSAFE_CONTROL_CHARACTER)",
+      );
+      expect(logged).not.toContain("safe");
       expect(listTempFiles(dir)).toEqual([]);
     });
   });
@@ -350,17 +344,28 @@ describe("THAR_CORE=rust dual write", () => {
 describe("atomic replace", () => {
   test("an injected write failure leaves the target byte-identical and no temp", async () => {
     await withTempDir(async (dir) => {
-      const filename = join(dir, "todos.txt");
-      await Runtime.writeTextFile(filename, "Original\n");
-      const before = readBytes(filename);
+      for (const fault of ["write", "partial-write"] as const) {
+        const filename = join(dir, `${fault}.txt`);
+        await Runtime.writeTextFile(filename, "Original\n");
+        const before = readBytes(filename);
 
-      setWriteFaultForTests("write");
-      await expect(
-        writeTodosToFile([new Todo("new")], filename),
-      ).rejects.toMatchObject({ code: "ENOSPC" });
+        setWriteFaultForTests(fault);
+        try {
+          await expect(
+            writeTodosToFile(
+              [new Todo("new content that is longer")],
+              filename,
+            ),
+          ).rejects.toMatchObject({ code: "ENOSPC" });
+        } finally {
+          setWriteFaultForTests(undefined);
+        }
 
-      expect(readBytes(filename)).toEqual(before);
-      expect(listTempFiles(dir)).toEqual([]);
+        // The failed temp (empty for `write`, a real prefix for
+        // `partial-write`) never reaches the target and is unlinked.
+        expect(readBytes(filename)).toEqual(before);
+        expect(listTempFiles(dir)).toEqual([]);
+      }
     });
   });
 
@@ -380,34 +385,37 @@ describe("atomic replace", () => {
     });
   });
 
-  test("a read-only directory refuses the write and keeps the original", async () => {
-    if (process.platform === "win32") return; // mode bits are not enforced
-    await withTempDir(async (dir) => {
-      const filename = join(dir, "todos.txt");
-      await Runtime.writeTextFile(filename, "Original\n");
-      const before = readBytes(filename);
+  // Windows does not enforce POSIX mode bits.
+  test.skipIf(process.platform === "win32")(
+    "a read-only directory refuses the write and keeps the original",
+    async () => {
+      await withTempDir(async (dir) => {
+        const filename = join(dir, "todos.txt");
+        await Runtime.writeTextFile(filename, "Original\n");
+        const before = readBytes(filename);
 
-      await Runtime.mkdir(join(dir, "locked"));
-      const target = join(dir, "locked", "todos.txt");
-      await Runtime.writeTextFile(target, "Locked\n");
+        await Runtime.mkdir(join(dir, "locked"));
+        const target = join(dir, "locked", "todos.txt");
+        await Runtime.writeTextFile(target, "Locked\n");
 
-      // `chmod` is a POSIX call; the runtime adapter does not expose it, so the
-      // test uses `node:fs` directly like the rest of the safety suite.
-      const { chmodSync } = await import("node:fs");
-      chmodSync(join(dir, "locked"), 0o555);
-      try {
-        await expect(
-          writeTodosToFile([new Todo("new")], target),
-        ).rejects.toMatchObject({ code: "EACCES" });
-        expect(readBytes(target)).toEqual(bytesOf("Locked\n"));
-        expect(listTempFiles(join(dir, "locked"))).toEqual([]);
-        // The untouched sibling is unaffected too.
-        expect(readBytes(filename)).toEqual(before);
-      } finally {
-        chmodSync(join(dir, "locked"), 0o755);
-      }
-    });
-  });
+        // `chmod` is a POSIX call; the runtime adapter does not expose it, so the
+        // test uses `node:fs` directly like the rest of the safety suite.
+        const { chmodSync } = await import("node:fs");
+        chmodSync(join(dir, "locked"), 0o555);
+        try {
+          await expect(
+            writeTodosToFile([new Todo("new")], target),
+          ).rejects.toMatchObject({ code: "EACCES" });
+          expect(readBytes(target)).toEqual(bytesOf("Locked\n"));
+          expect(listTempFiles(join(dir, "locked"))).toEqual([]);
+          // The untouched sibling is unaffected too.
+          expect(readBytes(filename)).toEqual(before);
+        } finally {
+          chmodSync(join(dir, "locked"), 0o755);
+        }
+      });
+    },
+  );
 
   test("a read-only file keeps its mode across the replace (POSIX)", async () => {
     // Atomic replace renames a temp file over the target, and POSIX `rename`
@@ -503,9 +511,15 @@ describe("atomic replace", () => {
       // Old or new, never partial and never empty.
       expect(readBytes(target)).toEqual(bytesOf("old\n"));
 
-      // The leftover temp file is inert: the next save writes a fresh one.
+      // The flush wrote a complete temp, then the child exited before rename.
+      // That temp is inert: it is never renamed into place, and the next save
+      // writes (and renames) a fresh one. Stale cleanup is deliberately out of
+      // scope for the write path.
+      const stale = listTempFiles(dir);
+      expect(stale).toHaveLength(1);
       await Runtime.writeTextFile(target, "after\n");
       expect(readBytes(target)).toEqual(bytesOf("after\n"));
+      expect(listTempFiles(dir)).toContain(stale[0]);
     });
   });
 });

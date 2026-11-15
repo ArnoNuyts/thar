@@ -1149,20 +1149,17 @@ export interface CoreSerializeInput {
 /**
  * The outcome of a real (non-fallback) `serializeFile` answer.
  *
- * `ok: false` is only ever the write-time guard's legitimate rejection: a
- * malformed request, an absent export, a malformed envelope and a thrown error
- * are all reported as `undefined` (fall back to the TypeScript serializer)
- * instead.
+ * `ok: false` is a typed rejection from the core (for example
+ * `UNSAFE_CONTROL_CHARACTER`); the caller reports it once and keeps the
+ * TypeScript text. A malformed request, an absent export, a malformed envelope
+ * and a thrown error are all reported as `undefined` instead.
  */
 export type SerializeCoreResult =
   | { ok: true; text: string }
-  | { ok: false; error: { code: string; index?: number; codePoint?: number } };
+  | { ok: false; error: { code: string } };
 
 /** A `serializeFile`-shaped function; the test seam injects one of these. */
 export type CoreSerializer = (input: string) => string;
-
-/** The `code` of the one rejection the write path must not swallow. */
-export const UNSAFE_CONTROL_CHARACTER_CODE = "UNSAFE_CONTROL_CHARACTER";
 
 /** Injected by {@link setSerializerForTests}; production leaves it unset. */
 let injectedSerializer: CoreSerializer | undefined;
@@ -1176,11 +1173,11 @@ const serializerOf = (core: CoreModule): CoreSerializer | undefined => {
 /**
  * Structural read of a `serializeFile` response.
  *
- * Only the merged contract's field names are accepted (`text`; `code`, `index`,
- * `codePoint`), so a package that emits a different shape falls back instead of
- * being guessed at. A guard rejection without a numeric `index`/`codePoint`
- * cannot be mapped back to `TodoControlCharacterError`, so it is treated as
- * malformed.
+ * Only the merged contract's field names are accepted (`text`; `code`), so a
+ * package that emits a different shape falls back instead of being guessed at.
+ * Any `ok:false` code is reported once and then falls back to TypeScript: the
+ * TypeScript guard has already accepted these lines, so a Rust-only rejection
+ * means package divergence, not unsafe user input.
  */
 const readSerializeEnvelope = (
   raw: string,
@@ -1198,30 +1195,11 @@ const readSerializeEnvelope = (
   if (envelope.ok !== false) return undefined;
   const error = envelope.error;
   if (typeof error !== "object" || error === null) return undefined;
-  const fields = error as {
-    code?: unknown;
-    index?: unknown;
-    codePoint?: unknown;
-  };
+  const fields = error as { code?: unknown };
   if (typeof fields.code !== "string" || fields.code.length === 0) {
     return undefined;
   }
-  if (fields.code !== UNSAFE_CONTROL_CHARACTER_CODE) {
-    // A different code means the request was rejected for a reason the write
-    // path cannot act on; the caller falls back to TypeScript.
-    return { ok: false, error: { code: fields.code } };
-  }
-  return isPositiveInteger(fields.index) &&
-    isNonNegativeInteger(fields.codePoint)
-    ? {
-        ok: false,
-        error: {
-          code: fields.code,
-          index: fields.index,
-          codePoint: fields.codePoint,
-        },
-      }
-    : undefined;
+  return { ok: false, error: { code: fields.code } };
 };
 
 /**
@@ -1253,7 +1231,8 @@ export const serializeTodosWithCore = (
       if (!serializerLogged) {
         serializerLogged = true;
         debugLog(
-          "thar core: serializeFile is not exported; using the TypeScript serializer",
+          "thar core: serializeFile is missing or not a function; " +
+            "using the TypeScript serializer",
         );
       }
       return undefined;
@@ -1274,10 +1253,9 @@ export const serializeTodosWithCore = (
       return undefined;
     }
     if (!result.ok) {
-      // The guard's rejection is legitimate: the caller maps it back to
-      // `TodoControlCharacterError` exactly as the TypeScript serializer would
-      // have thrown it.
-      if (result.error.code === UNSAFE_CONTROL_CHARACTER_CODE) return result;
+      // The TypeScript guard already accepted these lines, so a Rust-only
+      // rejection (even `UNSAFE_CONTROL_CHARACTER`) means the package diverged.
+      // Report it once and keep the oracle text; never block the user's save.
       if (!serializerLogged) {
         serializerLogged = true;
         debugLog(

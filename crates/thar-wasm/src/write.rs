@@ -177,6 +177,11 @@ fn unsafe_code_point(line: &str) -> Option<u32> {
 /// a `text` field is reported against the line that holds it instead of being
 /// mistaken for the `"\n"` separator (the TypeScript oracle scans
 /// `todos.map(toString)` the same way).
+///
+/// This is deliberately not a thin wrapper over `thar_core::serialize_file`:
+/// that helper joins first, so the line number and code point of a rejected
+/// character could no longer be recovered. The join below is three lines and the
+/// guard is the reason this loop exists.
 fn serialize_todos(todos: &[Todo]) -> Result<String, WriteError> {
     let mut out = String::with_capacity(
         todos

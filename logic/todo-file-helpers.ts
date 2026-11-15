@@ -190,14 +190,19 @@ const firstByteDifference = (left: Buffer, right: Buffer): number => {
  * The rule is deliberately narrow:
  *
  * - `ts` mode, an unavailable adapter, a thrown error, a malformed envelope and
- *   any non-guard rejection all keep `tsText`;
- * - a legitimate `UNSAFE_CONTROL_CHARACTER` rejection throws the same
- *   `TodoControlCharacterError` the TypeScript serializer would have thrown;
- * - the Rust text is used **only** when `Buffer.from(rust).equals(Buffer.from(ts))`.
- *   A byte compare, not a string compare: the two strings can be equal as text
- *   but differ in bytes only through a bug, and this gate exists to catch bugs.
- *   A mismatch logs one bounded line (lengths and the first differing byte) and
+ *   any rejection (including a guard rejection) all keep `tsText`;
+ * - Rust's text is **compared**, not written: when
+ *   `Buffer.from(rust).equals(Buffer.from(ts))` the TypeScript bytes still go to
+ *   disk. A byte compare, not a string compare, because the two strings can be
+ *   equal as text but differ in bytes only through a bug, and this gate exists
+ *   to catch bugs;
+ * - a mismatch logs one bounded line (lengths and the first differing byte) and
  *   keeps `tsText`.
+ *
+ * A Rust-only guard rejection is unreachable unless the WASM package disagrees
+ * with the already-run TypeScript guard, so blocking the save would be wrong:
+ * the user's accepted line is written from `tsText` and the divergence is
+ * logged once.
  *
  * Either way exactly one text reaches the single write below; the file never
  * contains a mix.
@@ -205,16 +210,7 @@ const firstByteDifference = (left: Buffer, right: Buffer): number => {
 const chooseWriteText = (todos: Todo[], tsText: string): string => {
   const result = serializeTodosWithCore(todos);
   if (result === undefined) return tsText;
-
-  if (!result.ok) {
-    const { index, codePoint } = result.error;
-    // The adapter only reports a guard rejection when both numeric fields are
-    // present, so this rebuilds the exact TypeScript error.
-    if (index !== undefined && codePoint !== undefined) {
-      throw new TodoControlCharacterError(index, codePoint);
-    }
-    return tsText;
-  }
+  if (!result.ok) return tsText;
 
   const rustBytes = Buffer.from(result.text, "utf8");
   const tsBytes = Buffer.from(tsText, "utf8");

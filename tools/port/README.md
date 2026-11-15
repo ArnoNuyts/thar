@@ -509,8 +509,10 @@ The write path is `serializeTodosForWrite`, the serializer inside
 todos.map((todo) => todo.toString()).join("\n") + "\n";
 ```
 
-CP4 also runs the same lines through `thar-wasm`'s `serializeFile` and writes the
-Rust text only when the bytes are identical. The contract pins that boundary.
+CP4 also runs the same lines through `thar-wasm`'s `serializeFile` and compares
+the bytes with the TypeScript output; the TypeScript bytes are written either
+way, so the Rust serializer is a verification gate rather than a second writer.
+The contract pins that boundary.
 
 - Oracle: `tools/port/write.ts` (import-safe builder) + `tools/port/write-cli.ts`
   (CLI).

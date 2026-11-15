@@ -28,7 +28,9 @@
 //! - Unknown fields are ignored, so a host can pass a CP1 parse record with its
 //!   extra `isDone`/`toString`/`hash` fields without a second projection.
 //! - Missing required fields are rejected with [`RecordError`]; nothing here can
-//!   panic on a bad field.
+//!   panic on a bad field. A tag value must be a string or a **non-empty**
+//!   string array: the parser never produces `[]`, and `k:` with an empty value
+//!   is not representable through this DTO.
 //!
 //! Each envelope owns its own error class and message prefix, so this module
 //! reports only the field that failed and the fixed reason.
