@@ -1,0 +1,3 @@
+﻿first todo after a BOM
+second todo
+﻿

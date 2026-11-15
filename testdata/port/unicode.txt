@@ -1,0 +1,8 @@
+café naïve résumé accents
+日本語のタスク with CJK text
+עברית מימין לשמאל right to left text
+é combining acute accent on e
+🎉 party:🎉 emoji in text and value
+👨‍👩‍👧‍👦 family emoji with zero width joiners
+Ω≈ç√∫˜µ≤≥÷ math symbols
+x 2024-05-01 2024-04-30 ✓ done with unicode and dates

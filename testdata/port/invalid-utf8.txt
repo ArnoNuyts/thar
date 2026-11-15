@@ -1,0 +1,4 @@
+café latin-1 byte becomes a replacement character
+ÿ leading invalid byte stays in the text
+truncated â‚ sequence at the end
+plain ascii line is unchanged

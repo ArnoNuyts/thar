@@ -1,0 +1,15 @@
++alpha leading project
+@beta leading context
++alpha +beta two projects
++alpha +alpha duplicate project collapses
+@alpha @alpha duplicate context collapses
+x@y at sign after a word is not a context
+docs at bob@example.com is email shaped text
+ping @example.com is an explicit context
++proj.one @ctx_two +proj-3 @2024 names allow dots underscores hyphens digits
++a/b slash ends the project name
++a+b adjacent plus is not a second project
++trailing, comma ends the project name
+@trailing. period ends the context name
+(+paren) plus inside parentheses is not a project
+(@paren) at sign inside parentheses is not a context

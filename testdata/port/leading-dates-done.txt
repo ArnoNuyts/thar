@@ -1,0 +1,8 @@
+x 2023-05-06 2023-05-04 completion and creation dates
+x 2023-05-06 only a completion date
+x task with no dates at all
+X 2023-05-06 capital X is not a done marker
+x 2023-05-06 2023-05-07 two dates with a body
+x completed later 2023-05-06 dates later in the text stay literal
+x 2023-05-06
+x

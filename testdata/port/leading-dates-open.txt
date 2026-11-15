@@ -1,0 +1,11 @@
+2023-05-04 single leading date is a creation date
+2023-05-04 2023-05-05 two valid leading dates stay literal
+0000-01-01 year zero is not a todo date
+10000-01-01 five digit years are not date tokens
+2023-13-01 month thirteen is not a todo date
+2023-02-29 2023 is not a leap year
+2023-04-31 april has thirty days
+2023-01-32 day thirty two is not a todo date
+2023-1-1 unpadded month and day are not date tokens
+2024-02-29 leap day is a valid creation date
+2023-05-04

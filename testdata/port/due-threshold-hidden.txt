@@ -1,0 +1,17 @@
+due:2020-01-01 due in the past is overdue
+due:2026-11-15 due today is overdue
+due:2026-11-16 due tomorrow is not overdue
+due:2023-02-29 invalid due is not overdue
+due:2020-01-01 due:2020-02-01 duplicate due is an array and not overdue
+Due:2020-01-01 uppercase Due is not the due tag
+due: a key with no value means no due date
+h:1 hidden by h one
+h:0 h zero does not hide
+h:x any non zero h hides
+h:1 h:0 duplicate h is an array and still hides
+t:2026-11-20 future threshold hides from the overview
+t:2026-11-15 today threshold is visible
+t:2020-01-01 past threshold is visible
+t:2027-02-29 invalid threshold is visible
+t: a key with no value means visible
+due:2020-01-01 h:1 t:2026-11-20 hidden and overdue at once
