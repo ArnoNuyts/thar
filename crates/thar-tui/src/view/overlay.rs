@@ -14,6 +14,7 @@ use ratatui::widgets::{Block, Borders, Clear};
 use crate::app::App;
 use crate::modal;
 use crate::theme;
+use crate::view::suggestion;
 
 /// Draw the active modal, if any.
 pub fn render(frame: &mut Frame, app: &App) {
@@ -46,4 +47,8 @@ pub fn render(frame: &mut Frame, app: &App) {
     );
 
     active.render(frame, rect);
+
+    if let Some(overlay) = active.suggestion_overlay(rect) {
+        suggestion::render(frame, &overlay, frame.area());
+    }
 }

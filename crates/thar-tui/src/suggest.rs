@@ -288,6 +288,43 @@ impl Suggestions {
     }
 }
 
+/// Largest number of suggestion rows drawn at once.
+pub const MAX_ROWS: usize = 6;
+
+/// The terminal cell where the typed `+`/`@` marker starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Anchor {
+    /// 0-based column.
+    pub x: u16,
+    /// 0-based row.
+    pub y: u16,
+}
+
+/// A suggestion list plus the cell it should be anchored under.
+///
+/// The view layer owns the popup geometry; this type is the seam between the
+/// editor/search state and that geometry. It borrows the list, so it cannot
+/// outlive the screen that owns it.
+pub struct Overlay<'a> {
+    /// Cell of the typed marker.
+    pub anchor: Anchor,
+    /// The filtered list.
+    pub suggestions: &'a Suggestions,
+}
+
+/// The visible slice of a suggestion list.
+///
+/// The whole list is drawn while it is short enough; otherwise the window
+/// scrolls so the highlighted item is the last visible row at most.
+#[must_use]
+pub fn visible_range(len: usize, selected: usize, cap: usize) -> (usize, usize) {
+    if len <= cap {
+        return (0, len);
+    }
+    let start = selected.saturating_sub(cap.saturating_sub(1));
+    (start, (start + cap).min(len))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Suggestions, TagKind, TagSources, match_tag_word_start, tag_prefix};

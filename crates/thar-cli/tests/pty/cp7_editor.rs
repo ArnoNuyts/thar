@@ -43,7 +43,7 @@ fn the_create_modal_types_applies_a_suggestion_and_saves() {
     // the modal, so it would race with the capture.
     session.send(b"write the port +th");
     session.wait_text("» write the port +th");
-    session.wait_text("│   +thar");
+    session.wait_text("│ +thar");
 
     // The first `Enter` applies the highlighted suggestion, not the form.
     session.send(ENTER);
@@ -123,7 +123,7 @@ fn cp7_editor_screenshot() {
     session.wait_text("Create new todo");
     session.send(b"buy oat milk for the week +th");
     session.wait_text("» buy oat milk for the week +th");
-    session.wait_text("│   +thar");
+    session.wait_text("│ +thar");
 
     let image = session.with_screen(svg);
     let svg_path = directory.join("cp7-editor.svg");
@@ -139,10 +139,31 @@ fn cp7_editor_screenshot() {
     // list, the second closes the screen, then `q` quits. The wait between the
     // two keeps crossterm from folding both bytes into one key event.
     session.send(ESC);
-    session.wait_no_text("│   +thar");
+    session.wait_no_text("│ +thar");
     session.send(ESC);
     session.wait_no_text("Create new todo");
     session.send(b"q");
     let status = session.wait_exit(TIMEOUT);
     assert_eq!(status.exit_code(), 0);
+}
+
+#[test]
+fn search_suggestions_popup_applies_to_the_query() {
+    let directory = TempDir::new("cp7-editor-search-suggest");
+    let path = directory.write("todo.txt", FIXTURE.as_bytes());
+    let mut session = Session::open_write(&path);
+
+    session.wait_text("WRITE");
+    session.send(b"/");
+    session.wait_text(" / ");
+    session.send(b"+th");
+    session.wait_text("│ +thar");
+
+    session.send(ENTER);
+    session.wait_text(" / +thar");
+
+    session.send(ESC);
+    session.wait_no_text(" / +thar");
+    session.send(b"q");
+    assert_eq!(session.wait_exit(TIMEOUT).exit_code(), 0);
 }

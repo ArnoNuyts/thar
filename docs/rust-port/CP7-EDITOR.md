@@ -101,11 +101,12 @@ One `TextModal` with a `Create`/`Edit` mode:
   button, Escape closes.
 - A rejected value returns `Outcome::Actions([Action::Toast(message)])` and the
   screen stays open.
-- Rendering: `» ` prompt, the character under the cursor in an inverse cell, the
-  suggestion rows below the input, then a bordered Save/Cancel row and the Ink
-  help line. The suggestion list is inline, so `body_rows` grows with it (capped
-  at six visible rows with a scrolling window) and the centred modal stays
-  centred.
+- Rendering: `» ` prompt, the character under the cursor in an inverse cell,
+  then a bordered Save/Cancel row and the Ink help line. Suggestions are a
+  floating popup (`view::suggestion`) sized to the longest name and anchored
+  under the typed `+`/`@`; it is painted after the modal, can cover the modal
+  border/buttons like the Ink root-level overlay, and never changes the modal's
+  fixed body height.
 
 The registry returns `Some` for `CreateTodo`/`EditTodo` and `None` for every
 other id, so the host keeps its bounded "not available" toast for the screens
@@ -171,10 +172,12 @@ as the CP6/CP7-write assets.
 - **No mouse in the create/edit screens.** The suggestion list is
   keyboard-only, per the workstream scope; Ink also supports hover and click on
   the Save/Cancel buttons.
-- **The suggestion list is inline, not a floating overlay.** `Modal::body_rows`
-  has no frame geometry, so reserving rows is what keeps the modal centred
-  deterministically. At most six suggestions are drawn at once; the window
-  scrolls with the highlight.
+- **The suggestion list is a floating, content-sized popup.** It is anchored
+  two columns left of the typed marker (so the row prefix aligns with it), sized
+  to the longest name plus prefix/padding/borders, clamped to the frame, and
+  flips above the anchor when there is no room below. At most six rows are drawn
+  at once; the window scrolls with the highlight. The search bar uses the same
+  popup with its `" / "` prompt origin.
 - **The help line is clipped at the modal width** instead of wrapping like
   `countWrappedLines`, because `body_rows` cannot know the terminal width.
 - **The input scrolls horizontally** instead of wrapping. A wrapped input would

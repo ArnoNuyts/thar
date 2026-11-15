@@ -108,6 +108,14 @@ pub enum Command {
     Undo,
     /// Redo the last undo.
     Redo,
+    /// Move the search suggestion highlight up.
+    SuggestionPrevious,
+    /// Move the search suggestion highlight down.
+    SuggestionNext,
+    /// Apply the highlighted search suggestion.
+    SuggestionApply,
+    /// Close the search suggestion popup only.
+    SuggestionClose,
     /// Confirm and archive every completed todo.
     Archive,
     /// Confirm and delete the selected todos.
@@ -155,6 +163,15 @@ pub fn command_for_key_in(app: &App, key: KeyEvent) -> Option<Command> {
     }
 
     if app.search_focused {
+        if app.search_suggestions.is_open() {
+            match key.code {
+                KeyCode::Up => return Some(Command::SuggestionPrevious),
+                KeyCode::Down => return Some(Command::SuggestionNext),
+                KeyCode::Enter | KeyCode::Tab => return Some(Command::SuggestionApply),
+                KeyCode::Esc => return Some(Command::SuggestionClose),
+                _ => {}
+            }
+        }
         return search_key(key);
     }
 
@@ -461,6 +478,7 @@ pub fn insert_query_text(app: &mut App, text: &str) {
     app.query = chars.into_iter().collect();
     app.query_cursor = cursor + inserted.len();
     nav::rebuild(app);
+    app.refresh_search_suggestions();
 }
 
 /// Apply one command to the app state.
@@ -470,6 +488,7 @@ pub fn apply(app: &mut App, command: Command) {
         Command::SearchFocus => {
             let was_visible = app.search_visible();
             app.search_focused = true;
+            app.refresh_search_suggestions();
             if app.search_visible() != was_visible {
                 nav::reflow(app);
             } else {
@@ -479,6 +498,7 @@ pub fn apply(app: &mut App, command: Command) {
         Command::SearchBlur => {
             let was_visible = app.search_visible();
             app.search_focused = false;
+            app.clear_search_suggestions();
             if app.search_visible() != was_visible {
                 nav::reflow(app);
             } else {
@@ -489,6 +509,7 @@ pub fn apply(app: &mut App, command: Command) {
             app.search_focused = false;
             app.query.clear();
             app.query_cursor = 0;
+            app.clear_search_suggestions();
             nav::rebuild(app);
         }
         Command::SearchInsert(ch) => insert_query_char(app, ch),
@@ -496,12 +517,20 @@ pub fn apply(app: &mut App, command: Command) {
         Command::SearchDelete => delete_query(app),
         Command::SearchLeft => {
             app.query_cursor = app.query_cursor.saturating_sub(1);
+            app.refresh_search_suggestions();
         }
         Command::SearchRight => {
             app.query_cursor = (app.query_cursor + 1).min(app.query.chars().count());
+            app.refresh_search_suggestions();
         }
-        Command::SearchHome => app.query_cursor = 0,
-        Command::SearchEnd => app.query_cursor = app.query.chars().count(),
+        Command::SearchHome => {
+            app.query_cursor = 0;
+            app.refresh_search_suggestions();
+        }
+        Command::SearchEnd => {
+            app.query_cursor = app.query.chars().count();
+            app.refresh_search_suggestions();
+        }
         Command::Up => nav::move_cursor(app, -1, false),
         Command::Down => nav::move_cursor(app, 1, false),
         Command::ContextUp => nav::move_context(app, -1, false),
@@ -539,6 +568,19 @@ pub fn apply(app: &mut App, command: Command) {
         Command::Redo => {
             app.redo();
         }
+        Command::SuggestionPrevious => app.search_suggestions.select_previous(),
+        Command::SuggestionNext => app.search_suggestions.select_next(),
+        Command::SuggestionApply => {
+            if let Some((text, cursor)) = app.search_suggestions.apply(&app.query, app.query_cursor)
+            {
+                app.query = text;
+                app.query_cursor = cursor;
+                app.clear_search_suggestions();
+                nav::rebuild(app);
+                app.refresh_search_suggestions();
+            }
+        }
+        Command::SuggestionClose => app.clear_search_suggestions(),
         Command::Archive => {
             app.apply_action(Action::Confirm(ConfirmRequest::archive()));
         }
@@ -584,6 +626,7 @@ fn insert_query_char(app: &mut App, ch: char) {
     app.query = chars.into_iter().collect();
     app.query_cursor = cursor + 1;
     nav::rebuild(app);
+    app.refresh_search_suggestions();
 }
 
 fn backspace_query(app: &mut App) {
@@ -596,6 +639,7 @@ fn backspace_query(app: &mut App) {
     app.query = chars.into_iter().collect();
     app.query_cursor = cursor - 1;
     nav::rebuild(app);
+    app.refresh_search_suggestions();
 }
 
 fn delete_query(app: &mut App) {
@@ -605,6 +649,7 @@ fn delete_query(app: &mut App) {
         chars.remove(cursor);
         app.query = chars.into_iter().collect();
         nav::rebuild(app);
+        app.refresh_search_suggestions();
     }
 }
 
@@ -700,6 +745,33 @@ mod tests {
         apply(&mut app, Command::ToggleHiddenView);
         let after = app.list.rows.iter().filter(|row| row.is_todo()).count();
         assert_eq!((before, after), (0, 1));
+    }
+
+    #[test]
+    fn search_suggestions_take_key_precedence_and_apply() {
+        let mut app = app(&["one +thar @home"]);
+        app.search_focused = true;
+        app.set_query("+th");
+        app.refresh_search_suggestions();
+        assert!(app.search_suggestions.is_open());
+
+        assert_eq!(
+            command_for_key_in(&app, key(KeyCode::Up, KeyModifiers::NONE)),
+            Some(Command::SuggestionPrevious)
+        );
+        assert_eq!(
+            command_for_key_in(&app, key(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(Command::SuggestionApply)
+        );
+        assert_eq!(
+            command_for_key_in(&app, key(KeyCode::Esc, KeyModifiers::NONE)),
+            Some(Command::SuggestionClose)
+        );
+
+        apply(&mut app, Command::SuggestionApply);
+        assert_eq!(app.query, "+thar ");
+        assert!(!app.search_suggestions.is_open());
+        assert_eq!(app.list.rows.iter().filter(|row| row.is_todo()).count(), 1);
     }
 
     #[test]
