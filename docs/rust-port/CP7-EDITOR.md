@@ -11,13 +11,13 @@ third-party dependency.
 
 ## What landed
 
-| Layer | Module | Oracle |
-| --- | --- | --- |
-| Write-side validation | `crates/thar-core/src/input.rs` | `logic/todo-input.ts`, `logic/limits.ts` |
-| One-line editor | `crates/thar-tui/src/editor.rs` | `components/ControlledTextInput.tsx` |
-| Tag sources + suggestions | `crates/thar-tui/src/suggest.rs` | `logic/tag-sources.ts`, `logic/patterns.ts`, `hooks/useSuggestionInput.ts` |
-| Create/edit screens | `crates/thar-tui/src/modal/create_edit.rs` | `components/CreateTodoModal.tsx`, `components/EditTodoModal.tsx`, `components/ModalTodoInput.tsx`, `components/SuggestionInput.tsx`, `components/SuggestionOverlay.tsx`, `utils/search-utils.ts` |
-| Registry | `crates/thar-tui/src/modal/registry_editor.rs` | the modal host's dispatch table |
+| Layer                     | Module                                         | Oracle                                                                                                                                                                                           |
+| ------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Write-side validation     | `crates/thar-core/src/input.rs`                | `logic/todo-input.ts`, `logic/limits.ts`                                                                                                                                                         |
+| One-line editor           | `crates/thar-tui/src/editor.rs`                | `components/ControlledTextInput.tsx`                                                                                                                                                             |
+| Tag sources + suggestions | `crates/thar-tui/src/suggest.rs`               | `logic/tag-sources.ts`, `logic/patterns.ts`, `hooks/useSuggestionInput.ts`                                                                                                                       |
+| Create/edit screens       | `crates/thar-tui/src/modal/create_edit.rs`     | `components/CreateTodoModal.tsx`, `components/EditTodoModal.tsx`, `components/ModalTodoInput.tsx`, `components/SuggestionInput.tsx`, `components/SuggestionOverlay.tsx`, `utils/search-utils.ts` |
+| Registry                  | `crates/thar-tui/src/modal/registry_editor.rs` | the modal host's dispatch table                                                                                                                                                                  |
 
 ### Validation (`thar-core`)
 
@@ -90,7 +90,7 @@ in the module header.
 
 One `TextModal` with a `Create`/`Edit` mode:
 
-- **Create** prefills `extractTagsAndContextsFromSearch(query)` (` +a @b `) with
+- **Create** prefills `extractTagsAndContextsFromSearch(query)` (`+a @b`) with
   the cursor at offset 0.
 - **Edit** starts at the cursor todo's `text` with the cursor at the end and
   caps at `max(MAX_TODO_CHARS, original UTF-16 length)`, so an unchanged
@@ -126,14 +126,14 @@ other workstreams own.
 
 New tests, all passing:
 
-| File | Count | Covers |
-| --- | --- | --- |
-| `crates/thar-core/src/input.rs` | 6 | validation table (accepted + every code), exact messages, UTF-16 cap, unpaired surrogate, batch atomicity/capacity |
-| `crates/thar-tui/src/editor.rs` | 6 | 27-row keymap table, consumed/not-consumed keys, paste rules, char cursor, replace-range clamping |
-| `crates/thar-tui/src/suggest.rs` | 5 | source collection, word-start shapes, prefix filtering, wrap, apply |
-| `crates/thar-tui/src/modal/create_edit.rs` | 16 | prefill, create/edit outcomes, empty/invalid/control/leading-date rejection, Tab/Shift+Tab, Escape ordering, suggestions + apply, paste, overlong grandfathering, suggestion window |
-| `crates/thar-tui/tests/golden_cp7_editor.rs` | 3 | cell-exact frames at 80×24 (create + suggestions, create prefill) and 100×30 (edit), plus inverse cursor / selected suggestion / selected button styles |
-| `crates/thar-cli/tests/pty/cp7_editor.rs` | 2 + 1 ignored | real PTY: `n` → type → suggestion → apply → submit → file gained the todo; Escape cancels byte-identically; ignored screenshot generator |
+| File                                         | Count         | Covers                                                                                                                                                                              |
+| -------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/thar-core/src/input.rs`              | 6             | validation table (accepted + every code), exact messages, UTF-16 cap, unpaired surrogate, batch atomicity/capacity                                                                  |
+| `crates/thar-tui/src/editor.rs`              | 6             | 27-row keymap table, consumed/not-consumed keys, paste rules, char cursor, replace-range clamping                                                                                   |
+| `crates/thar-tui/src/suggest.rs`             | 5             | source collection, word-start shapes, prefix filtering, wrap, apply                                                                                                                 |
+| `crates/thar-tui/src/modal/create_edit.rs`   | 16            | prefill, create/edit outcomes, empty/invalid/control/leading-date rejection, Tab/Shift+Tab, Escape ordering, suggestions + apply, paste, overlong grandfathering, suggestion window |
+| `crates/thar-tui/tests/golden_cp7_editor.rs` | 3             | cell-exact frames at 80×24 (create + suggestions, create prefill) and 100×30 (edit), plus inverse cursor / selected suggestion / selected button styles                             |
+| `crates/thar-cli/tests/pty/cp7_editor.rs`    | 2 + 1 ignored | real PTY: `n` → type → suggestion → apply → submit → file gained the todo; Escape cancels byte-identically; ignored screenshot generator                                            |
 
 Gates run from the branch head:
 
