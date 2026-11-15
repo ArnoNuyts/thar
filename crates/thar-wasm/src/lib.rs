@@ -1,9 +1,10 @@
 //! WebAssembly batch boundary for the Thar core.
 //!
 //! Checkpoint CP2b of `docs/rust-port/PLAN.md`: the real batch surface the Node
-//! app and the CP1 contract harness call. The boundary is deliberately coarse —
-//! one call per file load, no per-row getters — and every call returns one
-//! deterministic JSON document that JavaScript can `JSON.parse`.
+//! app and the CP1 contract harness call. CP3b1 adds the row builder
+//! ([`build_rows`]) on top of it. The boundary is deliberately coarse — one
+//! call per file load or row build, no per-row getters — and every call returns
+//! one deterministic JSON document that JavaScript can `JSON.parse`.
 //!
 //! # Envelope
 //!
@@ -27,11 +28,17 @@
 //! order `lineNumber`, `length`, `maxLineChars`, `lineCount`, `maxReadTodos`,
 //! `actualBytes`, `maxBytes`, `codePoint`), then `message`.
 //!
+//! [`build_rows`] takes a structured request (documented in the `rows` module)
+//! and answers with
+//! `{"ok":true,"rows":[…],"order":[…]}` or the same error envelope.
+//!
 //! The JSON is written by hand: every key is emitted in a fixed order, strings
 //! are escaped the way `JSON.stringify` would escape them, and no dependency is
 //! added just to serialize a handful of fields. That keeps the module inside
 //! the CP2 size budget (≤ 250 KB raw, ≤ 100 KB gzip) and makes the field order
-//! a property of the code rather than of a serializer's configuration.
+//! a property of the code rather than of a serializer's configuration. The one
+//! request document that arrives from JavaScript is read by the small parser in
+//! the `json` module.
 //!
 //! # Serialization
 //!
@@ -63,8 +70,15 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-use core::fmt::{self, Write as _};
+mod json;
+mod rows;
 
+use core::fmt;
+
+use json::{
+    push_json_bool, push_json_char, push_json_number, push_json_string, push_json_string_array,
+    push_optional_date,
+};
 use thar_core::{
     CoreError, ReadLimits, Todo, TodoDate, parse_file as parse_core_file, validate_file_bytes,
 };
@@ -143,6 +157,47 @@ pub fn parse_file_with_limits(
         max_line_chars: js_usize(max_line_chars),
     };
     parse_envelope(text, today, &limits).map_err(JsError::from)
+}
+
+/// Build the row model for one search, sort, and visibility state.
+///
+/// `input` is the JSON request documented in the `rows` module (todos, one
+/// host-normalized search view per todo, normalized terms, `showHidden`,
+/// `today`). The response is `{"ok":true,"rows":[…],"order":[…]}` or the
+/// `{"ok":false,"error":{…}}` envelope; invalid input is a *data* error and
+/// never panics.
+///
+/// One call per build, never per row: the host sends the whole list once and
+/// receives the whole row model once.
+///
+/// # Conventions the host owns
+///
+/// - **Case folding and term extraction.** `searchViews[*].text/contexts/
+///   projects` and `terms` must already be lowercased/extracted by the host
+///   (`toLowerCase`, `extractSearchTerms`); the core never folds.
+/// - **Collation.** Context names are collated with the en-US ICU order
+///   `thar_core::sort_by_importance` implements, the same assumption the CP3a
+///   probe pins (`docs/rust-port/PLAN.md` §13). The host must not pre-sort.
+/// - **Opaque names.** Names the programme supplies (rather than names scanned
+///   out of a line) are not normalized or validated here; they stay opaque
+///   until CP3b2/CP4.
+///
+/// # Example
+///
+/// ```js
+/// const rows = JSON.parse(core.buildRows(JSON.stringify({
+///   today: "2026-11-15",
+///   showHidden: false,
+///   terms: ["work"],
+///   todos: records,            // the `parseFile` records
+///   searchViews,               // derived from those records, lowercased
+/// })));
+/// if (!rows.ok) fallbackToTypeScript(rows.error.code);
+/// ```
+#[wasm_bindgen(js_name = buildRows)]
+#[must_use]
+pub fn build_rows(input: &str) -> String {
+    rows::build_rows_envelope(input)
 }
 
 /// Clamp a JavaScript limit to a `u64`.
@@ -326,86 +381,6 @@ fn push_error(out: &mut String, error: &CoreError) {
     out.push_str(",\"message\":");
     push_json_string(out, &error.to_string());
     out.push_str("}}");
-}
-
-/// Append `null` or a quoted `YYYY-MM-DD` date.
-fn push_optional_date(out: &mut String, date: Option<TodoDate>) {
-    match date {
-        Some(date) => {
-            // Digits and `-` need no escaping, and `Display` writes straight
-            // into `out`, so this does not allocate a temporary `String`.
-            push_fmt(out, format_args!("\"{date}\""));
-        }
-        None => out.push_str("null"),
-    }
-}
-
-/// Append a JSON array of strings.
-fn push_json_string_array(out: &mut String, values: &[String]) {
-    out.push('[');
-    for (index, value) in values.iter().enumerate() {
-        if index > 0 {
-            out.push(',');
-        }
-        push_json_string(out, value);
-    }
-    out.push(']');
-}
-
-/// Append formatted arguments without an unreachable `expect`.
-///
-/// `fmt::Write` for `String` is infallible, so a `write!` here can never return
-/// `Err`. The `Result` is dropped in this one documented place rather than
-/// repeated as `.expect(…)` at every call site.
-fn push_fmt(out: &mut String, args: fmt::Arguments<'_>) {
-    let _ = out.write_fmt(args);
-}
-
-/// Append `true` or `false`.
-fn push_json_bool(out: &mut String, value: bool) {
-    out.push_str(if value { "true" } else { "false" });
-}
-
-/// Append a JSON number.
-fn push_json_number(out: &mut String, value: u64) {
-    push_fmt(out, format_args!("{value}"));
-}
-
-/// Append a one-character JSON string (a priority letter).
-///
-/// Delegates to [`push_json_string`] instead of pushing quotes by hand, so a
-/// future non-`[A-Z]` priority is escaped like any other text.
-fn push_json_char(out: &mut String, value: char) {
-    let mut buffer = [0u8; 4];
-    push_json_string(out, value.encode_utf8(&mut buffer));
-}
-
-/// Append a JSON string, escaping exactly what `JSON.stringify` escapes.
-///
-/// `U+2028`/`U+2029` are escaped as well: they are legal raw inside a JSON
-/// string, but a caller may embed the document in a JavaScript source context
-/// where they are line terminators. The escaping is transparent to
-/// `JSON.parse`, so the contract bytes are unaffected.
-fn push_json_string(out: &mut String, value: &str) {
-    out.push('"');
-    for character in value.chars() {
-        match character {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '\u{0008}' => out.push_str("\\b"),
-            '\u{000C}' => out.push_str("\\f"),
-            '\u{2028}' => out.push_str("\\u2028"),
-            '\u{2029}' => out.push_str("\\u2029"),
-            control if (control as u32) < 0x20 => {
-                push_fmt(out, format_args!("\\u{:04x}", control as u32));
-            }
-            other => out.push(other),
-        }
-    }
-    out.push('"');
 }
 
 #[cfg(test)]
