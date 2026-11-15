@@ -1,12 +1,18 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { DEFAULT_CORPUS_DIR } from "../tools/port/build.ts";
+import { DEFAULT_CORPUS_DIR, listFixtures } from "../tools/port/build.ts";
 import { pinClock } from "../tools/port/clock.ts";
-import { compareContracts } from "../tools/port/compare.ts";
+import { compareContracts, formatDiff } from "../tools/port/compare.ts";
 import {
   GENERATED_FIXTURE,
   ROWS_MUTATION_NAMES,
@@ -14,7 +20,12 @@ import {
   buildRowsContract,
   createGeneratedLines,
   createManifest,
+  rowsRecordLabel,
 } from "../tools/port/rows.ts";
+import {
+  defaultCollatorLocale,
+  isEnglishCollator,
+} from "../utils/collation-locale.ts";
 import { extractSearchTerms } from "../utils/search-utils.ts";
 
 /**
@@ -28,12 +39,20 @@ import { extractSearchTerms } from "../utils/search-utils.ts";
 
 const RealDate = globalThis.Date;
 
+/**
+ * The rows harness pins the en-US collation order (PLAN §13 decision 8). On a
+ * host that resolves elsewhere the contract would produce genuine-looking
+ * diffs, so these coverage tests skip instead of failing the Node matrix.
+ */
+const ENGLISH_COLLATOR = isEnglishCollator(defaultCollatorLocale());
+
 let tempRoot: string;
 let corpusDir: string;
 let manifest: ReturnType<typeof createManifest>;
 let baseline: ReturnType<typeof buildRowsContract>;
 
 beforeAll(() => {
+  if (!ENGLISH_COLLATOR) return;
   tempRoot = mkdtempSync(join(tmpdir(), "thar-rows-test-"));
   corpusDir = join(tempRoot, "corpus");
   mkdirSync(corpusDir);
@@ -59,6 +78,7 @@ beforeAll(() => {
 }, 120_000);
 
 afterAll(() => {
+  if (!ENGLISH_COLLATOR) return;
   globalThis.Date = RealDate;
   rmSync(tempRoot, { recursive: true, force: true });
 });
@@ -66,7 +86,7 @@ afterAll(() => {
 const recordsFor = (fixture: string): RowsRecord[] =>
   baseline.records.filter((record) => record.fixture === fixture);
 
-describe("rows contract determinism", () => {
+describe.skipIf(!ENGLISH_COLLATOR)("rows contract determinism", () => {
   test("two runs are byte-identical and skip rejection fixtures", () => {
     const second = buildRowsContract({ corpusDir, manifest });
 
@@ -99,7 +119,7 @@ describe("rows contract determinism", () => {
   });
 });
 
-describe("rows contract schema", () => {
+describe.skipIf(!ENGLISH_COLLATOR)("rows contract schema", () => {
   test("records use the pinned key order and a fixed row shape", () => {
     for (const record of baseline.records) {
       expect(Object.keys(record)).toEqual([
@@ -195,9 +215,64 @@ describe("rows contract schema", () => {
     expect(bang?.terms).toEqual([]);
     expect(bang?.order).toEqual(empty?.order);
   });
+
+  test("the reverse final-sigma queries match the generated probe line", () => {
+    // Without a line that JS-lowercases to `aβ́ς.` / `aσ.`, both queries matched
+    // nothing and the contract only proved "empty == empty".
+    for (const query of ["aΣ.Α", "aβ\u0301Σ."]) {
+      const matched = recordsFor(GENERATED_FIXTURE).filter(
+        (record) => record.query === query && !record.showHidden,
+      );
+      expect(matched).toHaveLength(1);
+      expect(matched[0]?.terms).toHaveLength(1);
+      expect(matched[0]?.order.length).toBeGreaterThan(0);
+      expect(matched[0]?.order.length).toBeLessThan(
+        // The probe is one line, not the whole list.
+        recordsFor(GENERATED_FIXTURE).filter(
+          (record) => record.query === "" && !record.showHidden,
+        )[0]?.order.length ?? 0,
+      );
+    }
+  });
 });
 
-describe("rows contract mutation proof", () => {
+describe.skipIf(!ENGLISH_COLLATOR)("rows contract coverage (F11)", () => {
+  /** CP1's rejection fixtures, from `expected.json` (`kind: "error"`). */
+  const cp1ErrorFixtures = (): string[] => {
+    const expected = JSON.parse(
+      readFileSync(join(DEFAULT_CORPUS_DIR, "expected.json"), "utf8"),
+    ) as { files: Record<string, { kind?: string }> };
+    return Object.entries(expected.files)
+      .filter(([, record]) => record.kind === "error")
+      .map(([name]) => name)
+      .sort();
+  };
+
+  test("the skipped set is exactly CP1's error records", () => {
+    // A one-query manifest keeps this fast; the set is a property of the corpus,
+    // not of the query list.
+    const manifest = {
+      ...createManifest("2026-11-15T12:00:00"),
+      queries: [{ query: "", terms: [] }],
+      showHidden: [false],
+      generated: [],
+    };
+    const full = buildRowsContract({ corpusDir: DEFAULT_CORPUS_DIR, manifest });
+
+    const expected = cp1ErrorFixtures();
+    expect(full.skipped.slice().sort()).toEqual(expected);
+    expect(expected).toHaveLength(8);
+    expect(full.fixtures).toHaveLength(
+      listFixtures(DEFAULT_CORPUS_DIR).length - expected.length,
+    );
+    // No fixture is in both sets.
+    for (const name of full.skipped) {
+      expect(full.fixtures).not.toContain(name);
+    }
+  });
+});
+
+describe.skipIf(!ENGLISH_COLLATOR)("rows contract mutation proof", () => {
   test("every seeded mutation is caught", () => {
     for (const mutation of ROWS_MUTATION_NAMES) {
       const mutated = buildRowsContract({ corpusDir, manifest, mutation });
@@ -220,6 +295,32 @@ describe("rows contract mutation proof", () => {
     const result = compareContracts(baseline.jsonl, tampered, 5);
     expect(result.diffs.length).toBeGreaterThan(0);
     expect(result.diffs[0]?.path).toContain("todoCount");
+  }, 60_000);
+
+  test("diffs carry the record coordinates, so identical lines are distinguishable", () => {
+    const lines = baseline.jsonl.trimEnd().split("\n");
+    const position = lines.findIndex(
+      (line) => (JSON.parse(line) as RowsRecord).fixture === GENERATED_FIXTURE,
+    );
+    expect(position).toBeGreaterThanOrEqual(0);
+    const record = JSON.parse(lines[position] as string) as RowsRecord;
+    const tampered = [...lines];
+    tampered[position] = JSON.stringify({ ...record, todoCount: 99999 });
+
+    const result = compareContracts(
+      baseline.jsonl,
+      `${tampered.join("\n")}\n`,
+      5,
+      { recordLabel: rowsRecordLabel },
+    );
+
+    expect(result.diffs.length).toBeGreaterThan(0);
+    const first = result.diffs[0];
+    expect(first?.record).toBe(
+      `record ${position} query=${JSON.stringify(record.query)} showHidden=${record.showHidden}`,
+    );
+    expect(formatDiff(first!)).toContain(`[${first?.record}]`);
+    expect(formatDiff(first!)).toContain(GENERATED_FIXTURE);
   }, 60_000);
 
   test("pinning a different clock changes the contract", () => {

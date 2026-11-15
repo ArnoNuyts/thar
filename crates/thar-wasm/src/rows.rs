@@ -42,9 +42,10 @@
 //! - Todo ids are the array positions, matching parse order. The response
 //!   carries the index of every todo row so the host maps back to its objects.
 //! - `datesInText`/`completionDateInText` are optional and default to `false`;
-//!   the CP1 parse records do not carry them yet (they do not affect row
-//!   building, only serialization). A host that parsed the line itself must
-//!   pass its real flags.
+//!   they do not affect row building, only serialization. The CP1 parse records
+//!   do not carry them, so the rows contract's candidate leaves them `false`; a
+//!   host that parsed the line itself (the app's adapter) passes its real flags
+//!   so CP4 can rebuild an exact `Todo`.
 //!
 //! Unknown fields are ignored so a host can pass a CP1 record with its extra
 //! `isDone`/`toString` fields without a second projection; missing required
@@ -76,7 +77,7 @@
 //! validates a name it did not parse itself.
 
 use thar_core::{
-    Priority, Row, RowError, State, TagValue, Todo, TodoDate, TodoId, TodoParts, build_rows,
+    Priority, Row, RowError, RowInput, State, TagValue, Todo, TodoDate, TodoId, TodoParts,
 };
 
 use crate::json::{self, Value, push_json_number, push_json_string};
@@ -231,7 +232,7 @@ impl TodoRecord {
 }
 
 /// One host-normalized search view in a `build_rows` request.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct SearchViewRecord {
     text: String,
     contexts: Vec<String>,
@@ -420,6 +421,9 @@ fn decode(input: &str) -> Result<BuildRequest, RowsError> {
 }
 
 /// Build the rows for a decoded request.
+///
+/// Goes through [`RowInput`] so this boundary and any other caller of the core
+/// share one entry point (`RowInput::build`); the borrows live for the call.
 fn rows_for(request: &BuildRequest) -> Result<thar_core::Rows<'_>, RowsError> {
     let terms: Vec<&str> = request.terms.iter().map(String::as_str).collect();
     let context_refs: Vec<Vec<&str>> = request
@@ -444,13 +448,14 @@ fn rows_for(request: &BuildRequest) -> Result<thar_core::Rows<'_>, RowsError> {
         })
         .collect();
 
-    build_rows(
-        &request.todos,
-        &views,
-        &terms,
-        request.show_hidden,
-        request.today,
-    )
+    RowInput {
+        todos: &request.todos,
+        views: &views,
+        terms: &terms,
+        show_hidden: request.show_hidden,
+        today: request.today,
+    }
+    .build()
     .map_err(RowsError::from)
 }
 
@@ -475,6 +480,16 @@ pub(crate) fn build_rows_envelope(input: &str) -> String {
 
 /// Append the `{"ok":true,…}` envelope.
 fn push_rows(out: &mut String, rows: &thar_core::Rows<'_>) {
+    // `create_rows` emits exactly one todo row per input index, and
+    // `Rows::todo_indexes` is that same order spelled out. Zipping the two is
+    // therefore sound; the debug assertion makes a future desync a test
+    // failure instead of a silently wrong `index` on the wire.
+    debug_assert_eq!(
+        rows.todo_indexes().len(),
+        rows.rows().iter().filter(|row| row.is_todo()).count(),
+        "one todo index per todo row"
+    );
+
     out.push_str("{\"ok\":true,\"rows\":[");
     let mut indexes = rows.todo_indexes().iter();
     let mut first = true;
@@ -494,14 +509,17 @@ fn push_rows(out: &mut String, rows: &thar_core::Rows<'_>) {
                 out.push('}');
             }
             Row::Todo { number, .. } => {
-                // `create_rows` emits exactly one todo row per input item, so
-                // there is an index for every todo row; the fallback only keeps
-                // this loop total.
-                let index = indexes.next().copied();
+                // The invariant asserted above: without an index the host could
+                // not map this row back to its todo, so a missing one is a core
+                // bug, not wire data. `expect` keeps the failure honest.
+                let index = indexes
+                    .next()
+                    .copied()
+                    .expect("one todo index per todo row");
                 out.push_str("{\"type\":\"todo\",\"number\":");
                 push_json_number(out, *number as u64);
                 out.push_str(",\"index\":");
-                push_json_number(out, index.unwrap_or_default() as u64);
+                push_json_number(out, index as u64);
                 out.push('}');
             }
         }

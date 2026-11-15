@@ -13,10 +13,26 @@
 export interface ContractDiff {
   /** Fixture the diff belongs to, or `"<corpus>"` for file-level problems. */
   fixture: string;
+  /**
+   * Coordinates of the record the diff belongs to, when the caller supplies a
+   * `recordLabel` to {@link compareContracts}. The rows contract uses it to name
+   * `query`/`showHidden`/index, because identical fixture lines are not
+   * distinguishable by fixture name alone.
+   */
+  record?: string;
   /** JSON path inside the record (`todos[3].toString`, `serialized.sha256`). */
   path: string;
   expected: unknown;
   actual: unknown;
+}
+
+export interface CompareOptions {
+  /**
+   * Per-record coordinates, e.g. `record 12 query="MILK" showHidden=false`.
+   * Called once per record index on the oracle side; the label is attached to
+   * every diff found inside that record.
+   */
+  recordLabel?: (record: unknown, index: number) => string;
 }
 
 export interface CompareResult {
@@ -59,6 +75,8 @@ class DiffCollector {
   omitted = 0;
   /** True when the walk stopped before the input was exhausted. */
   truncated = false;
+  /** Current record coordinates, or `undefined` for file-level diffs. */
+  record: string | undefined;
 
   constructor(limit: number) {
     // Never retain zero diffs: a cap of 0 must not turn a difference into a
@@ -83,7 +101,13 @@ class DiffCollector {
       this.truncated = true;
       return;
     }
-    this.diffs.push({ fixture, path, expected, actual });
+    this.diffs.push({
+      fixture,
+      ...(this.record === undefined ? {} : { record: this.record }),
+      path,
+      expected,
+      actual,
+    });
   }
 }
 
@@ -254,6 +278,7 @@ export const compareContracts = (
   expectedText: string,
   actualText: string,
   maxDiffs = 20,
+  options: CompareOptions = {},
 ): CompareResult => {
   const collector = new DiffCollector(maxDiffs);
   const expected = parseJsonl(expectedText, collector, "oracle");
@@ -273,24 +298,30 @@ export const compareContracts = (
     const actualRecord = actual[index];
     const expectedFixture = fixtureNameOf(expectedRecord);
     if (expectedFixture !== fixtureNameOf(actualRecord)) {
+      collector.record = options.recordLabel?.(expectedRecord, index);
       collector.add(
         "<corpus>",
         childPath("records", index),
         expectedFixture,
         fixtureNameOf(actualRecord),
       );
+      collector.record = undefined;
       continue;
     }
+    collector.record = options.recordLabel?.(expectedRecord, index);
     compareValues(expectedFixture, "", expectedRecord, actualRecord, collector);
+    collector.record = undefined;
   }
 
   for (let index = shared; index < actual.length; index++) {
+    collector.record = options.recordLabel?.(actual[index], index);
     collector.add(
       "<corpus>",
       childPath("records", index),
       undefined,
       fixtureNameOf(actual[index]),
     );
+    collector.record = undefined;
   }
 
   return {
@@ -344,4 +375,4 @@ export const diffJson = (
 };
 
 export const formatDiff = (diff: ContractDiff): string =>
-  `${diff.fixture} ${diff.path}: expected ${renderValue(diff.expected)}, actual ${renderValue(diff.actual)}`;
+  `${diff.fixture}${diff.record === undefined ? "" : ` [${diff.record}]`} ${diff.path}: expected ${renderValue(diff.expected)}, actual ${renderValue(diff.actual)}`;

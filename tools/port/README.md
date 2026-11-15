@@ -331,16 +331,33 @@ npx vite-node tools/port/bench-rows.ts   # the perf table below (needs pkg/)
 
 Coverage: every parseable `*.txt` fixture (the rejection fixtures are skipped;
 the CP1 contract owns them) plus one generated 1 000-todo list, for a fixed
-12-query set and `showHidden=false`/`true`. That is **504 records / 4 449 890
+12-query set and `showHidden=false`/`true`. That is **504 records / 4 450 270
 bytes**, and the WASM candidate reproduces them with **0 diffs** (the TS oracle
 also passes its own candidate protocol via `--candidate-self`). The generated
 list is built in TS and handed to the candidate in a temp manifest, so there is
 no second committed corpus.
 
+The skipped set is not a free-for-all: the builder narrows its `catch` to the
+production validation error family and returns the skipped fixture names. A
+unit test asserts that set is exactly CP1's eight `kind: "error"` records, so a
+new unparseable fixture fails the suite instead of silently shrinking coverage.
+
 The query set is `""`, `"   "`, `work`, `@work`, `+project`, `alpha beta`,
 `!!!`, `MILK`, `ΟΔΟΣ`, `aΣ.Α`, `aβ́Σ.`, `due:` — the CP3a set (empty,
 whitespace-only, both prefixes, two terms, punctuation-only, uppercase, Unicode)
-plus the reverse final-sigma shapes.
+plus the reverse final-sigma shapes. One generated line ends in
+`aβ́Σ. aΣ.Α` (JS-lowercased to `aβ́ς. aσ.α`), so the extracted terms `aβ́ς.` and
+`aσ.` now match at least one row. What that **does** pin: matching consumes the
+host-lowercased views and the manifest's normalized terms verbatim, and a
+candidate that re-folds (`Σ→σ` per character) or matches case-sensitively loses
+that row. What it **does not** pin: a Rust-side case fold or a Rust
+`extractSearchTerms` port — the core never folds and never splits, so those
+pipeline stages are covered by the CP3a search-case table, not by this contract.
+
+The rows harness asserts the host's default collator is en-US-equivalent before
+it builds anything (PLAN §13 decision 8); the status lines print
+`collator en-US`. Under `LANG=da_DK.UTF-8` it exits 1 with a readable message
+instead of emitting genuine-looking row diffs.
 
 ### Record format
 
@@ -409,47 +426,66 @@ seeded mutation. The mutations live in the oracle's composition, not in
 The self-check runs on a slice of the corpus plus a 120-todo generated list so
 it stays fast; the full contract is the CI gate.
 
-### Perf evidence (CP3b1)
+### Perf evidence (CP3b1 / CP3b2b)
 
-`tools/port/bench-rows.ts` measures the same 120×40, whole-list row build as
-`createIndexes` (the viewport does not change the work), from the generated
-list at 50 / 3 000 / 10 000 todos, on Node 26.12.0 with the release WASM
-package on the development machine (a snapshot, not a CI gate). Times are
-milliseconds; p50/p95 of the full stateless call.
+There are **two** row benchmarks with different scopes; quoting one as a
+general speed-up is wrong, so both are recorded here.
+
+`tools/port/bench-rows.ts` (`npm run port:bench:rows`) measures the rows
+contract's own 1 000-line generated list (extended to 50 / 3 000 / 10 000),
+120×40, the full stateless call: `JSON.stringify` of the request, the Rust JSON
+decode + row build + JSON encode, and `JSON.parse` of the response. The
+generated list has many distinct mixed-case contexts, so the TS `localeCompare`
+sort dominates the oracle side. Times in milliseconds, p50/p95, Node 26.12.0,
+release WASM, development machine (a snapshot, not a CI gate):
 
 | todos  | path          | empty query   | one term (`work`) | multi term (`alpha beta`) |
 | ------ | ------------- | ------------- | ----------------- | ------------------------- |
-| 50     | TS oracle     | 0.44 / 0.84   | 0.42 / 0.78       | 0.41 / 0.45               |
-| 50     | WASM boundary | 0.45 / 0.70   | 0.42 / 0.76       | 0.41 / 0.44               |
-| 3 000  | TS oracle     | 126.9 / 133.4 | 128.7 / 158.3     | 128.1 / 133.3             |
-| 3 000  | WASM boundary | 25.3 / 26.0   | 24.7 / 26.0       | 24.4 / 24.9               |
-| 10 000 | TS oracle     | 523.7 / 532.6 | 530.9 / 553.2     | 528.4 / 593.9             |
-| 10 000 | WASM boundary | 85.1 / 87.3   | 81.9 / 83.0       | 81.3 / 89.7               |
+| 50     | TS oracle     | 0.46 / 0.87   | 0.70 / 0.85       | 0.43 / 0.79               |
+| 50     | WASM boundary | 0.55 / 0.93   | 0.74 / 0.81       | 0.41 / 0.67               |
+| 3 000  | TS oracle     | 129.8 / 146.4 | 130.7 / 142.2     | 127.5 / 135.3             |
+| 3 000  | WASM boundary | 25.1 / 26.3   | 24.8 / 28.5       | 24.3 / 25.1               |
+| 10 000 | TS oracle     | 524.5 / 591.5 | 534.6 / 542.3     | 532.6 / 562.5             |
+| 10 000 | WASM boundary | 89.4 / 106.4  | 82.0 / 86.5       | 81.8 / 98.9               |
 
-The stateless boundary is ~6.4× faster than the TypeScript pipeline at
-10 000 todos, but it is not yet the PLAN's **≤ 5 ms** search-keystroke target.
-`parse+views` (once per load, median of five) is 42.3 ms TS / 75.7 ms WASM at
-10 000. The per-keystroke split at 10 000 (p50, 2 562 KB request):
+`parse+views` (once per load, median of five) is 43.0 ms TS / 84.1 ms WASM at
+10 000. Request bytes at 10 000: **2 562 KB** (13 KB at 50, 766 KB at 3 000).
+The 10 000 stateless call splits into `JSON.stringify` 9.5–10.5 ms,
+`buildRows` 71.8–77.0 ms, `JSON.parse` 0.0–2.0 ms (p50).
 
-| stage                                             |          p50 |
-| ------------------------------------------------- | -----------: |
-| `JSON.stringify` of the request (JS)              |   8.3–9.2 ms |
-| `buildRows` (Rust JSON decode + row build + JSON) | 72.7–73.9 ms |
-| `JSON.parse` of the response (JS)                 |   0.0–2.0 ms |
+`scripts/bench-rows.ts` (`npm run bench:rows`) measures the **app-shaped
+adapter path**: `buildRowsWithCore` with the record/view cache warm (and a
+cold-input variant), on a list built by that script. With the app's list shape
+the TS sort is much cheaper, so the same release package is only modestly
+ahead:
+
+| todos  | query      | TS p50 / p95 | rust warm p50 / p95 | rust cold p50 / p95 |
+| ------ | ---------- | ------------ | ------------------- | ------------------- |
+| 3 000  | empty      | 23.5 / 30.7  | 22.6 / 25.8         | 25.6 / 34.9         |
+| 3 000  | one-term   | 23.9 / 28.2  | 21.2 / 32.0         | 23.5 / 33.5         |
+| 10 000 | empty      | 82.3 / 85.1  | 74.0 / 81.9         | 83.9 / 97.4         |
+| 10 000 | one-term   | 84.6 / 129.8 | 66.5 / 68.9         | 77.0 / 85.4         |
+| 10 000 | multi-term | 84.6 / 86.9  | 69.9 / 95.9         | 86.7 / 110.3        |
 
 The core alone (`cargo test --release -p thar-core --test rows_perf --
---ignored --nocapture`) is **7.9–8.2 ms p50 / 8.6–10.9 ms p95** at 10 000
-todos, of which `sort_by_importance` is 5.6 ms and `create_rows` 0.3 ms. So the
-domain work is close to the target; the marshalling dominates. CP3b2 should:
+--ignored --nocapture`) is **7.9–8.2 ms p50 / 8.6–10.9 ms p95** at 10 000, of
+which `sort_by_importance` is 5.6 ms and `create_rows` 0.3 ms.
 
-- add a **stateful handle** (`load` once per list/mutation, `build` per
-  keystroke) so the 2.5 MB request is decoded once, not per key;
-- precompute collation ranks/sort keys once per load (the 5.6 ms sort), which
+So the domain work is close to the target while marshalling dominates, and the
+end-to-end gap depends entirely on the list shape (≈6× on the contract's
+mixed-case list, ≈1.1–1.3× on the app-shaped one, at parity cold). The PLAN's
+**≤ 5 ms** search-keystroke target is a **future optimization goal, not a
+current claim**. CP3b2b records these numbers only; no caching or collation-rank
+work is done here. The deferred optimization phase would add:
+
+- a **stateful handle** (`load` once per list/mutation, `build` per keystroke)
+  so the 2.5 MB request is decoded once, not per key;
+- precomputed collation ranks/sort keys once per load (the 5.6 ms sort), which
   also addresses PLAN §5 CP3's sort-key TODO;
-- keep the stateless `buildRows` as the differential contract's entry point.
+- host-computed context ranks as an alternative to the en-US assumption
+  (PLAN §13 decision 8).
 
-These are reported, not silently accepted: CP3b1 does not wire `THAR_CORE=rust`
-(that is CP3b2), so no user path regresses.
+The stateless `buildRows` stays the differential contract's entry point.
 
 ## Seeded bugs (`tools/port/self-test.mjs`)
 
@@ -507,9 +543,10 @@ oracle on this corpus, not that it is a complete port.
 - **Serialization of DTO-built todos.** The rows contract feeds the parse
   records back through `buildRows`; the two round-trip flags
   (`datesInText`, `completionDateInText`) are not in the CP1 record set, so the
-  candidate leaves them `false`. Row building does not read them (only
-  `toString` does), so the omission cannot change a row; CP3b2's stateful
-  adapter will carry the real flags from its own parse.
+  contract's candidate leaves them `false`. Row building does not read them
+  (only `toString` does), so the omission cannot change a row. The **app's**
+  adapter (CP3b2b) does send the real flags from its own `Todo` objects, so CP4
+  can rebuild an exact todo from a row request.
 
 ## CI
 
@@ -525,9 +562,19 @@ budget, runs the Node smoke test, then runs `npm ci` and
 (`npm run port:contract:rows:wasm`). Its path filter includes `crates/**`,
 `testdata/port/**`, `tools/port/**`, `logic/core-wasm.ts`, `logic/limits.ts`,
 `unit-tests/core-wasm.test.ts` and `package.json`, so a change to either
-candidate, either adapter or their tests re-runs WASM parity. The Node matrix
-does not require Rust or a built `pkg/`; the WASM job is the only place the WASM
-candidates run in CI.
+candidate, either adapter or their tests re-runs WASM parity. The rows oracle
+imports real production modules, so CP3b2b widened that filter to include
+`logic/indexes.ts`, `logic/Todos.ts`, `logic/todo.ts`,
+`logic/todo-file-validation.ts`, `utils/search-utils.ts`, `types/enums.ts` and
+`unit-tests/port-rows.test.ts` as well; a change to just one of those now
+re-runs the rows contract. The Node matrix does not require Rust or a built
+`pkg/`; the wasm job is the only place the WASM candidates run in CI. (The
+Node `test` job in `ci.yml` has no path filters and always runs
+`unit-tests/port-rows.test.ts`.)
+
+The rows diff lines name the record they belong to — `fixture [record 12
+query="MILK" showHidden=false] rows[3].index` — because two records of one
+fixture can hold identical rows.
 
 ## Maintaining
 
