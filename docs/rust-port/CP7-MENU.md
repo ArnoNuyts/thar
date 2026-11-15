@@ -49,12 +49,12 @@ pub struct ConfirmRequest {
 On confirm the screen returns `Actions([Close, confirm])`, so the app applies
 the follow-up only after the modal has released its borrow. Exact strings:
 
-| Case | Title | Message |
-| --- | --- | --- |
-| delete one | `Delete Todo` | `Are you sure you want to delete this todo?` |
-| delete many | `Delete Todos` | `Are you sure you want to delete N todos?` |
-| archive | `Archive Completed` | `Archive all completed todos to done.txt?` |
-| paste > 10 | `Paste Multiple Todos` | `Are you sure you want to paste N todos?` |
+| Case        | Title                  | Message                                      |
+| ----------- | ---------------------- | -------------------------------------------- |
+| delete one  | `Delete Todo`          | `Are you sure you want to delete this todo?` |
+| delete many | `Delete Todos`         | `Are you sure you want to delete N todos?`   |
+| archive     | `Archive Completed`    | `Archive all completed todos to done.txt?`   |
+| paste > 10  | `Paste Multiple Todos` | `Are you sure you want to paste N todos?`    |
 
 Keys: Enter/Space activate the hovered-or-selected button, Tab (and
 Left/Right) navigate with wrap, Escape cancels. The buttons are centred in
@@ -86,14 +86,14 @@ version for this session.
 
 ### List-key wiring (`input.rs`)
 
-| Key | Command | Result |
-| --- | --- | --- |
-| `x` / Enter | `Open(TodoMenu or MultiSelectMenu)` | command menu |
-| `a` | `Archive` | archive confirmation |
-| `Delete` | `DeleteSelected` | delete confirmation |
-| `c` | `CopySelected` | `Effect::Copy` with canonical lines |
-| `v` | `Paste` | `Effect::Paste`, then `App::receive_clipboard` |
-| `u` | `Open(Update)` when the model exists, else one toast | update screen |
+| Key         | Command                                              | Result                                         |
+| ----------- | ---------------------------------------------------- | ---------------------------------------------- |
+| `x` / Enter | `Open(TodoMenu or MultiSelectMenu)`                  | command menu                                   |
+| `a`         | `Archive`                                            | archive confirmation                           |
+| `Delete`    | `DeleteSelected`                                     | delete confirmation                            |
+| `c`         | `CopySelected`                                       | `Effect::Copy` with canonical lines            |
+| `v`         | `Paste`                                              | `Effect::Paste`, then `App::receive_clipboard` |
+| `u`         | `Open(Update)` when the model exists, else one toast | update screen                                  |
 
 The clipboard read stays in `thar-cli` (`thar_store::clipboard::paste`), so
 `thar-tui` still has no filesystem or process I/O. `App::receive_clipboard`
