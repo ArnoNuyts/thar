@@ -24,6 +24,11 @@ pub mod registry_meta;
 pub mod text;
 pub mod update;
 
+mod date;
+mod priority;
+mod recurrence;
+mod tag;
+
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
 use thar_core::{TodoDate, TodoId};

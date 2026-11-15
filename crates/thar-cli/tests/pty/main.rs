@@ -18,6 +18,7 @@ mod session;
 #[path = "../support/mod.rs"]
 mod support;
 
+mod cp7_calendar;
 mod cp7_menu;
 mod cp7_write;
 
