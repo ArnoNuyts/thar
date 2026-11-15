@@ -12,17 +12,17 @@ unchanged.
 
 ## What landed
 
-| Area | Change |
-| ---- | ------ |
-| Watcher | New `crates/thar-cli/src/sync.rs` with `FileSync`, `ReloadOutcome`, `bounded_message` and the poll/debounce/suppression constants. std only (`fs::metadata`, `fs::File`). |
-| Event loop | `terminal::run_with_store` owns one `FileSync`, extends the `event::poll` timeout with the watcher deadline, and calls `apply_reload` after every event or timeout. |
-| Reload | Reads the bytes once, lossy-decodes and parses with the startup `ReadLimits`, calls `App::reloaded` (which calls `set_todos`, clearing the undo history), adopts the parsed bytes as both the watcher and `SaveGuard` baseline, and toasts `File reloaded`. |
-| Failure | Sets `app.load_error`, toasts the bounded message, cancels a pending save, and shows `READ-ONLY` until a later reload succeeds. |
-| Recovery | `App::reloaded` clears `load_error`, so `App::writable()` is true again and the next mutation saves. |
-| Save refusal | `StoreError::ChangedOnDisk` keeps the target untouched, shows one bounded toast, keeps the list dirty and retries with the app's 1 s backoff; the watcher normally reloads the external file first, which clears the dirty state. |
-| Store | `SaveGuard::set_baseline` adopts bytes the host just parsed; `atomic::write_atomic` gained a debug-only `THAR_SAVE_CRASH=before-rename` abort hook. |
-| Tests | `crates/thar-cli/tests/write_safety.rs` (11 passing + 1 helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (5 passing + 1 ignored generator). |
-| Asset | `docs/rust-port/assets/cp7-sync.png` from a real 100×30 PTY frame. |
+| Area         | Change                                                                                                                                                                                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Watcher      | New `crates/thar-cli/src/sync.rs` with `FileSync`, `ReloadOutcome`, `bounded_message` and the poll/debounce/suppression constants. std only (`fs::metadata`, `fs::File`).                                                                                   |
+| Event loop   | `terminal::run_with_store` owns one `FileSync`, extends the `event::poll` timeout with the watcher deadline, and calls `apply_reload` after every event or timeout.                                                                                         |
+| Reload       | Reads the bytes once, lossy-decodes and parses with the startup `ReadLimits`, calls `App::reloaded` (which calls `set_todos`, clearing the undo history), adopts the parsed bytes as both the watcher and `SaveGuard` baseline, and toasts `File reloaded`. |
+| Failure      | Sets `app.load_error`, toasts the bounded message, cancels a pending save, and shows `READ-ONLY` until a later reload succeeds.                                                                                                                             |
+| Recovery     | `App::reloaded` clears `load_error`, so `App::writable()` is true again and the next mutation saves.                                                                                                                                                        |
+| Save refusal | `StoreError::ChangedOnDisk` keeps the target untouched, shows one bounded toast, keeps the list dirty and retries with the app's 1 s backoff; the watcher normally reloads the external file first, which clears the dirty state.                           |
+| Store        | `SaveGuard::set_baseline` adopts bytes the host just parsed; `atomic::write_atomic` gained a debug-only `THAR_SAVE_CRASH=before-rename` abort hook.                                                                                                         |
+| Tests        | `crates/thar-cli/tests/write_safety.rs` (11 passing + 1 helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (5 passing + 1 ignored generator).                                                                                                              |
+| Asset        | `docs/rust-port/assets/cp7-sync.png` from a real 100×30 PTY frame.                                                                                                                                                                                          |
 
 ## Policy
 
@@ -31,12 +31,12 @@ unchanged.
 Constants in `thar-cli::sync`, chosen to match
 `hooks/useTodoFileSync.ts`:
 
-| Constant | Value | Meaning |
-| -------- | ----- | ------- |
-| `POLL_INTERVAL` | 250 ms | Metadata is checked at most four times a second while idle. |
-| `RELOAD_DEBOUNCE` | 500 ms | Quiet period from the last metadata change before the file is read. A second change restarts it. |
-| `SELF_WRITE_WINDOW` | 1 s | Reloads are suppressed this long after a successful save, matching the hook's `lastWriteTime < 1000` guard. |
-| `MAX_MESSAGE_CHARS` | 300 | Same bound as `MAX_DISPLAY_ERROR_CHARS` in `logic/display-safety.ts`. |
+| Constant            | Value  | Meaning                                                                                                     |
+| ------------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
+| `POLL_INTERVAL`     | 250 ms | Metadata is checked at most four times a second while idle.                                                 |
+| `RELOAD_DEBOUNCE`   | 500 ms | Quiet period from the last metadata change before the file is read. A second change restarts it.            |
+| `SELF_WRITE_WINDOW` | 1 s    | Reloads are suppressed this long after a successful save, matching the hook's `lastWriteTime < 1000` guard. |
+| `MAX_MESSAGE_CHARS` | 300    | Same bound as `MAX_DISPLAY_ERROR_CHARS` in `logic/display-safety.ts`.                                       |
 
 The watcher compares `(mtime, length)` against the last observed stamp. When a
 stamp changes it arms the debounce; when the debounce expires it reads the file
@@ -115,20 +115,20 @@ The TypeScript oracle names the case; the Rust test proves it on the real
 filesystem. No test uses a fixed sleep: every watcher assertion passes an
 explicit `Instant` to `FileSync::poll`, and the PTY tests poll the parsed screen.
 
-| Case | Rust evidence |
-| ---- | ------------- |
+| Case                                                                   | Rust evidence                                                                                                                                                        |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Read-only directory: save fails, target untouched, no temp/backup left | `write_safety::a_read_only_directory_refuses_the_save_and_keeps_the_target`, `pty::cp7_sync::a_read_only_directory_shows_a_bounded_save_failure_and_keeps_the_bytes` |
-| External edit between load and save: refused, external bytes intact | `write_safety::an_external_edit_between_load_and_save_is_refused` |
-| External edit: reloads into the new list | `write_safety::an_external_edit_reloads_into_the_new_list`, `pty::cp7_sync::an_external_edit_reloads_and_toasts` |
-| Reload replaces instead of merging, and quitting writes nothing | `pty::cp7_sync::an_external_edit_replaces_the_list_instead_of_merging` |
-| Touched-but-unchanged file: one read, `Unchanged`, no reload | `write_safety::a_touched_but_unchanged_file_is_read_once_and_does_not_reload` |
-| Restoring the original bytes clears recovery | `pty::cp7_sync::restoring_the_original_bytes_clears_read_only_recovery` |
-| Self-write echo: no reload; an edit inside the window waits | `write_safety::a_save_does_not_reload_its_own_bytes`, `write_safety::an_external_edit_inside_the_self_write_window_waits` |
-| Failed reload keeps the list, cancels the save, is not retried | `write_safety::a_failed_reload_keeps_the_list_cancels_the_save_and_is_not_retried`, `pty::cp7_sync::a_failed_reload_enters_read_only_recovery_and_a_fix_recovers` |
-| Recovery clears read-only and re-enables writes | `write_safety::a_later_reload_recovers_the_session_and_re_enables_writes`, same PTY test |
-| Missing file is a reload error, not an empty list | `write_safety::a_missing_file_is_a_reload_error_not_an_empty_list` |
-| Reload uses the reader's lossy UTF-8 decode | `write_safety::a_reload_lossily_decodes_invalid_utf8` |
-| Crash before the rename leaves the old target | `write_safety::crash_before_rename_leaves_the_previous_target` |
+| External edit between load and save: refused, external bytes intact    | `write_safety::an_external_edit_between_load_and_save_is_refused`                                                                                                    |
+| External edit: reloads into the new list                               | `write_safety::an_external_edit_reloads_into_the_new_list`, `pty::cp7_sync::an_external_edit_reloads_and_toasts`                                                     |
+| Reload replaces instead of merging, and quitting writes nothing        | `pty::cp7_sync::an_external_edit_replaces_the_list_instead_of_merging`                                                                                               |
+| Touched-but-unchanged file: one read, `Unchanged`, no reload           | `write_safety::a_touched_but_unchanged_file_is_read_once_and_does_not_reload`                                                                                        |
+| Restoring the original bytes clears recovery                           | `pty::cp7_sync::restoring_the_original_bytes_clears_read_only_recovery`                                                                                              |
+| Self-write echo: no reload; an edit inside the window waits            | `write_safety::a_save_does_not_reload_its_own_bytes`, `write_safety::an_external_edit_inside_the_self_write_window_waits`                                            |
+| Failed reload keeps the list, cancels the save, is not retried         | `write_safety::a_failed_reload_keeps_the_list_cancels_the_save_and_is_not_retried`, `pty::cp7_sync::a_failed_reload_enters_read_only_recovery_and_a_fix_recovers`    |
+| Recovery clears read-only and re-enables writes                        | `write_safety::a_later_reload_recovers_the_session_and_re_enables_writes`, same PTY test                                                                             |
+| Missing file is a reload error, not an empty list                      | `write_safety::a_missing_file_is_a_reload_error_not_an_empty_list`                                                                                                   |
+| Reload uses the reader's lossy UTF-8 decode                            | `write_safety::a_reload_lossily_decodes_invalid_utf8`                                                                                                                |
+| Crash before the rename leaves the old target                          | `write_safety::crash_before_rename_leaves_the_previous_target`                                                                                                       |
 
 ### Crash hook
 
@@ -186,7 +186,7 @@ an externally added `ship the CP7 sync @work +thar` row, the badge reads
   milliseconds after the initial load. An edit in that window is treated as the
   starting content. The Ink hook has the same window between `repository.load`
   and its first watcher event.
-- **A write session whose initial read *fails validation* still exits** with a
+- **A write session whose initial read _fails validation_ still exits** with a
   message before the TUI starts (CP6 behaviour, unchanged here). The recovery
   path covers a file that becomes invalid, unreadable or deleted after startup,
   which is what the Ink lifecycle tests exercise after the first load.
