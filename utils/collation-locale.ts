@@ -13,9 +13,17 @@
  * See `docs/rust-port/PLAN.md` §13 decision 8.
  */
 
+/**
+ * One collator for the process.
+ *
+ * The locale is fixed at startup from the environment, so constructing a
+ * formatter per call only costs allocations (and trips the a11y/perf lint).
+ */
+const defaultCollator = new Intl.Collator();
+
 /** The locale `new Intl.Collator()` resolves to on this host (e.g. `en-US`). */
 export const defaultCollatorLocale = (): string =>
-  new Intl.Collator().resolvedOptions().locale;
+  defaultCollator.resolvedOptions().locale;
 
 /**
  * True when `locale` collates like the pinned en-US order.
