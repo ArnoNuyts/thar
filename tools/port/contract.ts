@@ -1,9 +1,17 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { InvalidLimitError } from "../../logic/limits.ts";
 import {
   MUTATION_NAMES,
   MUTATIONS,
@@ -11,11 +19,14 @@ import {
   isMutationName,
 } from "./adapter.ts";
 import {
+  type ContractBuild,
+  CorpusError,
   DEFAULT_CLOCK_LOCAL,
   DEFAULT_CORPUS_DIR,
   REPO_ROOT,
   buildContract,
 } from "./build.ts";
+import { InvalidClockError } from "./clock.ts";
 import { decodeJsonlBytes, formatDiff, compareContracts } from "./compare.ts";
 import { verifyGolden } from "./golden.ts";
 
@@ -41,6 +52,9 @@ const EXIT_MATCH = 0;
 const EXIT_HARNESS_ERROR = 1;
 const EXIT_MISMATCH = 2;
 
+/** Longest free-form message printed for a harness error. */
+const MAX_ERROR_CHARS = 400;
+
 interface Options {
   corpusDir: string;
   clockLocal: string;
@@ -57,6 +71,27 @@ interface Options {
 }
 
 class HarnessError extends Error {}
+
+/** Keep a message printable even if it embeds untrusted text. */
+const bounded = (text: string): string =>
+  text.length > MAX_ERROR_CHARS ? `${text.slice(0, MAX_ERROR_CHARS)}…` : text;
+
+/**
+ * Translate the errors the corpus, clock and limit code can raise for bad
+ * *user* input into harness errors, so the CLI prints one line instead of a
+ * stack trace. Unexpected errors still propagate.
+ */
+const asHarnessError = (error: unknown): unknown => {
+  if (error instanceof HarnessError) return error;
+  if (
+    error instanceof CorpusError ||
+    error instanceof InvalidClockError ||
+    error instanceof InvalidLimitError
+  ) {
+    return new HarnessError(bounded(error.message));
+  }
+  return error;
+};
 
 const usage = `CP1 differential contract harness
 
@@ -76,7 +111,7 @@ Options:
   --verify-golden           Also compare the contract with
                             testdata/port/expected.json field by field
   --mutate <name>           TEST ONLY: build a deliberately broken contract
-  --max-diffs <n>           Print at most n diffs (default: 20)
+  --max-diffs <n>           Print at most n diffs (default: 20, minimum: 1)
   --list-mutations          Print the seeded mutations as JSON and exit
   --help                    Show this help
 
@@ -146,8 +181,11 @@ const parseArgs = (args: string[]): Options => {
       }
       case "--max-diffs": {
         const value = Number(valueOf(args, index, arg));
-        if (!Number.isSafeInteger(value) || value < 0) {
-          throw new HarnessError("--max-diffs must be a non-negative integer");
+        if (!Number.isSafeInteger(value) || value < 1) {
+          throw new HarnessError(
+            "--max-diffs must be a positive integer (at least 1); " +
+              "a cap of 0 would hide every difference",
+          );
         }
         options.maxDiffs = value;
         index++;
@@ -260,6 +298,17 @@ interface CandidateRun {
   detail: string;
 }
 
+/**
+ * Environment for the spawned candidate: inherited, minus the test-only
+ * mutation hook. Otherwise a globally exported `THAR_PORT_MUTATION` would
+ * mutate the oracle *and* the candidate, and a wrong candidate would pass.
+ */
+const candidateEnv = (): NodeJS.ProcessEnv => {
+  const env = { ...process.env };
+  delete env.THAR_PORT_MUTATION;
+  return env;
+};
+
 const runCandidate = (
   tokens: string[],
   corpusDir: string,
@@ -279,6 +328,7 @@ const runCandidate = (
     ],
     {
       cwd: process.cwd(),
+      env: candidateEnv(),
       encoding: "utf8",
       timeout: 120_000,
       maxBuffer: 16 * 1024 * 1024,
@@ -288,7 +338,7 @@ const runCandidate = (
   if (result.error) {
     return {
       ok: false,
-      detail: `candidate could not run: ${result.error.message}`,
+      detail: `candidate could not run: ${bounded(result.error.message)}`,
     };
   }
   if (result.status !== 0) {
@@ -307,10 +357,16 @@ const runCandidate = (
 const reportDiffs = (
   diffs: ReturnType<typeof compareContracts>["diffs"],
   omitted: number,
+  truncated: boolean,
 ): void => {
+  const shown = diffs.length;
+  const total = shown + omitted;
+  const notes: string[] = [];
+  if (omitted > 0) notes.push(`${omitted} omitted`);
+  if (truncated) notes.push("walk stopped at the --max-diffs cap");
   process.stderr.write(
-    `port-contract: ${diffs.length + omitted} diff(s)` +
-      (omitted > 0 ? ` (showing ${diffs.length}, ${omitted} omitted)` : "") +
+    `port-contract: ${truncated ? `at least ${total}` : `${total}`} diff(s)` +
+      (notes.length > 0 ? ` (showing ${shown}, ${notes.join("; ")})` : "") +
       "\n",
   );
   for (const diff of diffs) {
@@ -318,19 +374,42 @@ const reportDiffs = (
   }
 };
 
+/** True when two paths name the same file (after resolving links). */
+const sameFile = (left: string, right: string): boolean => {
+  const leftPath = resolve(left);
+  const rightPath = resolve(right);
+  if (leftPath === rightPath) return true;
+  if (!existsSync(leftPath) || !existsSync(rightPath)) return false;
+  try {
+    return realpathSync(leftPath) === realpathSync(rightPath);
+  } catch {
+    return false;
+  }
+};
+
+const invalidUtf8 = (source: string): number => {
+  process.stderr.write(
+    `port-contract: candidate output is not valid UTF-8 (${source})\n`,
+  );
+  return EXIT_MISMATCH;
+};
+
+const readCandidateFile = (path: string): Buffer => {
+  try {
+    return readFileSync(path);
+  } catch (error) {
+    throw new HarnessError(
+      bounded(
+        `cannot read candidate file ${path}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      ),
+    );
+  }
+};
+
 const main = (): number => {
   const options = parseArgs(process.argv.slice(2));
-
-  // Test-only hook used by wrappers that cannot append `--mutate` themselves.
-  const envMutation = process.env.THAR_PORT_MUTATION;
-  if (options.mutate === undefined && envMutation !== undefined) {
-    if (!isMutationName(envMutation)) {
-      throw new HarnessError(
-        `Unknown THAR_PORT_MUTATION ${JSON.stringify(envMutation)}; expected one of ${MUTATION_NAMES.join(", ")}`,
-      );
-    }
-    options.mutate = envMutation;
-  }
 
   if (options.help) {
     process.stdout.write(usage);
@@ -347,20 +426,80 @@ const main = (): number => {
     return EXIT_MATCH;
   }
 
-  const build = buildContract({
-    corpusDir: options.corpusDir,
-    clockLocal: options.clockLocal,
-    mutation: options.mutate,
-  });
+  // Test-only hook used by wrappers that cannot append `--mutate` themselves.
+  // Resolved after --help/--list-mutations so a stray export cannot break them.
+  const envMutation = process.env.THAR_PORT_MUTATION;
+  if (options.mutate === undefined && envMutation !== undefined) {
+    if (!isMutationName(envMutation)) {
+      throw new HarnessError(
+        `Unknown THAR_PORT_MUTATION ${JSON.stringify(envMutation)}; expected one of ${MUTATION_NAMES.join(", ")}`,
+      );
+    }
+    options.mutate = envMutation;
+  }
+
+  const candidates = [
+    options.candidate !== undefined,
+    options.candidateFile !== undefined,
+    options.candidateSelf,
+  ].filter(Boolean).length;
+
+  if (options.check && candidates !== 1) {
+    throw new HarnessError(
+      "--check requires exactly one of --candidate, --candidate-file or --candidate-self",
+    );
+  }
+  if (!options.check && candidates > 0) {
+    throw new HarnessError(
+      "--candidate, --candidate-file and --candidate-self require --check",
+    );
+  }
+  if (
+    options.out !== undefined &&
+    options.candidateFile !== undefined &&
+    sameFile(options.out, options.candidateFile)
+  ) {
+    // `--out` writes the oracle before the check, so comparing against the same
+    // path would compare the oracle with itself and always pass.
+    throw new HarnessError(
+      `--out and --candidate-file both name ${options.out}; ` +
+        "the oracle would be compared with itself",
+    );
+  }
+
+  let build: ContractBuild;
+  try {
+    build = buildContract({
+      corpusDir: options.corpusDir,
+      clockLocal: options.clockLocal,
+      mutation: options.mutate,
+    });
+  } catch (error) {
+    throw asHarnessError(error);
+  }
+
+  if (build.records.length === 0) {
+    throw new HarnessError(
+      `no fixtures found in ${build.corpusDir}: expected at least one *.txt file`,
+    );
+  }
 
   if (options.out) {
     writeFileSync(options.out, build.jsonl);
   } else if (!options.check && !options.verifyGolden) {
+    if (process.stdout.isTTY) {
+      process.stderr.write(
+        "port-contract: stdout is a terminal; pass --out <file> to keep JSONL readable\n",
+      );
+    }
     process.stdout.write(build.jsonl);
   }
 
+  const contractBytes = Buffer.byteLength(build.jsonl, "utf8");
+
   let diffs: ReturnType<typeof compareContracts>["diffs"] = [];
   let omitted = 0;
+  let truncated = false;
   let compared = false;
 
   if (options.verifyGolden) {
@@ -369,41 +508,25 @@ const main = (): number => {
       diffs = diffs.concat(verifyGolden(build));
     } catch (error) {
       throw new HarnessError(
-        `cannot verify against the golden file: ${error instanceof Error ? error.message : String(error)}`,
+        bounded(
+          `cannot verify against the golden file: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        ),
       );
     }
   }
 
   if (options.check) {
     compared = true;
-    const candidates = [
-      options.candidate !== undefined,
-      options.candidateFile !== undefined,
-      options.candidateSelf,
-    ].filter(Boolean).length;
-    if (candidates !== 1) {
-      throw new HarnessError(
-        "--check requires exactly one of --candidate, --candidate-file or --candidate-self",
-      );
-    }
 
     let candidateText: string;
     if (options.candidateFile !== undefined) {
-      const bytes = readFileSync(options.candidateFile);
-      const decoded = decodeJsonlBytes(bytes);
+      const decoded = decodeJsonlBytes(
+        readCandidateFile(options.candidateFile),
+      );
       if (decoded === undefined) {
-        reportDiffs(
-          [
-            {
-              fixture: "<corpus>",
-              path: "<file>",
-              expected: "UTF-8 JSONL",
-              actual: "invalid UTF-8",
-            },
-          ],
-          0,
-        );
-        return EXIT_MISMATCH;
+        return invalidUtf8(options.candidateFile);
       }
       candidateText = decoded;
     } else {
@@ -420,17 +543,25 @@ const main = (): number => {
           outFile,
         );
         if (!run.ok) {
+          // The candidate never produced a contract: that is a harness error,
+          // not a mismatch between two contracts.
           process.stderr.write(`port-contract: ${run.detail}\n`);
-          return EXIT_MISMATCH;
+          return EXIT_HARNESS_ERROR;
         }
+        let bytes: Buffer;
         try {
-          candidateText = readFileSync(outFile, "utf8");
+          bytes = readFileSync(outFile);
         } catch {
           process.stderr.write(
             `port-contract: candidate exited 0 but did not write ${outFile}\n`,
           );
-          return EXIT_MISMATCH;
+          return EXIT_HARNESS_ERROR;
         }
+        const decoded = decodeJsonlBytes(bytes);
+        if (decoded === undefined) {
+          return invalidUtf8(outFile);
+        }
+        candidateText = decoded;
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
@@ -443,23 +574,28 @@ const main = (): number => {
     );
     diffs = diffs.concat(result.diffs);
     omitted = result.omitted;
+    truncated = result.truncated;
   }
 
   if (!compared) {
     process.stderr.write(
       `port-contract: wrote ${build.records.length} fixture record(s)` +
-        ` (${build.jsonl.length} bytes)\n`,
+        ` (${contractBytes} bytes)\n`,
     );
     return EXIT_MATCH;
   }
 
   if (diffs.length > 0 || omitted > 0) {
-    reportDiffs(diffs, omitted);
+    reportDiffs(diffs, omitted, truncated);
     return EXIT_MISMATCH;
   }
 
+  const checks: string[] = [];
+  if (options.verifyGolden) checks.push("golden");
+  if (options.check) checks.push("candidate");
   process.stderr.write(
-    `port-contract: match (${build.records.length} fixture record(s))\n`,
+    `port-contract: match (${checks.join(" + ")}, ` +
+      `${build.records.length} fixture record(s), ${contractBytes} bytes)\n`,
   );
   return EXIT_MATCH;
 };

@@ -23,6 +23,11 @@ export interface CompareResult {
   diffs: ContractDiff[];
   /** Diffs omitted from `diffs` because of `maxDiffs`. */
   omitted: number;
+  /**
+   * True when the walk stopped at the `maxDiffs` cap, so `diffs` is a lower
+   * bound rather than the complete set of differences.
+   */
+  truncated: boolean;
 }
 
 type JsonValue =
@@ -52,9 +57,14 @@ class DiffCollector {
   readonly diffs: ContractDiff[] = [];
   private readonly limit: number;
   omitted = 0;
+  /** True when the walk stopped before the input was exhausted. */
+  truncated = false;
 
   constructor(limit: number) {
-    this.limit = limit;
+    // Never retain zero diffs: a cap of 0 must not turn a difference into a
+    // match. The CLI rejects 0; this is defence in depth for library callers.
+    const cap = Number.isFinite(limit) ? Math.floor(limit) : 1;
+    this.limit = Math.max(1, cap);
   }
 
   /** True once enough diffs were collected; callers stop walking. */
@@ -62,14 +72,32 @@ class DiffCollector {
     return this.diffs.length >= this.limit;
   }
 
+  /** Record that comparison stopped while differences may remain. */
+  stop(): void {
+    this.truncated = true;
+  }
+
   add(fixture: string, path: string, expected: unknown, actual: unknown): void {
     if (this.diffs.length >= this.limit) {
       this.omitted += 1;
+      this.truncated = true;
       return;
     }
     this.diffs.push({ fixture, path, expected, actual });
   }
 }
+
+/** Index of the first key that moved, or `undefined` for an identical list. */
+const firstKeyDivergence = (
+  expectedKeys: string[],
+  actualKeys: string[],
+): number | undefined => {
+  const shared = Math.min(expectedKeys.length, actualKeys.length);
+  for (let index = 0; index < shared; index++) {
+    if (expectedKeys[index] !== actualKeys[index]) return index;
+  }
+  return expectedKeys.length === actualKeys.length ? undefined : shared;
+};
 
 const compareValues = (
   fixture: string,
@@ -78,7 +106,10 @@ const compareValues = (
   actual: JsonValue,
   collector: DiffCollector,
 ): void => {
-  if (collector.full) return;
+  if (collector.full) {
+    collector.stop();
+    return;
+  }
 
   if (Array.isArray(expected) || Array.isArray(actual)) {
     if (!Array.isArray(expected) || !Array.isArray(actual)) {
@@ -89,7 +120,11 @@ const compareValues = (
       collector.add(fixture, `${path}.length`, expected.length, actual.length);
     }
     const shared = Math.min(expected.length, actual.length);
-    for (let index = 0; index < shared && !collector.full; index++) {
+    for (let index = 0; index < shared; index++) {
+      if (collector.full) {
+        collector.stop();
+        break;
+      }
       compareValues(
         fixture,
         childPath(path, index),
@@ -105,15 +140,25 @@ const compareValues = (
     const expectedKeys = Object.keys(expected);
     const actualKeys = Object.keys(actual);
     if (expectedKeys.join("\u0000") !== actualKeys.join("\u0000")) {
-      collector.add(
-        fixture,
-        path === "" ? "__keys" : `${path}.__keys`,
-        expectedKeys,
-        actualKeys,
-      );
+      const keysPath = path === "" ? "__keys" : `${path}.__keys`;
+      collector.add(fixture, keysPath, expectedKeys, actualKeys);
+      // Name the first key that moved: the full key list is truncated in the
+      // printed diff, so this is what makes a reordered schema diagnosable.
+      const divergence = firstKeyDivergence(expectedKeys, actualKeys);
+      if (divergence !== undefined) {
+        collector.add(
+          fixture,
+          `${keysPath}[${divergence}]`,
+          expectedKeys[divergence] ?? "<missing>",
+          actualKeys[divergence] ?? "<missing>",
+        );
+      }
     }
     for (const key of expectedKeys) {
-      if (collector.full) return;
+      if (collector.full) {
+        collector.stop();
+        return;
+      }
       if (!(key in actual)) {
         collector.add(fixture, joinPath(path, key), expected[key], undefined);
         continue;
@@ -220,7 +265,10 @@ export const compareContracts = (
 
   const shared = Math.min(expected.length, actual.length);
   for (let index = 0; index < shared; index++) {
-    if (collector.full) break;
+    if (collector.full) {
+      collector.stop();
+      break;
+    }
     const expectedRecord = expected[index];
     const actualRecord = actual[index];
     const expectedFixture = fixtureNameOf(expectedRecord);
@@ -245,17 +293,35 @@ export const compareContracts = (
     );
   }
 
-  return { diffs: collector.diffs, omitted: collector.omitted };
+  return {
+    diffs: collector.diffs,
+    omitted: collector.omitted,
+    truncated: collector.truncated,
+  };
 };
 
 const MAX_VALUE_CHARS = 120;
 
-/** Render one scalar for a diff line, truncated to stay readable. */
+const truncate = (text: string): string =>
+  text.length <= MAX_VALUE_CHARS
+    ? text
+    : `${text.slice(0, MAX_VALUE_CHARS)}…(+${text.length - MAX_VALUE_CHARS})`;
+
+/** Render one value for a diff line, truncated to stay readable. */
 const renderValue = (value: unknown): string => {
   if (value === undefined) return "<missing>";
-  const text = JSON.stringify(value);
-  if (text.length <= MAX_VALUE_CHARS) return text;
-  return `${text.slice(0, MAX_VALUE_CHARS)}…(+${text.length - MAX_VALUE_CHARS})`;
+  if (Array.isArray(value)) {
+    const text = JSON.stringify(value);
+    if (text.length <= MAX_VALUE_CHARS) return text;
+    // Say how many items there were instead of cutting mid-token, so a long
+    // key list still names its first few keys and its length.
+    const head = value
+      .slice(0, 6)
+      .map((item) => JSON.stringify(item))
+      .join(", ");
+    return truncate(`[${head}, … (${value.length} item(s))]`);
+  }
+  return truncate(JSON.stringify(value));
 };
 
 /** Compare two JSON values and return readable diffs (used by `--verify-golden`). */

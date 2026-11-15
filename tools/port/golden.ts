@@ -117,10 +117,12 @@ export const verifyGolden = (
           ),
         );
       }
+      // Self-consistency check, not a golden field: the record's own count
+      // must agree with the record's own todo list.
       diffs.push(
         ...diffJson(
           fixture,
-          "todos.length",
+          "todoCount === todos.length",
           record.todoCount,
           record.todos.length,
         ),

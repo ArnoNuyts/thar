@@ -1,6 +1,7 @@
 import { formatDateTag, parseDateTag } from "../../logic/dates.ts";
 import { getReadLimits } from "../../logic/limits.ts";
 import { Todo } from "../../logic/todo.ts";
+import { serializeTodosForWrite } from "../../logic/todo-file-helpers.ts";
 import { validateTodoFileContent } from "../../logic/todo-file-validation.ts";
 import { TodoStateEnum } from "../../types/enums.ts";
 import type { ContractTodo } from "./types.ts";
@@ -11,7 +12,8 @@ import type { ContractTodo } from "./types.ts";
  * The unmutated adapter calls exactly the production load and write paths:
  *
  * - parse: `validateTodoFileContent(...).filter(trim).map(new Todo)`
- * - serialize: `todos.map(todo => todo.toString()).join("\n") + "\n"`
+ * - serialize: `serializeTodosForWrite(todos)` (`writeTodosToFile`'s serializer,
+ *   including its write-time control-character guard)
  *
  * Seeded bugs are applied *here* (never by editing `logic/**` at runtime) so
  * the self-test can prove the comparator catches a wrong candidate. Each
@@ -242,7 +244,13 @@ export const createAdapter = (mutation?: MutationName): ContractAdapter => {
   return {
     parse,
     serializeLine,
-    serialize: (todos) => todos.map(serializeLine).join("\n") + "\n",
+    // Unmutated builds use the production whole-file serializer, so the
+    // contract also runs `writeTodosToFile`'s write-time control-character
+    // guard. Mutated builds must keep the seeded serialization instead.
+    serialize: (todos) =>
+      mutation === undefined
+        ? serializeTodosForWrite(todos)
+        : todos.map(serializeLine).join("\n") + "\n",
     record,
   };
 };

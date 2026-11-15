@@ -83,8 +83,11 @@ export type WriteOptions = {
  * Serialize todos only when the result passes the same policy as the reader.
  * This is the last line of defense: an unsafe value that reaches state (for
  * example through an old programmatic caller) must never be persisted.
+ *
+ * Exported so the CP1 contract serializes through this exact function (the
+ * write-time control-character guard) instead of re-implementing it.
  */
-const serializeTodosForWrite = (todos: Todo[]): string => {
+export const serializeTodosForWrite = (todos: Todo[]): string => {
   const lines = todos.map((todo) => todo.toString());
 
   for (let index = 0; index < lines.length; index++) {

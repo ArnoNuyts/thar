@@ -20,10 +20,17 @@ export interface PinnedClock {
   fixedTime: number;
 }
 
+export class InvalidClockError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidClockError";
+  }
+}
+
 const parseClock = (clockLocal: string): PinnedClock => {
   const match = CLOCK_PATTERN.exec(clockLocal);
   if (!match) {
-    throw new Error(
+    throw new InvalidClockError(
       `Invalid --clock value ${JSON.stringify(clockLocal)}: expected yyyy-MM-ddTHH:mm:ss`,
     );
   }
@@ -42,7 +49,7 @@ const parseClock = (clockLocal: string): PinnedClock => {
     date.getMinutes() !== minutes ||
     date.getSeconds() !== seconds
   ) {
-    throw new Error(
+    throw new InvalidClockError(
       `Invalid --clock value ${JSON.stringify(clockLocal)}: not a real date and time`,
     );
   }
@@ -51,17 +58,14 @@ const parseClock = (clockLocal: string): PinnedClock => {
 };
 
 /**
- * Replace the global `Date` with a subclass whose no-argument constructor and
- * `Date.now()` return the pinned instant. Explicit constructors
- * (`new Date(value)`, `new Date(y, m, d, ...)`) keep their normal behaviour,
- * and `instanceof Date` keeps working because the subclass extends the real
- * constructor.
+ * The real constructor, captured once. Every pin subclasses this and never the
+ * previously installed pin, so repeated calls cannot nest `Date` subclasses.
  */
-export const pinClock = (clockLocal: string): PinnedClock => {
-  const pinned = parseClock(clockLocal);
-  const fixedTime = pinned.fixedTime;
+const RealDate = globalThis.Date;
 
-  class PinnedDate extends Date {
+/** Build a `Date` subclass whose no-argument form returns `fixedTime`. */
+const createPinnedDate = (fixedTime: number): DateConstructor => {
+  class PinnedDate extends RealDate {
     constructor(...args: unknown[]) {
       if (args.length === 0) {
         super(fixedTime);
@@ -74,7 +78,36 @@ export const pinClock = (clockLocal: string): PinnedClock => {
       return fixedTime;
     }
   }
+  return PinnedDate as unknown as DateConstructor;
+};
 
-  globalThis.Date = PinnedDate as DateConstructor;
+let installed: { clock: PinnedClock; ctor: DateConstructor } | undefined;
+
+/**
+ * Replace the global `Date` with a subclass whose no-argument constructor and
+ * `Date.now()` return the pinned instant. Explicit constructors
+ * (`new Date(value)`, `new Date(y, m, d, ...)`) keep their normal behaviour,
+ * and `instanceof Date` keeps working because the subclass extends the real
+ * constructor.
+ *
+ * Idempotent: pinning the same wall time twice leaves the installed
+ * constructor untouched (no nested subclasses), and pinning a different time
+ * replaces it with a fresh subclass of the original `Date`. Re-pinning after
+ * `globalThis.Date` was restored reinstalls the pin.
+ */
+export const pinClock = (clockLocal: string): PinnedClock => {
+  const pinned = parseClock(clockLocal);
+
+  if (
+    installed !== undefined &&
+    installed.clock.clockLocal === pinned.clockLocal &&
+    globalThis.Date === installed.ctor
+  ) {
+    return installed.clock;
+  }
+
+  const ctor = createPinnedDate(pinned.fixedTime);
+  globalThis.Date = ctor;
+  installed = { clock: pinned, ctor };
   return pinned;
 };
