@@ -262,7 +262,7 @@ export function watchFs(filename: string): FsWatcher {
  *
  * @internal
  */
-export type WriteFault = "write" | "rename";
+export type WriteFault = "write" | "partial-write" | "rename";
 
 let injectedWriteFault: WriteFault | undefined;
 
@@ -361,6 +361,12 @@ const writeTextFile = async (
     try {
       if (injectedWriteFault === "write") {
         throw faultError("injected write failure", "ENOSPC");
+      }
+      if (injectedWriteFault === "partial-write") {
+        // Fail after a real prefix reaches the disk, the shape of a full disk
+        // or a power loss mid-write. The cleanup path must remove this temp.
+        await handle.writeFile(data.slice(0, Math.max(1, data.length >> 1)));
+        throw faultError("injected partial write failure", "ENOSPC");
       }
       await handle.writeFile(data);
       options?.signal?.throwIfAborted();

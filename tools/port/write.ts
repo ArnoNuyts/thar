@@ -345,17 +345,13 @@ export interface WriteContractBuild {
 }
 
 /**
- * Build the whole write contract from the corpus.
- *
- * `manifest` lets the oracle reproduce exactly what a candidate was told to
- * serialize (used only by tests that re-check a recorded manifest); in oracle
- * mode it is created from the corpus and the guard probes.
+ * Build the whole write contract as the oracle sees it: every parseable corpus
+ * fixture plus the guard probes, with the records derived from real `Todo`s.
  */
 export const buildWriteContract = (
   options: {
     corpusDir?: string;
     mutation?: WriteMutationName;
-    manifest?: WriteManifest;
   } = {},
 ): WriteContractBuild => {
   const corpusDir = resolve(options.corpusDir ?? DEFAULT_CORPUS_DIR);
@@ -363,63 +359,54 @@ export const buildWriteContract = (
   const skipped: string[] = [];
   const sources: { fixture: string; todos: Todo[] }[] = [];
 
-  if (options.manifest === undefined) {
-    for (const fixture of listFixtures(corpusDir)) {
-      let raw: Buffer;
-      try {
-        raw = readFileSync(join(corpusDir, fixture));
-      } catch (error) {
-        throw new CorpusError(
-          join(corpusDir, fixture),
-          `cannot read fixture ${fixture}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      }
-
-      let todos: Todo[];
-      try {
-        // `Buffer#toString` decodes lossily, exactly like the production reader.
-        todos = parseTodoText(raw.toString("utf8"), limits);
-      } catch (error) {
-        // Rejection fixtures are owned by the CP1 contract and
-        // `corpus_parity.rs`; only the validation family may be skipped, so
-        // coverage cannot shrink silently.
-        if (!(error instanceof TodoFileValidationError)) throw error;
-        skipped.push(fixture);
-        continue;
-      }
-
-      sources.push({ fixture, todos });
+  for (const fixture of listFixtures(corpusDir)) {
+    let raw: Buffer;
+    try {
+      raw = readFileSync(join(corpusDir, fixture));
+    } catch (error) {
+      throw new CorpusError(
+        join(corpusDir, fixture),
+        `cannot read fixture ${fixture}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
 
-    for (const probe of GUARD_PROBES) {
-      sources.push({ fixture: probe.fixture, todos: probe.todos });
+    let todos: Todo[];
+    try {
+      // `Buffer#toString` decodes lossily, exactly like the production reader.
+      todos = parseTodoText(raw.toString("utf8"), limits);
+    } catch (error) {
+      // Rejection fixtures are owned by the CP1 contract and
+      // `corpus_parity.rs`; only the validation family may be skipped, so
+      // coverage cannot shrink silently.
+      if (!(error instanceof TodoFileValidationError)) throw error;
+      skipped.push(fixture);
+      continue;
     }
 
-    // `listFixtures` is bytewise-sorted; keep the probes in the same order.
-    sources.sort((left, right) =>
-      compareFixtureNames(left.fixture, right.fixture),
-    );
+    sources.push({ fixture, todos });
   }
 
+  for (const probe of GUARD_PROBES) {
+    sources.push({ fixture: probe.fixture, todos: probe.todos });
+  }
+
+  // `listFixtures` is bytewise-sorted; keep the probes in the same order.
+  sources.sort((left, right) =>
+    compareFixtureNames(left.fixture, right.fixture),
+  );
+
   const manifest: WriteManifest = {
-    entries:
-      options.manifest?.entries ??
-      sources.map(({ fixture, todos }) => ({
-        fixture,
-        todos: todos.map(coreTodoRecord),
-      })),
+    entries: sources.map(({ fixture, todos }) => ({
+      fixture,
+      todos: todos.map(coreTodoRecord),
+    })),
   };
 
-  // In manifest mode the oracle runs the self-candidate over the supplied
-  // records: that is how `--candidate-self` replays a real candidate's input.
-  const records =
-    options.manifest === undefined
-      ? sources.map(({ fixture, todos }) =>
-          oracleRecord(fixture, todos, options.mutation),
-        )
-      : buildCandidateContract(manifest);
+  const records = sources.map(({ fixture, todos }) =>
+    oracleRecord(fixture, todos, options.mutation),
+  );
 
   return {
     corpusDir,

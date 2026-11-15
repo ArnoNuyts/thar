@@ -497,8 +497,10 @@ recorded. Do not start the next checkpoint while one is red.
 
 #### CP4 — implemented (opt-in, default is still `ts`)
 
-The checkpoint is complete on `feature/rust-port`. `THAR_CORE=ts`/unset behaves
-exactly as before: no package load, no second serialization, no fsync.
+The checkpoint is complete on `feature/rust-port`. `THAR_CORE=ts`/unset still
+loads no package and does no second serialization, but every mode now performs
+one extra best-effort `fsync` per save before the rename (measured ~0.4 ms →
+~4 ms on a warm local file, hidden by the 50 ms save debounce).
 
 - **Export.** `thar-wasm` adds `serializeFile(input)`:
   `{"todos":[TodoRecord…]}` → `{"ok":true,"text":"…"}` or
@@ -518,17 +520,19 @@ exactly as before: no package load, no second serialization, no fsync.
   `UNSAFE_CONTROL_CHARACTER` (deliberately not the read path's
   `CONTROL_CHARACTER`), carrying `index` (1-based line) and `codePoint`. Its
   message is `CoreError::ControlCharacter`'s `Display`, byte-identical to
-  `TodoControlCharacterError`'s. The adapter maps it back to the same TS error
-  class, so a user sees the same message and the same fields; any malformed or
-  unexpected rejection falls back to TypeScript instead.
+  `TodoControlCharacterError`'s. Because the TypeScript guard already accepted
+  these lines, a Rust-only rejection is a package divergence: the adapter reports
+  its code once and keeps the TypeScript text instead of blocking the save. Any
+  malformed or unexpected rejection falls back the same way.
 - **Dual write, one write.** `writeTodosToFile` always computes the oracle text
   with `serializeTodosForWrite`. In `rust` mode it also asks
-  `serializeTodosWithCore` and uses the Rust text **only** when
+  `serializeTodosWithCore` and compares the two with
   `Buffer.from(rust).equals(Buffer.from(ts))` — a byte compare, not a string
-  compare. A mismatch logs one bounded, content-free line (byte lengths and the
-  first differing byte) and keeps the TypeScript text; an adapter failure
-  (`undefined`) keeps the TypeScript text; a guard rejection throws the TS error
-  before the writer runs. The chosen text is validated
+  compare. The TypeScript bytes are what is written in every mode: equality
+  proves the Rust serializer agrees, and the gate is a verification step rather
+  than a second writer. A mismatch logs one bounded, content-free line (byte
+  lengths and the first differing byte); an adapter failure (`undefined`) and
+  every rejection keep the TypeScript text. The chosen text is validated
   (`validateTodoFileContent` + `maxFileBytes`) and written **once**, so
   `done.txt` appends exactly once.
 - **Byte compare before the write, not a temp-file read-back.** The plan said
