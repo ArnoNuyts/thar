@@ -26,6 +26,12 @@
 //!   a literal completion date keeps `completion_date_in_text` so serialization
 //!   never duplicates it.
 //! - Serialization never loses a tag or reorders one.
+//! - Case folding and search-term extraction belong to the host: JavaScript's
+//!   `toLowerCase` applies the Unicode `Final_Sigma` rule with
+//!   `Case_Ignorable` skipping, and `extractSearchTerms` is a JavaScript regex
+//!   pipeline. Rust's Unicode version can trail the host's, so search takes
+//!   already-normalized [`SearchView`]s and terms instead of approximating
+//!   either.
 //!
 //! # Decoding boundary
 //!
@@ -72,12 +78,10 @@ pub use limits::{
 };
 pub use model::{Priority, State, TagValue, Todo, TodoId, ToggleResult, serialize_file};
 pub use nav::{
-    SelectionRange, calculate_scroll_offset, clamp, find_todo_row, get_navigable_row,
+    SelectionRange, calculate_scroll_offset, find_todo_row, get_navigable_row,
     get_selection_range_rows, guesstimate_selection, validate_selection,
 };
-pub use query::{
-    extract_search_terms, filter_by_search, filter_hidden, js_lowercase, sort_by_importance,
-};
+pub use query::{SearchView, filter_by_search, filter_hidden, sort_by_importance};
 pub use recurrence::{
     MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, RecurrenceUnit, is_valid_recurrence,
     plan_recurrence,

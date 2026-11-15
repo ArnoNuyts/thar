@@ -53,17 +53,28 @@ use TagValue::{Many, One};
 /// Encapsulated like the other value newtypes: the adapter converts it to a JS
 /// number at the boundary. The TypeScript app uses `symbol` ids today; the
 /// adapter maps between the two during the incremental phase.
+///
+/// The value is a load-order index, so it is bounded by the reader's todo
+/// limit ([`crate::DEFAULT_MAX_READ_TODOS`], currently 10 000) and always
+/// inside JavaScript's safe-integer range (`2^53 - 1`). A caller that
+/// allocates ids itself must keep that bound: a larger value still converts
+/// losslessly on the Rust side, but the JavaScript `number` round-trip does
+/// not.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TodoId(u64);
 
 impl TodoId {
     /// Wrap a load-order index.
+    ///
+    /// The caller owns the bound: keep it inside the safe-integer range if the
+    /// id crosses into JavaScript as a `number` (see the type docs).
     #[must_use]
     pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    /// The numeric id, safe to hand to JavaScript as a `number`.
+    /// The numeric id, safe to hand to JavaScript as a `number` for
+    /// load-order ids (see the type docs).
     #[must_use]
     pub const fn value(self) -> u64 {
         self.0
@@ -354,7 +365,7 @@ impl Todo {
 
     /// Look up a tag by key; the first occurrence wins.
     ///
-    /// TODO(CP3): this is a linear scan per lookup, so a line with many tags
+    /// TODO(CP3b): this is a linear scan per lookup, so a line with many tags
     /// costs O(tags²) across `is_hidden`/`is_overdue`/`is_passed_threshold`.
     /// Replace the `Vec<(String, TagValue)>` with an insertion-ordered
     /// key→index map once row building does the same lookups per frame.
@@ -597,7 +608,7 @@ impl Todo {
             Err(error) => ToggleResult {
                 updated,
                 recurring: None,
-                recurrence_error: Some(error.message().to_owned()),
+                recurrence_error: Some(error),
             },
             Ok(next_due) => {
                 // The oracle serializes the completed todo, re-parses it, and
@@ -637,8 +648,9 @@ pub struct ToggleResult {
     pub updated: Todo,
     /// The next instance of a recurring todo, when `rec:` planned.
     pub recurring: Option<Todo>,
-    /// The recurrence message when `rec:` exists but is unusable.
-    pub recurrence_error: Option<String>,
+    /// Why an existing `rec:` value could not be planned; the host shows
+    /// [`RecurrenceError::message`] and leaves nothing stored.
+    pub recurrence_error: Option<RecurrenceError>,
 }
 
 impl fmt::Display for Todo {
@@ -810,6 +822,7 @@ pub fn serialize_file(todos: &[Todo]) -> String {
 mod tests {
     use super::{Priority, State, TagValue, Todo, TodoId, serialize_file};
     use crate::date::TodoDate;
+    use crate::recurrence::RecurrenceError;
 
     fn parse(line: &str) -> Todo {
         Todo::parse_line(line, TodoId::new(0))
@@ -1378,7 +1391,7 @@ mod tests {
             assert!(result.updated.is_done(), "line {line:?}");
             assert_eq!(result.recurring, None, "line {line:?}");
             assert_eq!(
-                result.recurrence_error.as_deref(),
+                result.recurrence_error.map(RecurrenceError::message),
                 Some(message),
                 "line {line:?}"
             );

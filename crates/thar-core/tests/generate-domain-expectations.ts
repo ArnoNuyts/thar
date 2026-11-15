@@ -68,7 +68,7 @@ const repoRoot = path.resolve(here, "../../..");
 const corpusDir = path.join(repoRoot, "testdata/port");
 const outputPath = path.join(here, "domain-expectations.json");
 
-/** Fixed query list: the search pins the lowercasing and term stripping. */
+/** Fixed query list: the search pins the host-normalized terms and views. */
 const QUERIES = [
   "",
   "   ",
@@ -100,6 +100,21 @@ const encodeList = <T>(
   values.length > digestAbove
     ? { count: values.length, sha256: hash(values.join("\n")) }
     : values;
+
+/** One todo's host-normalized search input: `[text, contexts, projects]`. */
+type SearchView = [string, string[], string[]];
+
+/**
+ * `filterBySearch` lowercases the text, contexts, and projects itself. The
+ * Rust core takes these values instead of folding again, because JavaScript's
+ * `toLowerCase` applies the Unicode Final_Sigma rule with Case_Ignorable
+ * skipping and `extractSearchTerms` is a JavaScript regex pipeline.
+ */
+const searchViewOf = (todo: Todo): SearchView => [
+  todo.text.toLowerCase(),
+  Array.from(todo.contexts).map((context) => context.toLowerCase()),
+  Array.from(todo.projects).map((project) => project.toLowerCase()),
+];
 
 const indexOfTodos = (todos: Todo[], subset: Todo[]): number[] =>
   subset.map((todo) => todos.indexOf(todo));
@@ -140,6 +155,7 @@ for (const name of fixtureNames) {
     sorted: encodeList(indexOfTodos(todos, sorted), 5000),
     visible: encodeList(indexOfTodos(todos, visible), 5000),
     rows: encodeList(encodeRows(visibleSorted), 5000),
+    searchView: todos.map(searchViewOf),
     search: Object.fromEntries(
       QUERIES.map((query) => [
         query,
@@ -257,6 +273,7 @@ const synthetic = {
     sorted: encodeList(indexOfTodos(syntheticTodos, syntheticSorted), 5000),
     visible: encodeList(indexOfTodos(syntheticTodos, syntheticVisible), 5000),
     rows: encodeList(encodeRows(syntheticVisibleSorted), 5000),
+    searchView: syntheticTodos.map(searchViewOf),
     search: Object.fromEntries(
       QUERIES.map((query) => [
         query,
@@ -332,40 +349,36 @@ for (let index = 0; index < 600; index++) {
 const collationOrder = [...collationStrings].sort(collate);
 
 // ---------------------------------------------------------------------------
-// Case folding: `String.prototype.toLowerCase`, including final sigma.
+// Search cases: the host normalization, including the internal-final-sigma
+// shapes Rust cannot derive without JavaScript's Final_Sigma rule.
 // ---------------------------------------------------------------------------
 
-const CASE_FOLDING_INPUTS = [
-  "HeLLo",
-  "MILK",
-  "İstanbul",
-  "ẞ",
-  "ß",
-  "Ǆ",
-  "ǅ",
-  "ǆ",
-  "ǈ",
-  "Σ",
-  "ΑΣ",
-  "ΑΣΑ",
-  "ΣΑ",
-  "ΟΔΟΣ",
-  "ΟΔΟΣ ΝΕΑ",
-  "ΟΔΟΣ, ΝΕΑ",
-  "ΟΔΟΣ.",
-  "ΑΣ1Α",
-  "ΑΣ_Α",
-  "ǅΣ",
-  "ЖУРНАЛ",
-  "ՀԱՅ",
-  "𐐀𐐁",
-  "",
+const SEARCH_CASES: Array<{ line: string; query: string }> = [
+  // PR #64 blocker 1a/1b: `Σ` is final (or not) only after skipping
+  // Case_Ignorable characters, so the term and the text fold differently.
+  { line: "aσ.", query: "aΣ.Α" },
+  { line: "aβ\u0301σ.", query: "aβ\u0301Σ." },
+  { line: "aσ.\u0301a", query: "aΣ.\u0301a" },
+  { line: "aς.", query: "aΣ." },
+  // Term extraction: lowercasing, ASCII-only `\w` stripping, and prefixes.
+  { line: "MILK", query: "MILK," },
+  { line: "walk dog @home", query: "/@HOME/" },
+  { line: "task @A.b @x", query: "@A.b" },
+  { line: "task @a.b @a😀b", query: "a.b" },
+  { line: "ΟΔΟΣ ΝΕΑ", query: "ΟΔΟΣ" },
+  { line: "buy milk +work", query: "@work" },
 ];
 
-const caseFolding = CASE_FOLDING_INPUTS.map((input) => ({
-  input,
-  lower: input.toLowerCase(),
-}));
+const searchCases = SEARCH_CASES.map(({ line, query }) => {
+  const todo = new Todo(line);
+  return {
+    line,
+    query,
+    view: searchViewOf(todo),
+    terms: extractSearchTerms(query),
+    matched: indexOfTodos([todo], filterBySearch([todo], query)),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Recurrence and setter/toggle pinning.
@@ -633,7 +646,11 @@ const document = {
     collation: "Intl.Collator default (locale-dependent, en-US here)",
     notes: [
       "Generated once with crates/thar-core/tests/generate-domain-expectations.ts; tests never regenerate it.",
+      "Temporary until CP3b replaces this file with the live CP1 contract.",
       "Fixture and synthetic indexes are positions in the input todo list.",
+      "searchView entries are [text, contexts, projects] already lowercased by the host.",
+      "searchTerms entries are the host-normalized extractSearchTerms output for each query.",
+      "searchCases pin the normalized view/terms for the sigma and astral-dot shapes.",
       "rows entries are 'context:<name>:<count>' or 'todo:<number>'.",
       "Lists above the digest threshold are stored as {count, sha256} of the newline-joined values.",
     ],
@@ -645,11 +662,11 @@ const document = {
     singleCharacters: singleCharacterOrder,
     strings: collationOrder,
   },
-  caseFolding,
   searchTerms: SEARCH_TERM_QUERIES.map((query) => ({
     query,
     terms: extractSearchTerms(query),
   })),
+  searchCases,
   recurrence,
   setters,
   toggles,

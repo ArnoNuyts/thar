@@ -17,19 +17,22 @@
 //! - `visible`: input indexes of `filterHidden`;
 //! - `rows`: `createIndexes` over the visible, sorted list, encoded as
 //!   `context:<name>:<count>` / `todo:<number>`;
-//! - `search`: matched input indexes per query in the fixed query list.
+//! - `search`: matched input indexes per query in the fixed query list,
+//!   replayed from the host-normalized `searchView` and `searchTerms` the
+//!   generator emitted. The Rust core never folds case or splits queries, so
+//!   the test feeds it exactly what JavaScript produced.
 //!
 //! Plus one deterministic 1 000-todo list (LCG, mixed-case and punctuation
 //! contexts, priorities, due/threshold/hidden tags, duplicate lines), the ICU
-//! collation probe, the case-folding table, the search-term table, and the
-//! recurrence/setter/toggle pins.
+//! collation probe, the search-case table (sigma and astral-dot shapes), and
+//! the recurrence/setter/toggle pins.
 //!
 //! Lists above the generator's digest threshold are stored as
 //! `{ "count": n, "sha256": "…" }` of the newline-joined values. That keeps
 //! the committed file reviewable while still pinning the exact order and
 //! content (`large-10000.txt`, and search results with more than 500 matches).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::fs;
 use std::path::PathBuf;
@@ -38,9 +41,9 @@ use std::sync::OnceLock;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use thar_core::{
-    CoreError, Priority, ReadLimits, Row, State, Todo, TodoDate, TodoId, ToggleResult, create_rows,
-    extract_search_terms, filter_by_search, filter_hidden, is_valid_recurrence, plan_recurrence,
-    serialize_file, sort_by_importance,
+    CoreError, Priority, ReadLimits, RecurrenceError, Row, SearchView, State, Todo, TodoDate,
+    TodoId, ToggleResult, create_rows, filter_by_search, filter_hidden, is_valid_recurrence,
+    plan_recurrence, serialize_file, sort_by_importance,
 };
 
 fn expectations_dir() -> PathBuf {
@@ -59,13 +62,12 @@ fn clock_day() -> TodoDate {
 #[serde(rename_all = "camelCase")]
 struct Expectations {
     oracle: Oracle,
-    #[allow(dead_code, reason = "the query list is embedded in each fixture")]
     queries: Vec<String>,
     fixtures: BTreeMap<String, FixtureExpectation>,
     synthetic: BTreeMap<String, SyntheticExpectation>,
     collation: CollationExpectation,
-    case_folding: Vec<CaseFoldingCase>,
     search_terms: Vec<SearchTermsCase>,
+    search_cases: Vec<SearchCase>,
     recurrence: Vec<RecurrenceCase>,
     setters: Vec<SetterCase>,
     toggles: Vec<ToggleCase>,
@@ -90,24 +92,31 @@ enum ListExpectation<T> {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct FixtureExpectation {
+struct DomainExpectation {
     todo_count: usize,
     sorted: ListExpectation<usize>,
     visible: ListExpectation<usize>,
     rows: ListExpectation<String>,
+    search_view: Vec<SearchViewExpectation>,
     search: BTreeMap<String, ListExpectation<usize>>,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+struct FixtureExpectation {
+    #[serde(flatten)]
+    domain: DomainExpectation,
+}
+
+#[derive(Debug, Deserialize)]
 struct SyntheticExpectation {
     lines: Vec<String>,
-    todo_count: usize,
-    sorted: ListExpectation<usize>,
-    visible: ListExpectation<usize>,
-    rows: ListExpectation<String>,
-    search: BTreeMap<String, ListExpectation<usize>>,
+    #[serde(flatten)]
+    domain: DomainExpectation,
 }
+
+/// One todo's host-normalized search input: `[text, contexts, projects]`.
+#[derive(Debug, Deserialize)]
+struct SearchViewExpectation(String, Vec<String>, Vec<String>);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -117,15 +126,18 @@ struct CollationExpectation {
 }
 
 #[derive(Debug, Deserialize)]
-struct CaseFoldingCase {
-    input: String,
-    lower: String,
-}
-
-#[derive(Debug, Deserialize)]
 struct SearchTermsCase {
     query: String,
     terms: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SearchCase {
+    line: String,
+    query: String,
+    view: SearchViewExpectation,
+    terms: Vec<String>,
+    matched: Vec<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -229,17 +241,31 @@ fn encode_rows(rows: &[Row<'_>]) -> Vec<String> {
         .collect()
 }
 
+/// The host-normalized terms the generator committed for `query`.
+fn terms_for(query: &str) -> Vec<&str> {
+    load_expectations()
+        .search_terms
+        .iter()
+        .find(|case| case.query == query)
+        .unwrap_or_else(|| panic!("no committed search terms for {query:?}"))
+        .terms
+        .iter()
+        .map(String::as_str)
+        .collect()
+}
+
 /// Everything the committed expectations pin for one list.
-fn assert_domain(
-    label: &str,
-    todos: &[Todo],
-    expected_todo_count: usize,
-    sorted_expectation: &ListExpectation<usize>,
-    visible_expectation: &ListExpectation<usize>,
-    rows_expectation: &ListExpectation<String>,
-    search_expectations: &BTreeMap<String, ListExpectation<usize>>,
-) {
-    assert_eq!(todos.len(), expected_todo_count, "{label}: todoCount");
+fn assert_domain(label: &str, todos: &[Todo], expected: &DomainExpectation) {
+    let DomainExpectation {
+        todo_count,
+        sorted: sorted_expectation,
+        visible: visible_expectation,
+        rows: rows_expectation,
+        search_view: search_views,
+        search: search_expectations,
+    } = expected;
+
+    assert_eq!(todos.len(), *todo_count, "{label}: todoCount");
 
     let sorted = sort_by_importance(todos, clock_day());
     sorted_expectation.verify(&format!("{label}: sorted"), &sorted);
@@ -261,8 +287,47 @@ fn assert_domain(
     let rows = create_rows(visible_sorted.iter());
     rows_expectation.verify(&format!("{label}: rows"), &encode_rows(&rows));
 
+    // Search takes the generator's normalized views; folding here would be a
+    // different implementation from JavaScript's.
+    assert_eq!(
+        search_views.len(),
+        todos.len(),
+        "{label}: one searchView per todo"
+    );
+    let context_lists: Vec<Vec<&str>> = search_views
+        .iter()
+        .map(|view| view.1.iter().map(String::as_str).collect())
+        .collect();
+    let project_lists: Vec<Vec<&str>> = search_views
+        .iter()
+        .map(|view| view.2.iter().map(String::as_str).collect())
+        .collect();
+    let all_views: Vec<SearchView<'_>> = search_views
+        .iter()
+        .enumerate()
+        .map(|(index, view)| SearchView {
+            text: &view.0,
+            contexts: &context_lists[index],
+            projects: &project_lists[index],
+        })
+        .collect();
+    let views: Vec<SearchView<'_>> = visible_order
+        .iter()
+        .map(|index| all_views[*index])
+        .collect();
+
+    // A dropped query key must not silently stop being tested.
+    let committed: BTreeSet<&str> = search_expectations.keys().map(String::as_str).collect();
+    let expected: BTreeSet<&str> = load_expectations()
+        .queries
+        .iter()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(committed, expected, "{label}: search query keys");
+
     for (query, matches) in search_expectations {
-        let matched: Vec<usize> = filter_by_search(&visible_sorted, query)
+        let terms = terms_for(query);
+        let matched: Vec<usize> = filter_by_search(&views, &terms)
             .into_iter()
             .map(|position| visible_order[position])
             .collect();
@@ -343,15 +408,7 @@ fn fixtures_match_the_oracle() {
 
     for (name, expected) in &expectations.fixtures {
         let todos = parse_fixture(name);
-        assert_domain(
-            name,
-            &todos,
-            expected.todo_count,
-            &expected.sorted,
-            &expected.visible,
-            &expected.rows,
-            &expected.search,
-        );
+        assert_domain(name, &todos, &expected.domain);
     }
 }
 
@@ -364,16 +421,7 @@ fn synthetic_list_matches_the_oracle() {
         let todos = thar_core::parse_file(&joined, &ReadLimits::DEFAULT)
             .expect("the synthetic list is a valid file");
         assert_eq!(todos.len(), synthetic.lines.len(), "{name}: line count");
-
-        assert_domain(
-            name,
-            &todos,
-            synthetic.todo_count,
-            &synthetic.sorted,
-            &synthetic.visible,
-            &synthetic.rows,
-            &synthetic.search,
-        );
+        assert_domain(name, &todos, &synthetic.domain);
     }
 }
 
@@ -438,29 +486,48 @@ fn collation_matches_the_oracle() {
 }
 
 #[test]
-fn case_folding_matches_the_oracle() {
+fn search_cases_match_the_oracle() {
     let expectations = load_expectations();
 
-    for case in &expectations.case_folding {
+    for case in &expectations.search_cases {
+        // The raw line still parses and round-trips; only search normalization
+        // comes from the host.
         assert_eq!(
-            thar_core::js_lowercase(&case.input),
-            case.lower,
-            "lowercase {:?}",
-            case.input
+            Todo::parse_line(&case.line, TodoId::new(0)).serialize(),
+            case.line,
+            "case line {:?}",
+            case.line
+        );
+
+        let contexts: Vec<&str> = case.view.1.iter().map(String::as_str).collect();
+        let projects: Vec<&str> = case.view.2.iter().map(String::as_str).collect();
+        let views = [SearchView {
+            text: &case.view.0,
+            contexts: &contexts,
+            projects: &projects,
+        }];
+        let terms: Vec<&str> = case.terms.iter().map(String::as_str).collect();
+
+        assert_eq!(
+            filter_by_search(&views, &terms),
+            case.matched,
+            "line {:?} query {:?}",
+            case.line,
+            case.query
         );
     }
 }
 
 #[test]
-fn search_terms_match_the_oracle() {
+fn every_query_has_committed_terms() {
     let expectations = load_expectations();
 
-    for case in &expectations.search_terms {
-        assert_eq!(
-            extract_search_terms(&case.query),
-            case.terms,
-            "terms for {:?}",
-            case.query
+    for query in &expectations.queries {
+        // `terms_for` panics when the generator dropped a query.
+        let terms = terms_for(query);
+        assert!(
+            !terms.iter().any(|term| term.is_empty()),
+            "query {query:?}: empty terms are dropped by the host"
         );
     }
 }
@@ -595,8 +662,8 @@ fn toggles_match_the_oracle() {
             case.line
         );
         assert_eq!(
-            result.recurrence_error.clone(),
-            case.error,
+            result.recurrence_error.map(RecurrenceError::message),
+            case.error.as_deref(),
             "recurrence error for {:?}",
             case.line
         );

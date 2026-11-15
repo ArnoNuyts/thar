@@ -1,15 +1,32 @@
 //! Sort, visibility, and search over a todo list.
 //!
-//! Ports `logic/Todos.ts` and `utils/search-utils.ts`. Everything returns
-//! indexes into the input slice so the caller keeps ownership and the sort can
-//! be applied to any list without cloning:
+//! Ports `logic/Todos.ts`. Everything returns indexes into the input slice so
+//! the caller keeps ownership and the sort can be applied to any list without
+//! cloning:
 //!
 //! - [`sort_by_importance`] is the stable four-key order: open before done,
 //!   first context (`None` first, then collated), overdue first, priority
 //!   (missing last, then `A`..`Z`), input order for ties;
 //! - [`filter_hidden`] keeps the todos visible in the overview at `today`;
-//! - [`filter_by_search`] applies the every-term AND filter;
-//! - [`extract_search_terms`] is the query normalizer both use.
+//! - [`filter_by_search`] applies the every-term AND filter to already
+//!   normalized [`SearchView`]s.
+//!
+//! # Search normalization is host-provided
+//!
+//! `String.prototype.toLowerCase` applies the Unicode `Final_Sigma` rule,
+//! skipping `Case_Ignorable` characters on both sides, and
+//! `extractSearchTerms` is a JavaScript regex pipeline. Rust's case mapping is
+//! not the contract: its Unicode version can trail the host's, and the
+//! per-character mapping has no `Final_Sigma` context. So this crate does not
+//! fold or split anything; the host passes the normalized values in.
+//!
+//! - The CP3b adapter lowercases each todo's `text`, `contexts`, and `projects`
+//!   once per load or mutation and passes one [`SearchView`] per visible todo.
+//! - Only the query changes per keystroke, so the host normalizes it with
+//!   `extractSearchTerms` and passes the resulting terms.
+//!
+//! Empty `terms` match every view: the oracle's `!query.trim()` early return
+//! and its punctuation-only (no usable term) case both land there.
 //!
 //! # Collation
 //!
@@ -21,33 +38,20 @@
 //! `"a" < "A" < "b" < "B"`. [`compare_contexts`] implements that order without
 //! a table lookup and without byte order.
 //!
-//! The order was measured against the TypeScript oracle (Node's ICU, `en-US`
-//! default, `sensitivity: variant`) and is pinned by the committed expectations
-//! in `crates/thar-core/tests/domain-expectations.json`; the probe covered
-//! every pair of two-character strings over the allowed alphabet. Priorities
-//! only ever contain `A`..`Z`, where the collation order is the byte order.
-//! Any character outside the allowed set (which the scanners cannot produce)
-//! sorts after the known weights by scalar value, so the comparator stays a
-//! total order.
-//!
-//! # Case folding
-//!
-//! `String.prototype.toLowerCase` and Rust's `char::to_lowercase` agree except
-//! for the Greek final sigma: JavaScript applies the Unicode default
-//! Final_Sigma rule (`"ΟΔΟΣ"` becomes `"οδος"`), while Rust always produces
-//! `"οσ"`. [`js_lowercase`] adds the final-sigma case for a directly adjacent
-//! cased letter, which covers every non-combining use. The remaining divergence
-//! (a sigma followed by a case-ignorable character and then a cased letter)
-//! cannot reach [`filter_by_search`]: the query normalizer strips every
-//! non-ASCII character from both ends of a term, so a term can never end in
-//! `σ`/`ς` and its internal sigmas only ever match a non-final text sigma,
-//! where both implementations agree.
+//! The order was measured against the TypeScript oracle running on Node's ICU
+//! with its `en-US` default (`sensitivity: variant`) and is pinned by the
+//! committed expectations in `crates/thar-core/tests/domain-expectations.json`;
+//! the probe covered every pair of two-character strings over the allowed
+//! alphabet. Priorities only ever contain `A`..`Z`, where the collation order is
+//! the byte order. Any character outside the allowed set (which the scanners
+//! cannot produce) sorts after the known weights by scalar value, so the
+//! comparator stays a total order. The locale assumption is recorded as an open
+//! decision in `docs/rust-port/PLAN.md` §13.
 
 use core::cmp::Ordering;
 
 use crate::date::TodoDate;
-use crate::js::{is_js_whitespace, js_trim};
-use crate::model::Todo;
+use crate::model::{Priority, Todo};
 
 /// Order todo indexes by importance at `today`.
 ///
@@ -76,7 +80,7 @@ pub fn sort_by_importance(todos: &[Todo], today: TodoDate) -> Vec<usize> {
             done: todo.is_done(),
             context: todo.contexts.first().map(String::as_str),
             overdue: todo.is_overdue(today),
-            priority: todo.priority.map(|priority| priority.as_char()),
+            priority: todo.priority,
         })
         .collect();
 
@@ -91,7 +95,7 @@ struct SortKey<'a> {
     done: bool,
     context: Option<&'a str>,
     overdue: bool,
-    priority: Option<char>,
+    priority: Option<Priority>,
 }
 
 /// Compare two precomputed importance keys.
@@ -120,7 +124,6 @@ fn compare_keys(left: &SortKey<'_>, right: &SortKey<'_>) -> Ordering {
 /// `[A-Za-z0-9_.-]` alphabet: it has no contractions, expansions, or secondary
 /// weights, so the comparison is decided by the primary sequence and then by
 /// case.
-#[must_use]
 fn compare_contexts(left: &str, right: &str) -> Ordering {
     let primary = left
         .chars()
@@ -169,59 +172,68 @@ pub fn filter_hidden(todos: &[Todo], today: TodoDate) -> Vec<usize> {
         .collect()
 }
 
-/// Keep the indexes of todos matching every term in `query`.
+/// One todo's already-normalized search fields.
 ///
-/// The query is lowercased, split on JavaScript whitespace, and stripped of
-/// wrapper punctuation by [`extract_search_terms`]. Terms match the todo text
-/// or the todo's contexts and projects; a leading `@`/`+` is stripped before
-/// the context/project comparison, so `@work` also finds `+work`. An empty,
-/// whitespace-only, or punctuation-only query matches every todo.
+/// The host owns case folding. JavaScript's `String.prototype.toLowerCase`
+/// applies the Unicode `Final_Sigma` rule (with `Case_Ignorable` skipping);
+/// Rust's per-character mapping has no such context and its Unicode version can
+/// trail the host's, so this type carries values the host lowercased instead of
+/// folding them again here.
+///
+/// The CP3b adapter builds one view per todo when the list loads or a todo is
+/// mutated, and reuses it for every keystroke.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SearchView<'a> {
+    /// Lowercased todo text, including its `@context` and `+project` tokens.
+    pub text: &'a str,
+    /// Lowercased contexts, in their stored order.
+    pub contexts: &'a [&'a str],
+    /// Lowercased projects, in their stored order.
+    pub projects: &'a [&'a str],
+}
+
+/// Keep the indexes of views matching every term in `terms`.
+///
+/// `views` and `terms` are already normalized by the host (see
+/// [`SearchView`]): terms are lowercased and stripped of wrapper punctuation,
+/// and a term matches the view text, or any context/project after its leading
+/// `@`/`+` is removed. Empty `terms` match every view, matching the oracle's
+/// empty, whitespace-only, and punctuation-only queries.
 ///
 /// # Example
 ///
 /// ```
-/// use thar_core::{Todo, TodoId, filter_by_search};
+/// use thar_core::{SearchView, filter_by_search};
 ///
-/// let todos = vec![
-///     Todo::parse_line("buy milk +work", TodoId::new(0)),
-///     Todo::parse_line("walk dog", TodoId::new(1)),
+/// let views = [
+///     SearchView { text: "buy milk +work", contexts: &[], projects: &["work"] },
+///     SearchView { text: "walk dog", contexts: &[], projects: &[] },
 /// ];
-/// assert_eq!(filter_by_search(&todos, "@work"), vec![0]);
-/// assert_eq!(filter_by_search(&todos, "!!!"), vec![0, 1]);
+/// // The host lowercases the query and extracts the terms; `@work` also
+/// // matches the project `work`.
+/// assert_eq!(filter_by_search(&views, &["@work"]), vec![0]);
+/// // No usable term (an empty or punctuation-only query) matches everything.
+/// assert_eq!(filter_by_search(&views, &[]), vec![0, 1]);
 /// ```
 #[must_use]
-pub fn filter_by_search(todos: &[Todo], query: &str) -> Vec<usize> {
-    let all = || -> Vec<usize> { (0..todos.len()).collect() };
-
-    if js_trim(query).is_empty() {
-        return all();
-    }
-
-    let terms = extract_search_terms(query);
+pub fn filter_by_search(views: &[SearchView<'_>], terms: &[&str]) -> Vec<usize> {
     if terms.is_empty() {
-        // No usable term: the oracle's `every` check is vacuously true.
-        return all();
+        return (0..views.len()).collect();
     }
 
     let mut matches = Vec::new();
-    for (index, todo) in todos.iter().enumerate() {
-        let text = js_lowercase(&todo.text);
-        let contexts: Vec<String> = todo
-            .contexts
-            .iter()
-            .map(|context| js_lowercase(context))
-            .collect();
-        let projects: Vec<String> = todo
-            .projects
-            .iter()
-            .map(|project| js_lowercase(project))
-            .collect();
-
+    for (index, view) in views.iter().enumerate() {
         let matched = terms.iter().all(|term| {
             let normalized = term.strip_prefix(['@', '+']).unwrap_or(term);
-            text.contains(term.as_str())
-                || contexts.iter().any(|context| context.contains(normalized))
-                || projects.iter().any(|project| project.contains(normalized))
+            view.text.contains(term)
+                || view
+                    .contexts
+                    .iter()
+                    .any(|context| context.contains(normalized))
+                || view
+                    .projects
+                    .iter()
+                    .any(|project| project.contains(normalized))
         });
 
         if matched {
@@ -232,122 +244,24 @@ pub fn filter_by_search(todos: &[Todo], query: &str) -> Vec<usize> {
     matches
 }
 
-/// Normalize a search query into the terms the filter matches.
-///
-/// Mirrors `extractSearchTerms` in `utils/search-utils.ts`: lowercase, trim,
-/// split on JavaScript whitespace, drop empty parts, strip leading characters
-/// that are not word characters/`@`/`+`, strip trailing characters that are
-/// not word characters/`.`/`-`/`_`, and drop whatever became empty.
-///
-/// # Example
-///
-/// ```
-/// use thar_core::extract_search_terms;
-///
-/// assert_eq!(extract_search_terms("/@work +bug/"), vec!["@work", "+bug"]);
-/// assert_eq!(extract_search_terms("!!!"), Vec::<String>::new());
-/// ```
-#[must_use]
-pub fn extract_search_terms(query: &str) -> Vec<String> {
-    let lowered = js_lowercase(query);
-
-    js_trim(&lowered)
-        .split(is_js_whitespace)
-        .filter(|part| !part.is_empty())
-        .filter_map(|part| {
-            let term = strip_term_wrappers(part);
-            (!term.is_empty()).then(|| term.to_owned())
-        })
-        .collect()
-}
-
-/// Apply the oracle's `^[^\w@+]+|[^\w.\-_]+$` strip to one term.
-///
-/// The leading run is removed first and the trailing run second. The global
-/// replacement in the oracle scans left to right, so both anchored
-/// alternatives can fire in one pass; stripping the prefix cannot change the
-/// suffix, which makes the two-step version equivalent.
-fn strip_term_wrappers(term: &str) -> &str {
-    let start = term
-        .char_indices()
-        .find(|(_, character)| is_term_start(*character))
-        .map_or(term.len(), |(index, _)| index);
-    let term = &term[start..];
-
-    let end = term
-        .char_indices()
-        .rev()
-        .find(|(_, character)| is_term_tail(*character))
-        .map_or(0, |(index, character)| index + character.len_utf8());
-
-    &term[..end]
-}
-
-/// `[\w@+]` with ASCII `\w`.
-fn is_term_start(character: char) -> bool {
-    character.is_ascii_alphanumeric() || matches!(character, '_' | '@' | '+')
-}
-
-/// `[\w.\-_]` with ASCII `\w`.
-fn is_term_tail(character: char) -> bool {
-    character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '-')
-}
-
-/// `String.prototype.toLowerCase`, including the Greek final sigma.
-///
-/// Only the Final_Sigma context is special-cased; every other character uses
-/// Rust's full Unicode lowercase mapping, which matches the oracle's default
-/// case conversion. JavaScript skips case-ignorable characters (combining
-/// marks, `.`, `:`, …) when it decides sigma; this implementation looks at the
-/// immediately adjacent characters only, which is documented in the module
-/// docs and cannot change a search result.
-#[must_use]
-pub fn js_lowercase(text: &str) -> String {
-    let mut output = String::with_capacity(text.len());
-    let mut previous: Option<char> = None;
-    let mut chars = text.chars().peekable();
-
-    while let Some(character) = chars.next() {
-        if character == '\u{03A3}' {
-            let before = previous.is_some_and(is_cased);
-            let after = chars.peek().copied().is_some_and(is_cased);
-            output.push(if before && !after {
-                '\u{03C2}'
-            } else {
-                '\u{03C3}'
-            });
-        } else {
-            output.extend(character.to_lowercase());
-        }
-        previous = Some(character);
-    }
-
-    output
-}
-
-/// True for the Unicode `Cased` property, approximated without tables.
-fn is_cased(character: char) -> bool {
-    character.is_uppercase() || character.is_lowercase() || is_titlecase(character)
-}
-
-/// True for the `Lt` (titlecase) category, whose characters have both a
-/// distinct lowercase and a distinct uppercase mapping.
-fn is_titlecase(character: char) -> bool {
-    character.is_alphabetic()
-        && character.to_lowercase().next() != Some(character)
-        && character.to_uppercase().next() != Some(character)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        extract_search_terms, filter_by_search, filter_hidden, js_lowercase, sort_by_importance,
-    };
+    use super::{SearchView, filter_by_search, filter_hidden, sort_by_importance};
     use crate::date::TodoDate;
     use crate::model::{Priority, State, Todo, TodoId};
 
     fn today() -> TodoDate {
         TodoDate::parse("2026-11-15").expect("valid today")
+    }
+
+    /// The host lowercases; ASCII inputs make `str::to_lowercase` equivalent,
+    /// and the sigma cases below pass the host values explicitly.
+    fn view<'a>(text: &'a str, contexts: &'a [&'a str], projects: &'a [&'a str]) -> SearchView<'a> {
+        SearchView {
+            text,
+            contexts,
+            projects,
+        }
     }
 
     fn todos(lines: &[&str]) -> Vec<Todo> {
@@ -449,93 +363,96 @@ mod tests {
     }
 
     #[test]
-    fn search_matches_text_case_insensitively() {
-        let list = todos(&["Buy Milk", "walk dog", "milk chocolate"]);
-        assert_eq!(filter_by_search(&list, "MILK"), vec![0, 2]);
-        assert_eq!(filter_by_search(&list, "milk"), vec![0, 2]);
+    fn search_matches_the_host_normalized_text() {
+        // The host lowercases `Buy Milk` to `buy milk` before filtering.
+        let views = [
+            view("buy milk", &[], &[]),
+            view("walk dog", &[], &[]),
+            view("milk chocolate", &[], &[]),
+        ];
+        assert_eq!(filter_by_search(&views, &["milk"]), vec![0, 2]);
     }
 
     #[test]
     fn search_matches_contexts_and_projects_across_prefixes() {
-        let list = todos(&["fix bug +work", "buy milk @home", "walk dog"]);
-        assert_eq!(filter_by_search(&list, "@work"), vec![0]);
-        assert_eq!(filter_by_search(&list, "+home"), vec![1]);
-        assert_eq!(filter_by_search(&list, "+work"), vec![0]);
-        assert_eq!(filter_by_search(&list, "@home"), vec![1]);
+        let views = [
+            view("fix bug +work", &["work"], &["work"]),
+            view("buy milk @home", &["home"], &["home"]),
+            view("walk dog", &[], &[]),
+        ];
+        assert_eq!(filter_by_search(&views, &["@work"]), vec![0]);
+        assert_eq!(filter_by_search(&views, &["+home"]), vec![1]);
+        assert_eq!(filter_by_search(&views, &["+work"]), vec![0]);
+        assert_eq!(filter_by_search(&views, &["@home"]), vec![1]);
     }
 
     #[test]
     fn search_requires_every_term() {
-        let list = todos(&["buy milk", "buy bread", "milk tea", "buy milk @home"]);
-        assert_eq!(filter_by_search(&list, "buy milk"), vec![0, 3]);
-        assert_eq!(filter_by_search(&list, "buy milk @home"), vec![3]);
-        assert_eq!(filter_by_search(&list, "zzz"), Vec::<usize>::new());
+        let views = [
+            view("buy milk", &[], &[]),
+            view("buy bread", &[], &[]),
+            view("milk tea", &[], &[]),
+            view("buy milk @home", &["home"], &[]),
+        ];
+        assert_eq!(filter_by_search(&views, &["buy", "milk"]), vec![0, 3]);
+        assert_eq!(filter_by_search(&views, &["buy", "milk", "@home"]), vec![3]);
+        assert_eq!(filter_by_search(&views, &["zzz"]), Vec::<usize>::new());
     }
 
     #[test]
-    fn search_tolerates_punctuation_and_ignores_empty_queries() {
-        let list = todos(&["buy milk", "walk dog @home"]);
-        assert_eq!(filter_by_search(&list, ""), vec![0, 1]);
-        assert_eq!(filter_by_search(&list, "   "), vec![0, 1]);
-        assert_eq!(filter_by_search(&list, "!!!"), vec![0, 1]);
-        assert_eq!(filter_by_search(&list, "milk,"), vec![0]);
-        assert_eq!(filter_by_search(&list, "/@home"), vec![1]);
+    fn search_ignores_empty_terms_and_internal_punctuation() {
+        let views = [
+            view("buy milk", &[], &[]),
+            view("walk dog @home", &["home"], &[]),
+        ];
+        // The host turns an empty, whitespace-only, or punctuation-only query
+        // into no terms; both paths match everything.
+        assert_eq!(filter_by_search(&views, &[]), vec![0, 1]);
+        // A term keeps internal dots, so `a.b` matches `a.b` in the text.
+        assert_eq!(filter_by_search(&views, &["milk"]), vec![0]);
+        assert_eq!(filter_by_search(&views, &["@home"]), vec![1]);
     }
 
     #[test]
     fn search_does_not_see_tags_that_were_stripped_from_the_text() {
-        let list = todos(&["task due:2024-01-01", "due task"]);
-        assert_eq!(filter_by_search(&list, "due"), vec![1]);
+        // The host lowercases `task`/`due task`, and the parsed tags are not
+        // part of the view.
+        let views = [view("task", &[], &[]), view("due task", &[], &[])];
+        assert_eq!(filter_by_search(&views, &["due"]), vec![1]);
     }
 
     #[test]
-    fn search_term_normalization_matches_the_oracle() {
-        assert_eq!(extract_search_terms("buy milk"), vec!["buy", "milk"]);
-        assert_eq!(extract_search_terms("@work +bug"), vec!["@work", "+bug"]);
-        assert_eq!(extract_search_terms("/@work +bug/"), vec!["@work", "+bug"]);
-        assert_eq!(extract_search_terms("/@home/"), vec!["@home"]);
-        assert_eq!(extract_search_terms("..abc.."), vec!["abc.."]);
-        assert_eq!(extract_search_terms("-x-"), vec!["x-"]);
-        assert_eq!(extract_search_terms("!!!"), Vec::<String>::new());
-        assert_eq!(extract_search_terms("@@@"), Vec::<String>::new());
-        // `\w` is ASCII-only, so a non-ASCII term is stripped to nothing and
-        // the query then matches every todo.
-        assert_eq!(extract_search_terms("ΟΔΟΣ"), Vec::<String>::new());
-        let list = todos(&["ΟΔΟΣ ΝΕΑ", "unrelated"]);
-        assert_eq!(filter_by_search(&list, "ΟΔΟΣ"), vec![0, 1]);
+    fn search_replays_host_normalized_final_sigma() {
+        // JavaScript lowercases `aΣ.Α` to `aσ.α` (the sigma is followed by a
+        // case-ignorable `.` and then a cased letter, so it is not final) and
+        // the term strips to `aσ.`, which matches the text. Rust's unconditional
+        // mapping gives the same string here, but the old adjacent-neighbour
+        // final-sigma rule gave `aς.` and dropped the match.
+        assert_eq!(
+            filter_by_search(&[view("aσ.", &[], &[])], &["aσ."]),
+            vec![0]
+        );
+
+        // `aβ\u{0301}Σ.` lowercases to `aβ\u{0301}ς.`: the sigma is final
+        // because the only following character is `.`. The text keeps its
+        // non-final sigma, so the oracle does not match. Rust cannot derive the
+        // final sigma from the adjacent character (the combining mark), which
+        // is why the host passes the terms in.
+        assert_eq!(
+            filter_by_search(&[view("aβ\u{0301}σ.", &[], &[])], &["aβ\u{0301}ς."]),
+            Vec::<usize>::new()
+        );
     }
 
     #[test]
-    fn lowercase_matches_javascript_including_the_final_sigma() {
-        for (input, expected) in [
-            ("HeLLo", "hello"),
-            ("İ", "i\u{0307}"),
-            ("ẞ", "ß"),
-            ("Ǆ", "ǆ"),
-            ("ǅ", "ǆ"),
-            ("Σ", "σ"),
-            ("ΑΣ", "ας"),
-            ("ΑΣΑ", "ασα"),
-            ("ΣΑ", "σα"),
-            ("ΟΔΟΣ ΝΕΑ", "οδος νεα"),
-            ("ΟΔΟΣ, ΝΕΑ", "οδος, νεα"),
-            ("ΑΣ1Α", "ας1α"),
-            ("ǅΣ", "ǆς"),
-        ] {
-            assert_eq!(js_lowercase(input), expected, "input {input:?}");
-        }
-    }
-
-    #[test]
-    fn final_sigma_can_only_match_where_the_oracle_agrees() {
-        // A final sigma in the text can only be reached by a term that keeps a
-        // sigma inside it, and such a term always has a word character after
-        // it, so both implementations compare a non-final sigma.
-        let list = todos(&["ΑΣ", "ΑΣΑ", "aσb", "aΣb"]);
-        assert_eq!(filter_by_search(&list, "aσb"), vec![2, 3]);
-        // A term ending in sigma is stripped, so the Greek text is only
-        // reachable through an empty term (matches everything).
-        assert_eq!(filter_by_search(&list, "ας"), vec![0, 1, 2, 3]);
+    fn character_level_case_mapping_is_not_javascript_case_mapping() {
+        // Guards why the host owns folding: `char::to_lowercase` has no
+        // context, so the old helper's per-character mapping plus an
+        // adjacent-neighbour rule missed the `Case_Ignorable` skip. Rust's
+        // `str::to_lowercase` models the full rule today, but its Unicode
+        // version can still trail the host's; the host value is the contract.
+        assert_eq!('Σ'.to_lowercase().to_string(), "σ");
+        assert_eq!("ΑΣ".to_lowercase(), "ας");
     }
 
     #[test]
