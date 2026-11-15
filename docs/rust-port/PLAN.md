@@ -7,8 +7,11 @@
 - **Date:** 2026-11-15
 - **Related:** [`scripts/benchmark-list.tsx`](../../scripts/benchmark-list.tsx),
   [`docs/update-mechanism.md`](../update-mechanism.md), [`AGENTS.md`](../../AGENTS.md)
-- **Target PR base:** `release/next` for completed checkpoints. The long-lived
-  branch is downstream of the release lines and is never a release branch.
+- **Target PR base:** `feature/rust-port` for every checkpoint and port PR.
+  The branch is protected from direct pushes, so all work lands by PR. Release
+  line work still goes through `release/next`; the port branch is downstream
+  and merges into a release line only when a checkpoint is explicitly
+  shippable.
 
 ## 1. Summary
 
@@ -210,8 +213,8 @@ components do not change in Phases 1–3.
 
 ## 5. Safe porting checkpoints
 
-`feature/rust-port` is a long-lived branch. Advance it in small checkpoint
-commits, each independently reversible. The rule is:
+`feature/rust-port` is a long-lived branch. Advance it with small checkpoint
+PRs, each independently reversible. The rule is:
 
 > **No checkpoint may change behaviour and implementation at the same time.**
 > A pure port is allowed; a new feature is not.
@@ -348,12 +351,15 @@ recorded. Do not start the next checkpoint while one is red.
 must never wait for the port.
 
 - **Direction:** merge `release/next` (and any hotfix commit that exists only
-  on `main`) **into** `feature/rust-port`. Never merge the port branch into a
-  release line until a checkpoint is explicitly shippable.
+  on `main`) **into** `feature/rust-port`. Because the port branch is protected
+  from direct pushes, do that sync through a PR from a small sync branch (or
+  from `release/next` when it is a pure fast-forwardable merge). Never merge
+  the port branch into a release line until a checkpoint is explicitly
+  shippable.
 - **Security first:** fix and release on `release/next`/`main` as usual. Once
-  the security release is tagged, immediately merge it into the port branch —
-  do not wait for the next checkpoint or a weekly sync — and re-run the port
-  gates.
+  the security release is tagged, open the sync PR into the port branch
+  immediately — do not wait for the next checkpoint or a weekly sync — and
+  re-run the port gates.
 - **Routine sync:** forward-merge `release/next` before starting each
   checkpoint and at least every two weeks. Weekly is a convenience, not a
   release gate. If `main` and `release/next` diverge, merge the line that
@@ -365,13 +371,16 @@ must never wait for the port.
   replaced the file, port the fix into Rust and record it in
   [`SECURITY-SYNC.md`](SECURITY-SYNC.md). Pure UI fixes stay TS-only until
   CP6, then must be ported before CP8.
-- **Prefer small landings:** CP0 and CP1 touch no behaviour and can land on
-  `release/next` immediately. Land CP2 (shadow, off by default) and CP3/CP4
-  (opt-in flags) once their gates pass, instead of holding all nine checkpoints
-  on one branch. If you prefer a single branch, the forward-merge rule above
-  applies unchanged.
-- One checkpoint per commit (or a tiny PR into this branch), with the gate
-  result in the commit message. Tag `rust-port/cpN` after each gate.
+- **Prefer small landings:** CP0 and CP1 touch no behaviour and land on
+  `feature/rust-port` as small PRs. Land CP2 (shadow, off by default) and
+  CP3/CP4 (opt-in flags) once their gates pass, instead of holding all nine
+  checkpoints in one PR. The forward-merge rule above applies unchanged.
+- **Protected branch:** `feature/rust-port` requires a PR, dismisses stale
+  approvals, requires conversation resolution, blocks force pushes and
+  deletions, and applies to admins too. Do not try to push to it directly;
+  open a PR.
+- One checkpoint per PR (one commit on the branch), with the gate result in
+  the commit message. Tag `rust-port/cpN` after each gate.
 - Keep `npm test` green at every commit. If a checkpoint cannot finish in a
   week, split it; do not let a red intermediate state live on the branch.
 - Stop conditions: any serialization byte mismatch, any data-loss report, or
@@ -640,20 +649,20 @@ generous for the scaffold and should be tightened after Phase 2 (target
 
 ## 10. Risks and mitigations
 
-| Risk                                                  | Impact   | Mitigation                                                                                                                                                                            |
-| ----------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Silent data loss or altered lines                     | Critical | Differential harness, atomic writes, read-only mode, real-file dogfood, rollback tag                                                                                                  |
-| Domain drift (dates, duplicate tags, `"None"` header) | High     | Fixtures for every known edge case; TS as oracle; property/fuzz tests                                                                                                                 |
-| ratatui 0.30 is 0.x                                   | Medium   | Pin versions; upgrade deliberately; keep view code behind a thin layer                                                                                                                |
-| Native distribution complexity                        | Medium   | Start with GitHub releases + npm optional deps; codesign macOS; keep Node fallback                                                                                                    |
-| Terminal/mouse differences                            | Medium   | PTY tests in Linux/macOS; Windows smoke; test tmux/SSH; document toggling mouse capture                                                                                               |
-| Scope creep in the TUI                                | High     | Phase gates and parity checklist; no new features until cutover                                                                                                                       |
-| Contributor velocity (Rust + borrow checker)          | Medium   | Keep modules small; pair; document architecture; use `cargo` workspace conventions                                                                                                    |
-| WASM boundary overhead                                | Low      | Coarse batch API; benchmark core calls at 50/3 k/10 k; never per-row FFI                                                                                                              |
-| CI flakiness / slow Rust builds                       | Low      | `rust-cache`, single fmt/clippy/test job, path filters, `lto` only in release                                                                                                         |
-| Toolchain churn (1.99.1 pin)                          | Low      | Bump `rust-toolchain.toml` and the CI action together in one PR                                                                                                                       |
-| Long-lived branch drift                               | Medium   | Forward-merge `release/next` after every security release and before each checkpoint; land completed checkpoints on `release/next`; tag each green CP; never rebase the shared branch |
-| Partial port lives forever                            | High     | Every checkpoint has a gate and a removal plan; CP5/CP8 explicitly delete dual paths                                                                                                  |
+| Risk                                                  | Impact   | Mitigation                                                                                                                                                                                 |
+| ----------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Silent data loss or altered lines                     | Critical | Differential harness, atomic writes, read-only mode, real-file dogfood, rollback tag                                                                                                       |
+| Domain drift (dates, duplicate tags, `"None"` header) | High     | Fixtures for every known edge case; TS as oracle; property/fuzz tests                                                                                                                      |
+| ratatui 0.30 is 0.x                                   | Medium   | Pin versions; upgrade deliberately; keep view code behind a thin layer                                                                                                                     |
+| Native distribution complexity                        | Medium   | Start with GitHub releases + npm optional deps; codesign macOS; keep Node fallback                                                                                                         |
+| Terminal/mouse differences                            | Medium   | PTY tests in Linux/macOS; Windows smoke; test tmux/SSH; document toggling mouse capture                                                                                                    |
+| Scope creep in the TUI                                | High     | Phase gates and parity checklist; no new features until cutover                                                                                                                            |
+| Contributor velocity (Rust + borrow checker)          | Medium   | Keep modules small; pair; document architecture; use `cargo` workspace conventions                                                                                                         |
+| WASM boundary overhead                                | Low      | Coarse batch API; benchmark core calls at 50/3 k/10 k; never per-row FFI                                                                                                                   |
+| CI flakiness / slow Rust builds                       | Low      | `rust-cache`, single fmt/clippy/test job, path filters, `lto` only in release                                                                                                              |
+| Toolchain churn (1.99.1 pin)                          | Low      | Bump `rust-toolchain.toml` and the CI action together in one PR                                                                                                                            |
+| Long-lived branch drift                               | Medium   | Forward-merge `release/next` after every security release and before each checkpoint; land completed checkpoints on `feature/rust-port`; tag each green CP; never rebase the shared branch |
+| Partial port lives forever                            | High     | Every checkpoint has a gate and a removal plan; CP5/CP8 explicitly delete dual paths                                                                                                       |
 
 ## 11. Rollout and rollback
 
