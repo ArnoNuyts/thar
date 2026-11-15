@@ -238,6 +238,16 @@ fn eighty_by_twenty_four_wraps_the_single_delete_message_without_truncation() {
         screen.iter().any(|line| line.contains("delete this")),
         "the first wrapped line dropped a character: {screen:#?}"
     );
+    // The text keeps one blank column inside the right border; touching the
+    // border is the layout bug this test pins.
+    let first = screen
+        .iter()
+        .find(|line| line.contains("delete this"))
+        .expect("first message line");
+    assert!(
+        first.trim_end().ends_with("this │"),
+        "the message touches the right border: {first:?}"
+    );
     assert!(
         screen.iter().any(|line| line.contains("todo?")),
         "the second wrapped line is missing: {screen:#?}"
@@ -290,6 +300,14 @@ fn one_hundred_by_thirty_pins_the_update_screen() {
         screen
             .iter()
             .any(|line| line.contains("https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0"))
+    );
+    let release = screen
+        .iter()
+        .find(|line| line.contains("releases/tag/v0.5.0"))
+        .expect("release URL row");
+    assert!(
+        release.trim_end().ends_with(" │"),
+        "the update content touches the right border: {release:?}"
     );
     let buttons = screen
         .iter()

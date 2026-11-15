@@ -292,7 +292,7 @@ impl Modal for ConfirmModal {
         let base = Style::default()
             .fg(theme::FOREGROUND)
             .bg(theme::MODAL_BACKGROUND);
-        let content_x = rect.body.x.saturating_add(2);
+        let content_x = rect.body.x.saturating_add(1);
         let content_width = self.content_width();
 
         for (index, line) in self.message_lines().iter().enumerate() {
