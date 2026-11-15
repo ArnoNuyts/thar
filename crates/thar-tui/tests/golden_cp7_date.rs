@@ -110,12 +110,12 @@ fn the_due_date_list_matches_at_80x24() {
             "                    ┌─────────────Set Due Date─────────────┐",
             "                    │                                      │",
             "                    │                                      │",
-            "                    │ » Today                              │",
-            "                    │   Tomorrow                           │",
-            "                    │   Next Week                          │",
-            "                    │   Next Month                         │",
-            "                    │   Custom                             │",
-            "                    │   Reset                              │",
+            "                    │  » Today                             │",
+            "                    │    Tomorrow                          │",
+            "                    │    Next Week                         │",
+            "                    │    Next Month                        │",
+            "                    │    Custom                            │",
+            "                    │    Reset                             │",
             "                    │                                      │",
             "                    └──────────────────────────────────────┘",
         ],
@@ -145,7 +145,7 @@ fn the_due_date_list_matches_at_80x24() {
         .iter()
         .position(|line| line.contains('┌'))
         .expect("top");
-    let marker = &buffer[(22, u16::try_from(top + 3).expect("row"))];
+    let marker = &buffer[(23, u16::try_from(top + 3).expect("row"))];
     assert_eq!(marker.symbol(), "»");
     assert_eq!(marker.style().fg, Some(Color::Rgb(0xAF, 0x76, 0xB7)));
 }
@@ -305,8 +305,8 @@ fn the_tag_editor_matches_at_100x30() {
             .expect("top"),
     )
     .expect("row");
-    let personal = &buffer[(34, top + 5)];
-    let work = &buffer[(34, top + 6)];
+    let personal = &buffer[(35, top + 5)];
+    let work = &buffer[(35, top + 6)];
     assert_eq!(personal.symbol(), "[");
     assert_eq!(personal.style().fg, Some(Color::Rgb(0xDD, 0xB1, 0x4D)));
     assert_eq!(work.symbol(), "[");
