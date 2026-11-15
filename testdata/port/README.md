@@ -69,6 +69,20 @@ recomputing the order from the TypeScript implementation.
 `[key, value]` pairs, array values preserved), `isDone`, `isHidden`,
 `isVisibleInOverview`, `isOverdue`, `toString` and `hash`.
 
+## Known gaps (CP1/CP2b)
+
+- `isPassedThreshold` is **not** committed in `expected.json` even though the
+  TypeScript test pins it. The Rust parity test derives it from the committed
+  `t:` tags and pins it in a table until CP1/CP2b adds the field to the
+  generator.
+- `FILE_TOO_LARGE`, `TOO_MANY_LINES` and `LINE_TOO_LONG` are generated
+  TypeScript-side only (see below), so they are not pinned by the Rust corpus.
+  CP2b decides whether to commit those fixtures.
+- The corpus has no dedicated JS-whitespace/`U+FEFF` or 8 192-unit astral
+  boundary fixture; Rust unit tests cover both. A fixture is a CP0 follow-up.
+- Rust parity reads fixtures with `String::from_utf8_lossy` (matching this
+  reader), so `invalid-utf8.txt` is exercised, not skipped.
+
 The file was produced once with a throwaway dump script and every value was
 reviewed by hand before committing. **Tests never regenerate it.** If behaviour
 intentionally changes, update `expected.json` and this document in the same

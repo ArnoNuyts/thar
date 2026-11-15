@@ -1,12 +1,9 @@
-# DRAFT — do not install this at .github/workflows/rust.yml until CP2 adds
-# the Cargo workspace and crates/thar-wasm. The commands were validated
-# locally on 2026-11-15 (scaffold: 16 129 bytes raw / 7 437 bytes gzip).
-#
 name: Rust
 
 # Path-filtered so the existing Node pipeline is unaffected while the Rust
-# port lands incrementally. Drop "feature/rust-port" from the branch list once
-# this workflow is merged.
+# port lands incrementally. Pull requests are filtered by path only; the push
+# branch list keeps the long-lived port branch covered without running Rust on
+# every Node-only release commit.
 on:
   push:
     branches: ["main", "release/next", "feature/rust-port"]
@@ -15,6 +12,7 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - "crates/**"
+      - "testdata/port/**"
       - ".github/workflows/rust.yml"
   pull_request:
     paths:
@@ -22,6 +20,7 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - "crates/**"
+      - "testdata/port/**"
       - ".github/workflows/rust.yml"
   workflow_dispatch:
 
@@ -54,13 +53,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Verify formatting
+        # `cargo fmt` does not resolve dependencies, so it has no `--locked`.
         run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
       - name: Test
-        run: cargo test --workspace --all-features
+        run: cargo test --locked --workspace --all-features
 
   wasm:
     name: wasm package + size budget
@@ -89,14 +89,18 @@ jobs:
       - name: Install wasm-pack
         uses: taiki-e/install-action@wasm-pack
 
-      - name: Install wasm-opt (size pass)
+      # wasm-pack uses a system `wasm-opt` when binaryen is on PATH, so on CI
+      # this apt install is the optimizer that runs. The crate's
+      # `[package.metadata.wasm-pack.profile.release]` flags only cover the
+      # bundled binaryen fallback used by developers without it; keep both.
+      - name: Install binaryen
         run: |
           sudo apt-get update
           sudo apt-get install -y binaryen
           wasm-opt --version
 
       - name: Build WASM package (Node target)
-        run: wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg
+        run: wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg --locked
 
       - name: Check WASM size budget
         run: |
@@ -126,6 +130,7 @@ jobs:
 
           assert.equal(core.recordCount("one\ntwo\n"), 2);
           assert.equal(core.recordCount(""), 0);
+          assert.equal(core.recordCount("a\n\nb\n"), 2);
           const version = core.coreVersion();
           assert.equal(typeof version, "string");
           assert.notEqual(version.length, 0);
