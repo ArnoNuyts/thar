@@ -71,7 +71,9 @@ test("no-native-date-math - allows date-fns helpers and time-of-day math", async
     await Runtime.writeTextFile(
       fixturePath,
       [
-        'import { addDays, addMonths, format } from "date-fns";',
+        'import { addDays } from "date-fns/addDays";',
+        'import { addMonths } from "date-fns/addMonths";',
+        'import { format } from "date-fns/format";',
         "",
         "const base = new Date();",
         "const tomorrow = addDays(base, 1);",

@@ -1,12 +1,10 @@
-import {
-  addDays,
-  addMonths,
-  addWeeks,
-  format,
-  isValid,
-  parseISO,
-  startOfDay,
-} from "date-fns";
+import { addDays } from "date-fns/addDays";
+import { addMonths } from "date-fns/addMonths";
+import { addWeeks } from "date-fns/addWeeks";
+import { format } from "date-fns/format";
+import { isValid } from "date-fns/isValid";
+import { parseISO } from "date-fns/parseISO";
+import { startOfDay } from "date-fns/startOfDay";
 
 /** Date tags (`due:`, `t:`) are stored as plain calendar days. */
 const DATE_TAG_REGEX = /^\d{4}-\d{2}-\d{2}$/;

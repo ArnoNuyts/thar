@@ -2,7 +2,9 @@ import { expect, test } from "vitest";
 
 import { render } from "ink-testing-library";
 import { useEffect, useState } from "react";
-import { addDays, addMonths, format } from "date-fns";
+import { addDays } from "date-fns/addDays";
+import { addMonths } from "date-fns/addMonths";
+import { format } from "date-fns/format";
 
 import { Calendar } from "../components/Calendar.tsx";
 import { waitFor } from "./test-utils.ts";

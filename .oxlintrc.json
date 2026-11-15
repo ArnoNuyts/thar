@@ -21,7 +21,21 @@
       }
     ],
     "unicorn/no-useless-spread": "off",
-    "thar/no-native-date-math": "error"
+    "thar/no-native-date-math": "error",
+    // The date-fns barrel pulls in every helper (and its locale data), which
+    // costs ~1.5s of module loading at startup; import the used helpers from
+    // their own subpaths instead.
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "date-fns",
+            "message": "Import from \"date-fns/<fn>\" (e.g. \"date-fns/addDays\") instead of the date-fns barrel."
+          }
+        ]
+      }
+    ]
   },
   "overrides": [
     {

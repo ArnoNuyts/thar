@@ -3,7 +3,10 @@ import { render } from "ink-testing-library";
 
 import { useEffect } from "react";
 import { Box } from "ink";
-import { addDays, addMonths, format, startOfDay } from "date-fns";
+import { addDays } from "date-fns/addDays";
+import { addMonths } from "date-fns/addMonths";
+import { format } from "date-fns/format";
+import { startOfDay } from "date-fns/startOfDay";
 
 import { SetDateModal } from "../components/SetDateModal.tsx";
 import { useModal } from "../contexts/modal-context.tsx";

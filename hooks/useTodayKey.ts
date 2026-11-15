@@ -1,4 +1,5 @@
-import { addDays, startOfDay } from "date-fns";
+import { addDays } from "date-fns/addDays";
+import { startOfDay } from "date-fns/startOfDay";
 import { useEffect, useState } from "react";
 
 /** Local calendar-day key; changes exactly once per day in the local timezone. */
