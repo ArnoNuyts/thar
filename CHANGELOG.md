@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-15
+
+### Changed
+
+- Refresh development dependencies, including `minimatch` 11 and `eslint`
+  10.15. There are no runtime dependency changes.
+
 ## [0.6.1] - 2026-11-14
 
 ### Changed
@@ -59,7 +66,8 @@ First public release.
 - Undo/redo, copy/paste, archive to `done.txt`, and external file watching.
 - npm package for Node.js 22.12 and newer.
 
-[Unreleased]: https://github.com/ArnoNuyts/thar/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/ArnoNuyts/thar/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/ArnoNuyts/thar/releases/tag/v0.6.2
 [0.6.1]: https://github.com/ArnoNuyts/thar/releases/tag/v0.6.1
 [0.6.0]: https://github.com/ArnoNuyts/thar/releases/tag/v0.6.0
 [0.5.0]: https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0

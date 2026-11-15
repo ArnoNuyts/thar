@@ -1,6 +1,6 @@
 {
   "name": "@arnoarnoarno/thar",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "A keyboard-driven todo.txt TUI for the terminal",
   "keywords": [
     "cli",
