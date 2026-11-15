@@ -86,7 +86,7 @@ fn is_name_char(character: char) -> bool {
 /// only extra member of JavaScript's `\s` is the byte-order mark, which a
 /// hand-written list here keeps explicit.
 fn is_js_whitespace(character: char) -> bool {
-    character.is_whitespace() || character == '\u{FEFF}'
+    thar_core::is_js_whitespace(character)
 }
 
 /// A `+project`/`@context` word being typed at the cursor.

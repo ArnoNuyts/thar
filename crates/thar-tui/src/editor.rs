@@ -233,7 +233,9 @@ impl Editor {
         // Multi-character input is a paste: trim it. A single character keeps
         // its spaces.
         let text = if stripped_len > 1 {
-            stripped.trim().to_owned()
+            stripped
+                .trim_matches(thar_core::is_js_whitespace)
+                .to_owned()
         } else {
             stripped
         };
@@ -404,6 +406,15 @@ mod tests {
         assert!(!editor.insert_text("\n\r"));
         assert!(!editor.insert_text("   "));
         assert_eq!(editor.value(), "a");
+
+        // JS whitespace, not Rust's: NEL (U+0085) is kept so the validator
+        // rejects it, while a pasted BOM (U+FEFF) is trimmed.
+        let mut editor = Editor::new("");
+        assert!(editor.insert_text("a\u{0085}"));
+        assert_eq!(editor.value(), "a\u{0085}");
+        let mut editor = Editor::new("");
+        assert!(editor.insert_text("\u{FEFF}text\u{FEFF}"));
+        assert_eq!(editor.value(), "text");
     }
 
     #[test]

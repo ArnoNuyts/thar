@@ -180,11 +180,11 @@ as the CP6/CP7-write assets.
 - **The input scrolls horizontally** instead of wrapping. A wrapped input would
   change `body_rows` per frame and make the cursor cell ambiguous at a soft
   wrap.
-- **Paste trimming uses Rust's `trim()`**, which differs from JavaScript's
-  `trim()` only for `U+FEFF` (the byte-order mark). A pasted control character
-  is not silently dropped: it stays visible via `sanitize_for_display` and the
-  submit is rejected with the bounded `control-character` toast, exactly like
-  the oracle.
+- **Paste trimming uses `thar_core::js_trim`**, the same JavaScript
+  `String.prototype.trim()` set the parsers use, so `U+FEFF` is trimmed and
+  `U+0085` (NEL) is kept. A pasted control character is not silently dropped:
+  it stays visible via `sanitize_for_display` and the submit is rejected with
+  the bounded `control-character` toast, exactly like the oracle.
 - **`extract_tags_and_contexts` keeps the search-token alphabet**, which
   includes a literal backslash (`[\w.\\_\-]`) that the todo parser itself does
   not accept. That is the oracle's `SEARCH_TAG_NAME_PATTERN`, not a typo.

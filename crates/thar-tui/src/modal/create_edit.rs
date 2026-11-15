@@ -41,7 +41,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use thar_core::{MAX_TODO_CHARS, TodoId, validate_todo_text};
+use thar_core::{MAX_TODO_CHARS, TodoId, validate_todo_batch, validate_todo_text};
 
 use crate::app::App;
 use crate::display::sanitize_for_display;
@@ -80,6 +80,7 @@ pub struct TextModal {
     /// 0 = Save, 1 = Cancel.
     selected_button: usize,
     max_chars: usize,
+    existing_count: usize,
     ids: Vec<TodoId>,
 }
 
@@ -92,7 +93,14 @@ impl TextModal {
         }
 
         match self.mode {
-            Mode::Create => Outcome::Actions(vec![Action::AddTodos(vec![value])]),
+            Mode::Create => {
+                if let Err(error) =
+                    validate_todo_batch(std::slice::from_ref(&value), self.existing_count, 1)
+                {
+                    return Outcome::Actions(vec![Action::Toast(error.message().to_owned())]);
+                }
+                Outcome::Actions(vec![Action::AddTodos(vec![value])])
+            }
             Mode::Edit => Outcome::Actions(vec![Action::UpdateText {
                 ids: self.ids.clone(),
                 text: value,
@@ -479,7 +487,7 @@ fn search_tokens(text: &str, sigil: char) -> Vec<String> {
 /// leaves a space before the first token.
 #[must_use]
 pub fn extract_tags_and_contexts(query: &str) -> String {
-    let trimmed = query.trim();
+    let trimmed = thar_core::js_trim(query);
     if trimmed.is_empty() {
         return String::new();
     }
@@ -510,6 +518,7 @@ pub fn create(app: &App) -> Box<dyn Modal> {
         suggestions: Suggestions::new(),
         selected_button: 0,
         max_chars: MAX_TODO_CHARS,
+        existing_count: app.todos.len(),
         ids: Vec::new(),
     })
 }
@@ -533,6 +542,7 @@ pub fn edit(app: &App) -> Box<dyn Modal> {
         suggestions: Suggestions::new(),
         selected_button: 0,
         max_chars,
+        existing_count: app.todos.len(),
         ids,
     })
 }
