@@ -8,7 +8,11 @@
 - Package manager: npm (`npm ci` / `npm install`).
 - Runtime/build: Vite 8 (Rolldown + Oxc) with React 19.
 - Typecheck: TypeScript 7 (`npm run typecheck`).
-- Lint: Oxlint (`npm run lint`).
+- Lint: Oxlint (`npm run lint`) with the React, react-perf and jsx-a11y
+  plugins enabled. The local `thar/no-native-date-math` rule
+  (`scripts/oxlint-plugin.mjs`) makes native `Date` mutation and calendar
+  arithmetic (`setDate`, `getDate() + 1`, …) errors; use date-fns helpers such
+  as `addDays`, `addMonths` and `addYears` instead.
 - Format: Oxfmt (`npm run fmt`, `npm run fmt:check`).
 - Tests: Vitest (`npm test`) using native `test`/`expect` imports. Prefer
   `Runtime` from `utils/runtime.ts` or Node built-ins over Deno APIs in tests.
@@ -40,6 +44,8 @@
 
 - `npm run check` — typecheck, lint, format check.
 - `npm test` — full Vitest suite.
+- `npm run doctor` — React Doctor scan. Use `-- --scope changed` for a
+  regression check against the base branch (CI gates on changed files only).
 - `npm run build` — Vite SSR bundle in `dist/`.
 - `npm run bench:list` — navigation benchmark for the main list. Uses the
   production Ink options by default and reports per-keypress wall time, React
