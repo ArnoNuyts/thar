@@ -196,9 +196,10 @@ Both parse calls return either `{"ok":true,"todos":[…]}` or
 `{"ok":false,"error":{…}}`; a record is exactly the CP1/`expected.json` field
 set, in that order. The whole-file write shape is derived as CP1 defines it
 (`todos.map(toString).join("\n") + "\n"`), so there is no second crossing.
-`build_rows` (CP3b1) takes one structured request — the todo fields, one
-host-normalized view per todo, the normalized terms, `showHidden` and `today` —
-and returns `{"ok":true,"rows":[…],"order":[…]}`; `apply_command` still arrives
+`build_rows` (CP3b1) takes one structured request — the todo fields (including
+the two round-trip flags), `searchViews` (one host-normalized search view per
+todo, aligned by index), the normalized `terms`, `showHidden` and `today` — and
+returns `{"ok":true,"rows":[…],"order":[…]}`; `apply_command` still arrives
 with CP3b2.
 
 Strings cross the boundary once per batch. Avoid per-row string getters; they
@@ -436,26 +437,48 @@ recorded. Do not start the next checkpoint while one is red.
 - `tools/port/rows.ts` + `rows-cli.ts` is the live contract: the TS pipeline
   (oracle) versus `parseFile` + `buildRows` (candidate) over every parseable
   fixture plus a generated 1 000-todo list, for 12 fixed queries and both
-  `showHidden` values. Evidence at landing: **504 records / 4 449 890 bytes, 0
-  diffs**; the self-check proves two runs are byte-identical and catches four
-  seeded row-builder/query mutations. The candidate derives its search views
-  from the WASM parse output, closing the parse→view gap; the terms come from
-  the host in a manifest, so the core never folds case.
+  `showHidden` values. Evidence: **504 records / 4 450 270 bytes, 0 diffs**
+  after CP3b2b added the final-sigma probe line; the self-check proves two runs
+  are byte-identical and catches four seeded row-builder/query mutations. The
+  candidate derives its search views from the WASM parse output, closing the
+  parse→view gap; the terms come from the host in a manifest, so the core never
+  folds case. The skipped-fixture set is narrowed to the validation error family
+  and asserted against CP1's eight error records.
 - CP3a follow-ups in this checkpoint: a no-fold test (`filter_by_search` never
   lowercases), the reverse final-sigma search cases, and the empty-terms
   contract.
 - Perf at 10 000 todos (release WASM, Node, 120×40, whole-list build as
-  `createIndexes`): the stateless call is **81–85 ms p50 / 83–90 ms p95**,
-  ~6.4× faster than the TS pipeline (524–531 / 533–594 ms) but **not yet the
-  ≤ 5 ms target**.
-  The core alone is 7.9/8.6 ms (sort 5.6 ms), so the marshalling dominates: the
-  2.5 MB request is decoded on every keystroke. CP3b2 must add a stateful handle
-  and precomputed collation ranks; the numbers are in `tools/port/README.md`,
-  not silently accepted. WASM size after the row surface: **81 679 bytes raw
-  / 35 887 bytes gzip** (budget 250 KB / 100 KB).
-- Deferred to CP3b2: the stateful cache, host/computed sort ranks, wiring
-  `THAR_CORE=rust`, and the opaque programme-supplied name fields. No user
-  behaviour changes here: `THAR_CORE` remains inert.
+  `createIndexes`). Two benchmarks exist and they do **not** measure the same
+  scope, so neither is a general "N×" claim:
+  - `tools/port/bench-rows.ts` (the rows contract's own generated list, the full
+    stateless call including the 2.5 MB request): WASM **82–89 ms p50 / 86–106
+    ms p95** against TS **525–535 / 542–592 ms** on this machine. That gap is
+    dominated by the generated list's many distinct mixed-case contexts, where
+    the TS `localeCompare` sort is the cost.
+  - `scripts/bench-rows.ts` (the app-shaped adapter path through
+    `buildRowsWithCore`, warm records/views cache): WASM **66–74 / 69–82 ms**
+    (plus a cold-input variant at **77–87 / 85–110 ms**) against TS **82–85 / 85–130 ms**. With the app's list shape the TS sort is much cheaper, so the
+    Rust row build is only modestly ahead — and cold marshalling can be at
+    parity.
+
+  Both are well short of the **≤ 5 ms** per-keystroke target: that target is a
+  future optimization goal, not a current claim. The core alone is 7.9/8.6 ms
+  (sort 5.6 ms), so the marshalling dominates: the request is decoded on every
+  keystroke. CP3b2b records these numbers only; the stateful handle and
+  precomputed collation ranks stay deferred, and the numbers live in
+  `tools/port/README.md`, not silently accepted. WASM size after the row
+  surface and the round-trip flags: **81 831 bytes raw / 35 986 bytes gzip**
+  (budget 250 KB / 100 KB).
+
+- Deferred: the stateful cache, host/computed sort ranks (with their own
+  optimization phase), and the opaque programme-supplied name fields.
+- CP3b2b connects the export: the adapter sends `searchViews` (the name the
+  merged decoder requires), sends the two round-trip flags, logs the typed
+  rejection `code`, gates an empty Rust result against the TS pipeline, and
+  falls back on a non-en-US host collation (PLAN §13 decision 8). A real-package
+  test in `unit-tests/core-wasm.test.ts` runs in the wasm CI job and skips
+  cleanly when `crates/thar-wasm/pkg/` is absent. No user behaviour changes:
+  `THAR_CORE` remains opt-in and `ts` stays the default.
 
 ### CP4 — Rust write path opt-in, byte-compared
 
@@ -903,12 +926,21 @@ tightens the constants and the README together.
    block the native port.
 8. **Context collation locale:** `thar-core` implements the en-US ICU order for
    the `[A-Za-z0-9_.-]` context alphabet; the TypeScript oracle calls
-   `localeCompare`, whose order depends on the host default locale. CI and
-   development machines run `en-US`. Before CP3b ships, either pin
-   `Intl.Collator("en-US")` in the oracle (and keep the comparator) or pass
-   host-computed context ranks across the boundary. Risk if left open: a
-   developer or user on another locale sees a different context order between
-   the TS and Rust paths.
+   `localeCompare`, whose order depends on the host default locale.
+   **Decided at CP3b2b:** the Rust sort stays en-US ICU, and the locale
+   assumption is made explicit instead of implicit:
+   - the rows harness refuses to run unless the host default collator is
+     en-US-equivalent, so `LANG=da_DK.UTF-8` is a readable harness error rather
+     than genuine-looking diffs;
+   - `THAR_CORE=rust` falls back to TypeScript, with one bounded debug line,
+     when the host default collator is not en-US;
+   - CI and development run en-US.
+
+   Host-computed collation ranks across the boundary remain a **future option**,
+   explicitly deferred with the optimization work (stateful handle, precomputed
+   ranks); nothing in CP3b2b changes the Rust comparator. Risk if the guard were
+   removed: a developer or user on another locale would see a different context
+   order between the TS and Rust paths.
 
 ## 14. Definition of done
 
