@@ -85,14 +85,14 @@ fn cp6_screenshot() {
 }
 
 /// `docs/rust-port/assets/<name>` relative to this crate.
-fn asset_path(name: &str) -> PathBuf {
+pub(crate) fn asset_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../docs/rust-port/assets")
         .join(name)
 }
 
 /// Rasterize one SVG frame with ffmpeg's librsvg decoder.
-fn rasterize(svg: &Path, png: &Path) {
+pub(crate) fn rasterize(svg: &Path, png: &Path) {
     let status = Command::new("ffmpeg")
         .args(["-y", "-hide_banner", "-loglevel", "error", "-i"])
         .arg(svg)
@@ -104,7 +104,7 @@ fn rasterize(svg: &Path, png: &Path) {
 }
 
 /// Turn the parsed screen into a self-contained SVG.
-fn svg(screen: &vt100::Screen) -> String {
+pub(crate) fn svg(screen: &vt100::Screen) -> String {
     let (rows, cols) = screen.size();
     let width = u32::from(cols.get()) * CELL_WIDTH + MARGIN * 2;
     let height = u32::from(rows.get()) * CELL_HEIGHT + MARGIN * 2;

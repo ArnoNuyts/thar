@@ -1,0 +1,11 @@
+[package]
+name = "thar-store"
+description = "Write-capable storage for Thar: atomic replace, backups, done.txt append, and clipboard"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thar-core.workspace = true

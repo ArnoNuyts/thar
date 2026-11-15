@@ -18,6 +18,8 @@ mod session;
 #[path = "../support/mod.rs"]
 mod support;
 
+mod cp7_write;
+
 use session::{Session, TIMEOUT};
 use support::{TempDir, modified};
 

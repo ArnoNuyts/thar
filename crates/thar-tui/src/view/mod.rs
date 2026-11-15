@@ -22,6 +22,7 @@
 //! Every string that comes from the file goes through
 //! [`crate::display::sanitize_for_display`] before it reaches the terminal.
 
+mod overlay;
 mod scrollbar;
 
 use ratatui::Frame;
@@ -39,6 +40,8 @@ use crate::theme;
 
 /// Label on the action bar's status side while the binary cannot write.
 const READ_ONLY_LABEL: &str = "READ-ONLY";
+/// Label on the action bar's status side when `--write` is active.
+const WRITE_LABEL: &str = "WRITE";
 
 /// Draw one frame.
 pub fn render(frame: &mut Frame, app: &App) {
@@ -60,6 +63,8 @@ pub fn render(frame: &mut Frame, app: &App) {
     if app.show_hidden {
         render_hidden_indicator(frame, layout);
     }
+
+    overlay::render(frame, app);
 }
 
 fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
@@ -359,11 +364,12 @@ fn render_action_bar(frame: &mut Frame, app: &App, layout: Layout) {
         spans.push(Span::raw(format!(" {label}  ")));
     }
 
-    let indicator_width = if app.read_only {
-        READ_ONLY_LABEL.chars().count() + 1
+    let (indicator, indicator_color) = if app.read_only {
+        (READ_ONLY_LABEL, theme::DANGER)
     } else {
-        0
+        (WRITE_LABEL, theme::SUCCESS)
     };
+    let indicator_width = indicator.chars().count() + 1;
     let right_limit = usize::from(layout.width.saturating_sub(action_width).saturating_sub(1));
     let status_limit = right_limit.saturating_sub(indicator_width);
     let toast = app.toast_message(std::time::Instant::now());
@@ -372,17 +378,16 @@ fn render_action_bar(frame: &mut Frame, app: &App, layout: Layout) {
     let load_error = app.load_error.as_deref().filter(|_| !app.rows().is_empty());
     let message = toast
         .or(load_error)
+        .or(app.save_error.as_deref())
         .map(|text| bound(sanitize_for_display(text), status_limit));
 
     let mut right = Vec::new();
     let mut right_width = 0;
-    if app.read_only {
-        right.push(Span::styled(
-            format!("{READ_ONLY_LABEL} "),
-            Style::default().fg(theme::DANGER),
-        ));
-        right_width += indicator_width;
-    }
+    right.push(Span::styled(
+        format!("{indicator} "),
+        Style::default().fg(indicator_color),
+    ));
+    right_width += indicator_width;
     if let Some(message) = message.filter(|text| !text.is_empty()) {
         right_width += message.chars().count();
         let color = if toast.is_some() {

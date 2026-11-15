@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 thar-core.workspace = true
+thar-store.workspace = true
 thar-tui.workspace = true
 ratatui.workspace = true
 jiff.workspace = true
