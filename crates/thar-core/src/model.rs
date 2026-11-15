@@ -33,7 +33,11 @@
 //! - `remove_context`/`remove_project` interpolate the name into the oracle's
 //!   `\s*@name(?=\s|$)` regex, where a `.` in the name is a regex any-character.
 //!   A stored name is otherwise `[A-Za-z0-9_.\-]`, so `.` is the only
-//!   metacharacter that can occur; `remove_mention` reproduces it.
+//!   metacharacter that can occur; `remove_mention` reproduces it. JavaScript's
+//!   `.` matches exactly one UTF-16 code unit and never a line terminator, so
+//!   it cannot consume an astral character (a surrogate pair). Other regex
+//!   metacharacters are outside the parity surface: names are scanned from
+//!   text, and programmatic names become opaque with the CP3b API.
 
 use core::fmt;
 use core::fmt::Write as _;
@@ -698,9 +702,10 @@ fn trim_in_place(text: &mut String) {
 ///
 /// - the leading whitespace run is consumed together with the token;
 /// - matching is leftmost and non-overlapping, and every match is removed;
-/// - a `.` in the name is a regex any-character (but not a line terminator),
-///   which is the only metacharacter a stored `[A-Za-z0-9_.\-]` name can
-///   contain, so removing `a.b` also removes an earlier `@aXb`;
+/// - a `.` in the name is a regex any-character (but not a line terminator and
+///   not a surrogate half — JavaScript's `.` is one UTF-16 code unit), which is
+///   the only metacharacter a stored `[A-Za-z0-9_.\-]` name can contain, so
+///   removing `a.b` also removes an earlier `@aXb` but not `@a😀b`;
 /// - the token must be followed by JavaScript whitespace or the end of the
 ///   text.
 fn remove_mention(text: &str, sigil: char, name: &str) -> String {
@@ -712,21 +717,15 @@ fn remove_mention(text: &str, sigil: char, name: &str) -> String {
         let Some(character) = text[index..].chars().next() else {
             break;
         };
-        let candidate = index;
-        let after_whitespace = if is_js_whitespace(character) {
-            index + whitespace_prefix_len(&text[index..])
-        } else {
-            index
-        };
 
-        if let Some(end) = mention_at(text, after_whitespace, sigil, name) {
-            output.push_str(&text[copied..candidate]);
+        if let Some((start, end)) = match_at(text, index, sigil, name) {
+            output.push_str(&text[copied..start]);
             copied = end;
             index = end;
-        } else if after_whitespace > index {
-            // Nothing inside a whitespace run can start a match: the run is
-            // followed by the same character for every start inside it.
-            index = after_whitespace;
+        } else if is_js_whitespace(character) {
+            // A failed match cannot start inside the leading whitespace run:
+            // every start in it is followed by the same sigil.
+            index += whitespace_prefix_len(&text[index..]);
         } else {
             index += character.len_utf8();
         }
@@ -736,20 +735,28 @@ fn remove_mention(text: &str, sigil: char, name: &str) -> String {
     output
 }
 
-/// Match `sigil` + `name` at `start`, returning the byte index after it.
-fn mention_at(text: &str, start: usize, sigil: char, name: &str) -> Option<usize> {
+/// Match `\s*sigil+name(?=\s|$)` at `start`, returning the matched byte range.
+///
+/// The range starts at `start` because `\s*` is greedy and the token after it
+/// is fixed; it ends after the name, before the required lookahead whitespace.
+fn match_at(text: &str, start: usize, sigil: char, name: &str) -> Option<(usize, usize)> {
     let rest = text.get(start..)?;
-    let actual_sigil = rest.chars().next()?;
+    let mut cursor = start + whitespace_prefix_len(rest);
+
+    let actual_sigil = text[cursor..].chars().next()?;
     if actual_sigil != sigil {
         return None;
     }
-    let mut cursor = start + actual_sigil.len_utf8();
+    cursor += actual_sigil.len_utf8();
 
     for expected in name.chars() {
         let actual = text[cursor..].chars().next()?;
         let matched = if expected == '.' {
-            // JavaScript's `.` skips line terminators.
-            !matches!(actual, '\n' | '\r' | '\u{2028}' | '\u{2029}')
+            // JavaScript's `.` matches one UTF-16 code unit and skips line
+            // terminators. A BMP character is 1..=3 UTF-8 bytes; an astral
+            // character is 4 and is a surrogate pair in UTF-16, so `.` cannot
+            // consume it.
+            !matches!(actual, '\n' | '\r' | '\u{2028}' | '\u{2029}') && actual.len_utf8() != 4
         } else {
             actual == expected
         };
@@ -760,8 +767,8 @@ fn mention_at(text: &str, start: usize, sigil: char, name: &str) -> Option<usize
     }
 
     match text[cursor..].chars().next() {
-        None => Some(cursor),
-        Some(next) if is_js_whitespace(next) => Some(cursor),
+        None => Some((start, cursor)),
+        Some(next) if is_js_whitespace(next) => Some((start, cursor)),
         Some(_) => None,
     }
 }
@@ -1279,6 +1286,39 @@ mod tests {
         let todo = parse("one @aXb two @a.b");
         assert_eq!(todo.contexts, vec!["aXb".to_owned(), "a.b".to_owned()]);
         assert_eq!(todo.remove_context("a.b").serialize(), "one two");
+    }
+
+    #[test]
+    fn remove_context_dot_matches_one_utf16_code_unit() {
+        // BMP characters are one UTF-16 code unit however many UTF-8 bytes they
+        // take, so `.` consumes the 3-byte € and removes `@a€b` too.
+        assert_eq!(
+            parse("task @a€b @a.b").remove_context("a.b").serialize(),
+            "task"
+        );
+
+        // An astral character is a surrogate pair in UTF-16, so `.` cannot
+        // consume it and `@a😀b` survives.
+        assert_eq!(
+            parse("task @a.b @a😀b").remove_context("a.b").serialize(),
+            "task @a😀b"
+        );
+        assert_eq!(
+            parse("task @a😀b @a.b").remove_context("a.b").serialize(),
+            "task @a😀b"
+        );
+    }
+
+    #[test]
+    fn remove_project_dot_matches_one_utf16_code_unit() {
+        assert_eq!(
+            parse("task +a😀b +a.b").remove_project("a.b").serialize(),
+            "task +a😀b"
+        );
+        assert_eq!(
+            parse("task +aéb +a.b").remove_project("a.b").serialize(),
+            "task"
+        );
     }
 
     #[test]
