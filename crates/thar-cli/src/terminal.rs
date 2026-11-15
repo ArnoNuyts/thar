@@ -247,7 +247,12 @@ impl Drop for TerminalSession {
     fn drop(&mut self) {
         restore_terminal();
         let _ = self.terminal.show_cursor();
-        if let Some(previous) = self.previous_hook.take() {
+        // During unwinding std forbids changing the panic hook; the panic hook
+        // installed by `start` already restored the terminal, and the default
+        // hook stays in place for the rest of the unwind.
+        if let Some(previous) = self.previous_hook.take()
+            && !std::thread::panicking()
+        {
             panic::set_hook(Box::new(move |info| previous(info)));
         }
     }

@@ -139,6 +139,57 @@ jobs:
       - name: Test
         run: cargo test --locked --workspace --all-features
 
+  # CP6 runs the binary on a real PTY. Linux is also covered by the `test`
+  # job's workspace run; this matrix adds the macOS runner, where the kernel
+  # PTY, termios and mouse decoding differ.
+  pty:
+    name: PTY (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: pty-${{ matrix.os }}
+
+      - name: PTY integration tests
+        # portable-pty + vt100 are dev-dependencies only. The target is empty
+        # on non-Unix hosts, so this never runs a PTY test on Windows.
+        run: cargo test --locked -p thar-cli --test pty
+
+  # portable-pty is Unix-focused, so Windows gets a compile check instead of a
+  # PTY run: it still validates the crate, the binary and every test target.
+  windows:
+    name: Windows compile check
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: windows
+
+      - name: Check every target
+        run: cargo check --locked -p thar-cli --all-targets
+
   wasm:
     name: wasm package + size budget
     runs-on: ubuntu-latest
