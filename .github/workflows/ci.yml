@@ -80,6 +80,11 @@ jobs:
       - name: Prove the seeded mutations are caught
         run: npm run port:selftest
 
+      # CP3b: the live rows contract, TS-only here. The WASM candidate half runs
+      # in the rust workflow's `wasm` job, where the package is built.
+      - name: Rows contract (oracle, candidate protocol, mutation proof)
+        run: npm run port:contract:rows
+
   doctor:
     runs-on: ubuntu-latest
     timeout-minutes: 15
