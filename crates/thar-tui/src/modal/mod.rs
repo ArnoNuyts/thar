@@ -20,6 +20,8 @@ pub mod registry_editor;
 pub mod registry_menu;
 pub mod registry_meta;
 
+mod create_edit;
+
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
 use thar_core::{TodoDate, TodoId};
