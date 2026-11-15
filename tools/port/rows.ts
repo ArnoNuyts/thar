@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { createIndexes } from "../../logic/indexes.ts";
-import { type ReadLimits, getReadLimits } from "../../logic/limits.ts";
+import {
+  TodoFileValidationError,
+  type ReadLimits,
+  getReadLimits,
+} from "../../logic/limits.ts";
 import { Todo } from "../../logic/todo.ts";
 import { validateTodoFileContent } from "../../logic/todo-file-validation.ts";
 import {
@@ -11,6 +15,10 @@ import {
   sortByImportance,
 } from "../../logic/Todos.ts";
 import { IndexType } from "../../types/enums.ts";
+import {
+  defaultCollatorLocale,
+  isEnglishCollator,
+} from "../../utils/collation-locale.ts";
 import { extractSearchTerms } from "../../utils/search-utils.ts";
 import {
   CorpusError,
@@ -59,7 +67,15 @@ process.env.TZ = "UTC";
  *
  * The generated list is built here and handed to the candidate in a manifest
  * file, so there is no second committed corpus. Rejection fixtures (the
- * `control-*.txt` files) are skipped: `corpus_parity.rs` owns them.
+ * `control-*` and bare-CR files) are skipped: `corpus_parity.rs` owns them. The
+ * catch is narrowed to the production validation error family and the skipped
+ * names are returned, so the test suite can assert the set equals CP1's error
+ * records instead of coverage shrinking silently.
+ *
+ * The oracle's context order comes from the host `localeCompare`, while Rust
+ * implements en-US ICU, so the builder refuses to run off an en-US-equivalent
+ * default collator instead of producing genuine-looking diffs (PLAN §13
+ * decision 8).
  *
  * The CLI lives in `rows-cli.ts`; everything here is import-safe, so the
  * benchmark and the unit tests can build the same contract in-process.
@@ -116,6 +132,18 @@ export interface RowsQuery {
   terms: string[];
 }
 
+/**
+ * Record coordinates for a diff line.
+ *
+ * Every fixture contributes one record per (query, `showHidden`) pair, and two
+ * records can hold identical rows, so the fixture name alone does not say which
+ * record differs. The index, query and flag do.
+ */
+export const rowsRecordLabel = (record: unknown, index: number): string => {
+  const fields = record as { query?: unknown; showHidden?: unknown };
+  return `record ${index} query=${JSON.stringify(fields.query ?? null)} showHidden=${String(fields.showHidden)}`;
+};
+
 /** The candidate's input besides the corpus: queries, generated lines, clock. */
 export interface RowsManifest {
   clockLocal: string;
@@ -170,6 +198,28 @@ export const isRowsMutationName = (value: string): value is RowsMutationName =>
 /** A rows-contract build problem the CLI reports as one bounded line. */
 export class RowsHarnessError extends Error {}
 
+/**
+ * The host's default collator locale, checked before anything is built.
+ *
+ * The oracle compares first contexts with `localeCompare`, whose order depends
+ * on the host locale, while `thar-core` implements the en-US ICU order (PLAN
+ * §13 decision 8). Off en-US the two can disagree for the same names, so the
+ * harness fails with a readable line instead of reporting genuine-looking row
+ * diffs.
+ */
+export const assertEnglishCollatorLocale = (): string => {
+  const locale = defaultCollatorLocale();
+  if (!isEnglishCollator(locale)) {
+    throw new RowsHarnessError(
+      `rows harness needs the en-US default collator, but this host resolved ` +
+        `${JSON.stringify(locale)}; context order comes from localeCompare and ` +
+        "the Rust sort implements en-US ICU. Rerun with LANG=en_US.UTF-8 " +
+        "LC_ALL=en_US.UTF-8 (docs/rust-port/PLAN.md §13).",
+    );
+  }
+  return locale;
+};
+
 /** The production parse path: validate the file, drop blank lines, parse. */
 const parseTodoText = (text: string, limits: ReadLimits): Todo[] => {
   const lines = validateTodoFileContent(text, limits);
@@ -187,7 +237,9 @@ const manifestLimits = (limits: ReadLimits): RowsManifest["readLimits"] => ({
  * priorities, due/threshold/hidden tags, and duplicate lines for stability.
  *
  * Built here (not committed) so the contract covers cases the corpus does not
- * need to grow for.
+ * need to grow for. The list is exactly `count` lines: the last slot is the
+ * reverse final-sigma probe, so the `aΣ.Α` / `aβ́Σ.` queries match at least one
+ * row instead of only proving that an empty oracle equals an empty candidate.
  */
 export const createGeneratedLines = (
   count = GENERATED_TODO_COUNT,
@@ -247,7 +299,9 @@ export const createGeneratedLines = (
   ] as const;
 
   const lines: string[] = [];
-  for (let index = 0; index < count; index++) {
+  // Reserve the last slot for the final-sigma probe below, so `count` is the
+  // list length the read limit sees (the benchmark runs at the 10 000 cap).
+  for (let index = 0; index < count - 1; index++) {
     // Every seventh line repeats the previous one so equal-key stability and
     // duplicate detection are exercised.
     if (index > 0 && index % 7 === 0) {
@@ -278,6 +332,11 @@ export const createGeneratedLines = (
         .join(" "),
     );
   }
+
+  // The two reverse final-sigma query shapes, on one visible (not hidden, no
+  // threshold) line: JS lowercases it to `aβ́ς. aσ.α`, so `aβ́ς.` and `aσ.` both
+  // find it. A per-character fold would produce `aβσ.`/`aσ.` and lose the row.
+  lines.push("final sigma probe aβ\u0301Σ. aΣ.Α");
 
   return lines;
 };
@@ -318,8 +377,9 @@ const generatedFixtures = (
 const corpusFixtures = (
   corpusDir: string,
   limits: ReadLimits,
-): RowsFixture[] => {
+): { fixtures: RowsFixture[]; skipped: string[] } => {
   const fixtures: RowsFixture[] = [];
+  const skipped: string[] = [];
 
   for (const fixture of listFixtures(corpusDir)) {
     let raw: Buffer;
@@ -338,16 +398,20 @@ const corpusFixtures = (
     try {
       // `Buffer#toString` decodes lossily, exactly like the production reader.
       todos = parseTodoText(raw.toString("utf8"), limits);
-    } catch {
+    } catch (error) {
       // Rejection fixtures are owned by the CP1 contract and
       // `corpus_parity.rs`; there is no row model for a file that cannot parse.
+      // Only the validation family may be skipped: swallowing every error would
+      // silently shrink coverage, so anything else is a harness bug.
+      if (!(error instanceof TodoFileValidationError)) throw error;
+      skipped.push(fixture);
       continue;
     }
 
     fixtures.push({ name: fixture, todos });
   }
 
-  return fixtures;
+  return { fixtures, skipped };
 };
 
 /** Case-sensitive search over raw fields: the `case-sensitive-search` bug. */
@@ -398,10 +462,20 @@ export const buildRowsContract = (
 ): {
   corpusDir: string;
   clockLocal: string;
+  /** The host collator locale the oracle ran under (pinned to en-US). */
+  collatorLocale: string;
   manifest: RowsManifest;
   records: RowsRecord[];
+  /** Parseable fixture names that produced rows. */
+  fixtures: string[];
+  /**
+   * Fixtures skipped because the production reader rejected them (the CP1
+   * `kind: "error"` records). Never any other failure.
+   */
+  skipped: string[];
   jsonl: string;
 } => {
+  const collatorLocale = assertEnglishCollatorLocale();
   const corpusDir = resolve(options.corpusDir ?? DEFAULT_CORPUS_DIR);
   const clockLocal =
     options.manifest?.clockLocal ?? options.clockLocal ?? DEFAULT_CLOCK_LOCAL;
@@ -411,10 +485,8 @@ export const buildRowsContract = (
   const manifest =
     options.manifest ??
     createManifest(options.clockLocal ?? DEFAULT_CLOCK_LOCAL, limits);
-  const fixtures = [
-    ...corpusFixtures(corpusDir, limits),
-    ...generatedFixtures(manifest, limits),
-  ];
+  const corpus = corpusFixtures(corpusDir, limits);
+  const fixtures = [...corpus.fixtures, ...generatedFixtures(manifest, limits)];
   fixtures.sort((left, right) => compareFixtureNames(left.name, right.name));
 
   const records: RowsRecord[] = [];
@@ -479,8 +551,11 @@ export const buildRowsContract = (
   return {
     corpusDir,
     clockLocal,
+    collatorLocale,
     manifest,
     records,
+    fixtures: fixtures.map((fixture) => fixture.name),
+    skipped: corpus.skipped,
     jsonl:
       records.map((record) => JSON.stringify(record)).join("\n") +
       (records.length > 0 ? "\n" : ""),

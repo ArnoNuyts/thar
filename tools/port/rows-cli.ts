@@ -35,6 +35,7 @@ import {
   createGeneratedLines,
   createManifest,
   isRowsMutationName,
+  rowsRecordLabel,
 } from "./rows.ts";
 
 /**
@@ -397,7 +398,8 @@ const main = (): number => {
 
   if (!options.check) {
     process.stderr.write(
-      `port-rows: wrote ${build.records.length} record(s) (${contractBytes} bytes)\n`,
+      `port-rows: wrote ${build.records.length} record(s) (${contractBytes} bytes, ` +
+        `collator ${build.collatorLocale})\n`,
     );
     return EXIT_MATCH;
   }
@@ -447,14 +449,22 @@ const main = (): number => {
     rmSync(tempDir, { recursive: true, force: true });
   }
 
-  const result = compareContracts(build.jsonl, candidateText, options.maxDiffs);
+  const result = compareContracts(
+    build.jsonl,
+    candidateText,
+    options.maxDiffs,
+    {
+      recordLabel: rowsRecordLabel,
+    },
+  );
   if (result.diffs.length > 0 || result.omitted > 0) {
     reportDiffs(result.diffs, result.omitted, result.truncated);
     return EXIT_MISMATCH;
   }
 
   process.stderr.write(
-    `port-rows: match (candidate, ${build.records.length} record(s), ${contractBytes} bytes)\n`,
+    `port-rows: match (candidate, ${build.records.length} record(s), ` +
+      `${contractBytes} bytes, collator ${build.collatorLocale})\n`,
   );
   return EXIT_MATCH;
 };

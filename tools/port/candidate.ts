@@ -131,7 +131,6 @@ export interface CandidateRun {
 const candidateEnv = (): NodeJS.ProcessEnv => {
   const env = { ...process.env };
   delete env.THAR_PORT_MUTATION;
-  delete env.THAR_ROWS_MUTATION;
   return env;
 };
 
