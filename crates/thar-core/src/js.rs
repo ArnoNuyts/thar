@@ -12,7 +12,7 @@
 
 /// True for the characters matched by JavaScript's `\s` and trimmed by
 /// `String.prototype.trim()`.
-pub(crate) const fn is_js_whitespace(character: char) -> bool {
+pub const fn is_js_whitespace(character: char) -> bool {
     matches!(
         character,
         '\u{0009}'        // tab
@@ -42,7 +42,7 @@ pub(crate) fn whitespace_prefix_len(text: &str) -> usize {
 }
 
 /// `String.prototype.trim()`: strip JS whitespace from both ends.
-pub(crate) fn js_trim(text: &str) -> &str {
+pub fn js_trim(text: &str) -> &str {
     text.trim_matches(is_js_whitespace)
 }
 

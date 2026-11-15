@@ -24,6 +24,7 @@ pub mod registry_meta;
 pub mod text;
 pub mod update;
 
+mod create_edit;
 mod date;
 mod priority;
 mod recurrence;
