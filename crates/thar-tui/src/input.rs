@@ -431,6 +431,7 @@ fn left_click(
     // The Ink list focuses the list on any row click, which blurs the search
     // input without clearing its filter.
     app.search_focused = false;
+    app.clear_search_suggestions();
     nav::select_row(app, row, mouse.shift);
 
     let double = !mouse.shift
@@ -752,7 +753,6 @@ mod tests {
         let mut app = app(&["one +thar @home"]);
         app.search_focused = true;
         app.set_query("+th");
-        app.refresh_search_suggestions();
         assert!(app.search_suggestions.is_open());
 
         assert_eq!(

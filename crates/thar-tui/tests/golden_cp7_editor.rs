@@ -256,7 +256,6 @@ fn eighty_by_twenty_four_search_popup_is_content_sized_and_anchored() {
     app.resize(80, 24);
     app.search_focused = true;
     app.set_query("+th");
-    app.refresh_search_suggestions();
     let backend = draw(&app, 80, 24);
     let screen = screen_lines(&backend);
 

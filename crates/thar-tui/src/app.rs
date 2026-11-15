@@ -198,7 +198,7 @@ impl App {
         self.todos = todos;
         self.views = self.todos.iter().map(view_for).collect();
         self.tag_sources = TagSources::collect(&self.todos);
-        self.search_suggestions.clear();
+        self.refresh_search_suggestions();
         self.range.clear();
         self.anchor = None;
         self.cursor = None;
@@ -301,6 +301,7 @@ impl App {
     pub fn set_query(&mut self, query: impl Into<String>) {
         self.query = query.into();
         self.query_cursor = self.query.chars().count();
+        self.refresh_search_suggestions();
         crate::nav::rebuild(self);
     }
 

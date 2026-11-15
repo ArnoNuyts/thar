@@ -248,11 +248,7 @@ impl Modal for TextModal {
         if available == 0 {
             return None;
         }
-        let window_start = if cursor >= available {
-            cursor + 1 - available
-        } else {
-            0
-        };
+        let (window_start, _) = input_window(chars, cursor, available);
         let word_start = self.suggestions.start();
         let before_word = if word_start <= window_start {
             String::new()
@@ -265,10 +261,12 @@ impl Modal for TextModal {
         };
         let width = u16::try_from(Line::from(sanitize_for_display(&before_word)).width())
             .unwrap_or(u16::MAX);
+        let max_x = content.x.saturating_add(content.width.saturating_sub(1));
         let x = content
             .x
             .saturating_add(u16::try_from(PROMPT.chars().count()).unwrap_or(0))
-            .saturating_add(width);
+            .saturating_add(width)
+            .min(max_x);
         Some(Overlay {
             anchor: Anchor {
                 x,
@@ -287,6 +285,58 @@ fn content_rect(body: Rect) -> Rect {
         body.width.saturating_sub(2),
         body.height,
     )
+}
+
+/// Display width of one character after sanitization.
+fn char_width(character: char) -> usize {
+    Line::from(sanitize_for_display(&character.to_string())).width()
+}
+
+/// Display width of a run of characters in terminal cells.
+fn cells_width(chars: &[char]) -> usize {
+    chars.iter().map(|character| char_width(*character)).sum()
+}
+
+/// The cell-based input window: the first and exclusive last char indexes that
+/// fit `available` terminal cells while keeping the cursor visible.
+///
+/// The editor stores a char index, but rendering and anchoring are in cells.
+/// A CJK glyph is two cells and a sanitized control character can be six, so a
+/// char window would overflow the input row and detach the popup from the
+/// marker.
+fn input_window(chars: &[char], cursor: usize, available: usize) -> (usize, usize) {
+    if available == 0 {
+        return (cursor.min(chars.len()), cursor.min(chars.len()));
+    }
+
+    let cursor = cursor.min(chars.len());
+    let mut start = 0;
+    let mut before = cells_width(&chars[..cursor]);
+    // Leave one cell for the inverse cursor cell.
+    while start < cursor && before.saturating_add(1) > available {
+        before = before.saturating_sub(char_width(chars[start]));
+        start += 1;
+    }
+
+    let mut end = cursor;
+    let mut used = before.saturating_add(1);
+    if let Some(at) = chars.get(cursor) {
+        let width = char_width(*at);
+        if used.saturating_add(width) <= available {
+            used = used.saturating_add(width);
+            end = cursor + 1;
+        }
+    }
+    while end < chars.len() {
+        let width = char_width(chars[end]);
+        if used.saturating_add(width) > available {
+            break;
+        }
+        used = used.saturating_add(width);
+        end += 1;
+    }
+
+    (start, end)
 }
 
 /// One row of the content rectangle, if it is still inside the modal.
@@ -318,19 +368,16 @@ fn render_input(frame: &mut Frame, content: Rect, offset: u16, editor: &Editor) 
         return;
     }
 
-    // Horizontal window: keep the cursor visible, one cell for the blank
-    // cursor when it sits at the end of the text.
-    let start = if cursor >= available {
-        cursor + 1 - available
-    } else {
-        0
-    };
-    let end = chars.len().min(start.saturating_add(available));
+    let (start, end) = input_window(chars, cursor, available);
     let window = chars.get(start..end).unwrap_or(&[]);
 
     let cursor_at = cursor.saturating_sub(start);
     let before: String = window[..cursor_at.min(window.len())].iter().collect();
-    let at = window.get(cursor_at).copied().unwrap_or(' ');
+    let at = chars
+        .get(cursor)
+        .copied()
+        .filter(|_| cursor < end)
+        .unwrap_or(' ');
     let after: String = window[window.len().min(cursor_at.saturating_add(1))..]
         .iter()
         .collect();
@@ -885,6 +932,17 @@ mod tests {
             actions(modal.handle_key(key(KeyCode::Enter))),
             [Action::AddTodos(vec!["b".to_owned()])]
         );
+    }
+
+    #[test]
+    fn the_input_window_counts_display_cells_not_chars() {
+        let text = format!("{} +th", "日".repeat(30));
+        let chars: Vec<char> = text.chars().collect();
+        let cursor = chars.len();
+        let (start, end) = super::input_window(&chars, cursor, 36);
+        assert!(start > 0, "the wide prefix must scroll");
+        assert_eq!(end, cursor);
+        assert!(super::cells_width(&chars[start..cursor]) < 36);
     }
 
     #[test]
