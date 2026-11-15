@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { startOfDay } from "date-fns";
 import { useWindowSize } from "ink";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearch } from "../contexts/search-context.tsx";
 import {
   filterBySearch,
@@ -7,6 +8,8 @@ import {
   sortByImportance,
   type Todos,
 } from "../logic/Todos.ts";
+import { buildRowsWithCore } from "../logic/core-wasm.ts";
+import { formatDateTag } from "../logic/dates.ts";
 import { createIndexes, IndexEntry } from "../logic/indexes.ts";
 import {
   areSetsEqual,
@@ -19,6 +22,11 @@ import {
   reconcileNavState,
 } from "../logic/navigation.ts";
 import { IndexType } from "../types/enums.ts";
+import { useTodayKey } from "./useTodayKey.ts";
+
+/** The local calendar day in the `YYYY-MM-DD` form the Rust boundary takes. */
+export const todayDateKey = (dayKey: string): string =>
+  formatDateTag(startOfDay(new Date(dayKey)));
 
 /**
  * Owns navigation selection state, derived indexes, and event handlers.
@@ -56,7 +64,17 @@ export const useNavigationState = (
   const listHeight =
     listHeightForTest ?? windowRows - 2 - (searchBarVisible ? 2 : 0);
 
+  // A day key that re-renders at local midnight; `today` is derived from it so
+  // the Rust row builder's overdue/threshold verdicts roll over with the list.
+  const todayKey = useTodayKey();
+  const today = useMemo(() => todayDateKey(todayKey), [todayKey]);
+
   const indexes: IndexEntry[] = useMemo(() => {
+    // `THAR_CORE=rust` may build the rows in Rust; the value is `undefined`
+    // in `ts` mode, when the package or export is missing, and on any error.
+    const coreRows = buildRowsWithCore(todos, searchQuery, showHidden, today);
+    if (coreRows) return coreRows;
+
     let filteredTodos = sortByImportance(todos);
 
     if (!showHidden) {
@@ -66,7 +84,7 @@ export const useNavigationState = (
     filteredTodos = filterBySearch(filteredTodos, searchQuery);
 
     return createIndexes(filteredTodos);
-  }, [todos, searchQuery, showHidden]);
+  }, [todos, searchQuery, showHidden, today]);
 
   // Derived state is reconciled purely during render, then committed in an
   // effect. The current render already sees the reconciled result, and the
