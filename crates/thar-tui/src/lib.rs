@@ -50,4 +50,6 @@ pub use app::{App, Effect};
 pub use history::History;
 pub use layout::Layout;
 pub use list::{ListModel, ListRow};
-pub use modal::{Action, Modal, ModalId, Outcome, TagKind};
+pub use modal::{
+    Action, ConfirmRequest, InstallKind, Modal, ModalId, Outcome, TagKind, UpdateModel,
+};
