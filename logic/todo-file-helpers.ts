@@ -1,5 +1,6 @@
 import { Runtime } from "../utils/runtime.ts";
 import { findUnsafeTodoTextCodePoint } from "./control-characters.ts";
+import { shadowCheckTodoFile } from "./core-wasm.ts";
 import {
   getReadLimits,
   type ReadLimits,
@@ -70,9 +71,16 @@ export async function readTodosFromFile(
     throw new TodoFileTooLargeError(actualBytes, limits.maxFileBytes);
   }
 
-  return validateTodoFileContent(data, limits)
+  const todos = validateTodoFileContent(data, limits)
     .filter((x) => x.trim())
     .map((x) => new Todo(x));
+
+  // Development-only differential check against the Rust core; a no-op unless
+  // THAR_SHADOW=1. It never changes `todos` and never throws (see
+  // `logic/core-wasm.ts`), so the TypeScript result stays the app's state.
+  shadowCheckTodoFile(data, todos);
+
+  return todos;
 }
 
 export type WriteOptions = {

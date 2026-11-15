@@ -43,6 +43,29 @@ Supports projects (`+project`), contexts (`@context`), priorities, due dates,
 threshold dates, recurrence, and hidden todos. Run `thar --help` for options
 and see the [todo.txt format](https://github.com/todotxt/todo.txt) for tags.
 
+## Rust port (development)
+
+The `todo.txt` domain is being ported to Rust in `crates/` and loaded through
+WebAssembly. Nothing in the shipped app changes yet: the TypeScript
+implementation is still the source of truth, no `wasm` package is published, and
+both variables below are development-only.
+
+```sh
+wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg
+```
+
+| Variable          | Effect                                                                                                                                                                                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `THAR_CORE=ts`    | Default. Only value that is live today; `rust` is read but behaves identically until CP3.                                                                                                                                                                                                           |
+| `THAR_SHADOW=1`   | After each successful load, parse the same text with the Rust core and compare per-todo `toString`/`hash` and the serialized file. Off by default; never changes state, saves or toasts.                                                                                                            |
+| `THAR_SHADOW_LOG` | Shadow log path. Default `<cache>/thar/shadow.log` (`$XDG_CACHE_HOME`, `~/Library/Caches`, `%LOCALAPPDATA%`, else `~/.cache`). Records counts, line indexes and 16-hex-digit SHA-256 digests only — never todo text. Capped at 64 KiB; the file is truncated before an append would exceed the cap. |
+| `THAR_CORE_WASM`  | Explicit path to `thar_wasm.js`, for experiments outside the checkout.                                                                                                                                                                                                                              |
+
+A missing or broken package disables the Rust path silently (one `console.debug`
+line), so the app and its tests work in a clean checkout without Rust. See
+[`docs/rust-port/PLAN.md`](docs/rust-port/PLAN.md) and
+[`tools/port/README.md`](tools/port/README.md).
+
 ## License
 
 [MIT](LICENSE)
