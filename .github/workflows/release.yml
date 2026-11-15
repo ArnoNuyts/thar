@@ -47,6 +47,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The published package ships the real WASM core: `prepack` builds it, so
+      # the publish job needs Rust and wasm-pack.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@wasm-pack
+
+      - name: Install binaryen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+          wasm-opt --version
+
       - name: Resolve release
         id: release
         env:
@@ -134,6 +155,25 @@ jobs:
             npm version "$VERSION" --no-git-tag-version
           fi
 
+      - name: Verify the tarball ships the WASM core
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          tarball="$(npm pack --silent | tail -n1)"
+          contents="$(tar -tzf "$tarball")"
+          for required in \
+            package/crates/thar-wasm/pkg/thar_wasm.js \
+            package/crates/thar-wasm/pkg/thar_wasm_bg.wasm; do
+            if ! grep -qx "$required" <<<"$contents"; then
+              echo "::error::$tarball is missing $required" >&2
+              echo "$contents" >&2
+              exit 1
+            fi
+          done
+          echo "$tarball ships the WASM core ($(du -h "$tarball" | cut -f1))."
+
+      # `npm publish` packs again (and `prepack` rebuilds the WASM), so the
+      # tarball verified above is a preflight, not the published bytes.
       - name: Publish to npm
         if: steps.check.outputs.skip != 'true'
         env:

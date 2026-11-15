@@ -180,12 +180,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # `npm pack` runs `prepack`, which builds the WASM core the published
+      # package ships.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: version-guard
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@wasm-pack
+
+      - name: Install binaryen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+
       - name: Verify package contents
         run: npm pack --dry-run
 
   package-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Setup repo
@@ -197,6 +217,28 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # The published package ships the real WASM core (CP5), so packing it
+      # requires Rust. The build is not optional: a tarball without
+      # `crates/thar-wasm/pkg/thar_wasm.js` fails the checks below.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: package-smoke
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@wasm-pack
+
+      - name: Install binaryen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+          wasm-opt --version
+
       - name: Install dependencies
         run: npm ci
 
@@ -204,17 +246,74 @@ jobs:
         id: pack
         run: echo "tarball=$(npm pack --silent | tail -n1)" >> "$GITHUB_OUTPUT"
 
-      - name: Install package globally
-        run: npm install -g --prefix "$RUNNER_TEMP/prefix" "./${{ steps.pack.outputs.tarball }}"
-
-      - name: Smoke test the installed package
+      - name: Verify the tarball ships the WASM core
+        env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
         run: |
-          bin_name="$(node -p "Object.keys(require('./package.json').bin ?? {})[0] ?? ''")"
-          if [ -z "$bin_name" ]; then
-            # release/next currently has no bin entry; the pack/install steps above
-            # still verify packaging, and the bin checks run once one is added.
-            echo "Package has no bin entry; skipping CLI smoke checks."
-            exit 0
+          set -euo pipefail
+          contents="$(tar -tzf "$TARBALL")"
+          for required in \
+            package/crates/thar-wasm/pkg/thar_wasm.js \
+            package/crates/thar-wasm/pkg/thar_wasm_bg.wasm; do
+            if ! grep -qx "$required" <<<"$contents"; then
+              echo "::error::$TARBALL is missing $required" >&2
+              echo "$contents" >&2
+              exit 1
+            fi
+          done
+          echo "$TARBALL ships the WASM core."
+
+      - name: Install the tarball into a temp project
+        id: install
+        env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/smoke"
+          mkdir -p "$project"
+          cd "$project"
+          npm init -y >/dev/null
+          npm install "$GITHUB_WORKSPACE/$TARBALL"
+          echo "project=$project" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test the default and the TypeScript escape hatch
+        env:
+          PROJECT: ${{ steps.install.outputs.project }}
+        run: |
+          set -euo pipefail
+          cd "$PROJECT"
+          bin="node_modules/.bin/thar"
+          if [ ! -x "$bin" ]; then
+            echo "::error::the installed package has no thar bin" >&2
+            exit 1
           fi
-          "$RUNNER_TEMP/prefix/bin/$bin_name" --version
-          "$RUNNER_TEMP/prefix/bin/$bin_name" --help
+          # Default mode: no THAR_CORE, so the app uses the packaged Rust core.
+          "$bin" --version
+          "$bin" --help >/dev/null
+          # The documented escape hatch still runs.
+          THAR_CORE=ts "$bin" --version
+          THAR_CORE=ts "$bin" --help >/dev/null
+
+      # The packaged module, required exactly as `dist/main.js` resolves it.
+      # `coreVersion()` proves the tarball's WASM loads; a missing or broken
+      # package would throw here instead of silently falling back.
+      - name: Verify the packaged core loads
+        env:
+          PROJECT: ${{ steps.install.outputs.project }}
+        run: |
+          cd "$PROJECT"
+          node - <<'NODE'
+          const path = require("node:path");
+          const pkg = require.resolve("@arnoarnoarno/thar/package.json");
+          const entry = path.join(path.dirname(pkg), "crates", "thar-wasm", "pkg", "thar_wasm.js");
+          const core = require(entry);
+          const version = core.coreVersion();
+          if (typeof version !== "string" || version.length === 0) {
+            throw new Error("packaged coreVersion() is empty");
+          }
+          const parsed = JSON.parse(core.parseFile("one\n", "2026-11-15"));
+          if (parsed.ok !== true || parsed.todos.length !== 1) {
+            throw new Error("packaged parseFile() did not answer");
+          }
+          console.log(`packaged core ok (core ${version}, default THAR_CORE)`);
+          NODE
