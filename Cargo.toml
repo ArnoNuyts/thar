@@ -1,0 +1,25 @@
+# Rust workspace for the Thar port. See docs/rust-port/PLAN.md.
+#
+# thar-core is the pure todo.txt domain; thar-wasm is the WebAssembly batch
+# boundary loaded by the Node app during the incremental adoption phase.
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/ArnoNuyts/thar"
+
+[workspace.dependencies]
+thar-core = { path = "crates/thar-core", version = "0.1.0" }
+wasm-bindgen = "0.2.130"
+
+# Keep the shipped WASM small: the size gate is 250 KB raw / 100 KB gzip.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
