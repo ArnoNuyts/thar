@@ -77,8 +77,10 @@ export async function readTodosFromFile(
 
   // Development-only differential check against the Rust core; a no-op unless
   // THAR_SHADOW=1. It never changes `todos` and never throws (see
-  // `logic/core-wasm.ts`), so the TypeScript result stays the app's state.
-  shadowCheckTodoFile(data, todos);
+  // `logic/core-wasm.ts`), so the TypeScript result stays the app's state. The
+  // effective limits are passed through: Rust must judge this file by the same
+  // `THAR_MAX_*` values the TypeScript reader just used.
+  shadowCheckTodoFile(data, todos, limits);
 
   return todos;
 }

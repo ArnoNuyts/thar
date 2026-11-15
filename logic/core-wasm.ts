@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { startOfDay } from "date-fns";
 
 import { formatDateTag } from "./dates.ts";
+import { getReadLimits, type ReadLimits } from "./limits.ts";
 import type { Todo } from "./todo.ts";
 
 /**
@@ -177,21 +178,37 @@ const isCoreParseResult = (value: unknown): value is CoreParseResult => {
 };
 
 /**
- * Parse `text` with the Rust core, using default read limits.
+ * Parse `text` with the Rust core.
  *
- * `today` is the local calendar day (`YYYY-MM-DD`). Returns `undefined` when
- * the package is unavailable or the call fails for any reason; it never throws.
- * The result is exactly the JSON envelope `thar-wasm` documents, parsed.
+ * `today` is the local calendar day (`YYYY-MM-DD`). With no `limits` the call
+ * uses `thar-wasm`'s compile-time defaults; pass the effective `ReadLimits`
+ * (from `getReadLimits()`) whenever the host may have overridden
+ * `THAR_MAX_*`, otherwise Rust rejects files the TypeScript reader accepted.
+ *
+ * Returns `undefined` when the package is unavailable or the call fails for any
+ * reason; it never throws. The result is exactly the JSON envelope
+ * `thar-wasm` documents, parsed.
  */
 export const parseFileWithCore = (
   text: string,
   today: string,
+  limits?: ReadLimits,
 ): CoreParseResult | undefined => {
   const core = loadCoreModule();
   if (!core) return undefined;
 
   try {
-    const parsed: unknown = JSON.parse(core.parseFile(text, today));
+    const raw =
+      limits === undefined
+        ? core.parseFile(text, today)
+        : core.parseFileWithLimits(
+            text,
+            today,
+            limits.maxFileBytes,
+            limits.maxReadTodos,
+            limits.maxLineChars,
+          );
+    const parsed: unknown = JSON.parse(raw);
     if (!isCoreParseResult(parsed)) {
       if (!adapterLogged) {
         adapterLogged = true;
@@ -292,6 +309,10 @@ const shortHash = (line: string): string =>
 /**
  * Compare the Rust parse with the TypeScript result the app is about to use.
  *
+ * `limits` are the effective read limits of the load that produced `todos`;
+ * passing them keeps Rust from rejecting a file the TypeScript reader accepted
+ * under a `THAR_MAX_*` override.
+ *
  * Returns `undefined` when the two agree or when the Rust package is
  * unavailable. Only per-todo `toString`/`hash` and the whole-file serialized
  * bytes are compared; that is what CP1 freezes, and it keeps the check
@@ -300,8 +321,9 @@ const shortHash = (line: string): string =>
 const compareWithCore = (
   text: string,
   todos: readonly Todo[],
+  limits: ReadLimits,
 ): ShadowRecord | undefined => {
-  const parsed = parseFileWithCore(text, todayFromClock());
+  const parsed = parseFileWithCore(text, todayFromClock(), limits);
   if (!parsed) return undefined;
 
   const at = new Date().toISOString();
@@ -391,6 +413,11 @@ const appendShadowRecord = (record: ShadowRecord): void => {
  * `THAR_SHADOW=1`: compare the Rust parse of `text` with `todos` and record a
  * bounded, content-free diagnostic on any difference.
  *
+ * `limits` must be the effective read limits of the load that produced `todos`
+ * — normally the same `ReadLimits` the caller read the file with. Omit it only
+ * for a standalone call; the current environment's `getReadLimits()` is then
+ * used, and a `THAR_MAX_*` override still cannot cause a spurious rejection.
+ *
  * No-op unless the variable is `1`. The todo file is never touched, and nothing
  * here may throw: a broken package or an unwritable cache path only produces one
  * debug line, and the TypeScript result is always what the app keeps using.
@@ -398,11 +425,14 @@ const appendShadowRecord = (record: ShadowRecord): void => {
 export const shadowCheckTodoFile = (
   text: string,
   todos: readonly Todo[],
+  limits?: ReadLimits,
 ): void => {
   if (!isShadowEnabled()) return;
 
   try {
-    const record = compareWithCore(text, todos);
+    // Inside the `try`: `getReadLimits` rejects an invalid `THAR_MAX_*` and
+    // the shadow must never throw into the read path.
+    const record = compareWithCore(text, todos, limits ?? getReadLimits());
     if (!record) return;
     appendShadowRecord(record);
 
