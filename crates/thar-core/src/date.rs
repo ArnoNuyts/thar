@@ -100,7 +100,7 @@ const fn is_leap_year(year: u16) -> bool {
 }
 
 /// Number of days in a month; `0` for an invalid month.
-const fn days_in_month(year: u16, month: u8) -> u8 {
+pub(crate) const fn days_in_month(year: u16, month: u8) -> u8 {
     match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
