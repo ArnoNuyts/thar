@@ -56,7 +56,9 @@
 //! `today` that is not a real `YYYY-MM-DD` calendar day — is a rejected
 //! function result ([`TodayError`]) that wasm-bindgen turns into a thrown
 //! JavaScript `Error`; the TypeScript adapter catches it and disables the Rust
-//! path instead of surfacing it in the TUI.
+//! path instead of surfacing it in the TUI. [`TodayError`] implements
+//! `std::error::Error`, so wasm-bindgen's blanket `From<E> for JsError` builds
+//! the thrown error from its fixed, content-free `Display` message.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -105,7 +107,7 @@ pub fn core_version() -> String {
 /// `today` is not a valid `YYYY-MM-DD` calendar day.
 #[wasm_bindgen(js_name = parseFile)]
 pub fn parse_file(text: &str, today: &str) -> Result<String, JsError> {
-    parse_envelope(text, today, &ReadLimits::DEFAULT).map_err(to_js_error)
+    parse_envelope(text, today, &ReadLimits::DEFAULT).map_err(JsError::from)
 }
 
 /// Parse a whole file with explicit read limits.
@@ -115,6 +117,14 @@ pub fn parse_file(text: &str, today: &str) -> Result<String, JsError> {
 /// `THAR_MAX_READ_TODOS` and `THAR_MAX_LINE_CHARS`. The host owns the
 /// environment; the core only receives numbers, so a corpus run can pin them.
 ///
+/// The limits arrive as `f64`, the JavaScript `Number` type, so the whole host
+/// range crosses without a `BigInt` round-trip (wasm-bindgen maps `u64`
+/// parameters to `BigInt`). They are clamped by [`js_u64`]/[`js_usize`]: a
+/// non-finite or non-positive value accepts nothing, and a value beyond the
+/// target range saturates instead of wrapping. `max_file_bytes` is a `u64`, so
+/// there is no 4 GiB cap; on wasm32 only `max_read_todos`/`max_line_chars`
+/// saturate at `usize::MAX`, which no real file reaches.
+///
 /// # Errors
 ///
 /// Returns a JavaScript `Error` (via wasm-bindgen) carrying [`TodayError`] when
@@ -123,21 +133,36 @@ pub fn parse_file(text: &str, today: &str) -> Result<String, JsError> {
 pub fn parse_file_with_limits(
     text: &str,
     today: &str,
-    max_file_bytes: u32,
-    max_read_todos: u32,
-    max_line_chars: u32,
+    max_file_bytes: f64,
+    max_read_todos: f64,
+    max_line_chars: f64,
 ) -> Result<String, JsError> {
     let limits = ReadLimits {
-        max_file_bytes: u64::from(max_file_bytes),
-        max_read_todos: max_read_todos as usize,
-        max_line_chars: max_line_chars as usize,
+        max_file_bytes: js_u64(max_file_bytes),
+        max_read_todos: js_usize(max_read_todos),
+        max_line_chars: js_usize(max_line_chars),
     };
-    parse_envelope(text, today, &limits).map_err(to_js_error)
+    parse_envelope(text, today, &limits).map_err(JsError::from)
 }
 
-/// Turn a [`TodayError`] into the JavaScript error wasm-bindgen throws.
-fn to_js_error(error: TodayError) -> JsError {
-    JsError::new(&error.to_string())
+/// Clamp a JavaScript limit to a `u64`.
+///
+/// The host validates its environment before calling; this only defends the
+/// boundary. Non-finite and non-positive values accept nothing (`0`) rather
+/// than panicking or wrapping, and an oversized value saturates at the integer
+/// bound, which for a byte limit is indistinguishable from "no limit".
+fn js_u64(value: f64) -> u64 {
+    if value.is_finite() && value > 0.0 {
+        // `as` saturates at the integer bounds and floors the fraction.
+        value as u64
+    } else {
+        0
+    }
+}
+
+/// Clamp a JavaScript limit to `usize` (32-bit on wasm32).
+fn js_usize(value: f64) -> usize {
+    usize::try_from(js_u64(value)).unwrap_or(usize::MAX)
 }
 
 /// Build the JSON envelope for one file.
@@ -153,8 +178,12 @@ fn parse_envelope(text: &str, today: &str, limits: &ReadLimits) -> Result<String
     let parsed =
         validate_file_bytes(text.len() as u64, limits).and_then(|()| parse_core_file(text, limits));
 
-    // Records are larger than their lines because every field is spelled out.
-    let mut out = String::with_capacity(text.len().saturating_mul(2).saturating_add(256));
+    // A record spells out every field, so a file of short lines expands far
+    // more than the input does. 50% of the input plus 256 bytes is right-sized
+    // for typical todo lines; a miss only costs an amortized `String` growth,
+    // while reserving more would double the peak allocation on a large
+    // `todo.txt`.
+    let mut out = String::with_capacity(text.len().saturating_mul(3) / 2 + 256);
     match parsed {
         Ok(todos) => {
             out.push_str("{\"ok\":true,\"todos\":[");
@@ -302,7 +331,11 @@ fn push_error(out: &mut String, error: &CoreError) {
 /// Append `null` or a quoted `YYYY-MM-DD` date.
 fn push_optional_date(out: &mut String, date: Option<TodoDate>) {
     match date {
-        Some(date) => push_json_string(out, &date.to_string()),
+        Some(date) => {
+            // Digits and `-` need no escaping, and `Display` writes straight
+            // into `out`, so this does not allocate a temporary `String`.
+            push_fmt(out, format_args!("\"{date}\""));
+        }
         None => out.push_str("null"),
     }
 }
@@ -319,6 +352,15 @@ fn push_json_string_array(out: &mut String, values: &[String]) {
     out.push(']');
 }
 
+/// Append formatted arguments without an unreachable `expect`.
+///
+/// `fmt::Write` for `String` is infallible, so a `write!` here can never return
+/// `Err`. The `Result` is dropped in this one documented place rather than
+/// repeated as `.expect(…)` at every call site.
+fn push_fmt(out: &mut String, args: fmt::Arguments<'_>) {
+    let _ = out.write_fmt(args);
+}
+
 /// Append `true` or `false`.
 fn push_json_bool(out: &mut String, value: bool) {
     out.push_str(if value { "true" } else { "false" });
@@ -326,14 +368,16 @@ fn push_json_bool(out: &mut String, value: bool) {
 
 /// Append a JSON number.
 fn push_json_number(out: &mut String, value: u64) {
-    write!(out, "{value}").expect("writing to a String cannot fail");
+    push_fmt(out, format_args!("{value}"));
 }
 
 /// Append a one-character JSON string (a priority letter).
+///
+/// Delegates to [`push_json_string`] instead of pushing quotes by hand, so a
+/// future non-`[A-Z]` priority is escaped like any other text.
 fn push_json_char(out: &mut String, value: char) {
-    out.push('"');
-    out.push(value);
-    out.push('"');
+    let mut buffer = [0u8; 4];
+    push_json_string(out, value.encode_utf8(&mut buffer));
 }
 
 /// Append a JSON string, escaping exactly what `JSON.stringify` escapes.
@@ -356,7 +400,7 @@ fn push_json_string(out: &mut String, value: &str) {
             '\u{2028}' => out.push_str("\\u2028"),
             '\u{2029}' => out.push_str("\\u2029"),
             control if (control as u32) < 0x20 => {
-                write!(out, "\\u{:04x}", control as u32).expect("writing to a String cannot fail");
+                push_fmt(out, format_args!("\\u{:04x}", control as u32));
             }
             other => out.push(other),
         }
@@ -366,7 +410,7 @@ fn push_json_string(out: &mut String, value: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{TodayError, parse_envelope};
+    use super::{TodayError, js_u64, js_usize, parse_envelope, parse_file_with_limits};
     use thar_core::ReadLimits;
 
     fn parse(text: &str, today: &str) -> String {
@@ -379,6 +423,37 @@ mod tests {
             max_read_todos,
             max_line_chars,
         }
+    }
+
+    #[test]
+    fn clamps_javascript_limits_instead_of_wrapping() {
+        assert_eq!(js_u64(1_024.0), 1_024);
+        // 4 GiB + 1: the old `u32` parameter would have wrapped to 1.
+        assert_eq!(js_u64(4_294_967_297.0), 4_294_967_297);
+        assert_eq!(js_u64(f64::NAN), 0);
+        assert_eq!(js_u64(f64::INFINITY), 0);
+        assert_eq!(js_u64(-1.0), 0);
+        assert_eq!(js_u64(0.0), 0);
+        assert_eq!(js_u64(2.9), 2);
+        assert_eq!(js_usize(9.0), 9);
+        // Saturates instead of wrapping on wasm32, where `usize` is 32-bit.
+        assert_eq!(js_usize(1e30), usize::MAX);
+    }
+
+    #[test]
+    fn accepts_a_file_limit_above_four_gibibytes() {
+        // Native-target call of the real export: the mapping is pure Rust.
+        let json = parse_file_with_limits("abc\n", "2026-11-15", 4_294_967_297.0, 10.0, 10.0)
+            .expect("a valid today");
+        assert!(json.starts_with("{\"ok\":true"), "{json}");
+    }
+
+    #[test]
+    fn escapes_a_priority_like_any_other_string() {
+        // `push_json_char` delegates to `push_json_string`; a `[A-Z]` priority
+        // is unchanged, and the helper no longer has an unescaped fast path.
+        let json = parse("(A) one\n", "2026-11-15");
+        assert!(json.contains("\"priority\":\"A\""), "{json}");
     }
 
     #[test]

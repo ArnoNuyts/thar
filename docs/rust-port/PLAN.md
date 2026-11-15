@@ -181,8 +181,8 @@ call per row/field:
 
 ```rust
 parse_file(text: &str, today: &str) -> String;   // JSON envelope, default limits
-parse_file_with_limits(text, today, max_file_bytes: u32,
-                       max_read_todos: u32, max_line_chars: u32) -> String;
+parse_file_with_limits(text, today, max_file_bytes: f64,
+                       max_read_todos: f64, max_line_chars: f64) -> String;
 core_version() -> String;
 ```
 
@@ -309,22 +309,35 @@ recorded. Do not start the next checkpoint while one is red.
 
 - `thar-wasm` now exports the real batch surface: `parseFile(text, today)` and
   `parseFileWithLimits(text, today, maxFileBytes, maxReadTodos, maxLineChars)`
-  return the CP1 JSON envelope, plus `coreVersion()`. The `recordCount` scaffold
-  is gone. JSON is written by hand (no `serde`), so field order is part of the
-  code and the module stays far inside the size budget.
+  return the CP1 JSON envelope, plus `coreVersion()`. The limit parameters are
+  `f64` (a JavaScript `Number`) and are clamped, so a limit above 4 GiB does not
+  wrap and a `BigInt` round-trip is not needed. The `recordCount` scaffold is
+  gone. JSON is written by hand (no `serde`), so field order is part of the code
+  and the module stays far inside the size budget.
 - `tools/port/candidates/wasm.mjs` is a plain-Node candidate over the built
   package: raw bytes, lossy UTF-8 decode, `node:crypto` hashes, production read
   limits from the environment, and the CP1 error record shape.
 - `logic/core-wasm.ts` is the dev-only adapter (`parseFileWithCore`) and the
-  `THAR_SHADOW=1` check. It loads the package with `createRequire` and a runtime
-  path, so the build, the test matrix and `npm run check` never require Rust or
-  a built `pkg/`. Any failure degrades to "TypeScript only" with at most one
-  debug line.
+  `THAR_SHADOW=1` check. It loads the package with `createRequire` and a
+  module-relative runtime path; there is no `process.cwd()` candidate, so the
+  build, the test matrix and `npm run check` never require Rust or a built
+  `pkg/`, and an unrelated working directory cannot shadow the checkout's
+  package. `THAR_CORE_WASM` is a **dev-only escape hatch** for pointing the
+  adapter at another build, and it is resolved with `path.resolve`, so a
+  _relative_ value is still relative to `process.cwd()`. The working directory
+  therefore only decides where an explicitly named package lives — it can never
+  cause a package to be picked up implicitly. Any failure degrades to
+  "TypeScript only" with at most one debug line that never quotes the input.
+- The shadow check passes the effective `ReadLimits` of the load to
+  `parseFileWithLimits`, so a `THAR_MAX_*` override cannot produce a spurious
+  `FILE_TOO_LARGE`/`LINE_TOO_LONG` rejection.
 - Shadow records are content-free: counts, todo indexes, 16-hex-digit SHA-256
   digests of the serialized lines, and the serialized-file digests. A todo line
   _is_ its own `hash`, so raw lines are never written. The log is
   `<cache>/thar/shadow.log` (`THAR_SHADOW_LOG` overrides), capped at 64 KiB by
-  truncating the file before an append would exceed it.
+  truncating the file before an append would exceed it. One record is appended
+  per load that differs, not once per process; only the `console.warn` summary
+  is once per process.
 - `THAR_CORE=ts|rust` is read but inert at CP2: both values keep the TypeScript
   implementation as the source of truth, and a test pins that. CP3 is the switch.
 - Evidence at landing: 0 contract diffs over 28 fixtures / 3 432 008 contract

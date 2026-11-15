@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -9,6 +10,7 @@ import {
   isShadowEnabled,
   parseFileWithCore,
   resetCoreBridgeForTests,
+  resolveShadowLogPath,
   shadowCheckTodoFile,
   shadowLogPath,
 } from "../logic/core-wasm.ts";
@@ -32,6 +34,9 @@ const ENV_KEYS = [
   "THAR_SHADOW_LOG",
   "THAR_CORE",
   "THAR_CORE_WASM",
+  "THAR_MAX_FILE_BYTES",
+  "THAR_MAX_READ_TODOS",
+  "THAR_MAX_LINE_CHARS",
   "XDG_CACHE_HOME",
 ] as const;
 
@@ -102,6 +107,72 @@ const record = (line: string, fields: Record<string, unknown> = {}) => ({
   ...fields,
 });
 
+/**
+ * A package that enforces the three read limits the way `thar-wasm` does, and
+ * echoes each line as its `toString`/`hash` (`lineSuffix` adds a difference).
+ *
+ * `parseFile` implements the compile-time defaults (1 MiB / 10 000 / 8 192) and
+ * rejects a longer line, so a test that overrides `THAR_MAX_LINE_CHARS` fails
+ * with a spurious `rejected` record if the adapter forgets to pass the
+ * effective limits to `parseFileWithLimits`.
+ */
+const limitAwarePackage = (lineSuffix = "") => `
+const fail = (name, code, fields) => ({
+  ok: false,
+  error: { name, code, ...fields, message: "bounded" },
+});
+const todo = (line, rustLine) => ({
+  text: line,
+  state: "todo",
+  priority: null,
+  completionDate: null,
+  creationDate: null,
+  projects: [],
+  contexts: [],
+  tags: [],
+  isDone: false,
+  isHidden: false,
+  isVisibleInOverview: true,
+  isOverdue: false,
+  toString: rustLine,
+  hash: rustLine,
+});
+const check = (text, maxFileBytes, maxReadTodos, maxLineChars) => {
+  const actualBytes = Buffer.byteLength(text, "utf8");
+  if (actualBytes > maxFileBytes) {
+    return fail("TodoFileTooLargeError", "FILE_TOO_LARGE", {
+      actualBytes,
+      maxBytes: maxFileBytes,
+    });
+  }
+  const lines = text.split("\\n").filter((line) => line.trim());
+  if (lines.length > maxReadTodos) {
+    return fail("TodoLineCountLimitError", "TOO_MANY_LINES", {
+      lineCount: lines.length,
+      maxReadTodos,
+    });
+  }
+  const index = lines.findIndex((line) => line.length > maxLineChars);
+  if (index >= 0) {
+    return fail("TodoLineLengthLimitError", "LINE_TOO_LONG", {
+      lineNumber: index + 1,
+      length: lines[index].length,
+      maxLineChars,
+    });
+  }
+  return {
+    ok: true,
+    todos: lines.map((line) => todo(line, line + ${JSON.stringify(lineSuffix)})),
+  };
+};
+module.exports = {
+  coreVersion: () => "0.2.0-test",
+  parseFile: (text) => JSON.stringify(check(text, 1024 * 1024, 10000, 8192)),
+  parseFileWithLimits: (text, _today, maxFileBytes, maxReadTodos, maxLineChars) =>
+    JSON.stringify(check(text, maxFileBytes, maxReadTodos, maxLineChars)),
+};
+`;
+
 const withTempDir = async (fn: (dir: string) => Promise<void>) => {
   const dir = await Runtime.makeTempDir();
   try {
@@ -148,6 +219,72 @@ describe("WASM adapter fallback", () => {
       expect(parseFileWithCore("one", "2026-11-15")).toBeUndefined();
       expect(debug.mock.calls.at(-1)?.[0]).toContain("malformed parseFile");
     });
+  });
+
+  test("an invalid envelope never echoes its text on debug", async () => {
+    await withTempDir(async (dir) => {
+      // Node's `JSON.parse` message quotes the input; a todo line is its own
+      // hash, so a snippet would leak content.
+      const secret = "SECRET-todo-text-9f43";
+      await fakePackage(
+        dir,
+        `module.exports = {
+  coreVersion: () => "0.2.0-test",
+  parseFile: () => '{"ok":true,"todos":[${secret}',
+  parseFileWithLimits: () => '{"ok":true,"todos":[${secret}',
+};
+`,
+      );
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+      expect(parseFileWithCore(`${secret}\n`, "2026-11-15")).toBeUndefined();
+
+      const logged = debug.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(logged).toContain("SyntaxError");
+      expect(logged).not.toContain(secret);
+    });
+  });
+
+  test("an unrelated working directory cannot plant a package", async () => {
+    const dir = await Runtime.makeTempDir();
+    const originalCwd = process.cwd();
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    try {
+      const planted = join(dir, "crates", "thar-wasm", "pkg", "thar_wasm.js");
+      mkdirSync(dirname(planted), { recursive: true });
+      const plantedEnvelope = JSON.stringify(
+        JSON.stringify({
+          ok: true,
+          todos: [record("planted-cwd-marker")],
+        }),
+      );
+      await Runtime.writeTextFile(
+        planted,
+        `module.exports = {
+  coreVersion: () => "planted",
+  parseFile: () => ${plantedEnvelope},
+  parseFileWithLimits: () => ${plantedEnvelope},
+};
+`,
+      );
+
+      setEnv("THAR_CORE_WASM", undefined);
+      resetCoreBridgeForTests();
+      process.chdir(dir);
+
+      const parsed = parseFileWithCore("one", "2026-11-15");
+      expect(JSON.stringify(parsed ?? null)).not.toContain(
+        "planted-cwd-marker",
+      );
+
+      if (!existsSync(REAL_PACKAGE)) {
+        expect(parsed).toBeUndefined();
+        expect(debug.mock.calls[0]?.[0]).toContain("WASM package not built");
+      }
+    } finally {
+      process.chdir(originalCwd);
+      await Runtime.remove(dir, { recursive: true });
+    }
   });
 
   test("maps the ok envelope with every contract field", async () => {
@@ -327,6 +464,48 @@ describe("THAR_SHADOW=1", () => {
     });
   });
 
+  test("uses the effective read limits instead of the compile-time defaults", async () => {
+    await withTempDir(async (dir) => {
+      const log = join(dir, "shadow.log");
+      setEnv("THAR_SHADOW_LOG", log);
+      setEnv("THAR_SHADOW", "1");
+      // One line longer than the default 8 192 units but inside the override.
+      setEnv("THAR_MAX_LINE_CHARS", "10000");
+      const line = "a".repeat(9_000);
+      const filename = join(dir, "todo.txt");
+      await Runtime.writeTextFile(filename, `${line}\n`);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      await fakePackage(dir, limitAwarePackage());
+
+      // The TypeScript reader accepts the file under the override and Rust
+      // must reach the same verdict. Without the limits, the package's
+      // `parseFile` (8 192) would record a spurious rejection here.
+      const todos = await readTodosFromFile(filename);
+      expect(todos.map((todo) => todo.toString())).toEqual([line]);
+      expect(existsSync(log)).toBe(false);
+      expect(warn).not.toHaveBeenCalled();
+
+      // Under the same override a real difference is still caught, and it is
+      // reported as a mismatch rather than a limit rejection.
+      await fakePackage(
+        dir,
+        limitAwarePackage(" (rust)"),
+        "thar_wasm_diff.cjs",
+      );
+      await readTodosFromFile(filename);
+
+      const written = JSON.parse(readFileSync(log, "utf8").trim()) as Record<
+        string,
+        unknown
+      >;
+      expect(written.kind).toBe("mismatch");
+      expect(written.mismatchCount).toBe(1);
+      expect(written.tsTodoCount).toBe(1);
+      expect(written.rustTodoCount).toBe(1);
+    });
+  });
+
   test("a Rust rejection of a loadable file is recorded", async () => {
     await withTempDir(async (dir) => {
       const log = join(dir, "shadow.log");
@@ -419,15 +598,71 @@ describe("THAR_SHADOW=1", () => {
 });
 
 describe("shadow log path", () => {
+  // A made-up home directory: the branch tests pass it in, so nothing here
+  // depends on the host user, `os.homedir()` or `process.platform`.
+  const homeDir = join("/home", "someone");
+
   test("THAR_SHADOW_LOG wins over the cache directory", async () => {
     await withTempDir(async (dir) => {
       setEnv("XDG_CACHE_HOME", join(dir, "cache"));
       expect(shadowLogPath()).toBe(join(dir, "cache", "thar", "shadow.log"));
+      // The exported path is the pure helper applied to the live globals.
+      expect(shadowLogPath()).toBe(
+        resolveShadowLogPath(process.env, process.platform, homedir()),
+      );
 
       const explicit = join(dir, "elsewhere", "shadow.log");
       setEnv("THAR_SHADOW_LOG", explicit);
       expect(shadowLogPath()).toBe(explicit);
     });
+  });
+
+  test("XDG_CACHE_HOME wins on every platform, and empty means unset", () => {
+    const cache = join("/tmp", "cache");
+    const fallbacks = {
+      linux: join(homeDir, ".cache"),
+      darwin: join(homeDir, "Library", "Caches"),
+      win32: join(homeDir, "AppData", "Local"),
+    } as const;
+    for (const platform of ["linux", "darwin", "win32"] as const) {
+      expect(
+        resolveShadowLogPath({ XDG_CACHE_HOME: cache }, platform, homeDir),
+      ).toBe(join(cache, "thar", "shadow.log"));
+      expect(
+        resolveShadowLogPath({ XDG_CACHE_HOME: "" }, platform, homeDir),
+      ).toBe(join(fallbacks[platform], "thar", "shadow.log"));
+    }
+  });
+
+  test("falls back to the platform cache directory without XDG", () => {
+    expect(resolveShadowLogPath({}, "linux", homeDir)).toBe(
+      join(homeDir, ".cache", "thar", "shadow.log"),
+    );
+    // Every platform that is not darwin or win32 uses the XDG default.
+    expect(resolveShadowLogPath({}, "aix", homeDir)).toBe(
+      join(homeDir, ".cache", "thar", "shadow.log"),
+    );
+    expect(resolveShadowLogPath({}, "darwin", homeDir)).toBe(
+      join(homeDir, "Library", "Caches", "thar", "shadow.log"),
+    );
+  });
+
+  test("win32 prefers LOCALAPPDATA and falls back to the profile", () => {
+    const localAppData = join(homeDir, "AppData", "Local");
+    expect(
+      resolveShadowLogPath({ LOCALAPPDATA: localAppData }, "win32", homeDir),
+    ).toBe(join(localAppData, "thar", "shadow.log"));
+    expect(resolveShadowLogPath({}, "win32", homeDir)).toBe(
+      join(localAppData, "thar", "shadow.log"),
+    );
+    // LOCALAPPDATA is not consulted off Windows.
+    expect(
+      resolveShadowLogPath(
+        { LOCALAPPDATA: join(homeDir, "ignored") },
+        "darwin",
+        homeDir,
+      ),
+    ).toBe(join(homeDir, "Library", "Caches", "thar", "shadow.log"));
   });
 });
 

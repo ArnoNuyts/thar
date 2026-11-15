@@ -282,6 +282,12 @@ npx vite-node tools/port/contract.ts --check --verify-golden \
   `THAR_MAX_READ_TODOS` and `THAR_MAX_LINE_CHARS` with the production defaults
   and validation, and are passed to `parseFileWithLimits` so a candidate running
   with different limits cannot match.
+- TODO: those defaults, the variable names and the positive-integer validation
+  are now duplicated in `logic/limits.ts`, this candidate and the Rust
+  `ReadLimits`. A shared limits manifest — the harness writing the effective
+  limits next to the contract, or one small generated module both sides import —
+  would remove the drift risk. Not done at CP2b: it would add a file to
+  `testdata/port/**` and change the candidate protocol.
 - The whole-file `serialized` field is derived from the records as CP1 defines
   it: `todos.map(toString).join("\n") + "\n"`. The write-time control-character
   guard is not part of that definition (see "Coverage limits").
@@ -353,8 +359,11 @@ the oracle.
 
 `.github/workflows/rust.yml`'s `wasm` job builds `thar-wasm`, enforces the size
 budget, runs the Node smoke test, then runs `npm ci` and
-`npm run port:contract:wasm`. The Node matrix does not require Rust or a built
-`pkg/`; the WASM job is the only place the candidate runs in CI.
+`npm run port:contract:wasm`. Its path filter includes `crates/**`,
+`testdata/port/**`, `tools/port/**`, `logic/core-wasm.ts`, `logic/limits.ts`,
+`unit-tests/core-wasm.test.ts` and `package.json`, so a change to the candidate,
+the adapter or its tests re-runs WASM parity. The Node matrix does not require
+Rust or a built `pkg/`; the WASM job is the only place the candidate runs in CI.
 
 ## Maintaining
 
