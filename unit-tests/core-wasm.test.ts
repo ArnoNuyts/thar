@@ -334,6 +334,12 @@ describe("THAR_CORE default (CP5)", () => {
 
     setEnv("THAR_CORE", "ts");
     expect(getCoreMode()).toBe("ts");
+    // The opt-out is forgiving: a shell that exports `TS` or pads whitespace
+    // must still select TypeScript, not silently keep Rust.
+    setEnv("THAR_CORE", "TS");
+    expect(getCoreMode()).toBe("ts");
+    setEnv("THAR_CORE", " ts ");
+    expect(getCoreMode()).toBe("ts");
 
     // An empty value is treated as unset: the default applies.
     setEnv("THAR_CORE", "");
@@ -1818,7 +1824,9 @@ test.skipIf(!existsSync(REAL_PACKAGE))(
 test.skipIf(
   !existsSync(REAL_PACKAGE) || !isEnglishCollator(defaultCollatorLocale()),
 )("the built package builds rows through the real loader", () => {
-  setEnv("THAR_CORE", "rust");
+  // Default mode: unset, not the explicit `rust` value, so a regression that
+  // only affects the shipped configuration is caught.
+  setEnv("THAR_CORE", undefined);
   setEnv("THAR_CORE_WASM", undefined);
   resetCoreBridgeForTests();
   const debug = vi.spyOn(console, "debug").mockImplementation(() => {});

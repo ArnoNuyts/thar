@@ -522,7 +522,7 @@ parse, no log.
   from `record.text` with the constructor's `PROJECT_REGEX`/`CONTEXT_REGEX` and
   rejects a record whose sets differ. Without this, a package built from another
   commit could silently change `createIndexes` grouping.
-- **WASM size** after the parse surface: **84 632 bytes raw / 37 328 bytes
+- **WASM size** after the parse surface: **84 632 bytes raw / 37 292 bytes
   gzip** (+443 / +138 over CP4; budget 250 KB / 100 KB).
 - **Contract evidence.** `tools/port/parse.ts` + `parse-cli.ts`: **28 records /
   3 931 057 bytes, 0 diffs** for both the self candidate and the wired WASM
@@ -665,8 +665,9 @@ is read once per path, so the whole switch is one function and one commit to
 revert.
 
 - **Default flip.** `getCoreMode()` returns `"rust"` for `rust`, an unset
-  variable and an empty value; `"ts"` only when `THAR_CORE=ts` is set
-  explicitly. An unrecognized value (a typo such as `THAR_CORE=wasm`) keeps the
+  variable and an empty value; `"ts"` when `THAR_CORE=ts` is set explicitly.
+  The value is trimmed and case-folded, so `TS` and `" ts"` still opt out. An
+  unrecognized value (a typo such as `THAR_CORE=wasm`) keeps the
   Rust default and logs one bounded line that names neither the value nor any
   file content: silently falling back to the old core on a typo would hide the
   mistake, and defaulting to Rust is what the release notes say happens. All
@@ -702,13 +703,14 @@ revert.
   no WASM). `npm run build` still works without Rust; a source checkout without
   `pkg/` falls back to TypeScript with one debug line. Only packing/publishing
   needs the Rust toolchain.
-- **Tarball.** `npm pack` on this checkpoint is **107 644 bytes** (12 files),
-  up **41 767 bytes** from the 65 877-byte TypeScript-only tarball:
+- **Tarball.** `npm pack` on this checkpoint is **107 943 bytes** (12 files),
+  up **41 679 bytes** from the 66 264-byte TypeScript-only tarball:
   `thar_wasm_bg.wasm` 84 632 bytes, `thar_wasm.js` 11 571, the two `.d.ts`
   files and the nested `pkg/package.json` + `LICENSE`. The GIF is not shipped.
 - **CI.** `package-smoke` installs Rust + wasm-pack + binaryen, packs the real
-  tarball, asserts `crates/thar-wasm/pkg/thar_wasm.js` and
-  `thar_wasm_bg.wasm` are inside it, installs the tarball into a temp project,
+  tarball, runs the **full** `npm test` suite against the packed `pkg/` (the
+  shipped configuration), asserts `crates/thar-wasm/pkg/thar_wasm.js` and
+  `thar_wasm_bg.wasm` are inside the tarball, installs it into a temp project,
   runs `thar --version`/`--help` in the default mode and with `THAR_CORE=ts`,
   and requires the packaged module to load and answer `coreVersion()` +
   `parseFile()`. `version-guard` got the same toolchain because
@@ -738,10 +740,12 @@ revert.
   - `npm run check`, `npm test` and `npm run doctor -- --scope changed`
     (score 100) green; `npm run build` green with and without `pkg/`.
   - Default-mode proof from the packed build: a probe package wrapping the real
-    `crates/thar-wasm/pkg` recorded **1 `parseFileWithLimits`**, **3 `buildRows`**
-    and **1 `serializeFile`** call in a pseudo-TTY run with `THAR_CORE` unset,
-    and the completed todo was written to disk; the same run logged no
-    `thar core:` line. `THAR_CORE=ts` runs load nothing.
+    `crates/thar-wasm/pkg` recorded `parseFileWithLimits` on load, `buildRows`
+    on each list build and `serializeFile` on the save in a pseudo-TTY run with
+    `THAR_CORE` unset, and the completed todo was written to disk; the same run
+    logged no `thar core:` line. (The exact call counts depend on session
+    length; the property is that all three paths reach Rust.) `THAR_CORE=ts`
+    runs load nothing.
   - `docs/rust-port/assets/cp5-rust-default.gif` (436 173 bytes): default
     startup with priorities/contexts/projects/due/threshold/hidden/completed
     rows, a `work` search, completing a todo, then `cat` showing the written
@@ -1094,7 +1098,7 @@ Phase 2 target (≤ 100 KB raw / ≤ 40 KB gzip) is already met; the workflow ke
 the 250 KB / 100 KB ceiling until the CP3 row and command surface lands, then
 tightens the constants and the README together. After CP3b2b it is 81 831 /
 35 986, after CP4's write surface 84 189 / 37 190, and after CP3b2c's parse
-surface 84 632 / 37 328.
+surface 84 632 / 37 292.
 
 ### 9.2 Add in later phases
 

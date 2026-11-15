@@ -234,7 +234,8 @@ const errorName = (error: unknown): string =>
  * The requested implementation, from `THAR_CORE`.
  *
  * - `ts` is the escape hatch: the TypeScript reader, pipeline and serializer
- *   only, no package loaded.
+ *   only, no package loaded. The value is trimmed and case-folded, so a stray
+ *   `TS` or `" ts"` still opts out.
  * - `rust`, an unset variable and an empty value all select the Rust core; the
  *   wired paths fall back to TypeScript at runtime when the package is missing
  *   or disagrees.
@@ -245,7 +246,7 @@ const errorName = (error: unknown): string =>
 let unknownModeLogged = false;
 
 export const getCoreMode = (): CoreMode => {
-  const requested = process.env.THAR_CORE;
+  const requested = process.env.THAR_CORE?.trim().toLowerCase();
   if (requested === "ts") return "ts";
   if (requested !== undefined && requested !== "" && requested !== "rust") {
     if (!unknownModeLogged) {

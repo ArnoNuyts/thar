@@ -58,7 +58,7 @@ Nothing is lost and the file never contains a mix.
 | Variable         | Effect                                                                                                                                                                                                               |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `THAR_CORE=ts`   | Escape hatch for one release: use the TypeScript core only. Loads no WASM package and behaves exactly like the pre-port app.                                                                                         |
-| `THAR_CORE=rust` | Explicit default. Any value other than `ts` selects the Rust core.                                                                                                                                                   |
+| `THAR_CORE=rust` | Explicit default. Any value other than `ts` (trimmed, case-insensitive) selects the Rust core.                                                                                                                       |
 | `THAR_CORE_WASM` | Development-only: explicit path to another `thar_wasm.js`. Resolved with `path.resolve`, so a relative value is relative to the working directory; unset, only the module-relative `crates/thar-wasm/pkg/` is tried. |
 | `THAR_MAX_*`     | Read limits (`THAR_MAX_FILE_BYTES`, `THAR_MAX_READ_TODOS`, `THAR_MAX_LINE_CHARS`). They are passed to the Rust parser, so both implementations judge a file the same way.                                            |
 

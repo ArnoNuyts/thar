@@ -246,6 +246,12 @@ jobs:
         id: pack
         run: echo "tarball=$(npm pack --silent | tail -n1)" >> "$GITHUB_OUTPUT"
 
+      # `npm pack` runs `prepack`, so `pkg/` now exists. Run the full suite in
+      # the configuration users actually get (WASM present, THAR_CORE unset);
+      # the Node matrix covers the source checkout without a package.
+      - name: Run the full suite against the shipped WASM package
+        run: npm test
+
       - name: Verify the tarball ships the WASM core
         env:
           TARBALL: ${{ steps.pack.outputs.tarball }}
