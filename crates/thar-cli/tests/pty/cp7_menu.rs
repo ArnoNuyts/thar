@@ -7,6 +7,7 @@
 //!
 //! ```sh
 //! cargo test -p thar-cli --test pty -- --ignored cp7_menu_screenshot
+//! cargo test -p thar-cli --test pty -- --ignored cp7_modal_padding_screenshot
 //! ```
 
 use crate::screenshot::{asset_path, rasterize, svg};
@@ -198,4 +199,68 @@ fn cp7_menu_screenshot() {
     session.send(b"q");
     let status = session.wait_exit(TIMEOUT);
     assert_eq!(status.exit_code(), 0);
+}
+
+#[test]
+fn the_delete_confirmation_at_80x24_keeps_a_pad_before_the_right_border() {
+    let directory = TempDir::new("cp7-modal-padding-80");
+    let path = directory.write("todo.txt", b"one\ntwo\n");
+    let mut session = Session::open_write_sized(&path, 80, 24);
+
+    session.wait_text("WRITE");
+    session.wait_todo_text("one");
+    session.send(b"\x1b[3~"); // Delete
+    session.wait_text("Delete Todo");
+
+    let snapshot = session.snapshot();
+    let line = snapshot
+        .text
+        .lines()
+        .find(|line| line.contains("delete this"))
+        .unwrap_or_else(|| panic!("no wrapped message:\n{}", snapshot.text));
+    assert!(
+        line.trim_end().ends_with("this │"),
+        "the message touches the right border: {line:?}"
+    );
+    assert!(
+        !line.contains("this│"),
+        "no pad before the border: {line:?}"
+    );
+
+    session.send(b"\x1b");
+    session.wait_no_text("Delete Todo");
+    session.send(b"q");
+    assert_eq!(session.wait_exit(TIMEOUT).exit_code(), 0);
+}
+
+#[test]
+#[ignore = "manual asset generator: regenerates docs/rust-port/assets/cp7-modal-padding.png"]
+fn cp7_modal_padding_screenshot() {
+    let directory = TempDir::new("cp7-modal-padding");
+    let path = directory.write("todo.txt", FIXTURE.as_bytes());
+    let mut session = Session::open_write_sized(&path, 80, 24);
+
+    session.wait_text("WRITE");
+    session.wait_todo_text("water the plants");
+
+    // Open the single-todo delete confirmation. Its message is long enough to
+    // reach the right edge, which is exactly the padding this asset pins.
+    session.send(b"\x1b[3~"); // Delete
+    session.wait_text("Delete Todo");
+    session.wait_text("Are you sure");
+
+    let image = session.with_screen(svg);
+    let svg_path = directory.join("cp7-modal-padding.svg");
+    std::fs::write(&svg_path, &image).expect("write the SVG frame");
+
+    let png_path = asset_path("cp7-modal-padding.png");
+    std::fs::create_dir_all(png_path.parent().expect("the asset has a directory"))
+        .expect("create docs/rust-port/assets");
+    rasterize(&svg_path, &png_path);
+    println!("wrote {}", png_path.display());
+
+    session.send(b"\x1b"); // close the confirmation
+    session.wait_no_text("Delete Todo");
+    session.send(b"q");
+    assert_eq!(session.wait_exit(TIMEOUT).exit_code(), 0);
 }

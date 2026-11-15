@@ -174,12 +174,12 @@ impl ConfirmModal {
         }
     }
 
-    /// Relative cell column inside the modal for a 1-based mouse column.
+    /// Relative cell column inside the modal body for a 1-based mouse column.
     fn relative_column(&self, rect: ModalRect, mouse: MouseInput) -> Option<u16> {
         let column = mouse.x.checked_sub(1)?;
-        let start = rect.area.x;
-        let end = rect.area.x.saturating_add(rect.area.width);
-        (start..end).contains(&column).then_some(column - start)
+        let start = rect.body.x;
+        let end = start.saturating_add(rect.body.width);
+        (start..end).contains(&column).then(|| column - start)
     }
 
     /// Label-exact hover hit test, matching `getHoveredButtonIndex`.
@@ -188,20 +188,22 @@ impl ConfirmModal {
         if row != self.button_row() {
             return None;
         }
-        let column = self.relative_column(rect, mouse)?;
+        // The body has one pad column, so the labels start one cell in.
+        let column = self.relative_column(rect, mouse)?.checked_sub(1)?;
 
-        let modal_width = rect.area.width;
-        let left_half = modal_width / 2;
-        let right_half = modal_width - left_half;
+        let content_width = rect.body.width.saturating_sub(2);
+        let left_half = content_width / 2;
+        let right_half = content_width - left_half;
         for (index, label) in BUTTON_LABELS.iter().enumerate() {
             let rendered = format!("« {label} »");
-            let label_width = u16::try_from(rendered.chars().count()).unwrap_or(modal_width);
-            let (start, width) = if index == 0 {
+            let label_width = u16::try_from(rendered.chars().count()).unwrap_or(content_width);
+            let (section_start, section_width) = if index == 0 {
                 (0, left_half)
             } else {
                 (left_half, right_half)
             };
-            let offset = start.saturating_add(width.saturating_sub(label_width) / 2);
+            let offset =
+                section_start.saturating_add(section_width.saturating_sub(label_width) / 2);
             let end = offset.saturating_add(label_width);
             if (offset..end).contains(&column) {
                 return Some(index);
@@ -279,7 +281,7 @@ impl Modal for ConfirmModal {
                 let Some(column) = self.relative_column(rect, mouse) else {
                     return Outcome::Continue;
                 };
-                let index = if column < rect.area.width / 2 { 0 } else { 1 };
+                let index = if column < rect.body.width / 2 { 0 } else { 1 };
                 self.hovered = Some(index);
                 self.selected = index;
                 self.activate(index)
@@ -292,7 +294,7 @@ impl Modal for ConfirmModal {
         let base = Style::default()
             .fg(theme::FOREGROUND)
             .bg(theme::MODAL_BACKGROUND);
-        let content_x = rect.body.x.saturating_add(2);
+        let content_x = rect.body.x.saturating_add(1);
         let content_width = self.content_width();
 
         for (index, line) in self.message_lines().iter().enumerate() {
@@ -313,9 +315,10 @@ impl Modal for ConfirmModal {
         if button_y >= rect.body.y.saturating_add(rect.body.height) {
             return;
         }
-        let modal_width = rect.area.width;
-        let left_half = modal_width / 2;
-        let right_half = modal_width - left_half;
+        let content_left = rect.body.x.saturating_add(1);
+        let content_width = rect.body.width.saturating_sub(2);
+        let left_half = content_width / 2;
+        let right_half = content_width - left_half;
 
         for (index, label) in BUTTON_LABELS.iter().enumerate() {
             let active = self.selected == index || self.hovered == Some(index);
@@ -324,19 +327,16 @@ impl Modal for ConfirmModal {
             } else {
                 format!("‹ {label} ›")
             };
-            let label_width = u16::try_from(rendered.chars().count()).unwrap_or(modal_width);
+            let label_width = u16::try_from(rendered.chars().count()).unwrap_or(content_width);
             let (half_start, half_width) = if index == 0 {
                 (0, left_half)
             } else {
                 (left_half, right_half)
             };
             let offset = half_start.saturating_add(half_width.saturating_sub(label_width) / 2);
-            let area = Rect::new(
-                rect.area.x.saturating_add(offset),
-                button_y,
-                label_width.min(rect.area.width.saturating_sub(offset)),
-                1,
-            );
+            let width = label_width.min(content_width.saturating_sub(offset));
+            let area = Rect::new(content_left.saturating_add(offset), button_y, width, 1);
+            let text: String = rendered.chars().take(usize::from(width)).collect();
             let color = if self.hovered == Some(index) {
                 theme::WARNING
             } else if self.selected == index {
@@ -350,7 +350,7 @@ impl Modal for ConfirmModal {
                 Modifier::empty()
             });
             frame.render_widget(
-                Paragraph::new(Span::styled(rendered, style)).alignment(Alignment::Center),
+                Paragraph::new(Span::styled(text, style)).alignment(Alignment::Center),
                 area,
             );
         }
