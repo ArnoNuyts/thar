@@ -27,6 +27,7 @@
     "utils/**/*.ts",
     "scripts/**/*.ts",
     "scripts/**/*.tsx",
+    "tools/**/*.ts",
     "unit-tests/**/*.ts",
     "unit-tests/**/*.tsx",
     "vite.config.ts"
