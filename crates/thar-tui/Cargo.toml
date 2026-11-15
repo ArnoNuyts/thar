@@ -1,0 +1,12 @@
+[package]
+name = "thar-tui"
+description = "Read-only ratatui front end for Thar: row model, navigation, input, and views"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thar-core.workspace = true
+ratatui.workspace = true
