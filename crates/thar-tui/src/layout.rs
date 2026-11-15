@@ -18,6 +18,21 @@ pub const ACTION_BAR_HEIGHT: u16 = 2;
 pub const SEARCH_BAR_HEIGHT: u16 = 2;
 /// Width of the scrollbar column.
 pub const SCROLLBAR_WIDTH: u16 = 1;
+/// Action-bar items in render order: `(key, label)`.
+///
+/// The renderer and the click hit-test both read this table, so a label change
+/// cannot silently move the clickable region.
+pub const ACTION_ITEMS: [(&str, &str); 5] = [
+    ("x", "Menu"),
+    ("q", "Quit"),
+    ("n", "New"),
+    ("e", "Edit"),
+    ("/", "Search"),
+];
+/// Width of one action-bar item including its surrounding spaces.
+pub const fn action_item_width(key: &str, label: &str) -> u16 {
+    (key.len() + label.len() + 4) as u16
+}
 
 /// The resolved rows and columns for one frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,6 +127,23 @@ pub fn checkbox_columns(max_digits: usize) -> core::ops::RangeInclusive<u16> {
     start..=start.saturating_add(2)
 }
 
+/// The action-bar key at an 0-based screen column, if any.
+///
+/// The Ink bar lays items out from column 1 (1-based) with the segment
+/// `" <key> <label>  "`; this maps the same regions to 0-based columns.
+#[must_use]
+pub fn action_item_at(column: u16) -> Option<&'static str> {
+    let mut start = 0_u16;
+    for (key, label) in ACTION_ITEMS {
+        let width = action_item_width(key, label);
+        if (start..start + width).contains(&column) {
+            return Some(key);
+        }
+        start = start.saturating_add(width);
+    }
+    None
+}
+
 /// Lays out the row prefix exactly as the renderer does: a space, the number
 /// right-aligned to `max_digits`, a space, then `[ ]` or `[x]`.
 #[must_use]
@@ -168,5 +200,22 @@ mod tests {
     fn todo_prefix_is_the_rendered_prefix() {
         assert_eq!(todo_prefix(1, 1, false), " 1 [ ] ");
         assert_eq!(todo_prefix(7, 3, true), "   7 [x] ");
+    }
+
+    #[test]
+    fn action_items_cover_the_rendered_segments() {
+        use super::{ACTION_ITEMS, action_item_at, action_item_width};
+
+        let widths: Vec<u16> = ACTION_ITEMS
+            .iter()
+            .map(|(key, label)| action_item_width(key, label))
+            .collect();
+        assert_eq!(widths, [9, 9, 8, 9, 11]);
+        assert_eq!(action_item_at(0), Some("x"));
+        assert_eq!(action_item_at(8), Some("x"));
+        assert_eq!(action_item_at(9), Some("q"));
+        assert_eq!(action_item_at(44), Some("/"));
+        assert_eq!(action_item_at(45), Some("/"));
+        assert_eq!(action_item_at(46), None);
     }
 }
