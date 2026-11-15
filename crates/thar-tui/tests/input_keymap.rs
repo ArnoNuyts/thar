@@ -223,3 +223,41 @@ fn search_typing_edits_while_mutating_list_keys_stay_search_input() {
     // None of those characters produced a read-only toast.
     assert_eq!(app.toast_message(std::time::Instant::now()), None);
 }
+
+#[test]
+fn a_multi_character_paste_keeps_its_order_at_the_cursor() {
+    let mut app = app(&["write docs one", "read docs two", "buy milk"]);
+    input::apply(&mut app, Command::SearchFocus);
+
+    // At the end: "docs" must stay "docs", not reverse to "scod".
+    input::insert_query_text(&mut app, "docs");
+    assert_eq!(app.query, "docs");
+    assert_eq!(app.query_cursor, 4);
+    assert_eq!(
+        app.list.rows.iter().filter(|row| row.is_todo()).count(),
+        2,
+        "the filter must see the pasted text in order"
+    );
+
+    // Mid-query: splicing at the caret must keep the pasted run intact and
+    // push the suffix right.
+    app.query.clear();
+    app.query.push_str("abef");
+    app.query_cursor = 2;
+    input::insert_query_text(&mut app, "cd");
+    assert_eq!(app.query, "abcdef");
+    assert_eq!(app.query_cursor, 4);
+}
+
+#[test]
+fn search_focus_and_blur_never_reverse_or_drop_the_query() {
+    let mut app = app(&["one"]);
+    input::apply(&mut app, Command::SearchFocus);
+    input::insert_query_text(&mut app, "abc");
+    input::apply(&mut app, Command::SearchBlur);
+    assert_eq!(app.query, "abc");
+    assert_eq!(app.query_cursor, 3);
+    input::apply(&mut app, Command::SearchFocus);
+    input::insert_query_text(&mut app, "de");
+    assert_eq!(app.query, "abcde");
+}
