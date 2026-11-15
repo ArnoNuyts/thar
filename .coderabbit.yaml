@@ -1,0 +1,11 @@
+# CodeRabbit is disabled for this repository: it must not review pull requests
+# automatically, so it no longer posts comments or sends notifications.
+# Reviews are opt-in only: comment `@coderabbitai review` on a PR to run one.
+reviews:
+  auto_review:
+    enabled: false
+  # Do not post "review skipped" status messages in a walkthrough comment.
+  review_status: false
+chat:
+  # Only reply when explicitly mentioned.
+  auto_reply: false
