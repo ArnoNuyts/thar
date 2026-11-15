@@ -333,6 +333,8 @@ pub fn build_rows<'todos, 'views>(
         // Same predicate as `filter_hidden`; applying it to the sorted indexes
         // keeps the sort's order instead of scanning the list twice.
         order.retain(|&index| {
+            // `sort_by_importance` returns a permutation of the input indexes.
+            debug_assert!(index < todos.len(), "sort index {index} out of range");
             todos
                 .get(index)
                 .is_some_and(|todo| todo.is_visible_in_overview(today))
@@ -343,13 +345,21 @@ pub fn build_rows<'todos, 'views>(
         // Same predicate as `filter_by_search`, applied to the sorted list so
         // the views do not need to be copied into a second slice.
         order.retain(|&index| {
+            debug_assert!(index < views.len(), "sort index {index} out of range");
             views
                 .get(index)
                 .is_some_and(|view| view_matches(view, terms))
         });
     }
 
-    let rows = create_rows(order.iter().filter_map(|&index| todos.get(index)));
+    // `create_rows` emits exactly one todo row per index, which is what lets
+    // `Rows::todo_indexes` be zipped with the todo rows. The sort returns a
+    // permutation of the input indexes; assert that in debug builds so a
+    // desync cannot be introduced silently, and keep `get` total in release.
+    let rows = create_rows(order.iter().filter_map(|&index| {
+        debug_assert!(index < todos.len(), "sort index {index} out of range");
+        todos.get(index)
+    }));
 
     Ok(Rows {
         rows,
