@@ -10,9 +10,14 @@ here.
   (CP0).
 - Contract: `tools/port/contract.ts` (CLI), `tools/port/build.ts` (builder),
   `tools/port/adapter.ts` (parse/serialize adapter + mutations),
-  `tools/port/compare.ts` (diff engine), `tools/port/golden.ts` (CP0 check).
-- Tests: [`unit-tests/port-contract.test.ts`](../../unit-tests/port-contract.test.ts).
+  `tools/port/compare.ts` (diff engine), `tools/port/golden.ts` (CP0 check),
+  `tools/port/candidate.ts` (shared candidate protocol).
+- Rows contract (CP3b1): `tools/port/rows.ts` (oracle, import-safe),
+  `tools/port/rows-cli.ts` (CLI), `tools/port/bench-rows.ts` (perf).
+- Tests: [`unit-tests/port-contract.test.ts`](../../unit-tests/port-contract.test.ts),
+  [`unit-tests/port-rows.test.ts`](../../unit-tests/port-rows.test.ts).
 - WASM candidate (CP2b): `tools/port/candidates/wasm.mjs`.
+- WASM rows candidate (CP3b1): `tools/port/candidates/wasm-rows.mjs`.
 
 ## Commands
 
@@ -36,6 +41,11 @@ npm run port:selftest                       # seeded-bug proof
 # CP2b: the Rust core compiled to WASM as the candidate (needs wasm-pack)
 wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg
 npm run port:contract:wasm                  # golden + the WASM candidate
+
+# CP3b1: the live rows contract (sort/filter/search/rows over WASM)
+npm run port:contract:rows                  # TS only: candidate protocol + self-check
+npm run port:contract:rows:wasm             # the WASM candidate (needs pkg/)
+npx vite-node tools/port/bench-rows.ts      # perf table (needs pkg/)
 ```
 
 `npm run port:contract` prints npm's own `> thar@0.6.1 port:contract` banner on
@@ -297,6 +307,150 @@ script already passes `--candidate-self`, and the CLI accepts exactly one
 candidate selector. Use `port:contract:wasm` (or drop `--candidate-self` from an
 explicit `vite-node` invocation).
 
+## Rows contract (CP3b1)
+
+The row model is the host's per-keystroke composition:
+
+```ts
+createIndexes(filterBySearch(filterHidden(sortByImportance(todos)), query));
+```
+
+CP3b1 pins it live against `thar-wasm`'s `buildRows` instead of keeping the
+CP3a `crates/thar-core/tests/domain-expectations.json` snapshot.
+
+- Oracle: `tools/port/rows.ts` (import-safe builder) + `tools/port/rows-cli.ts`
+  (CLI).
+- Candidate: `tools/port/candidates/wasm-rows.mjs`.
+- Tests: [`unit-tests/port-rows.test.ts`](../../unit-tests/port-rows.test.ts).
+
+```sh
+npm run port:contract:rows        # TS only: oracle + candidate protocol + self-check
+npm run port:contract:rows:wasm   # the WASM candidate (needs crates/thar-wasm/pkg)
+npx vite-node tools/port/bench-rows.ts   # the perf table below (needs pkg/)
+```
+
+Coverage: every parseable `*.txt` fixture (the rejection fixtures are skipped;
+the CP1 contract owns them) plus one generated 1 000-todo list, for a fixed
+12-query set and `showHidden=false`/`true`. That is **504 records / 4 449 890
+bytes**, and the WASM candidate reproduces them with **0 diffs** (the TS oracle
+also passes its own candidate protocol via `--candidate-self`). The generated
+list is built in TS and handed to the candidate in a temp manifest, so there is
+no second committed corpus.
+
+The query set is `""`, `"   "`, `work`, `@work`, `+project`, `alpha beta`,
+`!!!`, `MILK`, `ΟΔΟΣ`, `aΣ.Α`, `aβ́Σ.`, `due:` — the CP3a set (empty,
+whitespace-only, both prefixes, two terms, punctuation-only, uppercase, Unicode)
+plus the reverse final-sigma shapes.
+
+### Record format
+
+One compact JSON object per (fixture, query, showHidden), fixture bytewise, then
+the query list order, then `false` before `true`. Keys are in this fixed order:
+
+```json
+{
+  "fixture": "tags.txt",
+  "query": "MILK",
+  "terms": ["milk"],
+  "showHidden": false,
+  "clockLocal": "2026-11-15T12:00:00",
+  "todoCount": 12,
+  "rows": [
+    { "type": "context", "contextName": "None", "todoCount": 3 },
+    { "type": "todo", "number": 1, "index": 5 }
+  ],
+  "order": [5, 0, 2]
+}
+```
+
+- `terms` is the host-normalized `extractSearchTerms` output for `query`; the
+  core never folds case, so the candidate must use this verbatim.
+- `index` is the todo's position in the parsed fixture, `number` the 1-based
+  todo-row number, `order` every todo row's index in row order.
+- `todoCount` is the number of todo rows (headers excluded).
+- Context headers keep their final group count (including the uncategorised
+  `"None"` header).
+
+### Candidate protocol
+
+```sh
+node tools/port/candidates/wasm-rows.mjs \
+  --corpus <dir> --clock <iso> --manifest <file> --out <file>
+```
+
+The manifest carries the query list with its host-normalized terms, the
+`showHidden` values, the effective read limits (from `getReadLimits`, so a
+`THAR_MAX_*` override cannot make the two sides disagree about which fixture
+parses) and the generated lines. The candidate:
+
+1. parses each text with `parseFileWithLimits`;
+2. derives one `searchView` per todo from the **WASM parse output** with
+   JavaScript `toLowerCase` (this closes the parse→view gap: the oracle also
+   lowercases the TS parse output);
+3. calls `buildRows` once per (query, showHidden) with the manifest's terms and
+   writes the oracle's record shape.
+
+A missing `pkg/` is a loud failure, never a contract mismatch.
+
+### Self-check
+
+`--selftest` (part of `npm run port:contract:rows`) builds a reduced contract
+twice — the bytes must be identical — and requires the comparator to catch every
+seeded mutation. The mutations live in the oracle's composition, not in
+`logic/**`:
+
+| Mutation                | Simulated bug                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `drop-none-header`      | omits the uncategorised `"None"` header (treats it as a display detail)              |
+| `miscount-headers`      | reports `todoCount: 1` on every header (counts headers instead of their group)       |
+| `case-sensitive-search` | matches terms against raw, non-lowercased fields (folds only one side of the search) |
+| `ignore-threshold`      | derives visibility from `h:` alone (drops the future `t:` threshold rule)            |
+
+The self-check runs on a slice of the corpus plus a 120-todo generated list so
+it stays fast; the full contract is the CI gate.
+
+### Perf evidence (CP3b1)
+
+`tools/port/bench-rows.ts` measures the same 120×40, whole-list row build as
+`createIndexes` (the viewport does not change the work), from the generated
+list at 50 / 3 000 / 10 000 todos, on Node 26.12.0 with the release WASM
+package on the development machine (a snapshot, not a CI gate). Times are
+milliseconds; p50/p95 of the full stateless call.
+
+| todos  | path          | empty query   | one term (`work`) | multi term (`alpha beta`) |
+| ------ | ------------- | ------------- | ----------------- | ------------------------- |
+| 50     | TS oracle     | 0.44 / 0.84   | 0.42 / 0.78       | 0.41 / 0.45               |
+| 50     | WASM boundary | 0.45 / 0.70   | 0.42 / 0.76       | 0.41 / 0.44               |
+| 3 000  | TS oracle     | 126.9 / 133.4 | 128.7 / 158.3     | 128.1 / 133.3             |
+| 3 000  | WASM boundary | 25.3 / 26.0   | 24.7 / 26.0       | 24.4 / 24.9               |
+| 10 000 | TS oracle     | 523.7 / 532.6 | 530.9 / 553.2     | 528.4 / 593.9             |
+| 10 000 | WASM boundary | 85.1 / 87.3   | 81.9 / 83.0       | 81.3 / 89.7               |
+
+The stateless boundary is ~6.4× faster than the TypeScript pipeline at
+10 000 todos, but it is not yet the PLAN's **≤ 5 ms** search-keystroke target.
+`parse+views` (once per load, median of five) is 42.3 ms TS / 75.7 ms WASM at
+10 000. The per-keystroke split at 10 000 (p50, 2 562 KB request):
+
+| stage                                             |          p50 |
+| ------------------------------------------------- | -----------: |
+| `JSON.stringify` of the request (JS)              |   8.3–9.2 ms |
+| `buildRows` (Rust JSON decode + row build + JSON) | 72.7–73.9 ms |
+| `JSON.parse` of the response (JS)                 |   0.0–2.0 ms |
+
+The core alone (`cargo test --release -p thar-core --test rows_perf --
+--ignored --nocapture`) is **7.9–8.2 ms p50 / 8.6–10.9 ms p95** at 10 000
+todos, of which `sort_by_importance` is 5.6 ms and `create_rows` 0.3 ms. So the
+domain work is close to the target; the marshalling dominates. CP3b2 should:
+
+- add a **stateful handle** (`load` once per list/mutation, `build` per
+  keystroke) so the 2.5 MB request is decoded once, not per key;
+- precompute collation ranks/sort keys once per load (the 5.6 ms sort), which
+  also addresses PLAN §5 CP3's sort-key TODO;
+- keep the stateless `buildRows` as the differential contract's entry point.
+
+These are reported, not silently accepted: CP3b1 does not wire `THAR_CORE=rust`
+(that is CP3b2), so no user path regresses.
+
 ## Seeded bugs (`tools/port/self-test.mjs`)
 
 Mutations are applied in `tools/port/adapter.ts` — in the harness's
@@ -347,23 +501,33 @@ oracle on this corpus, not that it is a complete port.
 - **Byte-size guard.** `tools/port/build.ts` mirrors the reader's post-read
   byte check (`readTodosFromFile`), not `writeTodosToFile`'s write-size guard;
   committed fixtures are far below 1 MiB.
-- **UI and I/O.** Indexes, navigation, the TUI and the file-system layer
-  (`Runtime`, atomic writes, file watching) are outside the contract.
+- **UI and I/O.** Navigation, the TUI and the file-system layer (`Runtime`,
+  atomic writes, file watching) are outside the contract. Indexes/rows are
+  covered by the CP3b1 rows contract above, not by the CP1 record set.
+- **Serialization of DTO-built todos.** The rows contract feeds the parse
+  records back through `buildRows`; the two round-trip flags
+  (`datesInText`, `completionDateInText`) are not in the CP1 record set, so the
+  candidate leaves them `false`. Row building does not read them (only
+  `toString` does), so the omission cannot change a row; CP3b2's stateful
+  adapter will carry the real flags from its own parse.
 
 ## CI
 
 `.github/workflows/ci.yml` has a `port-contract` job (ubuntu-latest, 10 minute
-timeout) that runs `npm ci`, `npm run port:contract:check` and
-`npm run port:selftest`. It is independent of the existing matrix jobs and is
-the oracle.
+timeout) that runs `npm ci`, `npm run port:contract:check`,
+`npm run port:selftest` and the TS-only half of the rows contract
+(`npm run port:contract:rows`). It is independent of the existing matrix jobs
+and is the oracle.
 
 `.github/workflows/rust.yml`'s `wasm` job builds `thar-wasm`, enforces the size
 budget, runs the Node smoke test, then runs `npm ci` and
-`npm run port:contract:wasm`. Its path filter includes `crates/**`,
+`npm run port:contract:wasm` and the rows contract against the WASM candidate
+(`npm run port:contract:rows:wasm`). Its path filter includes `crates/**`,
 `testdata/port/**`, `tools/port/**`, `logic/core-wasm.ts`, `logic/limits.ts`,
-`unit-tests/core-wasm.test.ts` and `package.json`, so a change to the candidate,
-the adapter or its tests re-runs WASM parity. The Node matrix does not require
-Rust or a built `pkg/`; the WASM job is the only place the candidate runs in CI.
+`unit-tests/core-wasm.test.ts` and `package.json`, so a change to either
+candidate, either adapter or their tests re-runs WASM parity. The Node matrix
+does not require Rust or a built `pkg/`; the WASM job is the only place the WASM
+candidates run in CI.
 
 ## Maintaining
 

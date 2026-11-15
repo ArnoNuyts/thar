@@ -7,7 +7,10 @@
   WASM/contract half; the seven-day real-file dogfood and the decisions CP3
   depends on are still open. CP3a adds the remaining pure domain (recurrence,
   setters, sort/filter/search, rows, navigation) and pins it to the TypeScript
-  oracle without wiring it in. See §4, §5 and §9.1 for what exists today.
+  oracle without wiring it in. CP3b1 adds the Rust row builder, the WASM
+  `build_rows` boundary and a live rows contract with perf evidence, still
+  without wiring `THAR_CORE=rust` (that is CP3b2). See §4, §5 and §9.1 for what
+  exists today.
 - **Date:** 2026-11-15
 - **Related:** [`scripts/benchmark-list.tsx`](../../scripts/benchmark-list.tsx),
   [`docs/update-mechanism.md`](../update-mechanism.md), [`AGENTS.md`](../../AGENTS.md)
@@ -185,6 +188,7 @@ call per row/field:
 parse_file(text: &str, today: &str) -> String;   // JSON envelope, default limits
 parse_file_with_limits(text, today, max_file_bytes: f64,
                        max_read_todos: f64, max_line_chars: f64) -> String;
+build_rows(input: &str) -> String;               // todos + views + terms -> rows
 core_version() -> String;
 ```
 
@@ -192,7 +196,10 @@ Both parse calls return either `{"ok":true,"todos":[…]}` or
 `{"ok":false,"error":{…}}`; a record is exactly the CP1/`expected.json` field
 set, in that order. The whole-file write shape is derived as CP1 defines it
 (`todos.map(toString).join("\n") + "\n"`), so there is no second crossing.
-`build_rows`, `apply_command` and the sort/filter surface arrive with CP3.
+`build_rows` (CP3b1) takes one structured request — the todo fields, one
+host-normalized view per todo, the normalized terms, `showHidden` and `today` —
+and returns `{"ok":true,"rows":[…],"order":[…]}`; `apply_command` still arrives
+with CP3b2.
 
 Strings cross the boundary once per batch. Avoid per-row string getters; they
 would erase the benefit and add marshalling overhead.
@@ -408,6 +415,47 @@ recorded. Do not start the next checkpoint while one is red.
 - `reconcileNavState` is deliberately not ported: it keys its cache on object
   identity, which has no portable equivalent; the host knows whether the list
   changed and composes the pure helpers instead.
+
+#### CP3b1 — row builder + live rows contract (no wiring)
+
+- `thar-core::build_rows` composes the existing pieces without duplicating
+  them: `sort_by_importance` → `filter_hidden` (unless hidden todos are shown)
+  → the `filter_by_search` predicate → `create_rows`. It returns `Rows`: the
+  `Row` list plus the ordered input indexes behind the todo rows, so the host
+  maps rows back without a second pass. Empty terms match everything; a view
+  count that is not aligned with the todos is a typed `RowError`.
+- `Todo::from_parts`/`TodoParts` rebuild a todo from already-parsed fields
+  (including the two round-trip flags); re-serializing would collapse duplicate
+  tag arrays and cannot recover the flags.
+- `thar-wasm` exports `buildRows(input)` over a JSON `TodoRecord` DTO:
+  `{today, showHidden, terms, todos, searchViews}` →
+  `{"ok":true,"rows":[…],"order":[…]}`. Fields are validated while decoding
+  (a hand-written JSON reader, no new dependency), invalid input is a typed
+  `{"ok":false,error:{…}}` envelope, and nothing panics. The boundary stays
+  coarse: one call per build.
+- `tools/port/rows.ts` + `rows-cli.ts` is the live contract: the TS pipeline
+  (oracle) versus `parseFile` + `buildRows` (candidate) over every parseable
+  fixture plus a generated 1 000-todo list, for 12 fixed queries and both
+  `showHidden` values. Evidence at landing: **504 records / 4 449 890 bytes, 0
+  diffs**; the self-check proves two runs are byte-identical and catches four
+  seeded row-builder/query mutations. The candidate derives its search views
+  from the WASM parse output, closing the parse→view gap; the terms come from
+  the host in a manifest, so the core never folds case.
+- CP3a follow-ups in this checkpoint: a no-fold test (`filter_by_search` never
+  lowercases), the reverse final-sigma search cases, and the empty-terms
+  contract.
+- Perf at 10 000 todos (release WASM, Node, 120×40, whole-list build as
+  `createIndexes`): the stateless call is **81–85 ms p50 / 83–90 ms p95**,
+  ~6.4× faster than the TS pipeline (524–531 / 533–594 ms) but **not yet the
+  ≤ 5 ms target**.
+  The core alone is 7.9/8.6 ms (sort 5.6 ms), so the marshalling dominates: the
+  2.5 MB request is decoded on every keystroke. CP3b2 must add a stateful handle
+  and precomputed collation ranks; the numbers are in `tools/port/README.md`,
+  not silently accepted. WASM size after the row surface: **81 679 bytes raw
+  / 35 887 bytes gzip** (budget 250 KB / 100 KB).
+- Deferred to CP3b2: the stateful cache, host/computed sort ranks, wiring
+  `THAR_CORE=rust`, and the opaque programme-supplied name fields. No user
+  behaviour changes here: `THAR_CORE` remains inert.
 
 ### CP4 — Rust write path opt-in, byte-compared
 
@@ -723,7 +771,9 @@ Jobs:
 
 - **test** (ubuntu): `cargo fmt --all --check`, `cargo clippy --locked
   --workspace --all-targets --all-features -- -D warnings`, `cargo test
-  --locked --workspace --all-features`.
+  --locked --workspace --all-features`. The row-perf measurement in
+  `crates/thar-core/tests/rows_perf.rs` is `#[ignore]`d: it is a manual
+  release-mode report, not a CI gate.
 - **wasm** (ubuntu):
   - installs Rust 1.99.1 + `wasm32-unknown-unknown` (`dtolnay/rust-toolchain`);
   - caches with `Swatinem/rust-cache@v2` (key `wasm`);
@@ -737,6 +787,9 @@ Jobs:
     against the built package;
   - runs the CP1 contract against the WASM candidate (`npm ci` then
     `npm run port:contract:wasm`) after the package is built;
+  - runs the CP3b1 rows contract against the WASM candidate
+    (`npm run port:contract:rows:wasm`), including the generated 1 000-todo
+    list; the TS-only half runs in the Node `port-contract` job;
   - uploads `pkg/**` and `wasm-size.txt` as the `thar-wasm` artifact
     (14 days).
 

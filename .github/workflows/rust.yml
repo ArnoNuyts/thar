@@ -187,6 +187,12 @@ jobs:
       - name: CP1 contract parity (WASM candidate)
         run: npm run port:contract:wasm
 
+      # CP3b: the live rows contract against the WASM candidate, including the
+      # generated 1 000-todo list. The TS-only half runs in the Node
+      # `port-contract` job.
+      - name: CP3b rows contract parity (WASM candidate)
+        run: npm run port:contract:rows:wasm
+
       - name: Upload WASM package
         uses: actions/upload-artifact@v4
         with:

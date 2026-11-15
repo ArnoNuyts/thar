@@ -76,17 +76,17 @@ pub use limits::{
     DEFAULT_MAX_FILE_BYTES, DEFAULT_MAX_LINE_CHARS, DEFAULT_MAX_READ_TODOS, MAX_PASTE_TODOS,
     MAX_TODO_CHARS, MAX_TODOS, ReadLimits,
 };
-pub use model::{Priority, State, TagValue, Todo, TodoId, ToggleResult, serialize_file};
+pub use model::{Priority, State, TagValue, Todo, TodoId, TodoParts, ToggleResult, serialize_file};
 pub use nav::{
     SelectionRange, calculate_scroll_offset, find_todo_row, get_navigable_row,
     get_selection_range_rows, guesstimate_selection, validate_selection,
 };
-pub use query::{SearchView, filter_by_search, filter_hidden, sort_by_importance};
+pub use query::{SearchView, filter_by_search, filter_hidden, sort_by_importance, view_matches};
 pub use recurrence::{
     MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, RecurrenceUnit, is_valid_recurrence,
     plan_recurrence,
 };
-pub use rows::{NONE_CONTEXT, Row, create_rows};
+pub use rows::{NONE_CONTEXT, Row, RowError, RowInput, Rows, build_rows, create_rows};
 pub use validation::{is_blank_line, validate_file_bytes, validate_file_content};
 
 /// Crate version, surfaced through the WASM smoke test.

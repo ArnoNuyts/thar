@@ -200,7 +200,103 @@ pub struct Todo {
     pub completion_date_in_text: bool,
 }
 
+/// The parsed pieces of a [`Todo`], used to rebuild one at a boundary.
+///
+/// A `Todo` cannot always be reconstructed by re-parsing its serialized line
+/// (array-valued tags collapse into a comma list, and the round-trip flags are
+/// not visible in the text), so a caller that already holds the parsed fields
+/// hands them back through [`Todo::from_parts`] instead.
+///
+/// Every non-text field is a type that validates itself ([`State`],
+/// [`Priority`], [`TodoDate`], [`TagValue`]), so a `TodoParts` is always a
+/// valid todo body. The two flags are the round-trip decisions
+/// [`Todo::parse_line`] records; a caller that did not parse the line itself
+/// must pass `false` rather than guess.
+///
+/// # Example
+///
+/// ```
+/// use thar_core::{Todo, TodoId, TodoParts};
+///
+/// let todo = Todo::from_parts(
+///     TodoId::new(7),
+///     TodoParts {
+///         text: "ship it @work".to_owned(),
+///         contexts: vec!["work".to_owned()],
+///         ..TodoParts::default()
+///     },
+/// );
+/// assert_eq!(todo.id, TodoId::new(7));
+/// assert_eq!(todo.serialize(), "ship it @work");
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TodoParts {
+    /// Body text, already trimmed and with tags removed.
+    pub text: String,
+    /// Completion state.
+    pub state: State,
+    /// `(A)`..`(Z)` priority, if any.
+    pub priority: Option<Priority>,
+    /// Completion date, if any.
+    pub completion_date: Option<TodoDate>,
+    /// Creation date, if any.
+    pub creation_date: Option<TodoDate>,
+    /// `+projects` in first-occurrence order.
+    pub projects: Vec<String>,
+    /// `@contexts` in first-occurrence order.
+    pub contexts: Vec<String>,
+    /// Tags in insertion order; repeated keys stay grouped as
+    /// [`TagValue::Many`].
+    pub tags: Vec<(String, TagValue)>,
+    /// True when leading date tokens stayed in `text`.
+    pub dates_in_text: bool,
+    /// True when the completion date is already the leading literal token in
+    /// `text`.
+    pub completion_date_in_text: bool,
+}
+
+impl Default for TodoParts {
+    /// An open, empty todo: no text, no dates, no tags, no flags.
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            state: State::Todo,
+            priority: None,
+            completion_date: None,
+            creation_date: None,
+            projects: Vec::new(),
+            contexts: Vec::new(),
+            tags: Vec::new(),
+            dates_in_text: false,
+            completion_date_in_text: false,
+        }
+    }
+}
+
 impl Todo {
+    /// Rebuild a todo from already-parsed parts.
+    ///
+    /// This does **not** re-parse `parts.text`, so the projects, contexts, and
+    /// tags are taken exactly as supplied: it is the lossless direction for a
+    /// boundary that already parsed the line (for example the WASM
+    /// `build_rows` request). The parts are typed, so there is nothing to
+    /// fail; the caller validates the wire form before building them.
+    #[must_use]
+    pub fn from_parts(id: TodoId, parts: TodoParts) -> Self {
+        Self {
+            id,
+            text: parts.text,
+            state: parts.state,
+            priority: parts.priority,
+            completion_date: parts.completion_date,
+            creation_date: parts.creation_date,
+            projects: parts.projects,
+            contexts: parts.contexts,
+            tags: parts.tags,
+            dates_in_text: parts.dates_in_text,
+            completion_date_in_text: parts.completion_date_in_text,
+        }
+    }
     /// Parse one raw line.
     ///
     /// This never fails: every `&str` is accepted, including control

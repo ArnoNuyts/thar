@@ -1,0 +1,791 @@
+//! The structured `build_rows` request and its JSON envelope.
+//!
+//! `parse_file` returns CP1 records, so the host already holds the parsed
+//! fields when it builds rows on the next keystroke. Re-serializing those
+//! records would be lossy (a duplicate tag key collapses into a comma list, and
+//! the two round-trip flags are not in the CP1 record set), so this module
+//! accepts the fields back as a DTO and rebuilds a [`Todo`] through
+//! [`Todo::from_parts`].
+//!
+//! # Request
+//!
+//! ```json
+//! {
+//!   "today": "2026-11-15",
+//!   "showHidden": false,
+//!   "terms": ["work"],
+//!   "todos": [
+//!     {
+//!       "text": "ship it @work",
+//!       "state": "todo",
+//!       "priority": null,
+//!       "completionDate": null,
+//!       "creationDate": null,
+//!       "projects": [],
+//!       "contexts": ["work"],
+//!       "tags": [["due", "2024-01-01"]],
+//!       "datesInText": false,
+//!       "completionDateInText": false
+//!     }
+//!   ],
+//!   "searchViews": [
+//!     { "text": "ship it @work", "contexts": ["work"], "projects": [] }
+//!   ]
+//! }
+//! ```
+//!
+//! - `searchViews` is aligned with `todos`; `views[i]` belongs to `todos[i]`.
+//! - `searchViews` and `terms` are **already lowercased/extracted by the host**
+//!   (JavaScript's `toLowerCase` applies the Unicode `Final_Sigma` rule, and
+//!   `extractSearchTerms` is a JavaScript regex pipeline). Empty `terms` match
+//!   every todo.
+//! - Todo ids are the array positions, matching parse order. The response
+//!   carries the index of every todo row so the host maps back to its objects.
+//! - `datesInText`/`completionDateInText` are optional and default to `false`;
+//!   the CP1 parse records do not carry them yet (they do not affect row
+//!   building, only serialization). A host that parsed the line itself must
+//!   pass its real flags.
+//!
+//! Unknown fields are ignored so a host can pass a CP1 record with its extra
+//! `isDone`/`toString` fields without a second projection; missing required
+//! fields are rejected.
+//!
+//! # Response
+//!
+//! ```json
+//! {
+//!   "ok": true,
+//!   "rows": [
+//!     { "type": "context", "contextName": "work", "todoCount": 1 },
+//!     { "type": "todo", "number": 1, "index": 0 }
+//!   ],
+//!   "order": [0]
+//! }
+//! ```
+//!
+//! `order` is the sorted, filtered, searched todo order, i.e. the input index
+//! of every todo row in row order. Rejected input returns
+//! `{"ok":false,"error":{"name":"TodoBuildRowsError","code":…,"message":…}}`
+//! and never panics.
+//!
+//! # Collation and names
+//!
+//! Sorting collates context names with the en-US ICU order implemented by
+//! `thar_core` (see `docs/rust-port/PLAN.md` §13); the host must not pre-sort.
+//! Names the programme supplies stay opaque: this module never normalizes or
+//! validates a name it did not parse itself.
+
+use thar_core::{
+    Priority, Row, RowError, State, TagValue, Todo, TodoDate, TodoId, TodoParts, build_rows,
+};
+
+use crate::json::{self, Value, push_json_number, push_json_string};
+
+/// Name of the one error class this boundary reports.
+const ERROR_NAME: &str = "TodoBuildRowsError";
+
+/// Why a `build_rows` request was rejected.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RowsError {
+    /// The document is not valid JSON.
+    InvalidJson {
+        /// Byte offset where the reader stopped.
+        offset: usize,
+        /// Fixed description of the syntax problem.
+        reason: &'static str,
+    },
+    /// The document is valid JSON but a field has the wrong type or shape.
+    InvalidInput {
+        /// Request field the problem belongs to.
+        field: &'static str,
+        /// Fixed description of the rule that was broken.
+        reason: &'static str,
+    },
+    /// `today` is not a strict `YYYY-MM-DD` calendar day.
+    InvalidToday,
+    /// `searchViews` is not aligned with `todos`.
+    ViewCountMismatch {
+        /// Number of todos supplied.
+        todos: usize,
+        /// Number of search views supplied.
+        views: usize,
+    },
+}
+
+impl RowsError {
+    /// Stable machine code, in the CP1 style.
+    #[must_use]
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::InvalidJson { .. } | Self::InvalidInput { .. } => "INVALID_INPUT",
+            Self::InvalidToday => "INVALID_TODAY",
+            Self::ViewCountMismatch { .. } => "VIEW_COUNT_MISMATCH",
+        }
+    }
+
+    /// The error class name (one class, several codes).
+    #[must_use]
+    pub fn name(&self) -> &'static str {
+        ERROR_NAME
+    }
+
+    /// Content-free explanation; never quotes the request.
+    #[must_use]
+    pub fn message(&self) -> String {
+        match self {
+            Self::InvalidJson { offset, reason } => {
+                format!("build_rows input is not valid JSON: {reason} at byte {offset}")
+            }
+            Self::InvalidInput { field, reason } => {
+                format!("build_rows input field `{field}` {reason}")
+            }
+            Self::InvalidToday => {
+                "build_rows today must be a valid YYYY-MM-DD calendar day in years 1..=9999"
+                    .to_owned()
+            }
+            Self::ViewCountMismatch { todos, views } => {
+                format!("build_rows searchViews ({views}) must be aligned with todos ({todos})")
+            }
+        }
+    }
+
+    /// A field-shaped rejection.
+    fn invalid(field: &'static str, reason: &'static str) -> Self {
+        Self::InvalidInput { field, reason }
+    }
+}
+
+impl From<RowError> for RowsError {
+    fn from(error: RowError) -> Self {
+        match error {
+            RowError::ViewCountMismatch { todos, views } => {
+                Self::ViewCountMismatch { todos, views }
+            }
+        }
+    }
+}
+
+/// One todo in a `build_rows` request.
+///
+/// The JSON form is documented at the top of this module. `TodoRecord` exists
+/// so untrusted wire data is validated exactly once, before it becomes a typed
+/// [`TodoParts`]; nothing here can panic on a bad field.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TodoRecord {
+    parts: TodoParts,
+}
+
+impl TodoRecord {
+    /// Decode one record from a request array element.
+    fn from_json(value: &Value) -> Result<Self, RowsError> {
+        let state = match value
+            .get("state")
+            .and_then(Value::as_str)
+            .ok_or_else(|| RowsError::invalid("state", "must be \"todo\" or \"done\""))?
+        {
+            "todo" => State::Todo,
+            "done" => State::Done,
+            _ => return Err(RowsError::invalid("state", "must be \"todo\" or \"done\"")),
+        };
+
+        let priority = match value.get("priority") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(letter)) => {
+                let mut characters = letter.chars();
+                let priority = match (characters.next(), characters.next()) {
+                    (Some(letter), None) => Priority::new(letter),
+                    _ => None,
+                };
+                Some(
+                    priority
+                        .ok_or_else(|| RowsError::invalid("priority", "must be an A..Z letter"))?,
+                )
+            }
+            Some(_) => return Err(RowsError::invalid("priority", "must be a string or null")),
+        };
+
+        Ok(Self {
+            parts: TodoParts {
+                text: required_string(value, "text", "todos.text")?,
+                state,
+                priority,
+                completion_date: optional_date(value, "completionDate", "todos.completionDate")?,
+                creation_date: optional_date(value, "creationDate", "todos.creationDate")?,
+                projects: string_array(value, "projects", "todos.projects")?,
+                contexts: string_array(value, "contexts", "todos.contexts")?,
+                tags: tag_pairs(value)?,
+                dates_in_text: optional_bool(value, "datesInText", "todos.datesInText")?,
+                completion_date_in_text: optional_bool(
+                    value,
+                    "completionDateInText",
+                    "todos.completionDateInText",
+                )?,
+            },
+        })
+    }
+
+    /// The core todo, with the id the caller assigns.
+    fn into_todo(self, id: TodoId) -> Todo {
+        Todo::from_parts(id, self.parts)
+    }
+}
+
+/// One host-normalized search view in a `build_rows` request.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct SearchViewRecord {
+    text: String,
+    contexts: Vec<String>,
+    projects: Vec<String>,
+}
+
+impl SearchViewRecord {
+    /// Decode one view from a request array element.
+    fn from_json(value: &Value) -> Result<Self, RowsError> {
+        Ok(Self {
+            text: required_string(value, "text", "searchViews.text")?,
+            contexts: string_array(value, "contexts", "searchViews.contexts")?,
+            projects: string_array(value, "projects", "searchViews.projects")?,
+        })
+    }
+}
+
+/// A decoded request, borrowing nothing from the input document.
+#[derive(Clone, Debug)]
+struct BuildRequest {
+    today: TodoDate,
+    show_hidden: bool,
+    terms: Vec<String>,
+    todos: Vec<Todo>,
+    views: Vec<SearchViewRecord>,
+}
+
+/// A required string field.
+///
+/// `key` is the JSON key, `label` the path shown in the error (the same string
+/// at the top level, `searchViews.text` inside a view, and so on).
+fn required_string(value: &Value, key: &str, label: &'static str) -> Result<String, RowsError> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| RowsError::invalid(label, "must be a string"))
+}
+
+/// An optional boolean field, defaulting to `false`.
+fn optional_bool(value: &Value, key: &str, label: &'static str) -> Result<bool, RowsError> {
+    match value.get(key) {
+        None => Ok(false),
+        Some(Value::Bool(flag)) => Ok(*flag),
+        Some(_) => Err(RowsError::invalid(label, "must be a boolean")),
+    }
+}
+
+/// An optional date field.
+fn optional_date(
+    value: &Value,
+    key: &str,
+    label: &'static str,
+) -> Result<Option<TodoDate>, RowsError> {
+    match value.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(text)) => TodoDate::parse(text)
+            .map(Some)
+            .ok_or_else(|| RowsError::invalid(label, "must be a YYYY-MM-DD calendar day")),
+        Some(_) => Err(RowsError::invalid(
+            label,
+            "must be a YYYY-MM-DD string or null",
+        )),
+    }
+}
+
+/// A required string-array field.
+fn string_array(value: &Value, key: &str, label: &'static str) -> Result<Vec<String>, RowsError> {
+    let values = value
+        .get(key)
+        .and_then(Value::as_array)
+        .ok_or_else(|| RowsError::invalid(label, "must be an array of strings"))?;
+
+    values
+        .iter()
+        .map(|item| {
+            item.as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| RowsError::invalid(label, "must be an array of strings"))
+        })
+        .collect()
+}
+
+/// The `tags` field: an ordered `[key, value]` pair list.
+fn tag_pairs(value: &Value) -> Result<Vec<(String, TagValue)>, RowsError> {
+    let pairs = value
+        .get("tags")
+        .and_then(Value::as_array)
+        .ok_or_else(|| RowsError::invalid("tags", "must be an array of [key, value] pairs"))?;
+
+    pairs
+        .iter()
+        .map(|pair| {
+            let fields = pair
+                .as_array()
+                .filter(|fields| fields.len() == 2)
+                .ok_or_else(|| {
+                    RowsError::invalid("tags", "must be an array of [key, value] pairs")
+                })?;
+            let key = fields[0]
+                .as_str()
+                .ok_or_else(|| RowsError::invalid("tags", "tag keys must be strings"))?
+                .to_owned();
+
+            let tag_value = match &fields[1] {
+                Value::String(single) => TagValue::One(single.clone()),
+                Value::Array(values) if values.len() == 1 => {
+                    let single = values[0]
+                        .as_str()
+                        .ok_or_else(|| RowsError::invalid("tags", "tag values must be strings"))?;
+                    TagValue::One(single.to_owned())
+                }
+                Value::Array(values) if values.len() > 1 => {
+                    let mut collected = Vec::with_capacity(values.len());
+                    for item in values {
+                        collected.push(
+                            item.as_str()
+                                .ok_or_else(|| {
+                                    RowsError::invalid("tags", "tag values must be strings")
+                                })?
+                                .to_owned(),
+                        );
+                    }
+                    TagValue::Many(collected)
+                }
+                _ => {
+                    return Err(RowsError::invalid(
+                        "tags",
+                        "tag values must be a string or a non-empty string array",
+                    ));
+                }
+            };
+
+            Ok((key, tag_value))
+        })
+        .collect()
+}
+
+/// Decode one request document.
+fn decode(input: &str) -> Result<BuildRequest, RowsError> {
+    let document = json::parse(input).map_err(|error| RowsError::InvalidJson {
+        offset: error.offset,
+        reason: error.reason,
+    })?;
+
+    let today = document
+        .get("today")
+        .and_then(Value::as_str)
+        .ok_or_else(|| RowsError::invalid("today", "must be a YYYY-MM-DD string"))
+        .and_then(|text| TodoDate::parse(text).ok_or(RowsError::InvalidToday))?;
+
+    let show_hidden = document
+        .get("showHidden")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| RowsError::invalid("showHidden", "must be a boolean"))?;
+
+    let terms = string_array(&document, "terms", "terms")?;
+
+    let records = document
+        .get("todos")
+        .and_then(Value::as_array)
+        .ok_or_else(|| RowsError::invalid("todos", "must be an array of todo records"))?;
+
+    let mut todos = Vec::with_capacity(records.len());
+    for (index, record) in records.iter().enumerate() {
+        // `TodoId` is the load-order index; `usize as u64` is exact on wasm32
+        // and within JavaScript's safe-integer range for the read limit.
+        todos.push(TodoRecord::from_json(record)?.into_todo(TodoId::new(index as u64)));
+    }
+
+    let views = document
+        .get("searchViews")
+        .and_then(Value::as_array)
+        .ok_or_else(|| RowsError::invalid("searchViews", "must be an array of search views"))?
+        .iter()
+        .map(SearchViewRecord::from_json)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(BuildRequest {
+        today,
+        show_hidden,
+        terms,
+        todos,
+        views,
+    })
+}
+
+/// Build the rows for a decoded request.
+fn rows_for(request: &BuildRequest) -> Result<thar_core::Rows<'_>, RowsError> {
+    let terms: Vec<&str> = request.terms.iter().map(String::as_str).collect();
+    let context_refs: Vec<Vec<&str>> = request
+        .views
+        .iter()
+        .map(|view| view.contexts.iter().map(String::as_str).collect())
+        .collect();
+    let project_refs: Vec<Vec<&str>> = request
+        .views
+        .iter()
+        .map(|view| view.projects.iter().map(String::as_str).collect())
+        .collect();
+
+    let views: Vec<thar_core::SearchView<'_>> = request
+        .views
+        .iter()
+        .enumerate()
+        .map(|(index, view)| thar_core::SearchView {
+            text: &view.text,
+            contexts: &context_refs[index],
+            projects: &project_refs[index],
+        })
+        .collect();
+
+    build_rows(
+        &request.todos,
+        &views,
+        &terms,
+        request.show_hidden,
+        request.today,
+    )
+    .map_err(RowsError::from)
+}
+
+/// Build the response envelope for one request document.
+///
+/// This is the whole `build_rows` implementation behind the wasm export: it is
+/// a plain function so the native tests can exercise it without a JavaScript
+/// runtime.
+pub(crate) fn build_rows_envelope(input: &str) -> String {
+    let mut out = String::with_capacity(input.len().saturating_add(256));
+
+    match decode(input) {
+        Ok(request) => match rows_for(&request) {
+            Ok(rows) => push_rows(&mut out, &rows),
+            Err(error) => push_error(&mut out, &error),
+        },
+        Err(error) => push_error(&mut out, &error),
+    }
+
+    out
+}
+
+/// Append the `{"ok":true,…}` envelope.
+fn push_rows(out: &mut String, rows: &thar_core::Rows<'_>) {
+    out.push_str("{\"ok\":true,\"rows\":[");
+    let mut indexes = rows.todo_indexes().iter();
+    let mut first = true;
+
+    for row in rows.rows() {
+        if !first {
+            out.push(',');
+        }
+        first = false;
+
+        match row {
+            Row::Context { name, todo_count } => {
+                out.push_str("{\"type\":\"context\",\"contextName\":");
+                push_json_string(out, name);
+                out.push_str(",\"todoCount\":");
+                push_json_number(out, *todo_count as u64);
+                out.push('}');
+            }
+            Row::Todo { number, .. } => {
+                // `create_rows` emits exactly one todo row per input item, so
+                // there is an index for every todo row; the fallback only keeps
+                // this loop total.
+                let index = indexes.next().copied();
+                out.push_str("{\"type\":\"todo\",\"number\":");
+                push_json_number(out, *number as u64);
+                out.push_str(",\"index\":");
+                push_json_number(out, index.unwrap_or_default() as u64);
+                out.push('}');
+            }
+        }
+    }
+
+    out.push_str("],\"order\":[");
+    for (position, index) in rows.todo_indexes().iter().enumerate() {
+        if position > 0 {
+            out.push(',');
+        }
+        push_json_number(out, *index as u64);
+    }
+    out.push_str("]}");
+}
+
+/// Append the `{"ok":false,…}` envelope.
+fn push_error(out: &mut String, error: &RowsError) {
+    out.push_str("{\"ok\":false,\"error\":{\"name\":");
+    push_json_string(out, error.name());
+    out.push_str(",\"code\":");
+    push_json_string(out, error.code());
+    out.push_str(",\"message\":");
+    push_json_string(out, &error.message());
+    out.push_str("}}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RowsError, build_rows_envelope};
+
+    const TODAY: &str = "2026-11-15";
+
+    /// One request with two todos: an open `@home` todo and a plain one.
+    fn request(todos: &str, views: &str, terms: &str, show_hidden: bool) -> String {
+        format!(
+            "{{\"today\":\"{TODAY}\",\"showHidden\":{show_hidden},\"terms\":{terms},\
+             \"todos\":{todos},\"searchViews\":{views}}}"
+        )
+    }
+
+    fn record(text: &str, contexts: &str, extra: &str) -> String {
+        format!(
+            "{{\"text\":\"{text}\",\"state\":\"todo\",\"priority\":null,\
+             \"completionDate\":null,\"creationDate\":null,\
+             \"projects\":[],\"contexts\":{contexts},\"tags\":[]\
+             {extra}}}"
+        )
+    }
+
+    #[test]
+    fn emits_the_documented_row_shape() {
+        let todos = format!(
+            "[{},{}]",
+            record("one @home", "[\"home\"]", ""),
+            record("two", "[]", "")
+        );
+        let views = "[{\"text\":\"one @home\",\"contexts\":[\"home\"],\"projects\":[]},\
+                     {\"text\":\"two\",\"contexts\":[],\"projects\":[]}]";
+        let json = build_rows_envelope(&request(&todos, views, "[]", false));
+
+        assert_eq!(
+            json,
+            "{\"ok\":true,\"rows\":[\
+             {\"type\":\"context\",\"contextName\":\"None\",\"todoCount\":1},\
+             {\"type\":\"todo\",\"number\":1,\"index\":1},\
+             {\"type\":\"context\",\"contextName\":\"home\",\"todoCount\":1},\
+             {\"type\":\"todo\",\"number\":2,\"index\":0}],\
+             \"order\":[1,0]}"
+        );
+    }
+
+    #[test]
+    fn applies_hidden_and_search_rules() {
+        let todos = format!(
+            "[{},{}]",
+            record("drop me", "[]", ",\"datesInText\":false"),
+            record("keep me", "[]", "")
+        );
+        let views = "[{\"text\":\"drop me\",\"contexts\":[],\"projects\":[]},\
+                     {\"text\":\"keep me\",\"contexts\":[],\"projects\":[]}]";
+
+        let filtered = build_rows_envelope(&request(&todos, views, "[\"keep\"]", false));
+        let value: serde_json::Value = serde_json::from_str(&filtered).expect("valid JSON");
+        assert_eq!(value["order"], serde_json::json!([1]));
+
+        let all = build_rows_envelope(&request(&todos, views, "[]", false));
+        let value: serde_json::Value = serde_json::from_str(&all).expect("valid JSON");
+        assert_eq!(value["order"], serde_json::json!([0, 1]));
+    }
+
+    #[test]
+    fn rebuilds_tags_and_flags_without_reparsing() {
+        // `text` must stay exactly as sent (no tag stripping), and a duplicate
+        // key must stay one array-valued tag: re-parsing the serialized line
+        // would collapse these.
+        let todos = "[{\"text\":\"ship it\",\"state\":\"done\",\"priority\":\"A\",\
+                      \"completionDate\":\"2024-03-02\",\"creationDate\":\"2024-03-01\",\
+                      \"projects\":[\"thar\"],\"contexts\":[\"work\"],\
+                      \"tags\":[[\"beta\",[\"one\",\"two\"]],[\"h\",\"1\"]],\
+                      \"datesInText\":false,\"completionDateInText\":false}]";
+        let views = "[{\"text\":\"ship it\",\"contexts\":[\"work\"],\"projects\":[\"thar\"]}]";
+        // `h:1` hides the todo, so hiding it proves the tag array was rebuilt.
+        let hidden = build_rows_envelope(&request(todos, views, "[]", false));
+        let value: serde_json::Value = serde_json::from_str(&hidden).expect("valid JSON");
+        assert_eq!(value["rows"], serde_json::json!([]));
+
+        let shown = build_rows_envelope(&request(todos, views, "[]", true));
+        let value: serde_json::Value = serde_json::from_str(&shown).expect("valid JSON");
+        assert_eq!(
+            value["rows"],
+            serde_json::json!([
+                {"type": "context", "contextName": "work", "todoCount": 1},
+                {"type": "todo", "number": 1, "index": 0},
+            ])
+        );
+    }
+
+    #[test]
+    fn ignores_unknown_record_fields() {
+        let todos = format!(
+            "[{}]",
+            record(
+                "one",
+                "[]",
+                ",\"isDone\":false,\"hash\":\"one\",\"isOverdue\":true"
+            )
+        );
+        let views = "[{\"text\":\"one\",\"contexts\":[],\"projects\":[]}]";
+        let json = build_rows_envelope(&request(&todos, views, "[]", false));
+        assert!(json.starts_with("{\"ok\":true"), "{json}");
+    }
+
+    #[test]
+    fn rejects_every_bad_field_without_panicking() {
+        let views = "[{\"text\":\"one\",\"contexts\":[],\"projects\":[]}]";
+        let good = format!("[{}]", record("one", "[]", ""));
+
+        let cases = [
+            ("not json", "not json".to_owned()),
+            (
+                "missing showHidden",
+                format!(
+                    "{{\"today\":\"{TODAY}\",\"terms\":[],\"todos\":{good},\"searchViews\":{views}}}"
+                ),
+            ),
+            (
+                "bad today",
+                format!(
+                    "{{\"today\":\"2026-02-30\",\"showHidden\":false,\"terms\":[],\
+                     \"todos\":{good},\"searchViews\":{views}}}"
+                ),
+            ),
+            ("bad terms", request(&good, views, "[\"a\",1]", false)),
+            (
+                "missing todos",
+                format!(
+                    "{{\"today\":\"{TODAY}\",\"showHidden\":false,\"terms\":[],\"searchViews\":{views}}}"
+                ),
+            ),
+            ("misaligned views", request(&good, "[]", "[]", false)),
+            (
+                "bad state",
+                request(
+                    "[{\"text\":\"one\",\"state\":\"done!\",\"priority\":null,\
+                      \"completionDate\":null,\"creationDate\":null,\
+                      \"projects\":[],\"contexts\":[],\"tags\":[]}]",
+                    views,
+                    "[]",
+                    false,
+                ),
+            ),
+            (
+                "bad priority",
+                request(
+                    "[{\"text\":\"one\",\"state\":\"todo\",\"priority\":\"AA\",\
+                      \"completionDate\":null,\"creationDate\":null,\
+                      \"projects\":[],\"contexts\":[],\"tags\":[]}]",
+                    views,
+                    "[]",
+                    false,
+                ),
+            ),
+            (
+                "bad date",
+                request(
+                    "[{\"text\":\"one\",\"state\":\"todo\",\"priority\":null,\
+                      \"completionDate\":\"2024-02-30\",\"creationDate\":null,\
+                      \"projects\":[],\"contexts\":[],\"tags\":[]}]",
+                    views,
+                    "[]",
+                    false,
+                ),
+            ),
+            (
+                "bad contexts",
+                request(
+                    "[{\"text\":\"one\",\"state\":\"todo\",\"priority\":null,\
+                      \"completionDate\":null,\"creationDate\":null,\
+                      \"projects\":[],\"contexts\":\"home\",\"tags\":[]}]",
+                    views,
+                    "[]",
+                    false,
+                ),
+            ),
+            (
+                "bad tags",
+                request(
+                    "[{\"text\":\"one\",\"state\":\"todo\",\"priority\":null,\
+                      \"completionDate\":null,\"creationDate\":null,\
+                      \"projects\":[],\"contexts\":[],\"tags\":[[\"k\"]]}]",
+                    views,
+                    "[]",
+                    false,
+                ),
+            ),
+            (
+                "empty tag array",
+                request(
+                    "[{\"text\":\"one\",\"state\":\"todo\",\"priority\":null,\
+                      \"completionDate\":null,\"creationDate\":null,\
+                      \"projects\":[],\"contexts\":[],\"tags\":[[\"k\",[]]]}]",
+                    views,
+                    "[]",
+                    false,
+                ),
+            ),
+            (
+                "bad flags",
+                request(
+                    "[{\"text\":\"one\",\"state\":\"todo\",\"priority\":null,\
+                      \"completionDate\":null,\"creationDate\":null,\
+                      \"projects\":[],\"contexts\":[],\"tags\":[],\"datesInText\":1}]",
+                    views,
+                    "[]",
+                    false,
+                ),
+            ),
+        ];
+
+        for (label, input) in cases {
+            let json = build_rows_envelope(&input);
+            let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+            assert_eq!(value["ok"], false, "{label}: {json}");
+            assert_eq!(
+                value["error"]["name"], "TodoBuildRowsError",
+                "{label}: {json}"
+            );
+            assert!(
+                value["error"]["message"]
+                    .as_str()
+                    .is_some_and(|m| !m.is_empty()),
+                "{label}: {json}"
+            );
+        }
+    }
+
+    #[test]
+    fn maps_the_error_codes() {
+        let todos = format!("[{}]", record("one", "[]", ""));
+        let views = "[{\"text\":\"one\",\"contexts\":[],\"projects\":[]}]";
+
+        let misaligned = build_rows_envelope(&request(&todos, "[]", "[]", false));
+        let value: serde_json::Value = serde_json::from_str(&misaligned).expect("valid JSON");
+        assert_eq!(value["error"]["code"], "VIEW_COUNT_MISMATCH");
+
+        let bad_today = build_rows_envelope(&format!(
+            "{{\"today\":\"0000-01-01\",\"showHidden\":false,\"terms\":[],\
+             \"todos\":{todos},\"searchViews\":{views}}}"
+        ));
+        let value: serde_json::Value = serde_json::from_str(&bad_today).expect("valid JSON");
+        assert_eq!(value["error"]["code"], "INVALID_TODAY");
+
+        let invalid = build_rows_envelope("\"not an object\"");
+        let value: serde_json::Value = serde_json::from_str(&invalid).expect("valid JSON");
+        assert_eq!(value["error"]["code"], "INVALID_INPUT");
+        assert_eq!(
+            RowsError::ViewCountMismatch { todos: 1, views: 0 }.code(),
+            "VIEW_COUNT_MISMATCH"
+        );
+    }
+
+    #[test]
+    fn an_empty_list_still_returns_the_order_and_no_rows() {
+        let json = build_rows_envelope(&request("[]", "[]", "[]", false));
+        assert_eq!(json, "{\"ok\":true,\"rows\":[],\"order\":[]}");
+    }
+}

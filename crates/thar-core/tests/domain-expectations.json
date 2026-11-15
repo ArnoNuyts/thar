@@ -14461,6 +14461,20 @@
       "matched": []
     },
     {
+      "line": "aΣ.Α",
+      "query": "aσ.",
+      "view": ["aσ.α", [], []],
+      "terms": ["aσ."],
+      "matched": [0]
+    },
+    {
+      "line": "aβ́Σ.",
+      "query": "aβ́σ.",
+      "view": ["aβ́ς.", [], []],
+      "terms": ["aβ́σ."],
+      "matched": []
+    },
+    {
       "line": "aσ.́a",
       "query": "aΣ.́a",
       "view": ["aσ.́a", [], []],
