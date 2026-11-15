@@ -186,7 +186,9 @@ fn a_read_only_directory_shows_a_bounded_save_failure_and_keeps_the_bytes() {
 
         session.send(b"q");
         let status = session.wait_exit(TIMEOUT);
-        assert_eq!(status.exit_code(), 0);
+        // The quit flush still cannot write, so the binary must not report a
+        // clean exit: the in-memory edit was never saved.
+        assert_ne!(status.exit_code(), 0, "an unsaved quit must exit non-zero");
     });
 
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755))

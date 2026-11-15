@@ -364,8 +364,10 @@ pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()
 /// the written bytes as the comparison baseline, so the save's own metadata
 /// change does not schedule a reload. A failed save (including
 /// [`thar_store::StoreError::ChangedOnDisk`]) keeps the target untouched, shows
-/// one bounded toast and clears the dirty flag: there is no automatic retry, so
-/// a refused save cannot spam the action bar. The next mutation tries again.
+/// one bounded message, keeps the list dirty and retries after the app's
+/// backoff. The watcher normally reloads the external file first, which clears
+/// the dirty state and rebaselines both the guard and the watcher; a quit
+/// before that happens exits non-zero rather than reporting a false save.
 fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync) {
     let Some(store) = store else {
         if app.read_only {
