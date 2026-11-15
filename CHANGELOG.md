@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `thar-rs`: a read-only ratatui TUI shipped as a separate binary, with list
+  navigation, context headers, search, the hidden-todo view, a scrollbar,
+  mouse wheel/click/shift-click/double-click and terminal restore on panic.
+  It links no writer and never creates a todo file; `thar` still starts the Ink
+  app.
+
 ### Changed
 
 - The Rust todo core is now the default: parsing, list building and the
