@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -9,6 +10,7 @@ import {
   isShadowEnabled,
   parseFileWithCore,
   resetCoreBridgeForTests,
+  resolveShadowLogPath,
   shadowCheckTodoFile,
   shadowLogPath,
 } from "../logic/core-wasm.ts";
@@ -36,8 +38,6 @@ const ENV_KEYS = [
   "THAR_MAX_READ_TODOS",
   "THAR_MAX_LINE_CHARS",
   "XDG_CACHE_HOME",
-  "LOCALAPPDATA",
-  "HOME",
 ] as const;
 
 const savedEnv = new Map<string, string | undefined>();
@@ -598,10 +598,18 @@ describe("THAR_SHADOW=1", () => {
 });
 
 describe("shadow log path", () => {
+  // A made-up home directory: the branch tests pass it in, so nothing here
+  // depends on the host user, `os.homedir()` or `process.platform`.
+  const homeDir = join("/home", "someone");
+
   test("THAR_SHADOW_LOG wins over the cache directory", async () => {
     await withTempDir(async (dir) => {
       setEnv("XDG_CACHE_HOME", join(dir, "cache"));
       expect(shadowLogPath()).toBe(join(dir, "cache", "thar", "shadow.log"));
+      // The exported path is the pure helper applied to the live globals.
+      expect(shadowLogPath()).toBe(
+        resolveShadowLogPath(process.env, process.platform, homedir()),
+      );
 
       const explicit = join(dir, "elsewhere", "shadow.log");
       setEnv("THAR_SHADOW_LOG", explicit);
@@ -609,44 +617,52 @@ describe("shadow log path", () => {
     });
   });
 
-  test("falls back to the platform cache directory without XDG", async () => {
-    await withTempDir(async (dir) => {
-      setEnv("XDG_CACHE_HOME", undefined);
-      setEnv("HOME", dir);
-      const platform = process.platform;
-      const localAppData = join(dir, "LocalAppData");
-      try {
-        Object.defineProperty(process, "platform", {
-          value: "darwin",
-          configurable: true,
-        });
-        expect(shadowLogPath()).toBe(
-          join(dir, "Library", "Caches", "thar", "shadow.log"),
-        );
+  test("XDG_CACHE_HOME wins on every platform, and empty means unset", () => {
+    const cache = join("/tmp", "cache");
+    const fallbacks = {
+      linux: join(homeDir, ".cache"),
+      darwin: join(homeDir, "Library", "Caches"),
+      win32: join(homeDir, "AppData", "Local"),
+    } as const;
+    for (const platform of ["linux", "darwin", "win32"] as const) {
+      expect(
+        resolveShadowLogPath({ XDG_CACHE_HOME: cache }, platform, homeDir),
+      ).toBe(join(cache, "thar", "shadow.log"));
+      expect(
+        resolveShadowLogPath({ XDG_CACHE_HOME: "" }, platform, homeDir),
+      ).toBe(join(fallbacks[platform], "thar", "shadow.log"));
+    }
+  });
 
-        Object.defineProperty(process, "platform", {
-          value: "win32",
-          configurable: true,
-        });
-        setEnv("LOCALAPPDATA", localAppData);
-        expect(shadowLogPath()).toBe(join(localAppData, "thar", "shadow.log"));
-        setEnv("LOCALAPPDATA", undefined);
-        expect(shadowLogPath()).toBe(
-          join(dir, "AppData", "Local", "thar", "shadow.log"),
-        );
+  test("falls back to the platform cache directory without XDG", () => {
+    expect(resolveShadowLogPath({}, "linux", homeDir)).toBe(
+      join(homeDir, ".cache", "thar", "shadow.log"),
+    );
+    // Every platform that is not darwin or win32 uses the XDG default.
+    expect(resolveShadowLogPath({}, "aix", homeDir)).toBe(
+      join(homeDir, ".cache", "thar", "shadow.log"),
+    );
+    expect(resolveShadowLogPath({}, "darwin", homeDir)).toBe(
+      join(homeDir, "Library", "Caches", "thar", "shadow.log"),
+    );
+  });
 
-        Object.defineProperty(process, "platform", {
-          value: "linux",
-          configurable: true,
-        });
-        expect(shadowLogPath()).toBe(join(dir, ".cache", "thar", "shadow.log"));
-      } finally {
-        Object.defineProperty(process, "platform", {
-          value: platform,
-          configurable: true,
-        });
-      }
-    });
+  test("win32 prefers LOCALAPPDATA and falls back to the profile", () => {
+    const localAppData = join(homeDir, "AppData", "Local");
+    expect(
+      resolveShadowLogPath({ LOCALAPPDATA: localAppData }, "win32", homeDir),
+    ).toBe(join(localAppData, "thar", "shadow.log"));
+    expect(resolveShadowLogPath({}, "win32", homeDir)).toBe(
+      join(localAppData, "thar", "shadow.log"),
+    );
+    // LOCALAPPDATA is not consulted off Windows.
+    expect(
+      resolveShadowLogPath(
+        { LOCALAPPDATA: join(homeDir, "ignored") },
+        "darwin",
+        homeDir,
+      ),
+    ).toBe(join(homeDir, "Library", "Caches", "thar", "shadow.log"));
   });
 });
 

@@ -108,7 +108,8 @@ const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
  * any directory, and a `crates/thar-wasm/pkg` there belongs to whoever owns
  * that directory — loading it would run foreign code and make the shadow check
  * compare against a package this checkout never built. `THAR_CORE_WASM` is the
- * supported way to point the bridge at another build.
+ * dev-only escape hatch for pointing the bridge at another build; it goes
+ * through `resolve`, so a relative value is relative to `process.cwd()`.
  */
 const packageCandidates = (): string[] => {
   const override = process.env.THAR_CORE_WASM;
@@ -160,6 +161,11 @@ const loadCoreModule = (): CoreModule | null => {
     } catch (error) {
       if (!packageLogged) {
         packageLogged = true;
+        // Deliberate exception to the "never `error.message`" rule: this
+        // error comes from `require`-ing the package path, not from parsing a
+        // todo file, and the message is what tells a developer *why* the
+        // package was rejected (missing dependency, syntax error, ...). The
+        // candidate path is developer-supplied and contains no todo content.
         debugLog(
           `thar core: ignoring unloadable WASM package ${candidate}: ${
             error instanceof Error ? error.message : String(error)
@@ -316,22 +322,34 @@ const SHADOW_HASH_CHARS = 16;
  * `THAR_SHADOW_LOG` wins; otherwise `<user cache dir>/thar/shadow.log`
  * (`$XDG_CACHE_HOME`, `~/Library/Caches` on macOS, `%LOCALAPPDATA%` on Windows,
  * `~/.cache` elsewhere).
+ *
+ * The environment, platform and home directory are parameters rather than
+ * globals so the platform branches are testable on any host: `os.homedir()`
+ * ignores a faked `process.platform` and reads `USERPROFILE` on Windows.
  */
-export const shadowLogPath = (): string => {
-  const override = process.env.THAR_SHADOW_LOG;
+export const resolveShadowLogPath = (
+  env: Readonly<Record<string, string | undefined>>,
+  platform: NodeJS.Platform,
+  homeDir: string,
+): string => {
+  const override = env.THAR_SHADOW_LOG;
   if (override) return resolve(override);
 
-  const xdg = process.env.XDG_CACHE_HOME;
+  const xdg = env.XDG_CACHE_HOME;
   const base =
     xdg && xdg.length > 0
       ? xdg
-      : process.platform === "darwin"
-        ? join(homedir(), "Library", "Caches")
-        : process.platform === "win32"
-          ? (process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"))
-          : join(homedir(), ".cache");
+      : platform === "darwin"
+        ? join(homeDir, "Library", "Caches")
+        : platform === "win32"
+          ? (env.LOCALAPPDATA ?? join(homeDir, "AppData", "Local"))
+          : join(homeDir, ".cache");
   return join(base, "thar", "shadow.log");
 };
+
+/** {@link resolveShadowLogPath} for the current process. */
+export const shadowLogPath = (): string =>
+  resolveShadowLogPath(process.env, process.platform, homedir());
 
 /**
  * A content-free diagnostic record.
@@ -525,10 +543,11 @@ export const shadowCheckTodoFile = (
   } catch (error) {
     if (!adapterLogged) {
       adapterLogged = true;
+      // `errorName`, not `error.message`: a `JSON.parse` failure can quote
+      // the input, and the input here is a todo file.
       debugLog(
-        `thar shadow: check skipped: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `thar shadow: check skipped (${errorName(error)}); the TypeScript ` +
+          "result is unchanged",
       );
     }
   }
