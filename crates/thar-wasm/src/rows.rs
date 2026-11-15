@@ -5,7 +5,8 @@
 //! records would be lossy (a duplicate tag key collapses into a comma list, and
 //! the two round-trip flags are not in the CP1 record set), so this module
 //! accepts the fields back as a DTO and rebuilds a [`Todo`] through
-//! [`Todo::from_parts`].
+//! [`Todo::from_parts`]. The record shape itself is shared with
+//! [`crate::write`] and lives in the `record` module.
 //!
 //! # Request
 //!
@@ -76,11 +77,10 @@
 //! Names the programme supplies stay opaque: this module never normalizes or
 //! validates a name it did not parse itself.
 
-use thar_core::{
-    Priority, Row, RowError, RowInput, State, TagValue, Todo, TodoDate, TodoId, TodoParts,
-};
+use thar_core::{Row, RowError, RowInput, Todo, TodoDate};
 
 use crate::json::{self, Value, push_json_number, push_json_string};
+use crate::record::{RecordError, required_string, string_array, todo_records};
 
 /// Name of the one error class this boundary reports.
 const ERROR_NAME: &str = "TodoBuildRowsError";
@@ -156,6 +156,15 @@ impl RowsError {
     }
 }
 
+impl From<RecordError> for RowsError {
+    fn from(error: RecordError) -> Self {
+        Self::InvalidInput {
+            field: error.field,
+            reason: error.reason,
+        }
+    }
+}
+
 impl From<RowError> for RowsError {
     fn from(error: RowError) -> Self {
         match error {
@@ -163,71 +172,6 @@ impl From<RowError> for RowsError {
                 Self::ViewCountMismatch { todos, views }
             }
         }
-    }
-}
-
-/// One todo in a `build_rows` request.
-///
-/// The JSON form is documented at the top of this module. `TodoRecord` exists
-/// so untrusted wire data is validated exactly once, before it becomes a typed
-/// [`TodoParts`]; nothing here can panic on a bad field.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TodoRecord {
-    parts: TodoParts,
-}
-
-impl TodoRecord {
-    /// Decode one record from a request array element.
-    fn from_json(value: &Value) -> Result<Self, RowsError> {
-        let state = match value
-            .get("state")
-            .and_then(Value::as_str)
-            .ok_or_else(|| RowsError::invalid("state", "must be \"todo\" or \"done\""))?
-        {
-            "todo" => State::Todo,
-            "done" => State::Done,
-            _ => return Err(RowsError::invalid("state", "must be \"todo\" or \"done\"")),
-        };
-
-        let priority = match value.get("priority") {
-            None | Some(Value::Null) => None,
-            Some(Value::String(letter)) => {
-                let mut characters = letter.chars();
-                let priority = match (characters.next(), characters.next()) {
-                    (Some(letter), None) => Priority::new(letter),
-                    _ => None,
-                };
-                Some(
-                    priority
-                        .ok_or_else(|| RowsError::invalid("priority", "must be an A..Z letter"))?,
-                )
-            }
-            Some(_) => return Err(RowsError::invalid("priority", "must be a string or null")),
-        };
-
-        Ok(Self {
-            parts: TodoParts {
-                text: required_string(value, "text", "todos.text")?,
-                state,
-                priority,
-                completion_date: optional_date(value, "completionDate", "todos.completionDate")?,
-                creation_date: optional_date(value, "creationDate", "todos.creationDate")?,
-                projects: string_array(value, "projects", "todos.projects")?,
-                contexts: string_array(value, "contexts", "todos.contexts")?,
-                tags: tag_pairs(value)?,
-                dates_in_text: optional_bool(value, "datesInText", "todos.datesInText")?,
-                completion_date_in_text: optional_bool(
-                    value,
-                    "completionDateInText",
-                    "todos.completionDateInText",
-                )?,
-            },
-        })
-    }
-
-    /// The core todo, with the id the caller assigns.
-    fn into_todo(self, id: TodoId) -> Todo {
-        Todo::from_parts(id, self.parts)
     }
 }
 
@@ -260,117 +204,6 @@ struct BuildRequest {
     views: Vec<SearchViewRecord>,
 }
 
-/// A required string field.
-///
-/// `key` is the JSON key, `label` the path shown in the error (the same string
-/// at the top level, `searchViews.text` inside a view, and so on).
-fn required_string(value: &Value, key: &str, label: &'static str) -> Result<String, RowsError> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::to_owned)
-        .ok_or_else(|| RowsError::invalid(label, "must be a string"))
-}
-
-/// An optional boolean field, defaulting to `false`.
-fn optional_bool(value: &Value, key: &str, label: &'static str) -> Result<bool, RowsError> {
-    match value.get(key) {
-        None => Ok(false),
-        Some(Value::Bool(flag)) => Ok(*flag),
-        Some(_) => Err(RowsError::invalid(label, "must be a boolean")),
-    }
-}
-
-/// An optional date field.
-fn optional_date(
-    value: &Value,
-    key: &str,
-    label: &'static str,
-) -> Result<Option<TodoDate>, RowsError> {
-    match value.get(key) {
-        None | Some(Value::Null) => Ok(None),
-        Some(Value::String(text)) => TodoDate::parse(text)
-            .map(Some)
-            .ok_or_else(|| RowsError::invalid(label, "must be a YYYY-MM-DD calendar day")),
-        Some(_) => Err(RowsError::invalid(
-            label,
-            "must be a YYYY-MM-DD string or null",
-        )),
-    }
-}
-
-/// A required string-array field.
-fn string_array(value: &Value, key: &str, label: &'static str) -> Result<Vec<String>, RowsError> {
-    let values = value
-        .get(key)
-        .and_then(Value::as_array)
-        .ok_or_else(|| RowsError::invalid(label, "must be an array of strings"))?;
-
-    values
-        .iter()
-        .map(|item| {
-            item.as_str()
-                .map(str::to_owned)
-                .ok_or_else(|| RowsError::invalid(label, "must be an array of strings"))
-        })
-        .collect()
-}
-
-/// The `tags` field: an ordered `[key, value]` pair list.
-fn tag_pairs(value: &Value) -> Result<Vec<(String, TagValue)>, RowsError> {
-    let pairs = value
-        .get("tags")
-        .and_then(Value::as_array)
-        .ok_or_else(|| RowsError::invalid("tags", "must be an array of [key, value] pairs"))?;
-
-    pairs
-        .iter()
-        .map(|pair| {
-            let fields = pair
-                .as_array()
-                .filter(|fields| fields.len() == 2)
-                .ok_or_else(|| {
-                    RowsError::invalid("tags", "must be an array of [key, value] pairs")
-                })?;
-            let key = fields[0]
-                .as_str()
-                .ok_or_else(|| RowsError::invalid("tags", "tag keys must be strings"))?
-                .to_owned();
-
-            let tag_value = match &fields[1] {
-                Value::String(single) => TagValue::One(single.clone()),
-                Value::Array(values) if values.len() == 1 => {
-                    let single = values[0]
-                        .as_str()
-                        .ok_or_else(|| RowsError::invalid("tags", "tag values must be strings"))?;
-                    TagValue::One(single.to_owned())
-                }
-                Value::Array(values) if values.len() > 1 => {
-                    let mut collected = Vec::with_capacity(values.len());
-                    for item in values {
-                        collected.push(
-                            item.as_str()
-                                .ok_or_else(|| {
-                                    RowsError::invalid("tags", "tag values must be strings")
-                                })?
-                                .to_owned(),
-                        );
-                    }
-                    TagValue::Many(collected)
-                }
-                _ => {
-                    return Err(RowsError::invalid(
-                        "tags",
-                        "tag values must be a string or a non-empty string array",
-                    ));
-                }
-            };
-
-            Ok((key, tag_value))
-        })
-        .collect()
-}
-
 /// Decode one request document.
 fn decode(input: &str) -> Result<BuildRequest, RowsError> {
     let document = json::parse(input).map_err(|error| RowsError::InvalidJson {
@@ -391,17 +224,7 @@ fn decode(input: &str) -> Result<BuildRequest, RowsError> {
 
     let terms = string_array(&document, "terms", "terms")?;
 
-    let records = document
-        .get("todos")
-        .and_then(Value::as_array)
-        .ok_or_else(|| RowsError::invalid("todos", "must be an array of todo records"))?;
-
-    let mut todos = Vec::with_capacity(records.len());
-    for (index, record) in records.iter().enumerate() {
-        // `TodoId` is the load-order index; `usize as u64` is exact on wasm32
-        // and within JavaScript's safe-integer range for the read limit.
-        todos.push(TodoRecord::from_json(record)?.into_todo(TodoId::new(index as u64)));
-    }
+    let todos = todo_records(&document)?;
 
     let views = document
         .get("searchViews")
