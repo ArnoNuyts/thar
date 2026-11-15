@@ -5,7 +5,9 @@
   harness + candidate protocol) and CP2 (workspace, `thar-core`, the WASM batch
   surface, the read-only `THAR_SHADOW` check) are in. CP2b closes CP2's
   WASM/contract half; the seven-day real-file dogfood and the decisions CP3
-  depends on are still open. See §4, §5 and §9.1 for what exists today.
+  depends on are still open. CP3a adds the remaining pure domain (recurrence,
+  setters, sort/filter/search, rows, navigation) and pins it to the TypeScript
+  oracle without wiring it in. See §4, §5 and §9.1 for what exists today.
 - **Date:** 2026-11-15
 - **Related:** [`scripts/benchmark-list.tsx`](../../scripts/benchmark-list.tsx),
   [`docs/update-mechanism.md`](../update-mechanism.md), [`AGENTS.md`](../../AGENTS.md)
@@ -355,6 +357,41 @@ recorded. Do not start the next checkpoint while one is red.
   `getHash()` values; `npm test` passes with the flag; no latency/memory
   regression at 50/3 k/10 k.
 - Rollback: `THAR_CORE=ts` (and make `ts` the default again).
+
+#### CP3a — domain port (no behaviour change, no wiring)
+
+- `thar-core` now owns recurrence planning, the immutable setters and
+  `toggle_state`, sort / hidden filter / search, the contiguous-context row
+  model, and the pure navigation helpers. The setters are `fn(self) -> Self`
+  builders in the merged module, so they clone on write and cannot mutate a
+  borrowed todo; `Clone` deep-copies the project/context lists and tag arrays.
+- `tests/domain-expectations.json` pins the port against the TypeScript
+  oracle: per corpus fixture the sorted/visible indexes, the row encoding and
+  the search results for a fixed query list, plus a deterministic 1 000-todo
+  list, the collation probe, the case-folding table, the search-term table and
+  the recurrence/setter/toggle cases. The Rust tests read it and never
+  regenerate it; `tests/generate-domain-expectations.ts` documents how it was
+  produced.
+- **Collation:** no host input is needed. Context names are scanned with
+  `[\w.\-]+` (`A-Za-z0-9_.-`), and for that alphabet the ICU default order is
+  `_ - . 0..9` then case-insensitive letters with lowercase before uppercase
+  for the same primary weight, plus the ICU prefix rule. `thar-core` implements
+  that comparator directly; the committed probe covers every single character
+  and 485 strings. Priority comparison uses the same order restricted to
+  `A`..`Z`. The oracle's order depends on the host locale/ICU version, so the
+  expectations record Node and ICU and would need regeneration if the ICU
+  default order changed.
+- **Case folding:** `js_lowercase` matches `String.prototype.toLowerCase`
+  including the Greek final-sigma rule for directly adjacent cased letters.
+  JavaScript additionally skips case-ignorable characters (combining marks,
+  `.`, `:`, …) when deciding sigma; that residual cannot change a search
+  result, because the query normalizer strips every non-ASCII character from
+  the ends of a term, so a term never ends in `σ`/`ς` and only non-final
+  sigmas can match. The deviation is documented on `js_lowercase` and the
+  committed case-folding table covers the agreeing cases.
+- `reconcileNavState` is deliberately not ported: it keys its cache on object
+  identity, which has no portable equivalent; the host knows whether the list
+  changed and composes the pure helpers instead.
 
 ### CP4 — Rust write path opt-in, byte-compared
 
