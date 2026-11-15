@@ -31,7 +31,7 @@
 
 use core::fmt;
 
-use crate::date::{TodoDate, days_in_month};
+use crate::date::{TodoDate, add_days, add_months, add_weeks, add_years};
 
 /// Upper bound for `rec:` amounts so serialized values stay sane.
 pub const MAX_RECURRENCE_AMOUNT: u32 = 9_999;
@@ -126,10 +126,10 @@ impl Recurrence {
     #[must_use = "the planned day must be used"]
     pub fn plan(self, base: TodoDate) -> Result<TodoDate, RecurrenceError> {
         let planned = match self.unit {
-            RecurrenceUnit::Days => add_days(base, self.amount),
-            RecurrenceUnit::Weeks => add_days(base, self.amount.saturating_mul(7)),
-            RecurrenceUnit::Months => add_months(base, self.amount),
-            RecurrenceUnit::Years => add_months(base, self.amount.saturating_mul(12)),
+            RecurrenceUnit::Days => add_days(base, i64::from(self.amount)),
+            RecurrenceUnit::Weeks => add_weeks(base, i64::from(self.amount)),
+            RecurrenceUnit::Months => add_months(base, i64::from(self.amount)),
+            RecurrenceUnit::Years => add_years(base, i64::from(self.amount)),
         };
 
         planned.ok_or(RecurrenceError::OutOfRange)
@@ -195,77 +195,6 @@ pub fn is_valid_recurrence(value: &str) -> bool {
 #[must_use = "the planned day must be used"]
 pub fn plan_recurrence(value: &str, base: TodoDate) -> Result<TodoDate, RecurrenceError> {
     Recurrence::parse(value)?.plan(base)
-}
-
-/// Add whole calendar days.
-fn add_days(base: TodoDate, days: u32) -> Option<TodoDate> {
-    let shifted = days_from_civil(
-        i64::from(base.year()),
-        i64::from(base.month()),
-        i64::from(base.day()),
-    ) + i64::from(days);
-
-    let (year, month, day) = civil_from_days(shifted);
-    to_todo_date(year, month, day)
-}
-
-/// Add calendar months, clamping the day to the end of the target month.
-fn add_months(base: TodoDate, months: u32) -> Option<TodoDate> {
-    let total = i64::from(base.year() - 1) * 12 + i64::from(base.month() - 1) + i64::from(months);
-    let year = total.div_euclid(12) + 1;
-    let month = total.rem_euclid(12) + 1;
-
-    let year_u16 = u16::try_from(year).ok()?;
-    let month_u8 = u8::try_from(month).ok()?;
-    let day = base.day().min(days_in_month(year_u16, month_u8));
-
-    TodoDate::new(year_u16, month_u8, day)
-}
-
-/// Build a [`TodoDate`], rejecting out-of-range years.
-fn to_todo_date(year: i64, month: i64, day: i64) -> Option<TodoDate> {
-    let year = u16::try_from(year).ok()?;
-    let month = u8::try_from(month).ok()?;
-    let day = u8::try_from(day).ok()?;
-    TodoDate::new(year, month, day)
-}
-
-/// Days since 1970-01-01 for a proleptic Gregorian date.
-///
-/// Howard Hinnant's `days_from_civil`; exact for every year this crate accepts.
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = if month <= 2 { year - 1 } else { year };
-    let era = if year >= 0 { year } else { year - 399 } / 400;
-    let year_of_era = year - era * 400;
-    let month_prime = (month + 9).rem_euclid(12);
-    let day_of_year = (153 * month_prime + 2) / 5 + day - 1;
-    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-    era * 146_097 + day_of_era - 719_468
-}
-
-/// Inverse of [`days_from_civil`].
-fn civil_from_days(days: i64) -> (i64, i64, i64) {
-    let shifted = days + 719_468;
-    let era = if shifted >= 0 {
-        shifted
-    } else {
-        shifted - 146_096
-    } / 146_097;
-    let day_of_era = shifted - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_prime = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
-    let month = if month_prime < 10 {
-        month_prime + 3
-    } else {
-        month_prime - 9
-    };
-    let year = if month <= 2 { year + 1 } else { year };
-
-    (year, month, day)
 }
 
 #[cfg(test)]

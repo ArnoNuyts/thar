@@ -3,6 +3,7 @@
 //! The crate is split so each layer can be tested without a terminal:
 //!
 //! - [`app`] owns the state and the read-only invariant;
+//! - [`calendar`] is the Monday-first month grid used by the date modal;
 //! - [`display`] escapes control characters before anything reaches the
 //!   terminal;
 //! - [`list`] builds the owned row model from the `thar-core` domain;
@@ -26,6 +27,7 @@
 #![deny(missing_docs)]
 
 pub mod app;
+pub mod calendar;
 pub mod display;
 pub mod history;
 pub mod input;
