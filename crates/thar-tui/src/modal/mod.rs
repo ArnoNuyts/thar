@@ -13,12 +13,16 @@
 //! The CP6 layout module deliberately keeps the base rows (search bar, list,
 //! action bar) untouched; overlays live here and use their own hit-testing.
 
+pub mod confirm;
 pub mod geometry;
+pub mod menu;
 pub mod registry;
 pub mod registry_date;
 pub mod registry_editor;
 pub mod registry_menu;
 pub mod registry_meta;
+pub mod text;
+pub mod update;
 
 mod date;
 mod priority;
@@ -31,7 +35,9 @@ use thar_core::{TodoDate, TodoId};
 
 use crate::input::MouseInput;
 
+pub use confirm::ConfirmRequest;
 pub use geometry::{ModalRect, ModalWidth};
+pub use update::{InstallKind, UpdateModel};
 
 /// Every screen CP7 can show.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -167,8 +173,15 @@ pub enum Action {
     },
     /// Paste todos from the clipboard.
     Paste,
+    /// Add already-read clipboard lines, with the paste toast.
+    PasteLines {
+        /// Non-empty todo lines.
+        lines: Vec<String>,
+    },
     /// Archive every completed todo to `done.txt`.
     ArchiveCompleted,
+    /// Open a yes/no confirmation carrying the follow-up actions.
+    Confirm(ConfirmRequest),
 }
 
 /// What a modal wants the host to do after one event.
@@ -205,6 +218,8 @@ pub trait Modal {
     fn handle_paste(&mut self, _text: &str) -> Outcome {
         Outcome::Continue
     }
+    /// Keep the screen's geometry in step with a terminal resize.
+    fn resize(&mut self, _width: u16, _height: u16) {}
     /// Draw the body into the rectangle resolved by [`geometry::resolve`].
     fn render(&self, frame: &mut Frame, rect: ModalRect);
 }
@@ -242,6 +257,13 @@ impl Stack {
     #[must_use]
     pub fn top_mut(&mut self) -> Option<&mut (dyn Modal + 'static)> {
         self.active.as_deref_mut()
+    }
+
+    /// Forward a terminal resize to the active modal, if any.
+    pub fn resize(&mut self, width: u16, height: u16) {
+        if let Some(modal) = self.active.as_deref_mut() {
+            modal.resize(width, height);
+        }
     }
 }
 
