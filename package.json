@@ -29,6 +29,7 @@
     "bin",
     "dist/*.js",
     "dist/*.d.ts",
+    "crates/thar-wasm/pkg/**",
     "README.md",
     "LICENSE"
   ],
@@ -43,7 +44,8 @@
     "dev": "vite-node main.tsx",
     "build": "vite build && npm run build:types",
     "build:types": "node scripts/build-types.mjs",
-    "prepack": "npm run build",
+    "build:wasm": "wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg --locked && node scripts/clean-wasm-pkg.mjs",
+    "prepack": "npm run build:wasm && npm run build",
     "prepublishOnly": "npm run check && npm test",
     "package:check": "npm pack --dry-run",
     "test": "vitest run",

@@ -26,10 +26,11 @@ import { IndexType } from "../types/enums.ts";
 import { waitFor } from "./test-utils.ts";
 
 /**
- * CP3b2a: the main list uses the gated Rust row builder only when
- * `THAR_CORE=rust`, and the TypeScript indexes are the fallback for every
- * failure path. The injected builder keeps the hook test independent of a
- * `pkg/` build; the real export is covered in `unit-tests/core-wasm.test.ts`.
+ * CP5: the main list uses the gated Rust row builder by default (`THAR_CORE`
+ * unset or `rust`), and the TypeScript indexes are the fallback for every
+ * failure path. `THAR_CORE=ts` keeps the TypeScript pipeline only. The injected
+ * builder keeps the hook test independent of a `pkg/` build; the real export is
+ * covered in `unit-tests/core-wasm.test.ts`.
  */
 
 const savedCore = process.env.THAR_CORE;
@@ -105,8 +106,8 @@ const todos = () => [
 ];
 
 describe("read-path wiring", () => {
-  test("ts (or unset) never calls the Rust builder and keeps TS indexes", async () => {
-    delete process.env.THAR_CORE;
+  test("THAR_CORE=ts never calls the Rust builder and keeps TS indexes", async () => {
+    process.env.THAR_CORE = "ts";
     const builder = recordingBuilder(() => []);
     const list = renderList(todos());
 
@@ -128,6 +129,30 @@ describe("read-path wiring", () => {
     expect(actualTodos.map((entry) => entry.todo.text)).toEqual(
       expectedTodos.map((entry) => entry.todo.text),
     );
+    list.unmount();
+  });
+
+  test("the default (unset THAR_CORE) calls the Rust builder", async () => {
+    delete process.env.THAR_CORE;
+    const source = todos();
+    const builder = recordingBuilder(() => [
+      { type: "context", contextName: "work", todoCount: 2 },
+      { type: "todo", index: 1, number: 1 },
+      { type: "todo", index: 0, number: 2 },
+    ]);
+
+    const list = renderList(source);
+
+    await waitFor(() => {
+      expect(list.getIndexes()).toHaveLength(3);
+    });
+
+    expect(builder.calls.length).toBeGreaterThan(0);
+    expect(list.getIndexes().map((entry) => entry.type)).toEqual([
+      IndexType.context,
+      IndexType.todo,
+      IndexType.todo,
+    ]);
     list.unmount();
   });
 

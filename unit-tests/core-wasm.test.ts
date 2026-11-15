@@ -1,23 +1,17 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
-  MAX_SHADOW_LOG_BYTES,
   buildRowsWithCore,
   getCoreMode,
-  isShadowEnabled,
   parseFileWithCore,
   resetCoreBridgeForTests,
-  resolveShadowLogPath,
   serializeTodosWithCore,
   setCollatorLocaleForTests,
   setRowBuilderForTests,
   setSerializerForTests,
-  shadowCheckTodoFile,
-  shadowLogPath,
 } from "../logic/core-wasm.ts";
 import { formatDateTag } from "../logic/dates.ts";
 import { createIndexes } from "../logic/indexes.ts";
@@ -47,24 +41,21 @@ import { Runtime } from "../utils/runtime.ts";
 import { restoreRuntimeMocks } from "./test-utils.ts";
 
 /**
- * CP2b: the opt-in Rust bridge and the `THAR_SHADOW=1` differential check.
+ * CP5: the Rust bridge is the default core.
  *
  * The main Node test matrix must not require Rust or a built
  * `crates/thar-wasm/pkg/`, so these tests drive the real loader with a tiny
  * CommonJS test double written into a temp directory and named by
  * `THAR_CORE_WASM`. When the real package happens to exist (the Rust WASM CI
- * job and a developer checkout) one extra test runs against it.
+ * job and a developer checkout) extra tests run against it.
  */
 
 const ENV_KEYS = [
-  "THAR_SHADOW",
-  "THAR_SHADOW_LOG",
   "THAR_CORE",
   "THAR_CORE_WASM",
   "THAR_MAX_FILE_BYTES",
   "THAR_MAX_READ_TODOS",
   "THAR_MAX_LINE_CHARS",
-  "XDG_CACHE_HOME",
 ] as const;
 
 const savedEnv = new Map<string, string | undefined>();
@@ -137,72 +128,6 @@ const record = (line: string, fields: Record<string, unknown> = {}) => ({
   hash: line,
   ...fields,
 });
-
-/**
- * A package that enforces the three read limits the way `thar-wasm` does, and
- * echoes each line as its `toString`/`hash` (`lineSuffix` adds a difference).
- *
- * `parseFile` implements the compile-time defaults (1 MiB / 10 000 / 8 192) and
- * rejects a longer line, so a test that overrides `THAR_MAX_LINE_CHARS` fails
- * with a spurious `rejected` record if the adapter forgets to pass the
- * effective limits to `parseFileWithLimits`.
- */
-const limitAwarePackage = (lineSuffix = "") => `
-const fail = (name, code, fields) => ({
-  ok: false,
-  error: { name, code, ...fields, message: "bounded" },
-});
-const todo = (line, rustLine) => ({
-  text: line,
-  state: "todo",
-  priority: null,
-  completionDate: null,
-  creationDate: null,
-  projects: [],
-  contexts: [],
-  tags: [],
-  isDone: false,
-  isHidden: false,
-  isVisibleInOverview: true,
-  isOverdue: false,
-  toString: rustLine,
-  hash: rustLine,
-});
-const check = (text, maxFileBytes, maxReadTodos, maxLineChars) => {
-  const actualBytes = Buffer.byteLength(text, "utf8");
-  if (actualBytes > maxFileBytes) {
-    return fail("TodoFileTooLargeError", "FILE_TOO_LARGE", {
-      actualBytes,
-      maxBytes: maxFileBytes,
-    });
-  }
-  const lines = text.split("\\n").filter((line) => line.trim());
-  if (lines.length > maxReadTodos) {
-    return fail("TodoLineCountLimitError", "TOO_MANY_LINES", {
-      lineCount: lines.length,
-      maxReadTodos,
-    });
-  }
-  const index = lines.findIndex((line) => line.length > maxLineChars);
-  if (index >= 0) {
-    return fail("TodoLineLengthLimitError", "LINE_TOO_LONG", {
-      lineNumber: index + 1,
-      length: lines[index].length,
-      maxLineChars,
-    });
-  }
-  return {
-    ok: true,
-    todos: lines.map((line) => todo(line, line + ${JSON.stringify(lineSuffix)})),
-  };
-};
-module.exports = {
-  coreVersion: () => "0.2.0-test",
-  parseFile: (text) => JSON.stringify(check(text, 1024 * 1024, 10000, 8192)),
-  parseFileWithLimits: (text, _today, maxFileBytes, maxReadTodos, maxLineChars) =>
-    JSON.stringify(check(text, maxFileBytes, maxReadTodos, maxLineChars)),
-};
-`;
 
 const withTempDir = async (fn: (dir: string) => Promise<void>) => {
   const dir = await Runtime.makeTempDir();
@@ -348,6 +273,38 @@ describe("WASM adapter fallback", () => {
     });
   });
 
+  test("forwards the effective read limits to parseFileWithLimits", async () => {
+    await withTempDir(async (dir) => {
+      const calls = join(dir, "limits.json");
+      await fakePackage(
+        dir,
+        `const fs = require("node:fs");
+module.exports = {
+  coreVersion: () => "0.2.0-test",
+  parseFile: () => "{}",
+  parseFileWithLimits: (_text, today, maxFileBytes, maxReadTodos, maxLineChars) => {
+    fs.writeFileSync(${JSON.stringify(calls)}, JSON.stringify({ today, maxFileBytes, maxReadTodos, maxLineChars }));
+    return "{}";
+  },
+};
+`,
+      );
+
+      parseFileWithCore("one", "2026-11-15", {
+        maxFileBytes: 1_024,
+        maxReadTodos: 2,
+        maxLineChars: 3,
+      });
+
+      expect(JSON.parse(readFileSync(calls, "utf8"))).toEqual({
+        today: "2026-11-15",
+        maxFileBytes: 1_024,
+        maxReadTodos: 2,
+        maxLineChars: 3,
+      });
+    });
+  });
+
   test("a rejected envelope keeps the bounded error fields", async () => {
     await withTempDir(async (dir) => {
       const error = {
@@ -367,8 +324,41 @@ describe("WASM adapter fallback", () => {
   });
 });
 
-describe("THAR_CORE at CP2", () => {
-  test("both values keep the TypeScript implementation", async () => {
+describe("THAR_CORE default (CP5)", () => {
+  test("unset selects rust and THAR_CORE=ts is the escape hatch", () => {
+    setEnv("THAR_CORE", undefined);
+    expect(getCoreMode()).toBe("rust");
+
+    setEnv("THAR_CORE", "rust");
+    expect(getCoreMode()).toBe("rust");
+
+    setEnv("THAR_CORE", "ts");
+    expect(getCoreMode()).toBe("ts");
+    // The opt-out is forgiving: a shell that exports `TS` or pads whitespace
+    // must still select TypeScript, not silently keep Rust.
+    setEnv("THAR_CORE", "TS");
+    expect(getCoreMode()).toBe("ts");
+    setEnv("THAR_CORE", " ts ");
+    expect(getCoreMode()).toBe("ts");
+
+    // An empty value is treated as unset: the default applies.
+    setEnv("THAR_CORE", "");
+    expect(getCoreMode()).toBe("rust");
+  });
+
+  test("an unknown value keeps the rust default and logs once, without echoing it", () => {
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    setEnv("THAR_CORE", "SECRET-mode-value");
+    expect(getCoreMode()).toBe("rust");
+    expect(getCoreMode()).toBe("rust");
+    expect(debug).toHaveBeenCalledTimes(1);
+    const logged = String(debug.mock.calls[0]?.[0]);
+    expect(logged).toContain("unrecognized THAR_CORE value");
+    expect(logged).not.toContain("SECRET");
+  });
+
+  test("the ts escape hatch and the rust default parse the same file", async () => {
     await withTempDir(async (dir) => {
       const filename = join(dir, "todo.txt");
       await Runtime.writeTextFile(
@@ -380,11 +370,12 @@ describe("THAR_CORE at CP2", () => {
       expect(getCoreMode()).toBe("ts");
       const ts = await readTodosFromFile(filename);
 
-      setEnv("THAR_CORE", "rust");
-      expect(getCoreMode()).toBe("rust");
-      // No package built in this process: the TS path must still work.
+      // No package built in this process: the TS fallback must still work, and
+      // it must not change the list.
+      setEnv("THAR_CORE", undefined);
       setEnv("THAR_CORE_WASM", join(dir, "missing", "thar_wasm.js"));
       resetCoreBridgeForTests();
+      vi.spyOn(console, "debug").mockImplementation(() => {});
       const rust = await readTodosFromFile(filename);
 
       expect(rust.map((todo) => todo.toString())).toEqual(
@@ -393,11 +384,63 @@ describe("THAR_CORE at CP2", () => {
     });
   });
 
-  test("unknown values fall back to ts", () => {
-    setEnv("THAR_CORE", "wasm");
-    expect(getCoreMode()).toBe("ts");
-    setEnv("THAR_CORE", "");
-    expect(getCoreMode()).toBe("ts");
+  test("the rust default parses through the package when one is present", async () => {
+    await withTempDir(async (dir) => {
+      const filename = join(dir, "todo.txt");
+      const text = "one @work\nx 2024-03-02 done\n";
+      await Runtime.writeTextFile(filename, text);
+
+      const expected = ["one @work", "x 2024-03-02 done"].map(
+        (line) => new Todo(line),
+      );
+      await fakePackage(
+        dir,
+        `const todos = ${JSON.stringify(
+          expected.map((todo, id) => ({
+            text: todo.text,
+            state: todo.isDone() ? "done" : "todo",
+            priority: todo.priority ?? null,
+            completionDate:
+              todo.completionDate === undefined
+                ? null
+                : formatDateTag(todo.completionDate),
+            creationDate:
+              todo.creationDate === undefined
+                ? null
+                : formatDateTag(todo.creationDate),
+            projects: [...todo.projects],
+            contexts: [...todo.contexts],
+            tags: Object.entries(todo.tags),
+            isDone: todo.isDone(),
+            isHidden: todo.isHidden(),
+            isVisibleInOverview: todo.isVisibleInOverview(),
+            isOverdue: todo.isOverdue(),
+            toString: todo.toString(),
+            hash: todo.getHash(),
+            datesInText: todo.datesInText,
+            completionDateInText: todo.completionDateInText,
+            id,
+          })),
+        )};
+module.exports = {
+  coreVersion: () => "0.3.0-test",
+  parseFile: () => JSON.stringify({ ok: true, todos }),
+  parseFileWithLimits: () => JSON.stringify({ ok: true, todos }),
+};
+`,
+      );
+      setEnv("THAR_CORE", undefined);
+      resetCoreBridgeForTests();
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+      const todos = await readTodosFromFile(filename);
+
+      expect(todos.map((todo) => todo.toString())).toEqual(
+        expected.map((todo) => todo.toString()),
+      );
+      // A real answer, not the fallback: no diagnostic line at all.
+      expect(debug).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -451,16 +494,24 @@ describe("buildRowsWithCore", () => {
   const tsIndexes = (todos: Todo[]) =>
     createIndexes(filterBySearch(filterHidden(sortByImportance(todos)), ""));
 
-  test("ts mode and an unset variable never call the core", () => {
+  test("THAR_CORE=ts never calls the core, the default does", () => {
+    vi.spyOn(console, "debug").mockImplementation(() => {});
     const todos = [new Todo("one @home"), new Todo("two")];
     const builder = vi.fn(() => rowEnvelope([]));
     setRowBuilderForTests(builder);
 
-    for (const value of [undefined, "ts", "", "wasm"]) {
-      setEnv("THAR_CORE", value);
-      expect(buildRowsWithCore(todos, "", false, TODAY)).toBeUndefined();
-    }
+    setEnv("THAR_CORE", "ts");
+    expect(buildRowsWithCore(todos, "", false, TODAY)).toBeUndefined();
     expect(builder).not.toHaveBeenCalled();
+
+    // Unset, empty and an unknown value all take the rust default.
+    for (const value of [undefined, "", "wasm"]) {
+      setEnv("THAR_CORE", value);
+      // `rows: []` for a non-empty list is gated by the TypeScript pipeline,
+      // so the builder is called but its empty answer is not trusted here.
+      expect(buildRowsWithCore(todos, "", false, TODAY)).toBeDefined();
+    }
+    expect(builder).toHaveBeenCalled();
   });
 
   test("rust mode without the package falls back with one bounded log", async () => {
@@ -812,59 +863,47 @@ describe("buildRowsWithCore", () => {
     expect(debug).not.toHaveBeenCalled();
   });
 
-  test("a failing or inconsistent builder falls back and logs once", async () => {
-    await withTempDir(async (dir) => {
-      const log = join(dir, "shadow.log");
-      setEnv("THAR_SHADOW_LOG", log);
-      setEnv("THAR_CORE", "rust");
-      const secret = "SECRET-TODO-alpha-77";
-      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const todos = [new Todo(secret)];
+  test("a failing or inconsistent builder falls back and logs once", () => {
+    setEnv("THAR_CORE", "rust");
+    const secret = "SECRET-TODO-alpha-77";
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const todos = [new Todo(secret)];
 
-      const failures: (() => string)[] = [
-        () => {
-          throw new Error(`${secret} exploded`);
-        },
-        () => "not json",
-        () => JSON.stringify({ ok: false }),
-        () => JSON.stringify({ ok: true }),
-        () => rowEnvelope([todoRow(0, 1)]), // todo before any header
-        () => rowEnvelope([contextRow("None", 2), todoRow(0, 1)]), // count
-        () => rowEnvelope([contextRow("None", 1), todoRow(1, 1)]), // bad index
-        () =>
-          rowEnvelope([contextRow("None", 2), todoRow(0, 1), todoRow(0, 2)]),
-        () =>
-          rowEnvelope([contextRow("None", 2), todoRow(0, 2), todoRow(0, 1)]),
-        () =>
-          rowEnvelope([
-            contextRow("None", 1),
-            todoRow(0, 1),
-            contextRow("None", 1),
-          ]),
-        () =>
-          rowEnvelope([
-            { type: "context", contextName: "None", todoCount: "1" },
-          ]),
-        () => rowEnvelope([{ type: "other" }]),
-        // A header that does not name the todo's first context.
-        () => rowEnvelope([contextRow("wrong", 1), todoRow(0, 1)]),
-      ];
+    const failures: (() => string)[] = [
+      () => {
+        throw new Error(`${secret} exploded`);
+      },
+      () => "not json",
+      () => JSON.stringify({ ok: false }),
+      () => JSON.stringify({ ok: true }),
+      () => rowEnvelope([todoRow(0, 1)]), // todo before any header
+      () => rowEnvelope([contextRow("None", 2), todoRow(0, 1)]), // count
+      () => rowEnvelope([contextRow("None", 1), todoRow(1, 1)]), // bad index
+      () => rowEnvelope([contextRow("None", 2), todoRow(0, 1), todoRow(0, 2)]),
+      () => rowEnvelope([contextRow("None", 2), todoRow(0, 2), todoRow(0, 1)]),
+      () =>
+        rowEnvelope([
+          contextRow("None", 1),
+          todoRow(0, 1),
+          contextRow("None", 1),
+        ]),
+      () =>
+        rowEnvelope([{ type: "context", contextName: "None", todoCount: "1" }]),
+      () => rowEnvelope([{ type: "other" }]),
+      // A header that does not name the todo's first context.
+      () => rowEnvelope([contextRow("wrong", 1), todoRow(0, 1)]),
+    ];
 
-      for (const fail of failures) {
-        setRowBuilderForTests(fail);
-        expect(buildRowsWithCore(todos, "", false, TODAY)).toBeUndefined();
-      }
+    for (const fail of failures) {
+      setRowBuilderForTests(fail);
+      expect(buildRowsWithCore(todos, "", false, TODAY)).toBeUndefined();
+    }
 
-      expect(debug).toHaveBeenCalledTimes(1);
-      const logged = debug.mock.calls.map((call) => String(call[0])).join("\n");
-      expect(logged).toContain("buildRows");
-      expect(logged).not.toContain(secret);
-      expect(logged).not.toContain("exploded");
-      expect(warn).not.toHaveBeenCalled();
-      // Nothing is written anywhere: the shadow log stays absent.
-      expect(existsSync(log)).toBe(false);
-    });
+    expect(debug).toHaveBeenCalledTimes(1);
+    const logged = debug.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(logged).toContain("buildRows");
+    expect(logged).not.toContain(secret);
+    expect(logged).not.toContain("exploded");
   });
 
   test("a thrown error does not leak the request body", () => {
@@ -914,15 +953,20 @@ describe("buildRowsWithCore", () => {
 describe("serializeTodosWithCore", () => {
   const ok = (text: string) => JSON.stringify({ ok: true, text });
 
-  test("ts mode and an unset variable never call the core", () => {
+  test("THAR_CORE=ts never calls the core, the default does", () => {
     const serializer = vi.fn(() => ok("x\n"));
     setSerializerForTests(serializer);
 
-    for (const value of [undefined, "ts", "", "wasm"]) {
-      setEnv("THAR_CORE", value);
-      expect(serializeTodosWithCore([new Todo("one")])).toBeUndefined();
-    }
+    setEnv("THAR_CORE", "ts");
+    expect(serializeTodosWithCore([new Todo("one")])).toBeUndefined();
     expect(serializer).not.toHaveBeenCalled();
+
+    setEnv("THAR_CORE", undefined);
+    expect(serializeTodosWithCore([new Todo("one")])).toEqual({
+      ok: true,
+      text: "x\n",
+    });
+    expect(serializer).toHaveBeenCalledTimes(1);
   });
 
   test("sends the structured records with tags and both round-trip flags", () => {
@@ -1024,302 +1068,6 @@ describe("serializeTodosWithCore", () => {
       ).toEqual({ ok: true, text: "one\ntwo\n" });
       expect(debug).not.toHaveBeenCalled();
     });
-  });
-});
-
-describe("THAR_SHADOW=1", () => {
-  test("is off by default and writes nothing", async () => {
-    await withTempDir(async (dir) => {
-      const log = join(dir, "shadow.log");
-      setEnv("THAR_SHADOW_LOG", log);
-      setEnv("THAR_SHADOW", undefined);
-
-      expect(isShadowEnabled()).toBe(false);
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      shadowCheckTodoFile("alpha:one\n", [new Todo("something else")]);
-
-      expect(existsSync(log)).toBe(false);
-      expect(warn).not.toHaveBeenCalled();
-    });
-  });
-
-  test("a matching parse records nothing", async () => {
-    await withTempDir(async (dir) => {
-      const log = join(dir, "shadow.log");
-      setEnv("THAR_SHADOW_LOG", log);
-      setEnv("THAR_SHADOW", "1");
-      const text = "alpha:one\nbeta:two\n";
-      await envelopePackage({
-        ok: true,
-        todos: [
-          record("", {
-            tags: [["alpha", "one"]],
-            toString: " alpha:one",
-            hash: " alpha:one",
-          }),
-          record("", {
-            tags: [["beta", "two"]],
-            toString: " beta:two",
-            hash: " beta:two",
-          }),
-        ],
-      })(dir);
-
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      shadowCheckTodoFile(text, [new Todo("alpha:one"), new Todo("beta:two")]);
-
-      expect(existsSync(log)).toBe(false);
-      expect(warn).not.toHaveBeenCalled();
-    });
-  });
-
-  test("the read seam records a bounded, content-free mismatch", async () => {
-    await withTempDir(async (dir) => {
-      const log = join(dir, "shadow.log");
-      setEnv("THAR_SHADOW_LOG", log);
-      setEnv("THAR_SHADOW", "1");
-      const secret = "SECRET-TOKEN-should-never-be-logged";
-      await envelopePackage({ ok: true, todos: [record("different line")] })(
-        dir,
-      );
-
-      const filename = join(dir, "todo.txt");
-      await Runtime.writeTextFile(filename, `${secret}:SECRET-VALUE\nsecond\n`);
-
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const todos = await readTodosFromFile(filename);
-
-      // The app keeps the TypeScript result; only the log changed.
-      expect(todos.map((todo) => todo.toString())).toEqual([
-        `${secret}:SECRET-VALUE`,
-        "second",
-      ]);
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0]?.[0]).toContain("thar shadow:");
-      expect(warn.mock.calls[0]?.[0]).toContain(log);
-
-      const content = readFileSync(log, "utf8");
-      expect(content.endsWith("\n")).toBe(true);
-      expect(content).not.toContain("SECRET");
-      for (const line of content.trimEnd().split("\n")) {
-        const parsed = JSON.parse(line) as Record<string, unknown>;
-        expect(parsed.kind).toBe("mismatch");
-        expect(parsed.tsTodoCount).toBe(2);
-        expect(parsed.rustTodoCount).toBe(1);
-        expect(parsed.mismatchCount).toBe(2);
-        const details = parsed.lines as Record<string, unknown>[];
-        expect(details).toHaveLength(2);
-        expect(details[0]).toMatchObject({
-          index: 0,
-          // Both fields disagree with the TypeScript line; `hash` is the same
-          // serializer output, so it is reported separately.
-          fields: ["toString", "hash"],
-        });
-        expect(String(details[0]?.tsHash)).toMatch(/^[0-9a-f]{16}$/);
-        expect(String(details[0]?.rustHash)).toMatch(/^[0-9a-f]{16}$/);
-      }
-    });
-  });
-
-  test("uses the effective read limits instead of the compile-time defaults", async () => {
-    await withTempDir(async (dir) => {
-      const log = join(dir, "shadow.log");
-      setEnv("THAR_SHADOW_LOG", log);
-      setEnv("THAR_SHADOW", "1");
-      // One line longer than the default 8 192 units but inside the override.
-      setEnv("THAR_MAX_LINE_CHARS", "10000");
-      const line = "a".repeat(9_000);
-      const filename = join(dir, "todo.txt");
-      await Runtime.writeTextFile(filename, `${line}\n`);
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-      await fakePackage(dir, limitAwarePackage());
-
-      // The TypeScript reader accepts the file under the override and Rust
-      // must reach the same verdict. Without the limits, the package's
-      // `parseFile` (8 192) would record a spurious rejection here.
-      const todos = await readTodosFromFile(filename);
-      expect(todos.map((todo) => todo.toString())).toEqual([line]);
-      expect(existsSync(log)).toBe(false);
-      expect(warn).not.toHaveBeenCalled();
-
-      // Under the same override a real difference is still caught, and it is
-      // reported as a mismatch rather than a limit rejection.
-      await fakePackage(
-        dir,
-        limitAwarePackage(" (rust)"),
-        "thar_wasm_diff.cjs",
-      );
-      await readTodosFromFile(filename);
-
-      const written = JSON.parse(readFileSync(log, "utf8").trim()) as Record<
-        string,
-        unknown
-      >;
-      expect(written.kind).toBe("mismatch");
-      expect(written.mismatchCount).toBe(1);
-      expect(written.tsTodoCount).toBe(1);
-      expect(written.rustTodoCount).toBe(1);
-    });
-  });
-
-  test("a Rust rejection of a loadable file is recorded", async () => {
-    await withTempDir(async (dir) => {
-      const log = join(dir, "shadow.log");
-      setEnv("THAR_SHADOW_LOG", log);
-      setEnv("THAR_SHADOW", "1");
-      await envelopePackage({
-        ok: false,
-        error: {
-          name: "TodoLineCountLimitError",
-          code: "TOO_MANY_LINES",
-          lineCount: 2,
-          maxReadTodos: 1,
-          message: "bounded",
-        },
-      })(dir);
-
-      const filename = join(dir, "todo.txt");
-      await Runtime.writeTextFile(filename, "one\ntwo\n");
-      vi.spyOn(console, "warn").mockImplementation(() => {});
-      await readTodosFromFile(filename);
-
-      const record = JSON.parse(readFileSync(log, "utf8").trim()) as Record<
-        string,
-        unknown
-      >;
-      expect(record.kind).toBe("rejected");
-      expect(record.tsTodoCount).toBe(2);
-      expect(record.error).toEqual({
-        name: "TodoLineCountLimitError",
-        code: "TOO_MANY_LINES",
-      });
-      expect(JSON.stringify(record)).not.toContain("one");
-    });
-  });
-
-  test("caps the log file by truncating older records", async () => {
-    await withTempDir(async (dir) => {
-      const log = join(dir, "shadow.log");
-      setEnv("THAR_SHADOW_LOG", log);
-      setEnv("THAR_SHADOW", "1");
-      await envelopePackage({
-        ok: true,
-        todos: Array.from({ length: 20 }, (_, index) =>
-          record(`rust-${index}`),
-        ),
-      })(dir);
-
-      const todos = Array.from(
-        { length: 20 },
-        (_, index) => new Todo(`typescript-${index}`),
-      );
-      vi.spyOn(console, "warn").mockImplementation(() => {});
-      for (let index = 0; index < 200; index++) {
-        shadowCheckTodoFile("ignored", todos);
-      }
-
-      const size = readFileSync(log).byteLength;
-      expect(size).toBeLessThanOrEqual(MAX_SHADOW_LOG_BYTES);
-      const lines = readFileSync(log, "utf8").trimEnd().split("\n");
-      expect(lines.length).toBeGreaterThan(0);
-      for (const line of lines) {
-        expect(() => JSON.parse(line)).not.toThrow();
-      }
-      // Truncation means the oldest records are gone, not that the newest
-      // record was split: every line is still complete JSON.
-      expect(lines.length).toBeLessThan(200);
-    });
-  }, 30_000);
-
-  test("a broken package disables the check silently", async () => {
-    await withTempDir(async (dir) => {
-      const log = join(dir, "shadow.log");
-      setEnv("THAR_SHADOW_LOG", log);
-      setEnv("THAR_SHADOW", "1");
-      setEnv("THAR_CORE_WASM", join(dir, "missing.js"));
-      resetCoreBridgeForTests();
-      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-      const filename = join(dir, "todo.txt");
-      await Runtime.writeTextFile(filename, "one\n");
-      const todos = await readTodosFromFile(filename);
-
-      expect(todos).toHaveLength(1);
-      expect(existsSync(log)).toBe(false);
-      expect(warn).not.toHaveBeenCalled();
-      expect(debug).toHaveBeenCalledTimes(1);
-    });
-  });
-});
-
-describe("shadow log path", () => {
-  // A made-up home directory: the branch tests pass it in, so nothing here
-  // depends on the host user, `os.homedir()` or `process.platform`.
-  const homeDir = join("/home", "someone");
-
-  test("THAR_SHADOW_LOG wins over the cache directory", async () => {
-    await withTempDir(async (dir) => {
-      setEnv("XDG_CACHE_HOME", join(dir, "cache"));
-      expect(shadowLogPath()).toBe(join(dir, "cache", "thar", "shadow.log"));
-      // The exported path is the pure helper applied to the live globals.
-      expect(shadowLogPath()).toBe(
-        resolveShadowLogPath(process.env, process.platform, homedir()),
-      );
-
-      const explicit = join(dir, "elsewhere", "shadow.log");
-      setEnv("THAR_SHADOW_LOG", explicit);
-      expect(shadowLogPath()).toBe(explicit);
-    });
-  });
-
-  test("XDG_CACHE_HOME wins on every platform, and empty means unset", () => {
-    const cache = join("/tmp", "cache");
-    const fallbacks = {
-      linux: join(homeDir, ".cache"),
-      darwin: join(homeDir, "Library", "Caches"),
-      win32: join(homeDir, "AppData", "Local"),
-    } as const;
-    for (const platform of ["linux", "darwin", "win32"] as const) {
-      expect(
-        resolveShadowLogPath({ XDG_CACHE_HOME: cache }, platform, homeDir),
-      ).toBe(join(cache, "thar", "shadow.log"));
-      expect(
-        resolveShadowLogPath({ XDG_CACHE_HOME: "" }, platform, homeDir),
-      ).toBe(join(fallbacks[platform], "thar", "shadow.log"));
-    }
-  });
-
-  test("falls back to the platform cache directory without XDG", () => {
-    expect(resolveShadowLogPath({}, "linux", homeDir)).toBe(
-      join(homeDir, ".cache", "thar", "shadow.log"),
-    );
-    // Every platform that is not darwin or win32 uses the XDG default.
-    expect(resolveShadowLogPath({}, "aix", homeDir)).toBe(
-      join(homeDir, ".cache", "thar", "shadow.log"),
-    );
-    expect(resolveShadowLogPath({}, "darwin", homeDir)).toBe(
-      join(homeDir, "Library", "Caches", "thar", "shadow.log"),
-    );
-  });
-
-  test("win32 prefers LOCALAPPDATA and falls back to the profile", () => {
-    const localAppData = join(homeDir, "AppData", "Local");
-    expect(
-      resolveShadowLogPath({ LOCALAPPDATA: localAppData }, "win32", homeDir),
-    ).toBe(join(localAppData, "thar", "shadow.log"));
-    expect(resolveShadowLogPath({}, "win32", homeDir)).toBe(
-      join(localAppData, "thar", "shadow.log"),
-    );
-    // LOCALAPPDATA is not consulted off Windows.
-    expect(
-      resolveShadowLogPath(
-        { LOCALAPPDATA: join(homeDir, "ignored") },
-        "darwin",
-        homeDir,
-      ),
-    ).toBe(join(homeDir, "Library", "Caches", "thar", "shadow.log"));
   });
 });
 
@@ -1709,7 +1457,7 @@ module.exports = {
     });
   });
 
-  test("ts and unset modes never load the package", async () => {
+  test("THAR_CORE=ts never loads the package", async () => {
     await withTempDir(async (dir) => {
       const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
       const { filename, todos } = await writeAndReadTs(
@@ -1720,27 +1468,22 @@ module.exports = {
       // A path that does not exist: loading it in ts mode would log.
       setEnv("THAR_CORE_WASM", join(dir, "never", "thar_wasm.js"));
 
-      for (const mode of ["ts", undefined] as const) {
-        setEnv("THAR_CORE", mode);
-        resetCoreBridgeForTests();
-        const actual = await readTodosFromFile(filename);
-        expect(actual.map((todo) => todo.toString())).toEqual(
-          todos.map((todo) => todo.toString()),
-        );
-      }
+      setEnv("THAR_CORE", "ts");
+      resetCoreBridgeForTests();
+      const actual = await readTodosFromFile(filename);
+      expect(actual.map((todo) => todo.toString())).toEqual(
+        todos.map((todo) => todo.toString()),
+      );
       expect(debug).not.toHaveBeenCalled();
     });
   });
 
-  test("does not run the shadow check in rust mode", async () => {
+  test("parses the file exactly once", async () => {
     await withTempDir(async (dir) => {
-      const log = join(dir, "shadow.log");
       const counter = join(dir, "calls.txt");
       const filename = join(dir, "todo.txt");
       await Runtime.writeTextFile(filename, "one\ntwo\n");
       const todos = ["one", "two"].map((line) => new Todo(line));
-      setEnv("THAR_SHADOW", "1");
-      setEnv("THAR_SHADOW_LOG", log);
 
       const response = rustEnvelope(todos);
       await fakePackage(
@@ -1758,7 +1501,6 @@ module.exports = {
 `,
       );
       vi.spyOn(console, "debug").mockImplementation(() => {});
-      vi.spyOn(console, "warn").mockImplementation(() => {});
 
       setEnv("THAR_CORE", "rust");
       const actual = await readTodosFromFile(filename);
@@ -1766,9 +1508,8 @@ module.exports = {
       expect(actual.map((todo) => todo.toString())).toEqual(
         todos.map((todo) => todo.toString()),
       );
-      // Exactly one parse: the wired read path, not a shadow comparison too.
+      // Exactly one parse: the wired read path, no second Rust parse.
       expect(readFileSync(counter, "utf8")).toBe("x");
-      expect(existsSync(log)).toBe(false);
     });
   });
 
@@ -2083,7 +1824,9 @@ test.skipIf(!existsSync(REAL_PACKAGE))(
 test.skipIf(
   !existsSync(REAL_PACKAGE) || !isEnglishCollator(defaultCollatorLocale()),
 )("the built package builds rows through the real loader", () => {
-  setEnv("THAR_CORE", "rust");
+  // Default mode: unset, not the explicit `rust` value, so a regression that
+  // only affects the shipped configuration is caught.
+  setEnv("THAR_CORE", undefined);
   setEnv("THAR_CORE_WASM", undefined);
   resetCoreBridgeForTests();
   const debug = vi.spyOn(console, "debug").mockImplementation(() => {});

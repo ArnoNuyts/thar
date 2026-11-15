@@ -13,8 +13,8 @@ on:
       - "rust-toolchain.toml"
       - "crates/**"
       - "testdata/port/**"
-      # The candidate, the TS adapter/shadow bridge, and its tests are part of
-      # the WASM parity job even though they contain no Rust.
+      # The candidate, the TS adapter bridge, and its tests are part of the
+      # WASM parity job even though they contain no Rust.
       - "tools/port/**"
       - "logic/core-wasm.ts"
       - "logic/limits.ts"

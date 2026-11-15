@@ -58,7 +58,7 @@ npm run port:contract:write:wasm            # the WASM candidate (needs pkg/)
 
 # CP3b2c: the parse contract (parseFile -> Todo.fromParts -> serialize)
 npm run port:contract:parse                 # TS only: lossless factory + mutation proof
-npm run port:contract:parse:wasm            # the wired THAR_CORE=rust read path (needs pkg/)
+npm run port:contract:parse:wasm            # the wired Rust read path (needs pkg/)
 ```
 
 `npm run port:contract` prints npm's own `> thar@0.6.1 port:contract` banner on
@@ -605,9 +605,10 @@ rename. See `docs/rust-port/PLAN.md` §5 CP4 for the matrix.
 
 ## Parse contract (CP3b2c)
 
-CP3b2c wires `THAR_CORE=rust` into `readTodosFromFile`: one `parseFile` call
-replaces `validateTodoFileContent → filter(blank) → new Todo(line)`. The
-contract pins that reconstruction:
+CP3b2c wires the Rust read path into `readTodosFromFile` (the default since
+CP5; `THAR_CORE=ts` keeps the TypeScript reader): one `parseFile` call replaces
+`validateTodoFileContent → filter(blank) → new Todo(line)`. The contract pins
+that reconstruction:
 
 ```ts
 parse_file records → Todo.fromParts → serializeTodosForWrite
@@ -623,7 +624,7 @@ rejection records so read-error parity is part of the contract.
 
 ```sh
 npm run port:contract:parse        # TS only: lossless factory + mutation proof
-npm run port:contract:parse:wasm   # the wired THAR_CORE=rust read path (needs pkg/)
+npm run port:contract:parse:wasm   # the wired Rust read path (needs pkg/)
 ```
 
 ### Record format

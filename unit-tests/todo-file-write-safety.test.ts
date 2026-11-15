@@ -91,7 +91,7 @@ const serializerReturning = (text: string) => {
   return calls;
 };
 
-describe("THAR_CORE=ts (the default)", () => {
+describe("THAR_CORE=ts (the escape hatch)", () => {
   test("writes the TypeScript bytes and never asks Rust to serialize", async () => {
     await withTempDir(async (dir) => {
       const filename = join(dir, "todos.txt");
@@ -99,13 +99,11 @@ describe("THAR_CORE=ts (the default)", () => {
       const serializer = vi.fn(() => JSON.stringify({ ok: true, text: "x\n" }));
       setSerializerForTests(serializer);
 
-      for (const value of [undefined, "ts", "", "wasm"]) {
-        setEnv("THAR_CORE", value);
-        await writeTodosToFile(todos, filename);
-        expect(readBytes(filename)).toEqual(
-          bytesOf(serializeTodosForWrite(todos)),
-        );
-      }
+      setEnv("THAR_CORE", "ts");
+      await writeTodosToFile(todos, filename);
+      expect(readBytes(filename)).toEqual(
+        bytesOf(serializeTodosForWrite(todos)),
+      );
       expect(serializer).not.toHaveBeenCalled();
     });
   });
@@ -118,7 +116,7 @@ describe("THAR_CORE=ts (the default)", () => {
       // gives the "not loaded" claim a failing mode.
       const pkg = join(dir, "thar_wasm.cjs");
       await Runtime.writeTextFile(pkg, 'throw new Error("should not load");\n');
-      setEnv("THAR_CORE", undefined);
+      setEnv("THAR_CORE", "ts");
       setEnv("THAR_CORE_WASM", pkg);
       resetCoreBridgeForTests();
 
@@ -132,7 +130,22 @@ describe("THAR_CORE=ts (the default)", () => {
   });
 });
 
-describe("THAR_CORE=rust dual write", () => {
+describe("dual write (rust default)", () => {
+  test("an unset THAR_CORE asks Rust and writes the compared TypeScript bytes", async () => {
+    await withTempDir(async (dir) => {
+      setEnv("THAR_CORE", undefined);
+      resetCoreBridgeForTests();
+      const filename = join(dir, "todos.txt");
+      const todos = [new Todo("one")];
+      const calls = serializerReturning("one\n");
+
+      await writeTodosToFile(todos, filename);
+
+      expect(calls).toHaveLength(1);
+      expect(readBytes(filename)).toEqual(bytesOf("one\n"));
+    });
+  });
+
   test("identical Rust text produces the TypeScript bytes", async () => {
     await withTempDir(async (dir) => {
       const debug = vi.spyOn(console, "debug").mockImplementation(() => {});

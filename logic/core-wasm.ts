@@ -1,13 +1,5 @@
-import { createHash } from "node:crypto";
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,7 +16,6 @@ import { formatDateTag, parseDateTag } from "./dates.ts";
 import { createIndexes } from "./indexes.ts";
 import type { IndexEntry } from "./indexes.ts";
 import {
-  getReadLimits,
   type ReadLimits,
   TodoControlCharacterError,
   TodoFileValidationError,
@@ -38,52 +29,53 @@ import type { Todos } from "./Todos.ts";
 import { Todo, type TodoParts } from "./todo.ts";
 
 /**
- * Opt-in bridge to the Rust core compiled to WebAssembly (CP2b).
+ * Bridge to the Rust core compiled to WebAssembly.
  *
- * The TypeScript implementation is still the source of truth by default:
- * nothing here changes what the TUI displays, saves, or exports unless
- * `THAR_CORE=rust` is set. The module offers five entry points:
+ * Since CP5 the Rust core is the **default** for every wired path: parse
+ * (`readTodosFromFile`), rows (`useNavigationState`) and the byte-compared
+ * write (`writeTodosToFile`). `THAR_CORE=ts` is the documented escape hatch for
+ * one release and behaves exactly as the app did before the port: it loads no
+ * package at all. The module offers four entry points:
  *
  * - {@link parseFileWithCore}, a thin batch adapter over `thar-wasm`'s
- *   `parseFile`/`parseFileWithLimits`, used by the read path and the shadow
- *   check;
- * - {@link parseTodosWithCore}, the wired read path (CP3b2c): one Rust parse,
- *   validated into {@link Todo} instances through `Todo.fromParts`, with the
- *   TypeScript reader as the fallback;
- * - {@link buildRowsWithCore}, the opt-in row builder that calls the merged
+ *   `parseFile`/`parseFileWithLimits`;
+ * - {@link parseTodosWithCore}, the wired read path: one Rust parse, validated
+ *   into {@link Todo} instances through `Todo.fromParts`, with the TypeScript
+ *   reader as the fallback;
+ * - {@link buildRowsWithCore}, the wired row builder that calls the merged
  *   `buildRows` export and maps its rows back to `IndexEntry`;
- * - {@link serializeTodosWithCore}, the opt-in (CP4) whole-file serializer the
- *   write path byte-compares against the TypeScript oracle before saving;
- * - {@link shadowCheckTodoFile}, the `THAR_SHADOW=1` differential check that
- *   compares Rust against the already-parsed TypeScript result. In
- *   `THAR_CORE=rust` mode it is superseded: the read path already parses with
- *   Rust, so no second parse or shadow record happens.
+ * - {@link serializeTodosWithCore}, the whole-file serializer the write path
+ *   byte-compares against the TypeScript oracle before saving.
  *
- * All five are defensive: a missing, unbuildable or broken package, a
- * malformed envelope, an absent export, a rejected `today`, and a host collation
- * locale the Rust sort does not implement all resolve to `undefined` plus at
- * most one debug log. The one deliberate exception is a proven read rejection:
- * {@link parseTodosWithCore} throws the same `TodoFileValidationError` the
- * TypeScript reader would have thrown, so invalid files keep their exact user
- * error. Nothing else may throw into the TUI, and nothing here writes to the
- * todo file. Debug lines never include the parse input: a todo
- * line is its own `hash`, so a Node `JSON.parse` snippet would leak content.
- * For the same reason a row-builder or serializer failure logs only the error
- * class or the typed error code, never the todo list or the request body.
+ * All four are defensive: a missing, unbuildable or broken package, a malformed
+ * envelope, an absent export, a rejected `today`, and a host collation locale
+ * the Rust sort does not implement all resolve to `undefined` plus at most one
+ * bounded, content-free debug log. The one deliberate exception is a proven
+ * read rejection: {@link parseTodosWithCore} throws the same
+ * `TodoFileValidationError` the TypeScript reader would have thrown, so invalid
+ * files keep their exact user error. Nothing else may throw into the TUI, and
+ * nothing here writes to the todo file. Debug lines never include the parse
+ * input: a todo line is its own `hash`, so a Node `JSON.parse` snippet would
+ * leak content. For the same reason a row-builder or serializer failure logs
+ * only the error class or the typed error code, never the todo list or the
+ * request body.
  *
  * The package is loaded with `createRequire` and a module-relative runtime
- * path, never with a static `import`, so `npm run build`, `npm test` and
- * `npm run check` work in a clean checkout where `crates/thar-wasm/pkg/`
- * (gitignored) does not exist. Build it for local experiments with:
+ * path, never with a static `import`. In a source checkout that path is
+ * `crates/thar-wasm/pkg/` (gitignored, built by `npm run build:wasm`); in the
+ * published package it is the same path inside the tarball (`files` ships
+ * `crates/thar-wasm/pkg/**` next to `dist/main.js`). `npm run build`, `npm test`
+ * and `npm run check` still work without Rust: the adapter falls back to the
+ * TypeScript core and logs one line.
  *
- * ```sh
- * wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg
- * ```
+ * The runtime `THAR_SHADOW=1` differential check was removed at CP5. The
+ * durable oracle is the offline harness in `tools/port/` (`port:contract*`),
+ * which runs in CI and never touches a user's process.
  *
- * See `docs/rust-port/PLAN.md` §5 (CP2) and §9.1.
+ * See `docs/rust-port/PLAN.md` §5 (CP5) and §9.1.
  */
 
-/** Which implementation the read path should use. `ts` is the default. */
+/** Which implementation the wired paths should use. `rust` is the default. */
 export type CoreMode = "ts" | "rust";
 
 /**
@@ -108,9 +100,9 @@ export interface CoreTodoRecord {
   toString: string;
   hash: string;
   /**
-   * Round-trip flag, CP3b2c. Optional on the type so the shadow check keeps
-   * working against a package built before the parse-path fields existed; the
-   * read path requires it and falls back to TypeScript when it is absent.
+   * Round-trip flag, CP3b2c. Optional on the type so the adapter still accepts
+   * a package built before the parse-path fields existed; the read path
+   * requires it and falls back to TypeScript when it is absent.
    */
   datesInText?: boolean;
   /** Round-trip flag, CP3b2c. See {@link datesInText}. */
@@ -204,10 +196,10 @@ const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
  *
  * `process.cwd()` is deliberately not a candidate. The TUI may be started from
  * any directory, and a `crates/thar-wasm/pkg` there belongs to whoever owns
- * that directory — loading it would run foreign code and make the shadow check
- * compare against a package this checkout never built. `THAR_CORE_WASM` is the
- * dev-only escape hatch for pointing the bridge at another build; it goes
- * through `resolve`, so a relative value is relative to `process.cwd()`.
+ * that directory — loading it would run foreign code in this process.
+ * `THAR_CORE_WASM` is the dev-only escape hatch for pointing the bridge at
+ * another build; it goes through `resolve`, so a relative value is relative to
+ * `process.cwd()`.
  */
 const packageCandidates = (): string[] => {
   const override = process.env.THAR_CORE_WASM;
@@ -239,16 +231,34 @@ const errorName = (error: unknown): string =>
     : "unknown error";
 
 /**
- * The requested implementation, from `THAR_CORE=ts|rust`.
+ * The requested implementation, from `THAR_CORE`.
  *
- * `rust` opts into the Rust parse ({@link parseTodosWithCore}) and the Rust row
- * builder for the main list ({@link buildRowsWithCore}); the TypeScript
- * `validateTodoFileContent → new Todo` reader and the `sortByImportance →
- * filterHidden → filterBySearch → createIndexes` pipeline stay the fallback and
- * remain the default. `ts`, an unset variable and anything else mean `ts`.
+ * - `ts` is the escape hatch: the TypeScript reader, pipeline and serializer
+ *   only, no package loaded. The value is trimmed and case-folded, so a stray
+ *   `TS` or `" ts"` still opts out.
+ * - `rust`, an unset variable and an empty value all select the Rust core; the
+ *   wired paths fall back to TypeScript at runtime when the package is missing
+ *   or disagrees.
+ * - Any other value is treated as `rust` (the default applies unless the escape
+ *   hatch is named explicitly) after one bounded debug line. The value itself is
+ *   never echoed, so a stray environment value cannot leak into a log.
  */
-export const getCoreMode = (): CoreMode =>
-  process.env.THAR_CORE === "rust" ? "rust" : "ts";
+let unknownModeLogged = false;
+
+export const getCoreMode = (): CoreMode => {
+  const requested = process.env.THAR_CORE?.trim().toLowerCase();
+  if (requested === "ts") return "ts";
+  if (requested !== undefined && requested !== "" && requested !== "rust") {
+    if (!unknownModeLogged) {
+      unknownModeLogged = true;
+      debugLog(
+        "thar core: unrecognized THAR_CORE value; using the default Rust core " +
+          "(set THAR_CORE=ts to opt out)",
+      );
+    }
+  }
+  return "rust";
+};
 
 const loadCoreModule = (): CoreModule | null => {
   if (coreModule !== undefined) return coreModule;
@@ -281,7 +291,7 @@ const loadCoreModule = (): CoreModule | null => {
     packageLogged = true;
     debugLog(
       "thar core: WASM package not built; using the TypeScript core " +
-        "(build crates/thar-wasm/pkg with wasm-pack to enable the shadow check)",
+        "(build it with `npm run build:wasm`; THAR_CORE=ts silences this)",
     );
   }
   return null;
@@ -311,8 +321,8 @@ const isTagPair = (value: unknown): value is [string, string | string[]] =>
  * Structural check for one contract record.
  *
  * Deliberately stricter than a `"toString" in value` probe: a package that
- * returns the wrong shape must be ignored, not fed into the shadow comparison
- * where a missing field would read as a mismatch.
+ * returns the wrong shape must be ignored by every caller rather than guessed
+ * at.
  */
 const isCoreTodoRecord = (value: unknown): value is CoreTodoRecord => {
   if (typeof value !== "object" || value === null) return false;
@@ -334,8 +344,8 @@ const isCoreTodoRecord = (value: unknown): value is CoreTodoRecord => {
     typeof record.isOverdue === "boolean" &&
     typeof record.toString === "string" &&
     typeof record.hash === "string" &&
-    // CP3b2c fields: accepted when present, required by the read-path
-    // normalizer. The shadow check keeps working with an older package.
+    // CP3b2c fields: accepted when present and required by the read-path
+    // normalizer, so an older package still loads and falls back cleanly.
     (record.datesInText === undefined ||
       typeof record.datesInText === "boolean") &&
     (record.completionDateInText === undefined ||
@@ -640,10 +650,10 @@ const coreValidationError = (
 };
 
 /**
- * `THAR_CORE=rust`: parse the todo file with the Rust core and rebuild the
- * list as real {@link Todo} instances.
+ * Parse the todo file with the Rust core and rebuild the list as real
+ * {@link Todo} instances. This is the default wired read path since CP5.
  *
- * This is the wired read path (CP3b2c). One `parseFileWithLimits` call replaces
+ * One `parseFileWithLimits` call replaces
  * the TypeScript `validateTodoFileContent → filter(blank) → new Todo(line)`
  * chain:
  *
@@ -1036,7 +1046,8 @@ const tsIndexEntries = (
 };
 
 /**
- * `THAR_CORE=rust`: build the main list's rows in Rust.
+ * Build the main list's rows in Rust. This is the default wired row path since
+ * CP5.
  *
  * Returns `undefined` for the `ts` mode, a host locale the Rust collation does
  * not implement, a missing package or export, and on any thrown error or
@@ -1247,7 +1258,8 @@ const readSerializeEnvelope = (
 };
 
 /**
- * `THAR_CORE=rust`: serialize the whole todo list in Rust.
+ * Serialize the whole todo list in Rust. This is the default serializer since
+ * CP5, and its text is byte-compared against the TypeScript oracle.
  *
  * Returns the Rust text (`{ok: true}`), the write-time guard's rejection
  * (`{ok: false}`, `UNSAFE_CONTROL_CHARACTER` only), or `undefined` for the `ts`
@@ -1364,257 +1376,6 @@ export const setCollatorLocaleForTests = (locale: string | undefined): void => {
   injectedCollatorLocale = locale;
 };
 
-/** True when `THAR_SHADOW=1` is exported. Off by default. */
-export const isShadowEnabled = (): boolean => process.env.THAR_SHADOW === "1";
-
-/** Upper bound on one shadow log file; older records are dropped by truncation. */
-export const MAX_SHADOW_LOG_BYTES = 64 * 1024;
-
-/** Upper bound on per-line detail in one shadow record. */
-export const MAX_SHADOW_LINE_DETAILS = 20;
-
-/** Hex characters kept from a SHA-256 digest in a shadow record. */
-const SHADOW_HASH_CHARS = 16;
-
-/**
- * Where mismatch records are appended.
- *
- * `THAR_SHADOW_LOG` wins; otherwise `<user cache dir>/thar/shadow.log`
- * (`$XDG_CACHE_HOME`, `~/Library/Caches` on macOS, `%LOCALAPPDATA%` on Windows,
- * `~/.cache` elsewhere).
- *
- * The environment, platform and home directory are parameters rather than
- * globals so the platform branches are testable on any host: `os.homedir()`
- * ignores a faked `process.platform` and reads `USERPROFILE` on Windows.
- */
-export const resolveShadowLogPath = (
-  env: Readonly<Record<string, string | undefined>>,
-  platform: NodeJS.Platform,
-  homeDir: string,
-): string => {
-  const override = env.THAR_SHADOW_LOG;
-  if (override) return resolve(override);
-
-  const xdg = env.XDG_CACHE_HOME;
-  const base =
-    xdg && xdg.length > 0
-      ? xdg
-      : platform === "darwin"
-        ? join(homeDir, "Library", "Caches")
-        : platform === "win32"
-          ? (env.LOCALAPPDATA ?? join(homeDir, "AppData", "Local"))
-          : join(homeDir, ".cache");
-  return join(base, "thar", "shadow.log");
-};
-
-/** {@link resolveShadowLogPath} for the current process. */
-export const shadowLogPath = (): string =>
-  resolveShadowLogPath(process.env, process.platform, homedir());
-
-/**
- * A content-free diagnostic record.
- *
- * Counts, indexes, and truncated SHA-256 digests only: a todo line *is* its own
- * `hash`, so the raw line (and therefore any todo text) must never be written.
- */
-interface ShadowMismatch {
-  at: string;
-  kind: "mismatch";
-  tsTodoCount: number;
-  rustTodoCount: number;
-  mismatchCount: number;
-  lines: {
-    index: number;
-    fields: string[];
-    tsHash: string;
-    rustHash: string;
-  }[];
-  linesTruncated: boolean;
-  serialized: { equal: boolean; tsHash: string; rustHash: string };
-}
-
-interface ShadowRejected {
-  at: string;
-  kind: "rejected";
-  tsTodoCount: number;
-  error: { name: string; code: string };
-}
-
-type ShadowRecord = ShadowMismatch | ShadowRejected;
-
-/** Stable, content-free digest of one serialized todo line. */
-const shortHash = (line: string): string =>
-  createHash("sha256")
-    .update(line, "utf8")
-    .digest("hex")
-    .slice(0, SHADOW_HASH_CHARS);
-
-/**
- * Compare the Rust parse with the TypeScript result the app is about to use.
- *
- * `limits` are the effective read limits of the load that produced `todos`;
- * passing them keeps Rust from rejecting a file the TypeScript reader accepted
- * under a `THAR_MAX_*` override.
- *
- * Returns `undefined` when the two agree or when the Rust package is
- * unavailable. Only per-todo `toString`/`hash` and the whole-file serialized
- * bytes are compared; that is what CP1 freezes, and it keeps the check
- * independent of the ambient clock's sub-day drift.
- */
-const compareWithCore = (
-  text: string,
-  todos: readonly Todo[],
-  limits: ReadLimits,
-): ShadowRecord | undefined => {
-  const parsed = parseFileWithCore(text, todayFromClock(), limits);
-  if (!parsed) return undefined;
-
-  const at = new Date().toISOString();
-  const tsLines = todos.map((todo) => todo.toString());
-
-  if (!parsed.ok) {
-    return {
-      at,
-      kind: "rejected",
-      tsTodoCount: tsLines.length,
-      error: { name: parsed.error.name, code: parsed.error.code },
-    };
-  }
-
-  const rustLines = parsed.todos.map((todo) => todo.toString);
-  const lines: ShadowMismatch["lines"] = [];
-  let mismatchCount = 0;
-
-  for (
-    let index = 0;
-    index < Math.max(tsLines.length, rustLines.length);
-    index++
-  ) {
-    const tsLine = tsLines[index];
-    const todo = parsed.todos[index];
-    const rustLine = rustLines[index];
-    const fields: string[] = [];
-    if (tsLine !== rustLine) fields.push("toString");
-    // `getHash()` is `toString()`, so `hash` duplicates `toString` on both
-    // sides. It is still compared because it is a contract field: a record
-    // that carries the right line in `toString` and a wrong one in `hash`
-    // must not pass.
-    if (todo !== undefined && todo.hash !== tsLine) fields.push("hash");
-    if (fields.length === 0) continue;
-
-    mismatchCount++;
-    if (lines.length < MAX_SHADOW_LINE_DETAILS) {
-      lines.push({
-        index,
-        fields,
-        tsHash: tsLine === undefined ? "" : shortHash(tsLine),
-        rustHash: rustLine === undefined ? "" : shortHash(rustLine),
-      });
-    }
-  }
-
-  // The write shape is CP1's `todos.map(toString).join("\n") + "\n"`.
-  const tsSerialized = tsLines.join("\n") + "\n";
-  const rustSerialized = rustLines.join("\n") + "\n";
-  const serializedEqual = tsSerialized === rustSerialized;
-
-  if (mismatchCount === 0 && serializedEqual) return undefined;
-
-  return {
-    at,
-    kind: "mismatch",
-    tsTodoCount: tsLines.length,
-    rustTodoCount: rustLines.length,
-    mismatchCount,
-    lines,
-    linesTruncated: mismatchCount > lines.length,
-    serialized: {
-      equal: serializedEqual,
-      tsHash: shortHash(tsSerialized),
-      rustHash: shortHash(rustSerialized),
-    },
-  };
-};
-
-let shadowLogLogged = false;
-
-/** Append one record, truncating the file first when it would exceed the cap. */
-const appendShadowRecord = (record: ShadowRecord): void => {
-  const path = shadowLogPath();
-  const line = `${JSON.stringify(record)}\n`;
-
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  let size = 0;
-  try {
-    size = statSync(path).size;
-  } catch {
-    // Missing file: the append creates it below.
-  }
-  if (size + Buffer.byteLength(line, "utf8") > MAX_SHADOW_LOG_BYTES) {
-    writeFileSync(path, "", { mode: 0o600 });
-  }
-  appendFileSync(path, line, { mode: 0o600 });
-};
-
-/**
- * `THAR_SHADOW=1`: compare the Rust parse of `text` with `todos` and record a
- * bounded, content-free diagnostic on any difference.
- *
- * `limits` must be the effective read limits of the load that produced `todos`
- * — normally the same `ReadLimits` the caller read the file with. Omit it only
- * for a standalone call; the current environment's `getReadLimits()` is then
- * used, and a `THAR_MAX_*` override still cannot cause a spurious rejection.
- *
- * No-op unless the variable is `1`. The todo file is never touched, and nothing
- * here may throw: a broken package or an unwritable cache path only produces one
- * debug line, and the TypeScript result is always what the app keeps using.
- *
- * Superseded in `THAR_CORE=rust` mode: the wired read path already parsed with
- * Rust ({@link parseTodosWithCore}), so the reader does not call this at all
- * and no second parse happens. It remains the differential check for `ts`
- * mode, where no Rust parse would otherwise run.
- *
- * The record is written **per load**, not once per process: a file that keeps
- * disagreeing appends one record on every load, and the 64 KiB cap eventually
- * truncates the oldest ones. That is deliberate for the CP2 dogfood — the log
- * shows how often a real file mismatches, not just that it once did. Only the
- * `console.warn` summary is once per process (`shadowLogLogged`).
- */
-export const shadowCheckTodoFile = (
-  text: string,
-  todos: readonly Todo[],
-  limits?: ReadLimits,
-): void => {
-  if (!isShadowEnabled()) return;
-
-  try {
-    // Inside the `try`: `getReadLimits` rejects an invalid `THAR_MAX_*` and
-    // the shadow must never throw into the read path.
-    const record = compareWithCore(text, todos, limits ?? getReadLimits());
-    if (!record) return;
-    appendShadowRecord(record);
-
-    if (!shadowLogLogged) {
-      shadowLogLogged = true;
-      const detail =
-        record.kind === "rejected"
-          ? `Rust rejected a file TypeScript loaded (${record.error.code})`
-          : `${record.mismatchCount} line(s) differ from TypeScript`;
-      console.warn(`thar shadow: ${detail}; see ${shadowLogPath()}`);
-    }
-  } catch (error) {
-    if (!adapterLogged) {
-      adapterLogged = true;
-      // `errorName`, not `error.message`: a `JSON.parse` failure can quote
-      // the input, and the input here is a todo file.
-      debugLog(
-        `thar shadow: check skipped (${errorName(error)}); the TypeScript ` +
-          "result is unchanged",
-      );
-    }
-  }
-};
-
 /**
  * Test-only: forget the cached package, the injected row builder, the memoized
  * row input and the once-per-process log flags.
@@ -1633,9 +1394,9 @@ export const resetCoreBridgeForTests = (): void => {
   parseLogged = false;
   rowBuilderLogged = false;
   serializerLogged = false;
+  unknownModeLogged = false;
   injectedRowBuilder = undefined;
   injectedSerializer = undefined;
   injectedCollatorLocale = undefined;
   rowInputCache = new WeakMap();
-  shadowLogLogged = false;
 };

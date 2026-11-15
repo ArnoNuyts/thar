@@ -522,7 +522,7 @@ parse, no log.
   from `record.text` with the constructor's `PROJECT_REGEX`/`CONTEXT_REGEX` and
   rejects a record whose sets differ. Without this, a package built from another
   commit could silently change `createIndexes` grouping.
-- **WASM size** after the parse surface: **84 632 bytes raw / 37 328 bytes
+- **WASM size** after the parse surface: **84 632 bytes raw / 37 292 bytes
   gzip** (+443 / +138 over CP4; budget 250 KB / 100 KB).
 - **Contract evidence.** `tools/port/parse.ts` + `parse-cli.ts`: **28 records /
   3 931 057 bytes, 0 diffs** for both the self candidate and the wired WASM
@@ -656,6 +656,104 @@ one extra best-effort `fsync` per save before the rename (measured ~0.4 ms →
 - Gate: one full release cycle with zero data-loss reports; release notes name
   the opt-out.
 - Rollback: flip the default back to `ts` in one commit.
+
+#### CP5 — implemented (the Rust core is the default)
+
+`feature/rust-port` now runs the Rust core by default in the Node app, and the
+published npm package contains the WASM that makes that possible. `THAR_CORE`
+is read once per path, so the whole switch is one function and one commit to
+revert.
+
+- **Default flip.** `getCoreMode()` returns `"rust"` for `rust`, an unset
+  variable and an empty value; `"ts"` when `THAR_CORE=ts` is set explicitly.
+  The value is trimmed and case-folded, so `TS` and `" ts"` still opt out. An
+  unrecognized value (a typo such as `THAR_CORE=wasm`) keeps the
+  Rust default and logs one bounded line that names neither the value nor any
+  file content: silently falling back to the old core on a typo would hide the
+  mistake, and defaulting to Rust is what the release notes say happens. All
+  three wired paths read the same function: parse (`readTodosFromFile`), rows
+  (`useNavigationState`) and the byte-compared write (`writeTodosToFile`).
+- **Escape hatch.** `THAR_CORE=ts` returns before any package load, has no
+  adapter, no second serialization and no diagnostic line, and is covered by
+  tests that assert a deliberately broken `THAR_CORE_WASM` is never required.
+- **Fallback stays total.** A missing, unbuildable or broken package, an absent
+  export, a malformed envelope, a rejected `today`, a non-en-US host collator,
+  a record that does not rebuild byte-identically, and any thrown error all
+  keep the TypeScript result after **one** bounded, content-free `console.debug`
+  line. Nothing throws into the TUI, and a proven read rejection is still the
+  same `TodoFileValidationError` subclass with the same message.
+- **Dual write kept (documented deviation).** The PLAN's CP5 line said to
+  delete the dual-write path; this checkpoint keeps it deliberately. The
+  TypeScript serializer is still the writer and the Rust text is byte-compared
+  against it, so a package that ever disagrees writes the oracle bytes and logs
+  once. CP8 removes the TypeScript writer (and with it this belt), not CP5.
+- **Runtime shadow removed.** `THAR_SHADOW=1`, its bounded cache log, its path
+  resolution and its tests are gone: nothing production depended on them, the
+  durable oracle is the offline harness below, and a runtime differential check
+  would have parsed every file twice in the default configuration. The offline
+  harness (`npm run port:contract*`) stays in CI permanently.
+- **Packaging.** `package.json` ships `crates/thar-wasm/pkg/**` next to
+  `dist/main.js`, so `bin/thar.js` resolves the package through the existing
+  module-relative loader (`resolve(MODULE_DIR, "..")`) with no new candidate and
+  no cwd lookup. `prepack` runs `npm run build:wasm && npm run build`;
+  `build:wasm` runs `wasm-pack build crates/thar-wasm --release --target nodejs
+  --out-dir pkg --locked`, and a small `scripts/clean-wasm-pkg.mjs` deletes the
+  `*` `.gitignore` wasm-pack writes into `pkg/` (npm honours nested ignore files
+  even when `files` names the directory, which silently shipped a tarball with
+  no WASM). `npm run build` still works without Rust; a source checkout without
+  `pkg/` falls back to TypeScript with one debug line. Only packing/publishing
+  needs the Rust toolchain.
+- **Tarball.** `npm pack` on this checkpoint is **107 943 bytes** (12 files),
+  up **41 679 bytes** from the 66 264-byte TypeScript-only tarball:
+  `thar_wasm_bg.wasm` 84 632 bytes, `thar_wasm.js` 11 571, the two `.d.ts`
+  files and the nested `pkg/package.json` + `LICENSE`. The GIF is not shipped.
+- **CI.** `package-smoke` installs Rust + wasm-pack + binaryen, packs the real
+  tarball, runs the **full** `npm test` suite against the packed `pkg/` (the
+  shipped configuration), asserts `crates/thar-wasm/pkg/thar_wasm.js` and
+  `thar_wasm_bg.wasm` are inside the tarball, installs it into a temp project,
+  runs `thar --version`/`--help` in the default mode and with `THAR_CORE=ts`,
+  and requires the packaged module to load and answer `coreVersion()` +
+  `parseFile()`. `version-guard` got the same toolchain because
+  `npm pack --dry-run` runs `prepack`; the release `publish` job installs Rust
+  and wasm-pack, packs a tarball first, and fails loudly if the WASM is missing
+  before `npm publish`.
+- **Tests.** The full suite is green **with and without** `crates/thar-wasm/pkg/`
+  (922 passed with the package and the six real-package tests skipped without
+  it). Tests that pin the TypeScript oracle set `THAR_CORE=ts` explicitly:
+  the corpus characterization suite and the escape-hatch suites. New
+  default-mode coverage: `getCoreMode()` for unset/`rust`/`ts`/empty/unknown
+  (one log, no value echoed), a fake-package default-mode read with no
+  diagnostic, the unset-default dual write, the default row builder in the hook,
+  and the adapter forwarding the effective `ReadLimits`.
+- **Evidence.**
+  - `npm run port:contract:check`: 28 fixture records / 3 432 008 bytes, match;
+    `port:selftest` catches all 5 seeded mutations.
+  - `npm run port:contract:rows` (self and WASM): 504 records / 4 450 270
+    bytes, 0 diffs, 4 mutations caught; `port:contract:write`: 23 records / 3 566
+    bytes, 0 diffs, 3 mutations + 3 guard probes; `port:contract:parse`: 28
+    records / 3 931 057 bytes, 0 diffs, 4 mutations caught.
+  - `cargo fmt --check`, `cargo clippy --locked -D warnings`, `cargo test
+    --locked --workspace --all-features` (140 + 32 + 13 + 3 + 41 + 9 tests)
+    green.
+  - WASM **84 632 bytes raw / 37 292 bytes gzip** after wasm-opt (budget
+    250 KB / 100 KB).
+  - `npm run check`, `npm test` and `npm run doctor -- --scope changed`
+    (score 100) green; `npm run build` green with and without `pkg/`.
+  - Default-mode proof from the packed build: a probe package wrapping the real
+    `crates/thar-wasm/pkg` recorded `parseFileWithLimits` on load, `buildRows`
+    on each list build and `serializeFile` on the save in a pseudo-TTY run with
+    `THAR_CORE` unset, and the completed todo was written to disk; the same run
+    logged no `thar core:` line. (The exact call counts depend on session
+    length; the property is that all three paths reach Rust.) `THAR_CORE=ts`
+    runs load nothing.
+  - `docs/rust-port/assets/cp5-rust-default.gif` (436 173 bytes): default
+    startup with priorities/contexts/projects/due/threshold/hidden/completed
+    rows, a `work` search, completing a todo, then `cat` showing the written
+    line.
+- **What CP8 removes.** The TypeScript reader/pipeline/serializer and the
+  `THAR_CORE` switch, `logic/core-wasm.ts`, the dual write, Ink/React/date-fns,
+  and the npm WASM subpath (the Rust TUI becomes the package). Until then the
+  offline contracts and the TypeScript corpus stay as the oracle.
 
 ### CP6 — Read-only Rust TUI (separate binary)
 
@@ -981,6 +1079,18 @@ flag because it does not resolve dependencies.
 wasm-pack finds the license text and ships it in `pkg/` without a duplicate
 copy to maintain.
 
+Since CP5 the WASM is a shipped artifact, so the Node workflow packs it too:
+**`package-smoke`** installs Rust 1.99.1 + wasm-pack + binaryen, runs
+`npm pack` (which triggers `prepack` → `build:wasm` → `vite build`), asserts the
+tarball contains `crates/thar-wasm/pkg/thar_wasm.js` and
+`crates/thar-wasm/pkg/thar_wasm_bg.wasm`, installs the tarball into a temporary
+project, runs `thar --version`/`--help` both in the default mode and with
+`THAR_CORE=ts`, and requires the packaged module to load and answer
+`coreVersion()` and `parseFile()`. **`version-guard`** gets the same Rust setup
+because `npm pack --dry-run` also runs `prepack`. The release workflow's
+`publish` job installs Rust + wasm-pack, packs the tarball it is about to
+publish, and fails if either WASM file is missing.
+
 Why a size gate: the incremental path only makes sense if the core stays
 small enough to ship inside the npm package or fetch cheaply. The real CP2b
 batch core measures 49 568 bytes raw / 22 200 bytes gzip after wasm-opt, so the
@@ -988,7 +1098,7 @@ Phase 2 target (≤ 100 KB raw / ≤ 40 KB gzip) is already met; the workflow ke
 the 250 KB / 100 KB ceiling until the CP3 row and command surface lands, then
 tightens the constants and the README together. After CP3b2b it is 81 831 /
 35 986, after CP4's write surface 84 189 / 37 190, and after CP3b2c's parse
-surface 84 632 / 37 328.
+surface 84 632 / 37 292.
 
 ### 9.2 Add in later phases
 
@@ -1038,6 +1148,9 @@ surface 84 632 / 37 328.
 - CP0–CP4: `THAR_CORE=ts` remains the default; `rust` is opt-in in
   development. No user-visible change; every checkpoint is reversible with an
   environment flag.
+- CP5: the Rust core becomes the Node app's default; `THAR_CORE=ts` is the
+  one-release opt-out, and reverting is the one-line default flip. The WASM
+  ships in the npm tarball, so no download or platform matrix is involved.
 - CP6: ship `thar-rs` alongside the Ink app and keep it read-only by default.
   The Node package still installs the Ink app.
 - CP7–CP8: switch the default only after the release candidate passes the
