@@ -13,27 +13,35 @@ import { fileURLToPath } from "node:url";
 
 import { startOfDay } from "date-fns";
 
+import { IndexType } from "../types/enums.ts";
+import { extractSearchTerms } from "../utils/search-utils.ts";
 import { formatDateTag } from "./dates.ts";
+import type { IndexEntry } from "./indexes.ts";
 import { getReadLimits, type ReadLimits } from "./limits.ts";
+import type { Todos } from "./Todos.ts";
 import type { Todo } from "./todo.ts";
 
 /**
  * Opt-in bridge to the Rust core compiled to WebAssembly (CP2b).
  *
- * The TypeScript implementation is still the source of truth at CP2: nothing
- * here changes what the TUI displays, saves, or exports. The module offers two
- * development-only entry points:
+ * The TypeScript implementation is still the source of truth by default:
+ * nothing here changes what the TUI displays, saves, or exports unless
+ * `THAR_CORE=rust` is set. The module offers three entry points:
  *
  * - {@link parseFileWithCore}, a thin batch adapter over `thar-wasm`'s
  *   `parseFile`/`parseFileWithLimits`;
+ * - {@link buildRowsWithCore}, the CP3b2a opt-in row builder that calls the
+ *   CP3b1 `buildRows` export and maps its rows back to `IndexEntry`;
  * - {@link shadowCheckTodoFile}, the `THAR_SHADOW=1` differential check that
  *   compares Rust against the already-parsed TypeScript result.
  *
- * Both are defensive: a missing, unbuildable or broken package, a malformed
- * envelope, and a rejected `today` all resolve to `undefined` plus at most one
- * debug log. Nothing here may throw into the TUI, and nothing here writes to
- * the todo file. Debug lines never include the parse input: a todo line is its
- * own `hash`, so a Node `JSON.parse` snippet would leak content.
+ * All three are defensive: a missing, unbuildable or broken package, a
+ * malformed envelope, an absent export, and a rejected `today` all resolve to
+ * `undefined` plus at most one debug log. Nothing here may throw into the TUI,
+ * and nothing here writes to the todo file. Debug lines never include the
+ * parse input: a todo line is its own `hash`, so a Node `JSON.parse` snippet
+ * would leak content. For the same reason a row-builder failure logs only the
+ * error class, never the todo list or the request body.
  *
  * The package is loaded with `createRequire` and a module-relative runtime
  * path, never with a static `import`, so `npm run build`, `npm test` and
@@ -47,7 +55,7 @@ import type { Todo } from "./todo.ts";
  * See `docs/rust-port/PLAN.md` §5 (CP2) and §9.1.
  */
 
-/** Which implementation the read path should use; only `ts` is live at CP2. */
+/** Which implementation the read path should use. `ts` is the default. */
 export type CoreMode = "ts" | "rust";
 
 /**
@@ -94,6 +102,16 @@ interface CoreModule {
     maxReadTodos: number,
     maxLineChars: number,
   ): string;
+  /**
+   * CP3b1's coarse row builder: one JSON document in, one JSON envelope out.
+   *
+   * Optional because the CP2b package predates it, and because the export can
+   * be missing from a partially built package. Both the wasm-bindgen
+   * camelCase name and the Rust `snake_case` alias are accepted, so the
+   * adapter keeps working whichever name the merged export uses.
+   */
+  buildRows?(input: string): string;
+  build_rows?(input: string): string;
 }
 
 const PACKAGE_ENTRY = join("crates", "thar-wasm", "pkg", "thar_wasm.js");
@@ -121,6 +139,7 @@ const packageCandidates = (): string[] => {
 let coreModule: CoreModule | null | undefined;
 let packageLogged = false;
 let adapterLogged = false;
+let rowBuilderLogged = false;
 
 /** One debug line; each caller keeps its own once-per-process guard. */
 const debugLog = (message: string): void => {
@@ -141,10 +160,10 @@ const errorName = (error: unknown): string =>
 /**
  * The requested implementation, from `THAR_CORE=ts|rust`.
  *
- * At CP2 both values keep the TypeScript implementation as the source of truth;
- * the switch itself is CP3. The flag is read now so the CP3 change is a smaller
- * step and so tests can prove the values are behaviourally identical.
- * Anything other than `rust` means `ts`.
+ * `rust` opts into the Rust row builder for the main list
+ * ({@link buildRowsWithCore}); the TypeScript `sortByImportance → filterHidden
+ * → filterBySearch → createIndexes` path stays the fallback and remains the
+ * default. `ts`, an unset variable and anything else mean `ts`.
  */
 export const getCoreMode = (): CoreMode =>
   process.env.THAR_CORE === "rust" ? "rust" : "ts";
@@ -302,6 +321,326 @@ export const parseFileWithCore = (
     }
     return undefined;
   }
+};
+
+/**
+ * One structured todo handed to the Rust row builder.
+ *
+ * Mirrors the CP3b1 `TodoRecord` DTO: the getters of the TypeScript `Todo`,
+ * never `toString()`. Serializing and re-parsing a line would collapse a
+ * duplicated tag array (`beta:one beta:two`), and `build_rows` would then see
+ * `beta` as one value instead of two.
+ */
+export interface CoreRowTodo {
+  text: string;
+  state: "todo" | "done";
+  priority: string | null;
+  completionDate: string | null;
+  creationDate: string | null;
+  projects: string[];
+  contexts: string[];
+  tags: [string, string | string[]][];
+}
+
+/**
+ * The host-normalized `SearchView` for one todo.
+ *
+ * CP3a's core takes views instead of folding: `String.prototype.toLowerCase`
+ * applies the Unicode `Final_Sigma` rule and Rust's Unicode version can trail
+ * the host's. Only the query terms change per keystroke, so the text,
+ * contexts and projects are lowercased per element, exactly like
+ * `filterBySearch` does.
+ */
+export interface CoreRowSearchView {
+  text: string;
+  contexts: string[];
+  projects: string[];
+}
+
+/**
+ * The JSON document `buildRows` accepts (CP3b2a contract).
+ *
+ * `todos` and `views` are aligned by index. `terms` are already split and
+ * normalized by `extractSearchTerms`, and `today` is the local `YYYY-MM-DD`
+ * day. Empty `terms` match every todo, matching `filterBySearch`.
+ */
+export interface CoreRowInput {
+  todos: CoreRowTodo[];
+  views: CoreRowSearchView[];
+  terms: string[];
+  showHidden: boolean;
+  today: string;
+}
+
+/** A `buildRows`-shaped function; the test seam injects one of these. */
+export type CoreRowBuilder = (input: string) => string;
+
+/** A context header or todo row read back from the Rust envelope. */
+type CoreRow =
+  | { type: "context"; contextName: string; todoCount: number }
+  | { type: "todo"; index: number; number: number };
+
+/**
+ * Structured records and views, cached on the identity of the todo array.
+ *
+ * The app replaces the array on every edit and keeps `Todo` instances
+ * immutable (`with()` clones), so the array identity is a sound cache key.
+ * Rebuilding the records per keystroke at 10 000 todos is the expensive part
+ * of marshalling; only `terms` actually changes while typing.
+ */
+let rowInputCache = new WeakMap<
+  readonly Todo[],
+  { records: CoreRowTodo[]; views: CoreRowSearchView[] }
+>();
+
+/** Injected by {@link setRowBuilderForTests}; production leaves it unset. */
+let injectedRowBuilder: CoreRowBuilder | undefined;
+
+const coreTodoRecord = (todo: Todo): CoreRowTodo => ({
+  text: todo.text,
+  state: todo.isDone() ? "done" : "todo",
+  priority: todo.priority ?? null,
+  completionDate:
+    todo.completionDate === undefined
+      ? null
+      : formatDateTag(todo.completionDate),
+  creationDate:
+    todo.creationDate === undefined ? null : formatDateTag(todo.creationDate),
+  projects: Array.from(todo.projects),
+  contexts: Array.from(todo.contexts),
+  // `Object.entries` preserves insertion order and keeps array-valued tags:
+  // this is the structured form the CP3b1 DTO exists for.
+  tags: Object.entries(todo.tags).map(
+    ([key, value]) => [key, value] as [string, string | string[]],
+  ),
+});
+
+const rowInputFor = (
+  todos: Todos,
+): { records: CoreRowTodo[]; views: CoreRowSearchView[] } => {
+  const cached = rowInputCache.get(todos);
+  if (cached) return cached;
+
+  const records = todos.map(coreTodoRecord);
+  const views = records.map((record) => ({
+    text: record.text.toLowerCase(),
+    contexts: record.contexts.map((context) => context.toLowerCase()),
+    projects: record.projects.map((project) => project.toLowerCase()),
+  }));
+  const parts = { records, views };
+  rowInputCache.set(todos, parts);
+  return parts;
+};
+
+const isNonNegativeInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0;
+
+/**
+ * Read a todo index from an envelope, accepting a number or a numeric string.
+ *
+ * CP3b1 may echo the host index or its own `TodoId`; both are numeric. A
+ * non-numeric id is a shape error and triggers the fallback rather than a
+ * guess.
+ */
+const toRowIndex = (value: unknown): number | undefined => {
+  if (isNonNegativeInteger(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
+  return undefined;
+};
+
+/** Structural read of `{ok:true,rows:[…]}`; `undefined` means "fall back". */
+const readRowEnvelope = (raw: string): CoreRow[] | undefined => {
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const envelope = parsed as { ok?: unknown; rows?: unknown };
+  if (envelope.ok !== true || !Array.isArray(envelope.rows)) return undefined;
+
+  const rows: CoreRow[] = [];
+  for (const entry of envelope.rows) {
+    if (typeof entry !== "object" || entry === null) return undefined;
+    const record = entry as Record<string, unknown>;
+    // Accept the CP3b1 `kind`/`type` naming or a `name`/`contextName` alias.
+    const kind = record.type ?? record.kind;
+    if (kind === "context") {
+      const name = record.contextName ?? record.name;
+      const count = record.todoCount ?? record.todo_count;
+      if (!isNonNegativeInteger(count) || count < 1) return undefined;
+      if (typeof name !== "string") return undefined;
+      rows.push({ type: "context", contextName: name, todoCount: count });
+    } else if (kind === "todo") {
+      const index = toRowIndex(record.index ?? record.todoIndex ?? record.id);
+      const number = record.number;
+      if (index === undefined || typeof number !== "number") return undefined;
+      rows.push({ type: "todo", index, number });
+    } else {
+      return undefined;
+    }
+  }
+  return rows;
+};
+
+/**
+ * Map Rust rows back to `IndexEntry`.
+ *
+ * The row ids must be consistent with the input: an index in range, used at
+ * most once, headers whose `todoCount` matches the todo rows that follow, and
+ * 1-based numbers in list order. Anything else is a shape error, so the
+ * caller keeps the TypeScript indexes instead of rendering a half-valid list.
+ */
+const toIndexEntries = (
+  rows: CoreRow[],
+  todos: Todos,
+): IndexEntry[] | undefined => {
+  const entries: IndexEntry[] = [];
+  const seen = new Set<number>();
+  let header: { name: string; todoCount: number; seen: number } | undefined;
+  let expectedNumber = 1;
+
+  for (const row of rows) {
+    if (row.type === "context") {
+      if (header !== undefined && header.seen !== header.todoCount) {
+        return undefined;
+      }
+      header = {
+        name: row.contextName,
+        todoCount: row.todoCount,
+        seen: 0,
+      };
+      entries.push({
+        type: IndexType.context,
+        todoCount: row.todoCount,
+        contextName: row.contextName,
+      });
+      continue;
+    }
+
+    // A todo row without a preceding header cannot be rendered, the number
+    // must continue the global 1-based sequence, and the header must name the
+    // todo's first context (`"None"` for an uncategorised todo).
+    if (header === undefined) return undefined;
+    if (row.number !== expectedNumber) return undefined;
+
+    const todo = todos[row.index];
+    if (todo === undefined || seen.has(row.index)) return undefined;
+    const context = todo.contexts.values().next().value ?? "None";
+    if (header.name !== context) return undefined;
+
+    seen.add(row.index);
+    header.seen++;
+    expectedNumber++;
+    entries.push({ type: IndexType.todo, todo, number: row.number });
+  }
+
+  if (header !== undefined && header.seen !== header.todoCount) {
+    return undefined;
+  }
+  return entries;
+};
+
+const rowBuilderOf = (core: CoreModule): CoreRowBuilder | undefined => {
+  const builder = core.buildRows ?? core.build_rows;
+  if (typeof builder !== "function") return undefined;
+  return (input: string) => builder.call(core, input);
+};
+
+/**
+ * `THAR_CORE=rust`: build the main list's rows in Rust.
+ *
+ * Returns `undefined` for the `ts` mode, a missing package or export, and on
+ * any thrown error or inconsistent output; the caller then keeps the
+ * TypeScript `sortByImportance → filterHidden → filterBySearch → createIndexes`
+ * result. The first problem in a process logs one bounded, content-free debug
+ * line; nothing is ever thrown into the TUI and no todo content is logged.
+ *
+ * `query` is normalized here with `extractSearchTerms`, and the per-todo views
+ * are lowercased here, because CP3a's core deliberately does no case folding.
+ * `today` is the local `YYYY-MM-DD` day and must be passed from a value that
+ * changes at midnight.
+ */
+export const buildRowsWithCore = (
+  todos: Todos,
+  query: string,
+  showHidden: boolean,
+  today: string,
+): IndexEntry[] | undefined => {
+  if (getCoreMode() !== "rust") return undefined;
+
+  // The test seam bypasses the package, so the wiring can be exercised before
+  // the CP3b1 export lands. Production never injects a builder.
+  let builder = injectedRowBuilder;
+  if (!builder) {
+    const core = loadCoreModule();
+    // `loadCoreModule` already logs the missing package once per process.
+    if (!core) return undefined;
+
+    builder = rowBuilderOf(core);
+    if (!builder) {
+      if (!rowBuilderLogged) {
+        rowBuilderLogged = true;
+        debugLog(
+          "thar core: buildRows is not exported; using the TypeScript row builder",
+        );
+      }
+      return undefined;
+    }
+  }
+
+  try {
+    const { records, views } = rowInputFor(todos);
+    const input: CoreRowInput = {
+      todos: records,
+      views,
+      terms: extractSearchTerms(query),
+      showHidden,
+      today,
+    };
+    const rows = readRowEnvelope(builder(JSON.stringify(input)));
+    if (!rows) {
+      if (!rowBuilderLogged) {
+        rowBuilderLogged = true;
+        debugLog(
+          "thar core: ignoring a malformed buildRows envelope; " +
+            "using the TypeScript row builder",
+        );
+      }
+      return undefined;
+    }
+
+    const entries = toIndexEntries(rows, todos);
+    if (!entries && !rowBuilderLogged) {
+      rowBuilderLogged = true;
+      debugLog(
+        "thar core: buildRows returned rows that do not match the todo list; " +
+          "using the TypeScript row builder",
+      );
+    }
+    return entries;
+  } catch (error) {
+    if (!rowBuilderLogged) {
+      rowBuilderLogged = true;
+      // `errorName`, not `error.message`: a `JSON.parse` failure can quote the
+      // request, and the request contains the todo list.
+      debugLog(
+        `thar core: buildRows failed (${errorName(error)}); ` +
+          "using the TypeScript row builder",
+      );
+    }
+    return undefined;
+  }
+};
+
+/**
+ * Test-only: inject a `buildRows` stand-in, or clear it with `undefined`.
+ *
+ * The real export lands in CP3b1, so this seam lets the wiring and the
+ * fallback tests run against a deterministic fake. Production never calls it.
+ *
+ * @internal
+ */
+export const setRowBuilderForTests = (
+  builder: CoreRowBuilder | undefined,
+): void => {
+  injectedRowBuilder = builder;
 };
 
 /** True when `THAR_SHADOW=1` is exported. Off by default. */
@@ -554,7 +893,8 @@ export const shadowCheckTodoFile = (
 };
 
 /**
- * Test-only: forget the cached package and the once-per-process log flags.
+ * Test-only: forget the cached package, the injected row builder, the memoized
+ * row input and the once-per-process log flags.
  *
  * Production code never calls this; tests need it because the module cache and
  * the log-once guards outlive a single test. It is not public API: the package
@@ -567,5 +907,8 @@ export const resetCoreBridgeForTests = (): void => {
   coreModule = undefined;
   packageLogged = false;
   adapterLogged = false;
+  rowBuilderLogged = false;
+  injectedRowBuilder = undefined;
+  rowInputCache = new WeakMap();
   shadowLogLogged = false;
 };

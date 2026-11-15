@@ -6,15 +6,24 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   MAX_SHADOW_LOG_BYTES,
+  buildRowsWithCore,
   getCoreMode,
   isShadowEnabled,
   parseFileWithCore,
   resetCoreBridgeForTests,
   resolveShadowLogPath,
+  setRowBuilderForTests,
   shadowCheckTodoFile,
   shadowLogPath,
 } from "../logic/core-wasm.ts";
+import { createIndexes } from "../logic/indexes.ts";
+import {
+  filterBySearch,
+  filterHidden,
+  sortByImportance,
+} from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
+import { IndexType } from "../types/enums.ts";
 import { readTodosFromFile } from "../logic/todo-file-helpers.ts";
 import { Runtime } from "../utils/runtime.ts";
 import { restoreRuntimeMocks } from "./test-utils.ts";
@@ -367,6 +376,313 @@ describe("THAR_CORE at CP2", () => {
     expect(getCoreMode()).toBe("ts");
     setEnv("THAR_CORE", "");
     expect(getCoreMode()).toBe("ts");
+  });
+});
+
+/**
+ * CP3b2a: the gated `buildRows` adapter.
+ *
+ * The real WASM export lands in CP3b1, so most tests inject a fake through
+ * `setRowBuilderForTests`. One test drives a fake CommonJS package through the
+ * real loader to prove feature detection as well.
+ */
+describe("buildRowsWithCore", () => {
+  const TODAY = "2026-11-15";
+
+  const contextRow = (contextName: string, todoCount: number) => ({
+    type: "context",
+    contextName,
+    todoCount,
+  });
+  const todoRow = (index: number, number: number) => ({
+    type: "todo",
+    index,
+    number,
+  });
+  const rowEnvelope = (rows: unknown): string =>
+    JSON.stringify({ ok: true, rows });
+
+  interface Request {
+    todos: {
+      text: string;
+      tags: [string, string | string[]][];
+    }[];
+    views: { text: string; contexts: string[]; projects: string[] }[];
+    terms: string[];
+    showHidden: boolean;
+    today: string;
+  }
+
+  /** A fake builder that records the parsed request and returns `respond`. */
+  const captureBuilder = (respond: (input: Request) => string) => {
+    const inputs: Request[] = [];
+    setRowBuilderForTests((raw) => {
+      const input = JSON.parse(raw) as Request;
+      inputs.push(input);
+      return respond(input);
+    });
+    return inputs;
+  };
+
+  const tsIndexes = (todos: Todo[]) =>
+    createIndexes(filterBySearch(filterHidden(sortByImportance(todos)), ""));
+
+  test("ts mode and an unset variable never call the core", () => {
+    const todos = [new Todo("one @home"), new Todo("two")];
+    const builder = vi.fn(() => rowEnvelope([]));
+    setRowBuilderForTests(builder);
+
+    for (const value of [undefined, "ts", "", "wasm"]) {
+      setEnv("THAR_CORE", value);
+      expect(buildRowsWithCore(todos, "", false, TODAY)).toBeUndefined();
+    }
+    expect(builder).not.toHaveBeenCalled();
+  });
+
+  test("rust mode without the package falls back with one bounded log", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      setEnv("THAR_CORE", "rust");
+      setEnv("THAR_CORE_WASM", join(dir, "not-built", "thar_wasm.js"));
+      resetCoreBridgeForTests();
+
+      expect(
+        buildRowsWithCore([new Todo("one")], "", false, TODAY),
+      ).toBeUndefined();
+      // A second call does not log again.
+      expect(
+        buildRowsWithCore([new Todo("one")], "", false, TODAY),
+      ).toBeUndefined();
+
+      expect(debug).toHaveBeenCalledTimes(1);
+      expect(debug.mock.calls[0]?.[0]).toContain("WASM package not built");
+    });
+  });
+
+  test("rust mode without the buildRows export falls back with one log", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      await fakePackage(
+        dir,
+        'module.exports = { coreVersion: () => "0.2.0-test", parseFile: () => "{}", parseFileWithLimits: () => "{}" };\n',
+      );
+      setEnv("THAR_CORE", "rust");
+
+      const todos = [new Todo("one")];
+      expect(buildRowsWithCore(todos, "", false, TODAY)).toBeUndefined();
+      expect(buildRowsWithCore(todos, "", false, TODAY)).toBeUndefined();
+
+      expect(debug).toHaveBeenCalledTimes(1);
+      expect(debug.mock.calls[0]?.[0]).toContain("buildRows is not exported");
+      // The TypeScript fallback is untouched by the adapter.
+      expect(tsIndexes(todos).length).toBeGreaterThan(0);
+    });
+  });
+
+  test("a package that exports buildRows is detected and used", async () => {
+    await withTempDir(async (dir) => {
+      await fakePackage(
+        dir,
+        `module.exports = {
+  coreVersion: () => "0.3.0-test",
+  parseFile: () => '{"ok":true,"todos":[]}',
+  parseFileWithLimits: () => '{"ok":true,"todos":[]}',
+  buildRows: (input) => {
+    const request = JSON.parse(input);
+    const rows = [{ type: "context", contextName: "None", todoCount: request.todos.length }];
+    request.todos.forEach((_, index) =>
+      rows.push({ type: "todo", index, number: index + 1 }),
+    );
+    return JSON.stringify({ ok: true, rows });
+  },
+};
+`,
+      );
+      setEnv("THAR_CORE", "rust");
+
+      const todos = [new Todo("one"), new Todo("two")];
+      const entries = buildRowsWithCore(todos, "", false, TODAY);
+
+      expect(entries?.map((entry) => entry.type)).toEqual([
+        IndexType.context,
+        IndexType.todo,
+        IndexType.todo,
+      ]);
+      if (entries?.[0]?.type === IndexType.context) {
+        expect(entries[0].contextName).toBe("None");
+        expect(entries[0].todoCount).toBe(2);
+      }
+      if (entries?.[1]?.type === IndexType.todo) {
+        expect(entries[1].todo).toBe(todos[0]);
+        expect(entries[1].number).toBe(1);
+      }
+      if (entries?.[2]?.type === IndexType.todo) {
+        expect(entries[2].todo).toBe(todos[1]);
+        expect(entries[2].number).toBe(2);
+      }
+    });
+  });
+
+  test("maps rows back to the original Todo objects and headers", () => {
+    setEnv("THAR_CORE", "rust");
+    const todos = [
+      new Todo("beta @work"),
+      new Todo("alpha @work"),
+      new Todo("plain"),
+    ];
+    captureBuilder(() =>
+      rowEnvelope([
+        contextRow("work", 2),
+        todoRow(1, 1),
+        todoRow(0, 2),
+        contextRow("None", 1),
+        todoRow(2, 3),
+      ]),
+    );
+
+    const entries = buildRowsWithCore(todos, "", false, TODAY);
+    expect(entries).toHaveLength(5);
+    expect(entries?.[0]).toEqual({
+      type: IndexType.context,
+      contextName: "work",
+      todoCount: 2,
+    });
+    // Object identity, not a copy: selection state keys on `Todo.id`.
+    expect(entries?.[1]).toEqual({
+      type: IndexType.todo,
+      todo: todos[1],
+      number: 1,
+    });
+    expect(entries?.[2]).toEqual({
+      type: IndexType.todo,
+      todo: todos[0],
+      number: 2,
+    });
+    expect(entries?.[4]).toEqual({
+      type: IndexType.todo,
+      todo: todos[2],
+      number: 3,
+    });
+  });
+
+  test("sends structured records, host-normalized views and terms", () => {
+    setEnv("THAR_CORE", "rust");
+    // `aΣ.Α` keeps an internal sigma (the dot is Case_Ignorable, so the next
+    // cased letter makes it non-final) while `ΜΆΪΟΣ` ends in a final sigma.
+    // Both folds are JavaScript's, not Rust's per-character mapping.
+    const todo = new Todo("aΣ.Α ΜΆΪΟΣ beta:one beta:two +Thar @Work");
+    const inputs = captureBuilder(() =>
+      rowEnvelope([contextRow("Work", 1), todoRow(0, 1)]),
+    );
+
+    expect(buildRowsWithCore([todo], "MILK @Work", true, TODAY)).toHaveLength(
+      2,
+    );
+
+    const input = inputs[0];
+    expect(input).toBeDefined();
+    if (!input) return;
+    // Duplicate tag keys stay an array: a `toString()` round-trip would have
+    // produced the single value `["beta", "one,two"]` here.
+    expect(input.todos[0]?.tags).toContainEqual(["beta", ["one", "two"]]);
+    expect(input.todos[0]?.text).toBe("aΣ.Α ΜΆΪΟΣ +Thar @Work");
+    expect(input.views[0]?.text).toBe("aσ.α μάϊος +thar @work");
+    expect(input.views[0]?.contexts).toEqual(["work"]);
+    expect(input.views[0]?.projects).toEqual(["thar"]);
+    expect(input.terms).toEqual(["milk", "@work"]);
+    expect(input.showHidden).toBe(true);
+    expect(input.today).toBe(TODAY);
+  });
+
+  test("a failing or inconsistent builder falls back and logs once", async () => {
+    await withTempDir(async (dir) => {
+      const log = join(dir, "shadow.log");
+      setEnv("THAR_SHADOW_LOG", log);
+      setEnv("THAR_CORE", "rust");
+      const secret = "SECRET-TODO-alpha-77";
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const todos = [new Todo(secret)];
+
+      const failures: (() => string)[] = [
+        () => {
+          throw new Error(`${secret} exploded`);
+        },
+        () => "not json",
+        () => JSON.stringify({ ok: false }),
+        () => JSON.stringify({ ok: true }),
+        () => rowEnvelope([todoRow(0, 1)]), // todo before any header
+        () => rowEnvelope([contextRow("None", 2), todoRow(0, 1)]), // count
+        () => rowEnvelope([contextRow("None", 1), todoRow(1, 1)]), // bad index
+        () =>
+          rowEnvelope([contextRow("None", 2), todoRow(0, 1), todoRow(0, 2)]),
+        () =>
+          rowEnvelope([contextRow("None", 2), todoRow(0, 2), todoRow(0, 1)]),
+        () =>
+          rowEnvelope([
+            contextRow("None", 1),
+            todoRow(0, 1),
+            contextRow("None", 1),
+          ]),
+        () =>
+          rowEnvelope([
+            { type: "context", contextName: "None", todoCount: "1" },
+          ]),
+        () => rowEnvelope([{ type: "other" }]),
+        // A header that does not name the todo's first context.
+        () => rowEnvelope([contextRow("wrong", 1), todoRow(0, 1)]),
+      ];
+
+      for (const fail of failures) {
+        setRowBuilderForTests(fail);
+        expect(buildRowsWithCore(todos, "", false, TODAY)).toBeUndefined();
+      }
+
+      expect(debug).toHaveBeenCalledTimes(1);
+      const logged = debug.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(logged).toContain("buildRows");
+      expect(logged).not.toContain(secret);
+      expect(logged).not.toContain("exploded");
+      expect(warn).not.toHaveBeenCalled();
+      // Nothing is written anywhere: the shadow log stays absent.
+      expect(existsSync(log)).toBe(false);
+    });
+  });
+
+  test("a thrown error does not leak the request body", () => {
+    setEnv("THAR_CORE", "rust");
+    const secret = "SECRET-TODO-beta-88";
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    setRowBuilderForTests(() => {
+      throw new SyntaxError(`JSON.parse failed near ${secret}`);
+    });
+
+    expect(
+      buildRowsWithCore([new Todo(secret)], "", false, TODAY),
+    ).toBeUndefined();
+
+    const logged = debug.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(logged).toContain("SyntaxError");
+    expect(logged).not.toContain(secret);
+  });
+
+  test("the row input is memoized per todo array, per query only terms change", () => {
+    setEnv("THAR_CORE", "rust");
+    const todos = [new Todo("one")];
+    const inputs = captureBuilder(() =>
+      rowEnvelope([contextRow("None", 1), todoRow(0, 1)]),
+    );
+
+    buildRowsWithCore(todos, "first", false, TODAY);
+    buildRowsWithCore(todos, "second word", false, TODAY);
+
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]?.terms).toEqual(["first"]);
+    expect(inputs[1]?.terms).toEqual(["second", "word"]);
+    // A new array rebuilds the records.
+    buildRowsWithCore([...todos], "third", false, TODAY);
+    expect(inputs).toHaveLength(3);
+    expect(inputs[2]?.terms).toEqual(["third"]);
   });
 });
 
