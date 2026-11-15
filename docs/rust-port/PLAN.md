@@ -9,8 +9,10 @@
   setters, sort/filter/search, rows, navigation) and pins it to the TypeScript
   oracle without wiring it in. CP3b1 adds the Rust row builder, the WASM
   `build_rows` boundary and a live rows contract with perf evidence, still
-  without wiring `THAR_CORE=rust` (that is CP3b2). See §4, §5 and §9.1 for what
-  exists today.
+  without wiring `THAR_CORE=rust` (that is CP3b2). CP4 adds the
+  `serialize_file` export, the byte-compared dual write and the data-safety
+  matrix; `THAR_CORE` stays opt-in and `ts` is still the default. See §4, §5 and
+  §9.1 for what exists today.
 - **Date:** 2026-11-15
 - **Related:** [`scripts/benchmark-list.tsx`](../../scripts/benchmark-list.tsx),
   [`docs/update-mechanism.md`](../update-mechanism.md), [`AGENTS.md`](../../AGENTS.md)
@@ -493,6 +495,96 @@ recorded. Do not start the next checkpoint while one is red.
   corpus round-trips exactly. Run against copies of real files first.
 - Rollback: `THAR_CORE=ts`; the dual-serialization code is removed at CP5.
 
+#### CP4 — implemented (opt-in, default is still `ts`)
+
+The checkpoint is complete on `feature/rust-port`. `THAR_CORE=ts`/unset still
+loads no package and does no second serialization, but every mode now performs
+one extra best-effort `fsync` per save before the rename (measured ~0.4 ms →
+~4 ms on a warm local file, hidden by the 50 ms save debounce).
+
+- **Export.** `thar-wasm` adds `serializeFile(input)`:
+  `{"todos":[TodoRecord…]}` → `{"ok":true,"text":"…"}` or
+  `{"ok":false,"error":{…}}`. The record DTO is the one `buildRows` already
+  takes (moved to `crates/thar-wasm/src/record.rs`), so tags stay array-valued
+  and both round-trip flags cross the boundary. Each record is rebuilt with
+  `Todo::from_parts`, so nothing is re-parsed and no unwrap can see wire data.
+- **Exact write shape.** Per-record `serialize()`, joined with `"\n"`, plus
+  **one trailing `"\n"`**. Zero todos is not a special case: the TypeScript
+  oracle is `[].join("\n") + "\n"`, which is `"\n"`, so an empty todo list
+  writes a one-byte file, not an empty one. `empty.txt` pins that in the write
+  contract (bytes 1, sha256 `01ba4719…`).
+- **The write-time guard runs in Rust.** Before any text is returned, the lines
+  are scanned in order for the first rejected control code point
+  (`0x00–0x1F`, `0x7F–0x9F`, `U+2028`, `U+2029`; tab allowed). The rejection is
+  the only `ok:false` envelope with class `TodoControlCharacterError` and code
+  `UNSAFE_CONTROL_CHARACTER` (deliberately not the read path's
+  `CONTROL_CHARACTER`), carrying `index` (1-based line) and `codePoint`. Its
+  message is `CoreError::ControlCharacter`'s `Display`, byte-identical to
+  `TodoControlCharacterError`'s. Because the TypeScript guard already accepted
+  these lines, a Rust-only rejection is a package divergence: the adapter reports
+  its code once and keeps the TypeScript text instead of blocking the save. Any
+  malformed or unexpected rejection falls back the same way.
+- **Dual write, one write.** `writeTodosToFile` always computes the oracle text
+  with `serializeTodosForWrite`. In `rust` mode it also asks
+  `serializeTodosWithCore` and compares the two with
+  `Buffer.from(rust).equals(Buffer.from(ts))` — a byte compare, not a string
+  compare. The TypeScript bytes are what is written in every mode: equality
+  proves the Rust serializer agrees, and the gate is a verification step rather
+  than a second writer. A mismatch logs one bounded, content-free line (byte
+  lengths and the first differing byte); an adapter failure (`undefined`) and
+  every rejection keep the TypeScript text. The chosen text is validated
+  (`validateTodoFileContent` + `maxFileBytes`) and written **once**, so
+  `done.txt` appends exactly once.
+- **Byte compare before the write, not a temp-file read-back.** The plan said
+  "write a temp file, read it back, compare". Comparing the two in-memory
+  strings decides the same question strictly earlier (nothing touches the disk
+  on a mismatch) and the writer then writes exactly the compared buffer plus the
+  atomic replace below. A read-back would add I/O and a second decode without
+  strengthening the guarantee; the on-disk bytes are still pinned by the tests
+  and the write contract.
+- **Atomic replace + durability.** `Runtime.writeTextFile` keeps temp + rename
+  with the target's mode preserved, and now `fsync`s the temp file before the
+  rename. The flush is **best effort**: a filesystem that cannot `fsync` a
+  regular file must not fail a save. Directory `fsync` (which would also persist
+  the rename) is deliberately not done — it is not portably available and is
+  deferred with the rest of the durability work. Windows uses the same path
+  (Node's `rename` is the platform replace); it is best effort there too.
+  The append (`done.txt`) and exclusive-create paths are unchanged.
+- **Data-safety matrix** (`unit-tests/todo-file-write-safety.test.ts`, real
+  `fs`, temp dirs, no sleeps):
+
+  | Case                                                                                    | Result                                                                                                                                          |
+  | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+  | crash before rename (child process, `NODE_ENV=test` + `THAR_WRITE_CRASH=before-rename`) | target is the old file; the leftover temp is inert and the next save succeeds                                                                   |
+  | injected write failure (`ENOSPC`)                                                       | error propagates, target byte-identical, no temp file left                                                                                      |
+  | injected rename failure (`EIO`)                                                         | error propagates, target byte-identical, temp removed                                                                                           |
+  | read-only directory                                                                     | `EACCES` propagates, target and siblings untouched, no temp                                                                                     |
+  | read-only file in a writable directory                                                  | POSIX: replaced (rename checks the directory), mode 0444 preserved — existing behaviour, Windows refuses with `EPERM` and the file stays intact |
+  | concurrent external edit                                                                | never read-modify-write (`readTextFile` is not called); the external content is replaced whole, never spliced                                   |
+  | Rust text differs                                                                       | TypeScript bytes on disk, one bounded log, no throw                                                                                             |
+  | Rust envelope broken/absent/throwing                                                    | TypeScript bytes, one bounded log                                                                                                               |
+  | Rust `UNSAFE_CONTROL_CHARACTER`                                                         | `TodoControlCharacterError` with the same name/code/line/code point/message, nothing written                                                    |
+
+- **Contract evidence.** `tools/port/write.ts` + `write-cli.ts` +
+  `candidates/wasm-write.mjs`: the production writer (oracle) versus
+  `serializeFile` fed the app's own `coreTodoRecord` DTOs. **23 records / 3 566
+  bytes, 0 diffs** over 20 parseable fixtures plus 3 guard probes, and 3 seeded
+  mutations (dropped trailing newline, swapped date pair, dropped last tag) are
+  all caught. The self-candidate also proves the DTO is **lossless for
+  serialization**: rendering the same records reproduces the oracle bytes for
+  every fixture. The skipped set is exactly CP1's eight rejection fixtures.
+- **WASM size** after the write surface: **84 189 bytes raw / 37 190 bytes
+  gzip** (budget 250 KB / 100 KB; +2 358 / +1 204 bytes over CP3b2b).
+- **Locales.** The row builder still falls back to TypeScript off an
+  `en-US`-equivalent collator (PLAN §13 decision 8). Writing does not sort, so
+  the locale guard does not apply to it: the write path is byte-compared
+  regardless of locale.
+- **Deferred.** Stateful handles (decode once per list), host/computed
+  collation ranks, request-decoding allocation work, directory `fsync`, stale
+  `.tmp` cleanup, and `apply_command` all stay out of CP4. CP5 flips the default
+  (`THAR_CORE=rust`) and deletes the dual-serialization code once a release cycle
+  reports no data loss.
+
 ### CP5 — Rust core default
 
 - Default `THAR_CORE=rust` in the Node app; keep `ts` as an escape hatch for
@@ -813,6 +905,10 @@ Jobs:
   - runs the CP3b1 rows contract against the WASM candidate
     (`npm run port:contract:rows:wasm`), including the generated 1 000-todo
     list; the TS-only half runs in the Node `port-contract` job;
+  - runs the CP4 write contract against the WASM candidate
+    (`npm run port:contract:write:wasm`) and the adapter plus data-safety suites
+    against the package it just built (which includes the real-package corpus
+    round-trip); the TS-only half runs in the Node `port-contract` job;
   - uploads `pkg/**` and `wasm-size.txt` as the `thar-wasm` artifact
     (14 days).
 
@@ -828,7 +924,8 @@ small enough to ship inside the npm package or fetch cheaply. The real CP2b
 batch core measures 49 568 bytes raw / 22 200 bytes gzip after wasm-opt, so the
 Phase 2 target (≤ 100 KB raw / ≤ 40 KB gzip) is already met; the workflow keeps
 the 250 KB / 100 KB ceiling until the CP3 row and command surface lands, then
-tightens the constants and the README together.
+tightens the constants and the README together. After CP3b2b it is 81 831 /
+35 986, and after CP4's write surface 84 189 / 37 190.
 
 ### 9.2 Add in later phases
 

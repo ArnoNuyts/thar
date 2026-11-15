@@ -85,6 +85,11 @@ jobs:
       - name: Rows contract (oracle, candidate protocol, mutation proof)
         run: npm run port:contract:rows
 
+      # CP4: the write contract, TS-only here. The WASM candidate half runs in
+      # the rust workflow's `wasm` job, where the package is built.
+      - name: Write contract (oracle, candidate protocol, mutation proof)
+        run: npm run port:contract:write
+
   doctor:
     runs-on: ubuntu-latest
     timeout-minutes: 15

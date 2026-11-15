@@ -4,6 +4,7 @@ import { watch } from "node:fs";
 import {
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
   rename,
@@ -11,6 +12,7 @@ import {
   stat,
   unlink,
   writeFile,
+  type FileHandle,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -249,6 +251,68 @@ export function watchFs(filename: string): FsWatcher {
   };
 }
 
+/**
+ * Test-only fault injection for the atomic replace.
+ *
+ * The data-safety suite has to prove that a failed write and a failed rename
+ * leave the target untouched and no temp file behind. Neither error can be
+ * provoked reliably through the real filesystem (a full disk, a rename that
+ * fails after a successful write), so the replace path can be told to fail at a
+ * named step. Production never sets it.
+ *
+ * @internal
+ */
+export type WriteFault = "write" | "partial-write" | "rename";
+
+let injectedWriteFault: WriteFault | undefined;
+
+/** @internal */
+export const setWriteFaultForTests = (fault: WriteFault | undefined): void => {
+  injectedWriteFault = fault;
+};
+
+const faultError = (message: string, code: string): NodeJS.ErrnoException =>
+  Object.assign(new Error(message), { code });
+
+/**
+ * Stop the process between the temp-file flush and the rename.
+ *
+ * The crash test spawns a child process, writes through the real atomic
+ * replace, and observes the target: it must hold either the old or the new
+ * bytes, never a partial file. The hook only exists under a test runner
+ * (`NODE_ENV=test`) and needs `THAR_WRITE_CRASH=before-rename`, so a normal run
+ * cannot reach it.
+ *
+ * A crash at this point leaves the fully written temp file behind; the target is
+ * untouched and the leftover name is never renamed into place, so the next save
+ * simply writes a new temp file. Stale temp cleanup is deliberately not part of
+ * the write path.
+ */
+const crashBeforeRename = (): void => {
+  if (process.env.NODE_ENV !== "test") return;
+  if (process.env.THAR_WRITE_CRASH !== "before-rename") return;
+  process.exit(9);
+};
+
+/**
+ * Flush the temp file before the rename so a crash cannot leave a target that
+ * names unwritten bytes.
+ *
+ * Best effort on purpose: some platforms and filesystems do not support
+ * `fsync` on a regular file, and a save must not fail because durability could
+ * not be requested. The rename itself is still atomic; only the "survives a
+ * power loss immediately after the rename" guarantee depends on this call.
+ * Directory `fsync` (which would also persist the rename) is not done: it is not
+ * portably available and it is deferred with the rest of the durability work.
+ */
+const flushBestEffort = async (handle: FileHandle): Promise<void> => {
+  try {
+    await handle.sync();
+  } catch {
+    // Documented above: the save proceeds without the extra flush.
+  }
+};
+
 const writeTextFile = async (
   path: string | URL,
   data: string,
@@ -293,12 +357,28 @@ const writeTextFile = async (
   }
 
   try {
-    await writeFile(temporary, data, {
-      flag: "w",
-      mode,
-      signal: options?.signal,
-    });
-    options?.signal?.throwIfAborted();
+    const handle = await open(temporary, "w", mode);
+    try {
+      if (injectedWriteFault === "write") {
+        throw faultError("injected write failure", "ENOSPC");
+      }
+      if (injectedWriteFault === "partial-write") {
+        // Fail after a real prefix reaches the disk, the shape of a full disk
+        // or a power loss mid-write. The cleanup path must remove this temp.
+        await handle.writeFile(data.slice(0, Math.max(1, data.length >> 1)));
+        throw faultError("injected partial write failure", "ENOSPC");
+      }
+      await handle.writeFile(data);
+      options?.signal?.throwIfAborted();
+      await flushBestEffort(handle);
+    } finally {
+      await handle.close();
+    }
+
+    if (injectedWriteFault === "rename") {
+      throw faultError("injected rename failure", "EIO");
+    }
+    crashBeforeRename();
     await rename(temporary, target);
   } catch (error) {
     await unlink(temporary).catch(() => {});

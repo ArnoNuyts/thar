@@ -12,8 +12,10 @@ import {
   parseFileWithCore,
   resetCoreBridgeForTests,
   resolveShadowLogPath,
+  serializeTodosWithCore,
   setCollatorLocaleForTests,
   setRowBuilderForTests,
+  setSerializerForTests,
   shadowCheckTodoFile,
   shadowLogPath,
 } from "../logic/core-wasm.ts";
@@ -25,7 +27,10 @@ import {
 } from "../logic/Todos.ts";
 import { Todo } from "../logic/todo.ts";
 import { IndexType } from "../types/enums.ts";
-import { readTodosFromFile } from "../logic/todo-file-helpers.ts";
+import {
+  readTodosFromFile,
+  serializeTodosForWrite,
+} from "../logic/todo-file-helpers.ts";
 import {
   defaultCollatorLocale,
   isEnglishCollator,
@@ -891,6 +896,129 @@ describe("buildRowsWithCore", () => {
   });
 });
 
+/**
+ * CP4: the gated `serializeFile` adapter.
+ *
+ * As with the row builder, most tests inject a fake through
+ * `setSerializerForTests`; two drive a fake CommonJS package through the real
+ * loader to prove feature detection.
+ */
+describe("serializeTodosWithCore", () => {
+  const ok = (text: string) => JSON.stringify({ ok: true, text });
+
+  test("ts mode and an unset variable never call the core", () => {
+    const serializer = vi.fn(() => ok("x\n"));
+    setSerializerForTests(serializer);
+
+    for (const value of [undefined, "ts", "", "wasm"]) {
+      setEnv("THAR_CORE", value);
+      expect(serializeTodosWithCore([new Todo("one")])).toBeUndefined();
+    }
+    expect(serializer).not.toHaveBeenCalled();
+  });
+
+  test("sends the structured records with tags and both round-trip flags", () => {
+    setEnv("THAR_CORE", "rust");
+    const todo = new Todo(
+      "x 2024-03-02 2024-13-01 body kept literal beta:one beta:two @work",
+    );
+    const inputs: { todos: Record<string, unknown>[] }[] = [];
+    setSerializerForTests((raw) => {
+      inputs.push(JSON.parse(raw) as { todos: Record<string, unknown>[] });
+      return ok("line\n");
+    });
+
+    expect(serializeTodosWithCore([todo])).toEqual({
+      ok: true,
+      text: "line\n",
+    });
+
+    const record = inputs[0]?.todos[0];
+    expect(record).toBeDefined();
+    expect(record).toMatchObject({ state: "done", datesInText: true });
+    expect(record?.completionDateInText).toBe(true);
+    expect(record?.contexts).toEqual(["work"]);
+    // A `toString()` round-trip would collapse this into "one,two".
+    expect(record?.tags).toContainEqual(["beta", ["one", "two"]]);
+    // The request document uses the key the Rust decoder requires.
+    expect(Object.keys(inputs[0] ?? {})).toContain("todos");
+  });
+
+  test("a rejection falls back with its code, once per process", () => {
+    setEnv("THAR_CORE", "rust");
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const todos = [new Todo("one")];
+
+    // The TypeScript guard already accepted this list. A Rust-only rejection
+    // is a divergence, so the adapter falls back instead of throwing.
+    setSerializerForTests(() =>
+      JSON.stringify({
+        ok: false,
+        error: {
+          name: "TodoControlCharacterError",
+          code: "UNSAFE_CONTROL_CHARACTER",
+          message: "content-free",
+          index: 3,
+          codePoint: 0x1b,
+        },
+      }),
+    );
+    expect(serializeTodosWithCore(todos)).toBeUndefined();
+    expect(serializeTodosWithCore(todos)).toBeUndefined();
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(String(debug.mock.calls[0]?.[0])).toContain(
+      "serializeFile rejected (UNSAFE_CONTROL_CHARACTER)",
+    );
+  });
+
+  test("a package without the export falls back with one log", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      await fakePackage(
+        dir,
+        'module.exports = { coreVersion: () => "0.4.0-test", parseFile: () => "{}", parseFileWithLimits: () => "{}" };\n',
+      );
+      setEnv("THAR_CORE", "rust");
+
+      expect(serializeTodosWithCore([new Todo("one")])).toBeUndefined();
+      expect(serializeTodosWithCore([new Todo("one")])).toBeUndefined();
+
+      expect(debug).toHaveBeenCalledTimes(1);
+      expect(String(debug.mock.calls[0]?.[0])).toContain(
+        "serializeFile is missing or not a function",
+      );
+    });
+  });
+
+  test("a package that exports serializeFile is detected and used", async () => {
+    await withTempDir(async (dir) => {
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+      await fakePackage(
+        dir,
+        `module.exports = {
+  coreVersion: () => "0.4.0-test",
+  parseFile: () => '{"ok":true,"todos":[]}',
+  parseFileWithLimits: () => '{"ok":true,"todos":[]}',
+  serializeFile: (input) => {
+    const request = JSON.parse(input);
+    return JSON.stringify({
+      ok: true,
+      text: request.todos.map((todo) => todo.text).join("\\n") + "\\n",
+    });
+  },
+};
+`,
+      );
+      setEnv("THAR_CORE", "rust");
+
+      expect(
+        serializeTodosWithCore([new Todo("one"), new Todo("two")]),
+      ).toEqual({ ok: true, text: "one\ntwo\n" });
+      expect(debug).not.toHaveBeenCalled();
+    });
+  });
+});
+
 describe("THAR_SHADOW=1", () => {
   test("is off by default and writes nothing", async () => {
     await withTempDir(async (dir) => {
@@ -1215,6 +1343,48 @@ test.skipIf(!existsSync(REAL_PACKAGE))(
       ["alpha", "one"],
       ["beta", ["one", "two"]],
     ]);
+  },
+);
+
+/**
+ * CP4: the serializer against the **real** package the wasm CI job just built.
+ *
+ * The rest of this file drives a fake through the loader or a seam; this proves
+ * the request field names, the flags and the guard envelope match
+ * `crates/thar-wasm`. Skipped in the Node matrix, where `pkg/` does not exist.
+ */
+test.skipIf(!existsSync(REAL_PACKAGE))(
+  "the built package serializes through the real loader",
+  () => {
+    setEnv("THAR_CORE", "rust");
+    setEnv("THAR_CORE_WASM", undefined);
+    resetCoreBridgeForTests();
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    const todos = [
+      new Todo("(A) one @work due:2026-01-01 beta:one beta:two"),
+      new Todo("x 2024-03-02 2024-03-01 done"),
+      // The dates stayed literal, so serialization must not prepend them.
+      new Todo("x 2024-03-02 2024-13-01 kept literal"),
+      new Todo("tab\there"),
+    ];
+
+    expect(serializeTodosWithCore(todos)).toEqual({
+      ok: true,
+      text: serializeTodosForWrite(todos),
+    });
+    expect(debug).not.toHaveBeenCalled();
+
+    // The write-time guard is the Rust envelope. The adapter reports its code
+    // once and falls back; the TypeScript guard is what names line and code
+    // point for the user, so a Rust-only rejection never blocks a save.
+    expect(
+      serializeTodosWithCore([new Todo("safe"), new Todo("nul\u0000")]),
+    ).toBeUndefined();
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(String(debug.mock.calls[0]?.[0])).toContain(
+      "serializeFile rejected (UNSAFE_CONTROL_CHARACTER)",
+    );
   },
 );
 

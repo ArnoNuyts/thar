@@ -1,6 +1,6 @@
 import { Runtime } from "../utils/runtime.ts";
 import { findUnsafeTodoTextCodePoint } from "./control-characters.ts";
-import { shadowCheckTodoFile } from "./core-wasm.ts";
+import { serializeTodosWithCore, shadowCheckTodoFile } from "./core-wasm.ts";
 import {
   getReadLimits,
   type ReadLimits,
@@ -115,7 +115,12 @@ export const writeTodosToFile = async (
   filename: string,
   writeOptions: WriteOptions | undefined = undefined,
 ) => {
-  const data = serializeTodosForWrite(todos);
+  // The TypeScript serializer is always computed: it is the oracle the CP4
+  // dual-write gate compares against and the text written when the Rust path is
+  // off, unavailable, or disagrees. In `ts` mode this is the only serialization
+  // that happens (the adapter returns before loading anything).
+  const tsText = serializeTodosForWrite(todos);
+  const data = chooseWriteText(todos, tsText);
   const limits = getReadLimits();
 
   // Keep the write invariant aligned with the read path: line length, line
@@ -126,5 +131,75 @@ export const writeTodosToFile = async (
     throw new TodoFileTooLargeError(bytes, limits.maxFileBytes);
   }
 
+  // Exactly one write, whether the text came from Rust or TypeScript. The
+  // append path (`done.txt`) therefore appends once.
   await Runtime.writeTextFile(filename, data, writeOptions);
+};
+
+/**
+ * Whether the first dual-write mismatch has been reported.
+ *
+ * Saves are user-driven and repeat: a package that serializes differently would
+ * otherwise log on every save. One line per process is enough to notice, and it
+ * is content-free.
+ */
+let writeMismatchLogged = false;
+
+/** Test-only: forget the once-per-process mismatch log. @internal */
+export const resetWriteFallbackForTests = (): void => {
+  writeMismatchLogged = false;
+};
+
+/** Offset of the first byte where two UTF-8 buffers differ. */
+const firstByteDifference = (left: Buffer, right: Buffer): number => {
+  const shared = Math.min(left.length, right.length);
+  for (let index = 0; index < shared; index++) {
+    if (left[index] !== right[index]) return index;
+  }
+  return shared;
+};
+
+/**
+ * Pick the text to write: the TypeScript oracle, or Rust's copy of the same
+ * bytes when `THAR_CORE=rust` and the two agree exactly.
+ *
+ * The rule is deliberately narrow:
+ *
+ * - `ts` mode, an unavailable adapter, a thrown error, a malformed envelope and
+ *   any rejection (including a guard rejection) all keep `tsText`;
+ * - Rust's text is **compared**, not written: when
+ *   `Buffer.from(rust).equals(Buffer.from(ts))` the TypeScript bytes still go to
+ *   disk. A byte compare, not a string compare, because the two strings can be
+ *   equal as text but differ in bytes only through a bug, and this gate exists
+ *   to catch bugs;
+ * - a mismatch logs one bounded line (lengths and the first differing byte) and
+ *   keeps `tsText`.
+ *
+ * A Rust-only guard rejection is unreachable unless the WASM package disagrees
+ * with the already-run TypeScript guard, so blocking the save would be wrong:
+ * the user's accepted line is written from `tsText` and the divergence is
+ * logged once.
+ *
+ * Either way exactly one text reaches the single write below; the file never
+ * contains a mix.
+ */
+const chooseWriteText = (todos: Todo[], tsText: string): string => {
+  const result = serializeTodosWithCore(todos);
+  if (result === undefined) return tsText;
+  if (!result.ok) return tsText;
+
+  const rustBytes = Buffer.from(result.text, "utf8");
+  const tsBytes = Buffer.from(tsText, "utf8");
+  if (rustBytes.equals(tsBytes)) return tsText;
+
+  if (!writeMismatchLogged) {
+    writeMismatchLogged = true;
+    console.debug(
+      `thar core: serializeFile differs from the TypeScript serializer ` +
+        `(${rustBytes.length} vs ${tsBytes.length} bytes, first difference at ` +
+        `byte ${firstByteDifference(rustBytes, tsBytes)}); ` +
+        "using the TypeScript text",
+    );
+  }
+  return tsText;
 };

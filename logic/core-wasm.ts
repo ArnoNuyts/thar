@@ -32,23 +32,25 @@ import type { Todo } from "./todo.ts";
  *
  * The TypeScript implementation is still the source of truth by default:
  * nothing here changes what the TUI displays, saves, or exports unless
- * `THAR_CORE=rust` is set. The module offers three entry points:
+ * `THAR_CORE=rust` is set. The module offers four entry points:
  *
  * - {@link parseFileWithCore}, a thin batch adapter over `thar-wasm`'s
  *   `parseFile`/`parseFileWithLimits`;
  * - {@link buildRowsWithCore}, the opt-in row builder that calls the merged
  *   `buildRows` export and maps its rows back to `IndexEntry`;
+ * - {@link serializeTodosWithCore}, the opt-in (CP4) whole-file serializer the
+ *   write path byte-compares against the TypeScript oracle before saving;
  * - {@link shadowCheckTodoFile}, the `THAR_SHADOW=1` differential check that
  *   compares Rust against the already-parsed TypeScript result.
  *
- * All three are defensive: a missing, unbuildable or broken package, a
+ * All four are defensive: a missing, unbuildable or broken package, a
  * malformed envelope, an absent export, a rejected `today`, and a host collation
  * locale the Rust sort does not implement all resolve to `undefined` plus at
  * most one debug log. Nothing here may throw into the TUI, and nothing here
  * writes to the todo file. Debug lines never include the parse input: a todo
  * line is its own `hash`, so a Node `JSON.parse` snippet would leak content.
- * For the same reason a row-builder failure logs only the error class or the
- * typed error code, never the todo list or the request body.
+ * For the same reason a row-builder or serializer failure logs only the error
+ * class or the typed error code, never the todo list or the request body.
  *
  * The package is loaded with `createRequire` and a module-relative runtime
  * path, never with a static `import`, so `npm run build`, `npm test` and
@@ -117,6 +119,14 @@ interface CoreModule {
    * which is what the merged crate exports.
    */
   buildRows?(input: string): string;
+  /**
+   * CP4's whole-file serializer: one JSON document in, one JSON envelope out.
+   *
+   * Optional because a partially built package can lack the export. The
+   * wasm-bindgen name is `serializeFile`
+   * (`#[wasm_bindgen(js_name = serializeFile)]`).
+   */
+  serializeFile?(input: string): string;
 }
 
 const PACKAGE_ENTRY = join("crates", "thar-wasm", "pkg", "thar_wasm.js");
@@ -145,6 +155,7 @@ let coreModule: CoreModule | null | undefined;
 let packageLogged = false;
 let adapterLogged = false;
 let rowBuilderLogged = false;
+let serializerLogged = false;
 
 /** One debug line; each caller keeps its own once-per-process guard. */
 const debugLog = (message: string): void => {
@@ -329,13 +340,13 @@ export const parseFileWithCore = (
 };
 
 /**
- * One structured todo handed to the Rust row builder.
+ * One structured todo handed to the Rust core, at either boundary.
  *
  * Mirrors the Rust `TodoRecord` DTO: the getters of the TypeScript `Todo`,
  * never `toString()`. Serializing and re-parsing a line would collapse a
  * duplicated tag array (`beta:one beta:two`), and `build_rows` would then see
  * `beta` as one value instead of two. The two round-trip flags are sent too, so
- * CP4 can rebuild an exact `Todo`.
+ * CP4 can rebuild an exact `Todo` for serialization.
  */
 export interface CoreRowTodo {
   text: string;
@@ -418,7 +429,14 @@ let injectedRowBuilder: CoreRowBuilder | undefined;
 /** Injected by {@link setCollatorLocaleForTests}; production leaves it unset. */
 let injectedCollatorLocale: string | undefined;
 
-const coreTodoRecord = (todo: Todo): CoreRowTodo => ({
+/**
+ * The structured record both Rust boundaries take.
+ *
+ * Exported so the write contract (`tools/port/write.ts`) can build the exact
+ * request the app sends: the contract oracle must not re-implement these
+ * getters, or a broken projection could hide a serializer diff.
+ */
+export const coreTodoRecord = (todo: Todo): CoreRowTodo => ({
   text: todo.text,
   state: todo.isDone() ? "done" : "todo",
   priority: todo.priority ?? null,
@@ -772,6 +790,164 @@ export const buildRowsWithCore = (
 };
 
 /**
+ * The JSON document `serializeFile` accepts.
+ *
+ * The same DTO `buildRows` takes, without the search fields: CP4's write path
+ * only needs the records.
+ */
+export interface CoreSerializeInput {
+  todos: CoreRowTodo[];
+}
+
+/**
+ * The outcome of a real (non-fallback) `serializeFile` answer.
+ *
+ * `ok: false` is a typed rejection from the core (for example
+ * `UNSAFE_CONTROL_CHARACTER`); the caller reports it once and keeps the
+ * TypeScript text. A malformed request, an absent export, a malformed envelope
+ * and a thrown error are all reported as `undefined` instead.
+ */
+export type SerializeCoreResult =
+  | { ok: true; text: string }
+  | { ok: false; error: { code: string } };
+
+/** A `serializeFile`-shaped function; the test seam injects one of these. */
+export type CoreSerializer = (input: string) => string;
+
+/** Injected by {@link setSerializerForTests}; production leaves it unset. */
+let injectedSerializer: CoreSerializer | undefined;
+
+const serializerOf = (core: CoreModule): CoreSerializer | undefined => {
+  const serializer = core.serializeFile;
+  if (typeof serializer !== "function") return undefined;
+  return (input: string) => serializer.call(core, input);
+};
+
+/**
+ * Structural read of a `serializeFile` response.
+ *
+ * Only the merged contract's field names are accepted (`text`; `code`), so a
+ * package that emits a different shape falls back instead of being guessed at.
+ * Any `ok:false` code is reported once and then falls back to TypeScript: the
+ * TypeScript guard has already accepted these lines, so a Rust-only rejection
+ * means package divergence, not unsafe user input.
+ */
+const readSerializeEnvelope = (
+  raw: string,
+): SerializeCoreResult | undefined => {
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const envelope = parsed as { ok?: unknown; text?: unknown; error?: unknown };
+
+  if (envelope.ok === true) {
+    return typeof envelope.text === "string"
+      ? { ok: true, text: envelope.text }
+      : undefined;
+  }
+
+  if (envelope.ok !== false) return undefined;
+  const error = envelope.error;
+  if (typeof error !== "object" || error === null) return undefined;
+  const fields = error as { code?: unknown };
+  if (typeof fields.code !== "string" || fields.code.length === 0) {
+    return undefined;
+  }
+  return { ok: false, error: { code: fields.code } };
+};
+
+/**
+ * `THAR_CORE=rust`: serialize the whole todo list in Rust.
+ *
+ * Returns the Rust text (`{ok: true}`), the write-time guard's rejection
+ * (`{ok: false}`, `UNSAFE_CONTROL_CHARACTER` only), or `undefined` for the `ts`
+ * mode and every failure — a missing package or export, a thrown error, a
+ * malformed envelope, and any other rejection. The caller
+ * (`writeTodosToFile`) keeps the TypeScript text in that case, after a byte
+ * compare, so this function never writes, throws, or changes state.
+ *
+ * The first problem in a process logs one bounded, content-free debug line.
+ * The request body is never logged: it contains every todo line.
+ */
+export const serializeTodosWithCore = (
+  todos: Todos,
+): SerializeCoreResult | undefined => {
+  if (getCoreMode() !== "rust") return undefined;
+
+  let serializer = injectedSerializer;
+  if (!serializer) {
+    const core = loadCoreModule();
+    // `loadCoreModule` already logs the missing package once per process.
+    if (!core) return undefined;
+
+    serializer = serializerOf(core);
+    if (!serializer) {
+      if (!serializerLogged) {
+        serializerLogged = true;
+        debugLog(
+          "thar core: serializeFile is missing or not a function; " +
+            "using the TypeScript serializer",
+        );
+      }
+      return undefined;
+    }
+  }
+
+  try {
+    const input: CoreSerializeInput = { todos: todos.map(coreTodoRecord) };
+    const result = readSerializeEnvelope(serializer(JSON.stringify(input)));
+    if (result === undefined) {
+      if (!serializerLogged) {
+        serializerLogged = true;
+        debugLog(
+          "thar core: ignoring a malformed serializeFile envelope; " +
+            "using the TypeScript serializer",
+        );
+      }
+      return undefined;
+    }
+    if (!result.ok) {
+      // The TypeScript guard already accepted these lines, so a Rust-only
+      // rejection (even `UNSAFE_CONTROL_CHARACTER`) means the package diverged.
+      // Report it once and keep the oracle text; never block the user's save.
+      if (!serializerLogged) {
+        serializerLogged = true;
+        debugLog(
+          `thar core: serializeFile rejected (${result.error.code}); ` +
+            "using the TypeScript serializer",
+        );
+      }
+      return undefined;
+    }
+    return result;
+  } catch (error) {
+    if (!serializerLogged) {
+      serializerLogged = true;
+      // `errorName`, not `error.message`: a `JSON.parse` failure can quote the
+      // request, and the request contains every todo line.
+      debugLog(
+        `thar core: serializeFile failed (${errorName(error)}); ` +
+          "using the TypeScript serializer",
+      );
+    }
+    return undefined;
+  }
+};
+
+/**
+ * Test-only: inject a `serializeFile` stand-in, or clear it with `undefined`.
+ *
+ * The seam lets the write-path and data-safety tests drive the dual-write gate
+ * without building a package. Production never calls it.
+ *
+ * @internal
+ */
+export const setSerializerForTests = (
+  serializer: CoreSerializer | undefined,
+): void => {
+  injectedSerializer = serializer;
+};
+
+/**
  * Test-only: inject a `buildRows` stand-in, or clear it with `undefined`.
  *
  * The seam lets the wiring and the fallback tests run against a deterministic
@@ -1062,7 +1238,9 @@ export const resetCoreBridgeForTests = (): void => {
   packageLogged = false;
   adapterLogged = false;
   rowBuilderLogged = false;
+  serializerLogged = false;
   injectedRowBuilder = undefined;
+  injectedSerializer = undefined;
   injectedCollatorLocale = undefined;
   rowInputCache = new WeakMap();
   shadowLogLogged = false;

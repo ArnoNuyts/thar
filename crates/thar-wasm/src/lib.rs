@@ -32,6 +32,11 @@
 //! and answers with
 //! `{"ok":true,"rows":[…],"order":[…]}` or the same error envelope.
 //!
+//! [`serialize_file`] takes the same structured records (documented in the
+//! `record` module) and answers with `{"ok":true,"text":"…"}` or the error
+//! envelope, including the write-time control-character rejection documented in
+//! the `write` module.
+//!
 //! The JSON is written by hand: every key is emitted in a fixed order, strings
 //! are escaped the way `JSON.stringify` would escape them, and no dependency is
 //! added just to serialize a handful of fields. That keeps the module inside
@@ -42,12 +47,12 @@
 //!
 //! # Serialization
 //!
-//! There is no `serialize_file` export. The whole-file write shape is defined by
-//! CP1 as `todos.map(toString).join("\n") + "\n"`, i.e. per-record `toString`
-//! plus a join, so a caller derives it from the records instead of paying for a
-//! second crossing. `serializeTodosForWrite`'s write-time guard is the one part
-//! of the write path that is not reproducible from records; no corpus fixture
-//! reaches it (see "Coverage limits" in `tools/port/README.md`).
+//! [`serialize_file`] is the whole-file write shape CP1 defines:
+//! `todos.map(toString).join("\n") + "\n"`, i.e. per-record
+//! [`thar_core::Todo::serialize`], joined with `"\n"`, plus one trailing `"\n"`
+//! (so zero todos produce `"\n"`). It also runs the write-time guard from
+//! `serializeTodosForWrite` (`logic/todo-file-helpers.ts`) before returning any
+//! text; see the `write` module for the rejection envelope.
 //!
 //! # Decoding
 //!
@@ -71,7 +76,9 @@
 #![deny(missing_docs)]
 
 mod json;
+mod record;
 mod rows;
+mod write;
 
 use core::fmt;
 
@@ -198,6 +205,42 @@ pub fn parse_file_with_limits(
 #[must_use]
 pub fn build_rows(input: &str) -> String {
     rows::build_rows_envelope(input)
+}
+
+/// Serialize todos exactly as the writer does, with the write-time guard.
+///
+/// `input` is the JSON request documented in the `write` module: the structured
+/// records `build_rows` accepts, under `{"todos":[…]}`. The response is
+/// `{"ok":true,"text":"…"}` where `text` is
+/// `todos.map(toString).join("\n") + "\n"` (zero todos → `"\n"`), or
+/// `{"ok":false,"error":…}`:
+///
+/// - `{"name":"TodoControlCharacterError","code":"UNSAFE_CONTROL_CHARACTER",
+///   "message":…,"index":<1-based line>,"codePoint":<u32>}` when a serialized
+///   line contains a control code point the writer refuses. The `index` is the
+///   first offending line and the `codePoint` its first offending code point,
+///   matching `findUnsafeTodoTextCodePoint` in the write path;
+/// - `{"name":"TodoSerializeFileError","code":"INVALID_INPUT","message":…}` when
+///   the request itself is malformed.
+///
+/// Invalid input is a *data* error and never panics: the host falls back to the
+/// TypeScript serializer, or maps the control-character rejection back to
+/// `TodoControlCharacterError`, before anything touches the file.
+///
+/// # Example
+///
+/// ```js
+/// const { text, ok, error } = JSON.parse(core.serializeFile(JSON.stringify({
+///   todos: records, // the structured records from the app's own Todos
+/// })));
+/// if (!ok && error.code === "UNSAFE_CONTROL_CHARACTER") {
+///   throw new TodoControlCharacterError(error.index, error.codePoint);
+/// }
+/// ```
+#[wasm_bindgen(js_name = serializeFile)]
+#[must_use]
+pub fn serialize_file(input: &str) -> String {
+    write::serialize_envelope(input)
 }
 
 /// Clamp a JavaScript limit to a `u64`.
