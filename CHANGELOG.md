@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Rust todo core is now the default: parsing, list building and the
+  byte-compared write path run through the shipped WebAssembly core, with
+  `THAR_CORE=ts` as the one-release escape hatch.
+
 ## [0.6.1] - 2026-11-14
 
 ### Changed
