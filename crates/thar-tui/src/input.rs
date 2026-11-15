@@ -23,6 +23,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::App;
 use crate::layout::{action_item_at, checkbox_columns};
+use crate::modal::ModalId;
 use crate::nav;
 
 /// Message shown for every key that would modify `todo.txt`.
@@ -95,6 +96,20 @@ pub enum Command {
     ExtendUp,
     /// Extend the selection by one row downward.
     ExtendDown,
+    /// Open a modal screen.
+    Open(ModalId),
+    /// Flip open/done on the selected todos.
+    Toggle,
+    /// Flip the `h:` tag on the selected todos.
+    ToggleHidden,
+    /// Set a priority on the selected todos.
+    SetPriority(char),
+    /// Undo the last mutation.
+    Undo,
+    /// Redo the last undo.
+    Redo,
+    /// Show a bounded static message.
+    Toast(&'static str),
     /// A command CP6 does not support; the payload is the toast to show.
     Rejected(&'static str),
 }
@@ -115,6 +130,78 @@ pub fn command_for_key(key: KeyEvent, search_focused: bool) -> Option<Command> {
     }
 
     list_key(key)
+}
+
+/// Translate a key press for a specific app state.
+///
+/// This is the CP7 entry point: a read-only session keeps the CP6 mapping (a
+/// mutating key is one bounded toast), while `--write` maps the same keys to
+/// the mutation or modal they name. Keeping the mode out of the pure keymap
+/// means the CP6 tests still pin the read-only contract.
+#[must_use]
+pub fn command_for_key_in(app: &App, key: KeyEvent) -> Option<Command> {
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+        return Some(Command::Quit);
+    }
+
+    if app.search_focused {
+        return search_key(key);
+    }
+
+    if app.read_only {
+        list_key(key)
+    } else {
+        writable_list_key(app, key)
+    }
+}
+
+/// The list keymap when `--write` is active.
+fn writable_list_key(app: &App, key: KeyEvent) -> Option<Command> {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = key
+        .modifiers
+        .intersects(KeyModifiers::ALT | KeyModifiers::META);
+
+    match key.code {
+        KeyCode::Char(' ') if !ctrl && !alt => Some(Command::Toggle),
+        KeyCode::Char('h') if !ctrl && !alt => Some(Command::ToggleHidden),
+        KeyCode::Char('z') if !ctrl && !alt => Some(Command::Undo),
+        KeyCode::Char('Z') if !ctrl && !alt => Some(Command::Redo),
+        KeyCode::Char(letter @ 'A'..='F') if !ctrl && !alt => Some(Command::SetPriority(letter)),
+        KeyCode::Char('n') if !ctrl && !alt => Some(Command::Open(ModalId::CreateTodo)),
+        KeyCode::Char('e') if !ctrl && !alt => Some(Command::Open(ModalId::EditTodo)),
+        KeyCode::Char('x') if !ctrl && !alt => Some(Command::Open(menu_for(app))),
+        KeyCode::Char('d') if !ctrl && !alt => Some(Command::Open(ModalId::SetDueDate)),
+        KeyCode::Char('t') if !ctrl && !alt => Some(Command::Open(ModalId::SetThresholdDate)),
+        KeyCode::Char('r') if !ctrl && !alt => Some(Command::Open(ModalId::SetRecurrence)),
+        KeyCode::Char('+') if !ctrl && !alt => Some(Command::Open(ModalId::AddProject)),
+        KeyCode::Char('@') if !ctrl && !alt => Some(Command::Open(ModalId::AddContext)),
+        KeyCode::Enter => Some(Command::Open(menu_for(app))),
+        KeyCode::Char('a') if !ctrl && !alt => Some(Command::Toast(
+            "Archive arrives with the command menu workstream",
+        )),
+        KeyCode::Char('c') if !ctrl && !alt => Some(Command::Toast(
+            "Copy arrives with the command menu workstream",
+        )),
+        KeyCode::Char('v') if !ctrl && !alt => Some(Command::Toast(
+            "Paste arrives with the command menu workstream",
+        )),
+        KeyCode::Char('u') if !ctrl && !alt => Some(Command::Toast(
+            "Update check arrives with the update screen",
+        )),
+        KeyCode::Delete => Some(Command::Toast(
+            "Delete arrives with the command menu workstream",
+        )),
+        _ => list_key(key),
+    }
+}
+
+fn menu_for(app: &App) -> ModalId {
+    if app.range.is_empty() {
+        ModalId::TodoMenu
+    } else {
+        ModalId::MultiSelectMenu
+    }
 }
 
 fn search_key(key: KeyEvent) -> Option<Command> {
@@ -294,8 +381,11 @@ fn left_click(
         let command = match action_item_at(mouse.x.saturating_sub(1)) {
             Some("q") => Some(Command::Quit),
             Some("/") => Some(Command::SearchFocus),
-            Some(_) => Some(Command::Rejected(READ_ONLY_MESSAGE)),
-            None => None,
+            Some(_) if app.read_only => Some(Command::Rejected(READ_ONLY_MESSAGE)),
+            Some("x") => Some(Command::Open(menu_for(app))),
+            Some("n") => Some(Command::Open(ModalId::CreateTodo)),
+            Some("e") => Some(Command::Open(ModalId::EditTodo)),
+            _ => None,
         };
         return (last_click, command);
     }
@@ -326,14 +416,23 @@ fn left_click(
                     || (previous.x == mouse.x && previous.y == mouse.y))
         });
 
-    // The list is read-only: a double-click on the checkbox or on the text
-    // acknowledges the toggle/edit intent with one toast and writes nothing.
+    // A double-click on the checkbox toggles that todo; on the text it opens
+    // the editor. The read-only build acknowledges the intent with one toast.
+    let command = double.then(|| {
+        if app.read_only {
+            Command::Rejected(READ_ONLY_MESSAGE)
+        } else if clicked_checkbox(app, mouse.x) {
+            Command::Toggle
+        } else {
+            Command::Open(ModalId::EditTodo)
+        }
+    });
     (
         Some(LastClick {
             todo_id: Some(id),
             ..record
         }),
-        double.then_some(Command::Rejected(READ_ONLY_MESSAGE)),
+        command,
     )
 }
 
@@ -403,8 +502,33 @@ pub fn apply(app: &mut App, command: Command) {
         Command::ClearRange => nav::clear_range(app),
         Command::ExtendUp => nav::move_cursor(app, -1, true),
         Command::ExtendDown => nav::move_cursor(app, 1, true),
+        Command::Open(id) => app.open_modal(id),
+        Command::Toggle => {
+            let ids = selected_ids(app);
+            app.toggle_ids(&ids);
+        }
+        Command::ToggleHidden => {
+            let ids = selected_ids(app);
+            app.update_ids(&ids, |todo| todo.clone().toggle_hidden());
+        }
+        Command::SetPriority(letter) => {
+            let ids = selected_ids(app);
+            app.set_priority_ids(&ids, Some(letter));
+        }
+        Command::Undo => {
+            app.undo();
+        }
+        Command::Redo => {
+            app.redo();
+        }
+        Command::Toast(message) => app.push_toast(message),
         Command::Rejected(message) => app.push_toast(message),
     }
+}
+
+/// Ids of the active selection, in load order.
+fn selected_ids(app: &App) -> Vec<thar_core::TodoId> {
+    app.selected_todos().iter().map(|todo| todo.id).collect()
 }
 
 /// Is the 1-based terminal column on the checkbox of a todo row?

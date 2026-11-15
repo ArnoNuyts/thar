@@ -50,6 +50,17 @@ pub const TAG_CONTEXT: Color = PRIMARY;
 /// `+project` tag colour.
 pub const TAG_PROJECT: Color = INFO;
 
+/// Background of a modal surface.
+pub const MODAL_BACKGROUND: Color = rgb(0x202020);
+/// Background of a selected row in a menu or calendar.
+pub const SELECTED_BACKGROUND: Color = rgb(0x3A3A3A);
+/// Background of a primary button.
+pub const BUTTON_BACKGROUND: Color = SUCCESS;
+/// Background of a dangerous confirmation button.
+pub const DANGER_BACKGROUND: Color = DANGER;
+/// Border colour of a focused input.
+pub const INPUT_FOCUS: Color = SECONDARY;
+
 /// Colour of the `(A)`..`(F)` priority badge.
 #[must_use]
 pub const fn priority_color(letter: char) -> Option<Color> {

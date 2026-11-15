@@ -28,9 +28,10 @@ use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use thar_core::TodoDate;
+use thar_core::{MAX_PASTE_TODOS, TodoDate};
+use thar_store::SaveGuard;
 use thar_tui::input::{self, LastClick, MouseInput, MouseKind};
-use thar_tui::{App, view};
+use thar_tui::{App, Effect, view};
 
 /// Poll timeout used only when the host clock cannot produce a midnight.
 const CLOCK_FALLBACK: Duration = Duration::from_secs(60);
@@ -78,12 +79,16 @@ fn until_next_local_midnight(now: &jiff::Zoned) -> Option<Duration> {
     Duration::try_from(remaining).ok()
 }
 
-/// Poll timeout: the nearest of the toast expiry and the next local midnight.
+/// Poll timeout: the nearest of the toast expiry, the save debounce and the
+/// next local midnight.
 fn next_poll_timeout(app: &App, now: Instant) -> Duration {
     let midnight = until_next_local_midnight(&jiff::Zoned::now()).unwrap_or(CLOCK_FALLBACK);
     let timeout = app
         .toast_timeout(now)
         .map_or(midnight, |toast| midnight.min(toast));
+    let timeout = app
+        .save_timeout(now)
+        .map_or(timeout, |save| timeout.min(save));
     timeout.max(MIN_POLL)
 }
 
@@ -177,12 +182,26 @@ impl TerminalSession {
         Ok(session)
     }
 
-    /// Draw one frame and wait for one event.
+    /// Draw one frame and wait for one event, without a write path.
     ///
     /// # Errors
     ///
     /// Propagates draw, event-read, and size failures.
     pub fn run(&mut self, app: &mut App) -> io::Result<()> {
+        self.run_with_store(app, None)
+    }
+
+    /// Draw one frame and wait for one event, saving through `store` when it is
+    /// present.
+    ///
+    /// # Errors
+    ///
+    /// Propagates draw, event-read, and size failures.
+    pub fn run_with_store(
+        &mut self,
+        app: &mut App,
+        mut store: Option<&mut SaveGuard>,
+    ) -> io::Result<()> {
         let mut last_click: Option<LastClick> = None;
 
         loop {
@@ -191,9 +210,19 @@ impl TerminalSession {
 
             let now = Instant::now();
             app.expire_toast(now);
+            if app.save_due(now) {
+                flush_save(app, store.as_deref_mut());
+            }
             self.terminal.draw(|frame| view::render(frame, app))?;
 
             if app.should_quit {
+                // The Ink app can lose a save queued <50 ms before `q`; CP7
+                // flushes it, because losing the last keystroke of an edit is
+                // exactly the data-safety failure this checkpoint exists to
+                // prevent.
+                if app.dirty {
+                    flush_save(app, store.as_deref_mut());
+                }
                 return Ok(());
             }
 
@@ -206,39 +235,47 @@ impl TerminalSession {
                 match event::read()? {
                     Event::Key(key) => {
                         if key.kind != KeyEventKind::Release
-                            && let Some(command) = input::command_for_key(key, app.search_focused)
+                            && !app.handle_modal_key(key)
+                            && let Some(command) = input::command_for_key_in(app, key)
                         {
                             input::apply(app, command);
                         }
                     }
                     Event::Mouse(mouse) => {
                         if let Some(kind) = mouse_kind(mouse.kind) {
-                            let (next, command) = input::handle_mouse(
-                                app,
-                                MouseInput {
-                                    kind,
-                                    x: mouse.column.saturating_add(1),
-                                    y: mouse.row.saturating_add(1),
-                                    shift: mouse
-                                        .modifiers
-                                        .contains(ratatui::crossterm::event::KeyModifiers::SHIFT),
-                                },
-                                last_click,
-                                Instant::now(),
-                            );
-                            last_click = next;
-                            if let Some(command) = command {
-                                input::apply(app, command);
+                            let input = MouseInput {
+                                kind,
+                                x: mouse.column.saturating_add(1),
+                                y: mouse.row.saturating_add(1),
+                                shift: mouse
+                                    .modifiers
+                                    .contains(ratatui::crossterm::event::KeyModifiers::SHIFT),
+                            };
+                            if app.handle_modal_mouse(input) {
+                                // The modal consumed the click.
+                            } else {
+                                let (next, command) =
+                                    input::handle_mouse(app, input, last_click, Instant::now());
+                                last_click = next;
+                                if let Some(command) = command {
+                                    input::apply(app, command);
+                                }
                             }
                         }
                     }
                     Event::Resize(width, height) => app.resize(width, height),
-                    Event::Paste(text) => paste_into_search(app, &text),
+                    Event::Paste(text) => {
+                        if !app.handle_modal_paste(&text) {
+                            paste_into_focused(app, &text);
+                        }
+                    }
                     // Focus does not change any read-only state. The next
                     // iteration redraws and re-checks the local day.
                     Event::FocusGained | Event::FocusLost => {}
                 }
             }
+
+            process_effects(app, store.as_deref_mut());
 
             // A timeout at (or past) midnight lands here and re-derives the
             // local day, rebuilding overdue/threshold verdicts exactly once.
@@ -272,6 +309,109 @@ pub fn run_tui(app: &mut App) -> io::Result<()> {
     session.run(app)
 }
 
+/// Enter the TUI with a write path and restore the terminal on exit.
+///
+/// # Errors
+///
+/// Propagates terminal setup and draw errors.
+pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()> {
+    let mut session = TerminalSession::start()?;
+    session.run_with_store(app, Some(store))
+}
+
+/// Write the dirty list now and record the outcome on the app.
+fn flush_save(app: &mut App, store: Option<&mut SaveGuard>) {
+    let Some(store) = store else {
+        app.mark_saved();
+        return;
+    };
+    match store.save(&app.todos) {
+        Ok(_) => app.mark_saved(),
+        Err(error) => app.mark_save_failed(error.to_string()),
+    }
+}
+
+/// Drain the host effects queued by commands.
+fn process_effects(app: &mut App, mut store: Option<&mut SaveGuard>) {
+    for effect in app.take_effects() {
+        match effect {
+            Effect::ArchiveCompleted => archive(app, store.as_deref_mut()),
+            Effect::Copy(text) => copy(app, &text),
+            Effect::Paste => paste(app),
+            Effect::SaveFailed(message) => app.push_toast(message),
+        }
+    }
+}
+
+fn archive(app: &mut App, store: Option<&mut SaveGuard>) {
+    let ids = app.completed_ids();
+    if ids.is_empty() {
+        return;
+    }
+    let Some(_store) = store else {
+        app.push_toast(thar_tui::app::NOT_SAVED_MESSAGE);
+        return;
+    };
+
+    let todos = app.todos_by_ids(&ids);
+    let done = done_path(&app.filename);
+
+    match thar_store::append_done(&done, &todos) {
+        Ok(()) => app.remove_ids(&ids),
+        Err(error) => app.push_toast(format!("Archive failed: {error}")),
+    }
+}
+
+fn copy(app: &mut App, text: &str) {
+    let count = text.lines().count();
+    match thar_store::clipboard::copy(text) {
+        Ok(()) => app.push_toast(match count {
+            1 => "Todo copied".to_owned(),
+            count => format!("{count} todos copied"),
+        }),
+        Err(error) => app.push_toast(format!("Copy failed: {error}")),
+    }
+}
+
+fn paste(app: &mut App) {
+    let text = match thar_store::clipboard::paste() {
+        Ok(text) => text,
+        Err(error) => {
+            app.push_toast(format!("Paste failed: {error}"));
+            return;
+        }
+    };
+
+    let lines: Vec<String> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect();
+
+    if lines.is_empty() {
+        return;
+    }
+    if lines.len() > MAX_PASTE_TODOS {
+        app.push_toast(format!(
+            "Too many todos in one paste; the limit is {MAX_PASTE_TODOS}"
+        ));
+        return;
+    }
+
+    let added = app.add_todos(&lines);
+    if !added.is_empty() && app.writable() {
+        app.push_toast(format!("Pasted {} todo(s)", added.len()));
+    }
+}
+
+fn done_path(filename: &str) -> std::path::PathBuf {
+    std::path::Path::new(filename)
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("done.txt")
+}
+
 fn mouse_kind(kind: MouseEventKind) -> Option<MouseKind> {
     match kind {
         MouseEventKind::ScrollUp => Some(MouseKind::WheelUp),
@@ -294,18 +434,41 @@ fn is_pastable(character: char) -> bool {
     )
 }
 
-/// Bracketed paste into the focused search bar.
+/// Bracketed paste into the focused surface.
 ///
-/// CP6 has no create/edit modal, so an unfocused paste is ignored.
-fn paste_into_search(app: &mut App, text: &str) {
-    if !app.search_focused {
+/// The search bar keeps its one-line filter; the list adds one todo per
+/// non-empty line when `--write` is active. Modals receive their paste through
+/// [`App::handle_modal_paste`] before this function runs.
+fn paste_into_focused(app: &mut App, text: &str) {
+    if app.search_focused {
+        let text: String = text
+            .chars()
+            .filter(|character| is_pastable(*character))
+            .collect();
+        input::insert_query_text(app, &text);
         return;
     }
-    let text: String = text
-        .chars()
-        .filter(|character| is_pastable(*character))
+
+    if app.read_only {
+        return;
+    }
+
+    let lines: Vec<String> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
         .collect();
-    input::insert_query_text(app, &text);
+    if lines.is_empty() {
+        return;
+    }
+    if lines.len() > MAX_PASTE_TODOS {
+        app.push_toast(format!(
+            "Too many todos in one paste; the limit is {MAX_PASTE_TODOS}"
+        ));
+        return;
+    }
+    let _ = app.add_todos(&lines);
 }
 
 #[cfg(test)]

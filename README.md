@@ -73,32 +73,35 @@ On a host whose default collator differs, the main list falls back to the
 TypeScript ordering for that session so contexts keep their expected order;
 writing does not sort, so it is unaffected.
 
-### Rust TUI (`thar-rs`, read-only)
+### Rust TUI (`thar-rs`)
 
 CP6 adds a second, separate binary built from `crates/thar-cli`: a ratatui port
-of the list that opens a todo file **read-only**. It is not the `thar` npm
-entry point and does not replace the Ink app yet.
+of the list. It is not the `thar` npm entry point and does not replace the Ink
+app yet. It opens a todo file read-only by default.
 
 ```sh
 cargo run -p thar-cli --bin thar-rs -- --file todo.txt
-# or
+# or, with writes enabled:
 cargo build -p thar-cli --release
-./target/release/thar-rs --file todo.txt
+./target/release/thar-rs --write --file todo.txt
 ```
 
-It cannot write: no writer is linked into the binary, a missing todo file is
-opened as an empty list instead of being created, and every key that would
-modify the list answers with a bounded `Read-only: thar-rs cannot modify
-todo.txt` message. Navigation, context headers, search, the hidden-todo view
-(`H`), the mouse wheel/click/shift-click/double-click and the action bar work;
-editing and the modals are not part of this build.
+Without `--write` it cannot modify the file: a missing todo file is opened as
+an empty list instead of being created, and every write key answers with a
+bounded `Read-only: thar-rs cannot modify todo.txt` message. `--write` adds
+toggle (`space`), hidden (`h`), priority (`A`-`F`) and undo/redo (`z`/`Z`); the
+modal screens, calendar and text editor land in the parallel CP7 workstreams.
+Saves are debounced 50 ms, written atomically, and keep one `todo.txt.bak`
+(`0600`) before the first save; `--no-backup` disables the copy. A file changed
+by another program is never overwritten. The last pending save is flushed on
+quit.
 
-`--file`, `--help`, `--version` and `--no-update-check` are supported; `update`
-is rejected with a bounded message. CI runs the PTY suite
-(`cargo test -p thar-cli --test pty`) on Linux and macOS against the real
-binary, and only compiles the crate on Windows. See
-[`docs/rust-port/PLAN.md`](docs/rust-port/PLAN.md) (CP6) for the evidence and
-for what remains before the Rust TUI becomes the default.
+`--file`, `--help`, `--version`, `--write`, `--read-only`, `--no-backup` and
+`--no-update-check` are supported; `update` is rejected with a bounded message.
+CI runs the PTY suite (`cargo test -p thar-cli --test pty`) on Linux and macOS
+against the real binary, and only compiles the crate on Windows. See
+[`docs/rust-port/PLAN.md`](docs/rust-port/PLAN.md) (CP6/CP7) for the evidence
+and for what remains before the Rust TUI becomes the default.
 
 ### Building from source
 

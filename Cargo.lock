@@ -1582,6 +1582,7 @@ dependencies = [
  "portable-pty",
  "ratatui",
  "thar-core",
+ "thar-store",
  "thar-tui",
  "vt100",
 ]
@@ -1593,6 +1594,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "thar-store"
+version = "0.1.0"
+dependencies = [
+ "thar-core",
 ]
 
 [[package]]

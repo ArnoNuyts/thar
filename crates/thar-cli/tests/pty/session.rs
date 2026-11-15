@@ -110,6 +110,17 @@ impl Session {
         Self::spawn(directory, &args, environment)
     }
 
+    /// Run `thar-rs --write --file <file>`.
+    pub fn open_write(file: &Path) -> Self {
+        let directory = file.parent().unwrap_or_else(|| Path::new("."));
+        let args = [
+            OsStr::new("--write"),
+            OsStr::new("--file"),
+            file.as_os_str(),
+        ];
+        Self::spawn(directory, &args, &[])
+    }
+
     /// Run `thar-rs` with no arguments in `directory` (the default
     /// `./todo.txt` path).
     pub fn start(directory: &Path, environment: &[(&str, &str)]) -> Self {

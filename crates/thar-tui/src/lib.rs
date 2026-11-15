@@ -27,14 +27,18 @@
 
 pub mod app;
 pub mod display;
+pub mod history;
 pub mod input;
 pub mod layout;
 pub mod list;
+pub mod modal;
 pub mod nav;
 pub mod search;
 pub mod theme;
 pub mod view;
 
-pub use app::App;
+pub use app::{App, Effect};
+pub use history::History;
 pub use layout::Layout;
 pub use list::{ListModel, ListRow};
+pub use modal::{Action, Modal, ModalId, Outcome, TagKind};

@@ -832,6 +832,62 @@ distribution and cutover are CP8.
   byte-identical files for no-op edits.
 - Rollback: `--read-only`/omit `--write`; use the Ink app.
 
+#### CP7 — foundation implemented (write mode, save safety, undo/redo)
+
+The first CP7 slice lands the parts every screen depends on. It is deliberately
+a pure infrastructure step: the list gains toggle, hidden-tag, priority and
+undo/redo commands, while the modal screens arrive in parallel workstreams.
+
+- **`--write` is opt-in.** `thar-rs` stays read-only by default, keeps the CP6
+  `READ-ONLY` badge, and rejects every write command with the same bounded
+  toast. `--write` enables saving and the new commands, shows a green `WRITE`
+  badge, and creates a missing `todo.txt` (the Ink startup behaviour). The
+  event loop flushes a pending save on `q` instead of dropping the last
+  keystroke inside the 50 ms debounce.
+- **New crate `thar-store`.** All write-capable APIs live here so the CP6
+  scan of `thar-cli/src` and `thar-tui/src` still proves the read-only path:
+  - `atomic::write_atomic` writes a sibling temp file, syncs it, preserves the
+    target mode, and renames over the target; the temp is removed on error.
+  - `save::SaveGuard` remembers the bytes the session last read or wrote and
+    refuses to save when the file changed on disk (an external edit or delete),
+    leaving the target byte-identical.
+  - `backup` keeps one `todo.txt.bak` with mode `0600` before the first save;
+    an existing backup is never overwritten, and `--no-backup` disables it.
+  - `done::append_done` is the archive append; `clipboard` is the
+    `pbcopy`/`clip`/`wl-copy`/`xclip` port.
+- **Stable ids.** `TodoId` no longer doubles as the load-order index: create,
+  delete and paste shift the vector, so `App::index_of` now looks the id up and
+  every new todo gets a monotonic id from the session allocator. This was the
+  CP6 invariant that could not survive CP7.
+- **Undo/redo.** `thar-tui::history` snapshots the whole list per mutation, one
+  step per command (matching `todo-context.tsx`), clears both stacks on a load,
+  and is exposed through `z`/`Z`. Recurring toggles append their next instance.
+- **Command seam.** The list keymap reports the new intents, `App` owns the
+  mutation and the debounce (`SAVE_DEBOUNCE = 50 ms`), and `Effect` carries the
+  host-only work (archive, clipboard) back to the event loop. `input::apply`
+  stays pure.
+- **Modal host.** `thar-tui::modal` owns one active screen, the centred
+  geometry (`3 + body + 2` chrome), the `Action` vocabulary (create, text,
+  delete, toggle, dates, priority, recurrence, tags, undo/redo, view, copy,
+  paste, archive) and a registry split into `registry_editor`, `registry_date`,
+  `registry_meta` and `registry_menu`. Each parallel CP7 workstream fills only
+  its own registry file and screen modules; `view/overlay.rs` draws whatever
+  the stack holds. The four registry files are empty in this slice, so a key
+  for a not-yet-landed screen shows one bounded message.
+- **Tests and evidence.** `thar-store` 11 unit tests (atomic replace + mode,
+  backup-once, external-edit refusal, deleted-target refusal, append, ensure);
+  `thar-tui` app/history tests (stable ids, one-step group, undo/redo,
+  recurrence copy, debounce); PTY tests for toggle + backup, undo restoring the
+  original bytes, and a read-only run creating nothing; the ignored
+  `cp7_write_screenshot` generator produced
+  `docs/rust-port/assets/cp7-write.png` from a real 100x30 PTY.
+  `cargo fmt`, `cargo clippy -D warnings`, and
+  `cargo test --workspace --all-features` are green.
+- **Deliberately not here.** The eleven modal screens, the calendar, the text
+  editor and suggestions, the command menus, archive/copy/paste UI, and the
+  watcher/reload loop arrive in the parallel CP7 PRs. No performance work was
+  done, per the checkpoint instruction.
+
 ### CP8 — Cutover
 
 - Make `thar` the Rust TUI, publish as npm `next` first, then `latest` after a

@@ -19,6 +19,10 @@ pub struct CliOptions {
     pub version: bool,
     /// Accepted for CLI parity; CP6 has no update check to disable.
     pub no_update_check: bool,
+    /// `--write` was passed: allow saving and the editing commands.
+    pub write: bool,
+    /// `--no-backup` was passed: skip the one `<file>.bak` safety copy.
+    pub no_backup: bool,
     /// The `update` subcommand was requested.
     pub update: bool,
     /// `update --check` was requested.
@@ -55,7 +59,7 @@ pub fn format_usage(version: &str) -> String {
     [
         format!("thar-rs {version}"),
         String::new(),
-        "A read-only Rust todo.txt TUI for the terminal.".to_owned(),
+        "A todo.txt TUI for the terminal.".to_owned(),
         String::new(),
         "Usage:".to_owned(),
         "  thar-rs [options] [file]".to_owned(),
@@ -67,10 +71,14 @@ pub fn format_usage(version: &str) -> String {
         "  -f, --file <path>     Todo file to open".to_owned(),
         "  -h, --help            Show this help".to_owned(),
         "  -v, --version         Show version".to_owned(),
+        "  --write               Allow edits; default is read-only".to_owned(),
+        "  --read-only           Force the read-only default".to_owned(),
+        "  --no-backup           Do not keep todo.txt.bak before the first save".to_owned(),
         "  --no-update-check     Accepted for CLI parity".to_owned(),
         String::new(),
-        "This binary is read-only: it never creates, saves, or archives todos.".to_owned(),
-        "Editing, the command menu and the modals arrive with CP7.".to_owned(),
+        "Without --write this binary never creates, saves, or archives todos.".to_owned(),
+        "With --write, edits are debounced and saved atomically; todo.txt.bak keeps".to_owned(),
+        "the original until the first save of the session.".to_owned(),
     ]
     .join("\n")
 }
@@ -88,6 +96,8 @@ pub fn parse_cli_args(argv: &[String]) -> Result<CliOptions, CliError> {
             help: false,
             version: argv.iter().any(|arg| arg == "--version" || arg == "-v"),
             no_update_check: false,
+            write: false,
+            no_backup: false,
             update: true,
             update_check_only: argv.iter().any(|arg| arg == "--check"),
             update_yes: argv.iter().any(|arg| arg == "--yes" || arg == "-y"),
@@ -98,6 +108,9 @@ pub fn parse_cli_args(argv: &[String]) -> Result<CliOptions, CliError> {
     let mut help = false;
     let mut version = false;
     let mut no_update_check = false;
+    let mut write = false;
+    let mut read_only_flag = false;
+    let mut no_backup = false;
     let mut end_of_options = false;
 
     let mut set_file = |value: &str| -> Result<(), CliError> {
@@ -139,6 +152,24 @@ pub fn parse_cli_args(argv: &[String]) -> Result<CliOptions, CliError> {
             continue;
         }
 
+        if !end_of_options && argument == "--write" {
+            write = true;
+            index += 1;
+            continue;
+        }
+
+        if !end_of_options && argument == "--read-only" {
+            read_only_flag = true;
+            index += 1;
+            continue;
+        }
+
+        if !end_of_options && argument == "--no-backup" {
+            no_backup = true;
+            index += 1;
+            continue;
+        }
+
         if !end_of_options && (argument == "-f" || argument == "--file") {
             let value = argv
                 .get(index + 1)
@@ -162,11 +193,19 @@ pub fn parse_cli_args(argv: &[String]) -> Result<CliOptions, CliError> {
         index += 1;
     }
 
+    if write && read_only_flag {
+        return Err(CliError::new(
+            "--write and --read-only cannot be used together.",
+        ));
+    }
+
     Ok(CliOptions {
         file: file.unwrap_or_else(|| DEFAULT_FILENAME.to_owned()),
         help,
         version,
         no_update_check,
+        write,
+        no_backup,
         update: false,
         update_check_only: false,
         update_yes: false,
@@ -244,10 +283,30 @@ mod tests {
     }
 
     #[test]
+    fn accepts_write_mode_and_backup_flags() {
+        let options = parse_cli_args(&args(&["--write", "work.txt"])).expect("valid");
+        assert!(options.write);
+        assert!(!options.no_backup);
+        assert_eq!(options.file, "work.txt");
+
+        let options = parse_cli_args(&args(&["--write", "--no-backup"])).expect("valid");
+        assert!(options.write && options.no_backup);
+
+        let options = parse_cli_args(&args(&["--read-only"])).expect("valid");
+        assert!(!options.write);
+    }
+
+    #[test]
+    fn write_and_read_only_together_are_a_usage_error() {
+        assert!(parse_cli_args(&args(&["--write", "--read-only"])).is_err());
+    }
+
+    #[test]
     fn usage_names_the_binary_and_the_read_only_contract() {
         let usage = format_usage("0.1.0");
         assert!(usage.contains("thar-rs 0.1.0"));
         assert!(usage.contains("--no-update-check"));
+        assert!(usage.contains("--write"));
         assert!(usage.contains("read-only"));
     }
 

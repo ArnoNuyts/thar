@@ -15,6 +15,7 @@ repository = "https://github.com/ArnoNuyts/thar"
 
 [workspace.dependencies]
 thar-core = { path = "crates/thar-core", version = "0.1.0" }
+thar-store = { path = "crates/thar-store", version = "0.1.0" }
 thar-tui = { path = "crates/thar-tui", version = "0.1.0" }
 wasm-bindgen = "0.2.130"
 
