@@ -224,7 +224,11 @@ fn a_touched_but_unchanged_file_is_read_once_and_does_not_reload() {
     // the watcher must read the file and reject it by content comparison.
     set_modified(&path, SystemTime::now() + Duration::from_secs(60));
 
-    assert!(poll_until(&mut sync, start + POLL_INTERVAL).is_none());
+    let outcome = poll_until(&mut sync, start + POLL_INTERVAL);
+    assert!(
+        matches!(outcome, Some(ReloadOutcome::Unchanged)),
+        "a touch with identical bytes is an explicit no-op, not a missing event: {outcome:?}"
+    );
     assert_eq!(
         sync.content_reads(),
         1,

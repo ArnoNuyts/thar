@@ -211,6 +211,18 @@ impl App {
         self.load_error = None;
     }
 
+    /// Clear a previous reload failure after the file was rewritten with the
+    /// bytes this session already accepts.
+    ///
+    /// This is the "same bytes restored" recovery path: there is no new list to
+    /// adopt, but [`App::writable`] must turn true again and the banner must
+    /// disappear.
+    pub fn recovered(&mut self) {
+        self.load_error = None;
+        self.save_error = None;
+        self.save_retry_at = None;
+    }
+
     /// Record a failed file reload.
     ///
     /// The last good list stays in memory, but it must not be written: the
@@ -222,6 +234,8 @@ impl App {
         self.load_error = Some(message.clone());
         self.dirty = false;
         self.dirty_at = None;
+        self.save_retry_at = None;
+        self.save_error = None;
         self.push_toast(message);
     }
 

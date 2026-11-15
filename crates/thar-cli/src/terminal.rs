@@ -421,6 +421,12 @@ fn apply_reload(
             }
             Err(error) => app.reload_failed(bounded_message(&error.to_string())),
         },
+        ReloadOutcome::Unchanged => {
+            if app.load_error.is_some() {
+                app.recovered();
+                app.push_toast(RELOADED_MESSAGE);
+            }
+        }
         ReloadOutcome::Unreadable(message) => app.reload_failed(message),
     }
 }

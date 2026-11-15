@@ -86,6 +86,12 @@ pub enum ReloadOutcome {
     /// The caller decodes and parses them with [`crate::file::parse_bytes`],
     /// then hands them to [`FileSync::adopt`] and the save guard baseline.
     Changed(Vec<u8>),
+    /// The file was rewritten with exactly the accepted bytes.
+    ///
+    /// A touch is a no-op for a healthy session, but it is the only signal that
+    /// a previously failed reload can be cleared when the external fix restores
+    /// the original content.
+    Unchanged,
     /// The file exists but could not be read; the message is bounded and
     /// content-free, safe to show in the action bar.
     Unreadable(String),
@@ -213,7 +219,7 @@ impl FileSync {
         self.content_reads = self.content_reads.saturating_add(1);
 
         match read_bytes(&self.path, &self.limits) {
-            Ok(bytes) if bytes == self.baseline => None,
+            Ok(bytes) if bytes == self.baseline => Some(ReloadOutcome::Unchanged),
             Ok(bytes) => Some(ReloadOutcome::Changed(bytes)),
             Err(error) => Some(ReloadOutcome::Unreadable(bounded_message(
                 &error.to_string(),

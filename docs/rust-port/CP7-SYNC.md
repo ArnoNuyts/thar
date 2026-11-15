@@ -19,9 +19,9 @@ unchanged.
 | Reload | Reads the bytes once, lossy-decodes and parses with the startup `ReadLimits`, calls `App::reloaded` (which calls `set_todos`, clearing the undo history), adopts the parsed bytes as both the watcher and `SaveGuard` baseline, and toasts `File reloaded`. |
 | Failure | Sets `app.load_error`, toasts the bounded message, cancels a pending save, and shows `READ-ONLY` until a later reload succeeds. |
 | Recovery | `App::reloaded` clears `load_error`, so `App::writable()` is true again and the next mutation saves. |
-| Save refusal | `StoreError::ChangedOnDisk` keeps the target untouched, shows one bounded toast and clears the dirty flag; the watcher then reloads the external file. No retry loop. |
+| Save refusal | `StoreError::ChangedOnDisk` keeps the target untouched, shows one bounded toast, keeps the list dirty and retries with the app's 1 s backoff; the watcher normally reloads the external file first, which clears the dirty state. |
 | Store | `SaveGuard::set_baseline` adopts bytes the host just parsed; `atomic::write_atomic` gained a debug-only `THAR_SAVE_CRASH=before-rename` abort hook. |
-| Tests | `crates/thar-cli/tests/write_safety.rs` (11 passing + 1 helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (4 passing + 1 ignored generator). |
+| Tests | `crates/thar-cli/tests/write_safety.rs` (11 passing + 1 helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (5 passing + 1 ignored generator). |
 | Asset | `docs/rust-port/assets/cp7-sync.png` from a real 100×30 PTY frame. |
 
 ## Policy
@@ -75,7 +75,9 @@ When a save fails with `StoreError::ChangedOnDisk`:
   its baseline and returns before serializing to disk);
 - the action bar shows one bounded `Save failed: … changed on disk …` toast and
   `App::save_error` records it;
-- the dirty flag is cleared, so there is **no automatic retry**;
+- the list stays dirty and the app retries after its 1 s backoff; the watcher
+  normally reloads the external file first, which clears the dirty state and
+  rebaselines both the guard and the watcher;
 - the watcher notices the same metadata change independently and, after the
   debounce, reloads the external file.
 
@@ -119,7 +121,8 @@ explicit `Instant` to `FileSync::poll`, and the PTY tests poll the parsed screen
 | External edit between load and save: refused, external bytes intact | `write_safety::an_external_edit_between_load_and_save_is_refused` |
 | External edit: reloads into the new list | `write_safety::an_external_edit_reloads_into_the_new_list`, `pty::cp7_sync::an_external_edit_reloads_and_toasts` |
 | Reload replaces instead of merging, and quitting writes nothing | `pty::cp7_sync::an_external_edit_replaces_the_list_instead_of_merging` |
-| Touched-but-unchanged file: one read, no reload | `write_safety::a_touched_but_unchanged_file_is_read_once_and_does_not_reload` |
+| Touched-but-unchanged file: one read, `Unchanged`, no reload | `write_safety::a_touched_but_unchanged_file_is_read_once_and_does_not_reload` |
+| Restoring the original bytes clears recovery | `pty::cp7_sync::restoring_the_original_bytes_clears_read_only_recovery` |
 | Self-write echo: no reload; an edit inside the window waits | `write_safety::a_save_does_not_reload_its_own_bytes`, `write_safety::an_external_edit_inside_the_self_write_window_waits` |
 | Failed reload keeps the list, cancels the save, is not retried | `write_safety::a_failed_reload_keeps_the_list_cancels_the_save_and_is_not_retried`, `pty::cp7_sync::a_failed_reload_enters_read_only_recovery_and_a_fix_recovers` |
 | Recovery clears read-only and re-enables writes | `write_safety::a_later_reload_recovers_the_session_and_re_enables_writes`, same PTY test |
@@ -190,7 +193,8 @@ an externally added `ship the CP7 sync @work +thar` row, the badge reads
 - **No reload retry timer.** A failed reload is only retried after the metadata
   changes again. That keeps a rejected file from toasting in a loop. The
   trade-off is that fixing only the permission bits (which does not change mtime
-  or length) is not noticed until the file is written or touched.
+  or length) is not noticed until the file is written or touched; restoring
+  the exact accepted bytes does recover (the watcher reports `Unchanged`).
 - **No OS-level file lock.** `SaveGuard` compares the bytes and then renames;
   a writer that lands between the compare and the rename still loses. It is
   strictly stronger than the Ink app, which does not compare at all, but it is

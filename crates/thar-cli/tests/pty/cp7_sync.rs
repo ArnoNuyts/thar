@@ -264,6 +264,39 @@ fn a_failed_reload_enters_read_only_recovery_and_a_fix_recovers() {
 }
 
 #[test]
+fn restoring_the_original_bytes_clears_read_only_recovery() {
+    let directory = TempDir::new("cp7-sync-recovery-same-bytes");
+    let path = directory.write("todo.txt", b"one\ntwo\n");
+    let mut session = Session::open_write(&path);
+
+    session.wait_text("WRITE");
+    session.wait_todo_text("one");
+
+    // Break the file, then restore exactly the bytes the session accepted.
+    // The watcher sees a changed stamp but identical content, which must still
+    // clear the recovery state even though there is no new list to adopt.
+    std::fs::write(&path, b"POISONED\x00\n").expect("poison");
+    session.wait_text("READ-ONLY");
+    session.wait_text("Todo file line 1");
+
+    std::fs::write(&path, b"one\ntwo\n").expect("restore the original bytes");
+    session.wait_text("File reloaded");
+    session.wait_text("WRITE");
+    session.wait_no_text("READ-ONLY");
+    session.wait_no_text("Todo file line 1");
+    session.wait_todo_text("one");
+    session.wait_todo_text("two");
+
+    session.send(b"q");
+    let status = session.wait_exit(TIMEOUT);
+    assert_eq!(status.exit_code(), 0);
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("read restored file"),
+        "one\ntwo\n"
+    );
+}
+
+#[test]
 #[ignore = "manual asset generator: regenerates docs/rust-port/assets/cp7-sync.png"]
 fn cp7_sync_screenshot() {
     let directory = TempDir::new("cp7-sync-screenshot");
