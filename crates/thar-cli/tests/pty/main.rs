@@ -201,6 +201,25 @@ fn keyboard_navigation_moves_the_cursor_through_rows_and_contexts() {
 }
 
 #[test]
+fn bracketed_paste_into_search_keeps_the_text_in_order() {
+    let (_directory, mut session) = open_fixture("paste", FIXTURE);
+    session.wait_text("water the plants");
+
+    session.send(b"/");
+    session.wait_text(" /   /");
+    // Bracketed paste as a terminal sends it. The whole run must land in the
+    // query in order; a reversed insert would show "No results found for 'klim'".
+    session.send(b"\x1b[200~milk\x1b[201~");
+    session.wait_text(" / milk");
+    session.wait_todo_text("buy milk");
+    session.wait_no_text("No results found");
+
+    session.send(ENTER);
+    session.send(b"q");
+    assert_eq!(session.wait_exit(TIMEOUT).exit_code(), 0);
+}
+
+#[test]
 fn search_filters_shows_no_results_and_clears() {
     let (_directory, mut session) = open_fixture("search", FIXTURE);
     session.wait_text("water the plants");
@@ -356,6 +375,7 @@ fn ctrl_c_exits_cleanly_and_restores_the_terminal() {
     assert_restored(&session);
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn panic_reports_the_failure_and_restores_the_terminal() {
     let directory = TempDir::new("panic");

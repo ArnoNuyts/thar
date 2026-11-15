@@ -42,7 +42,8 @@ const MIN_POLL: Duration = Duration::from_millis(1);
 ///
 /// A PTY test sets this to `1` to prove the panic hook restores the terminal.
 /// It is inert unless the value is exactly `1`, and the trigger is compiled
-/// out of release builds.
+/// out of release builds (`cfg!(debug_assertions)`), so a release binary can
+/// never be crashed by an environment variable.
 const PANIC_ENV: &str = "THAR_TUI_PANIC";
 
 /// A panic hook owned by the session so it can be restored after the TUI exits.
@@ -126,8 +127,9 @@ impl TerminalSession {
     ///
     /// # Panics
     ///
-    /// Panics only when the test-only `THAR_TUI_PANIC=1` trigger is set; the
-    /// panic hook restores the terminal before the previous hook runs.
+    /// Panics only in a debug build when the test-only `THAR_TUI_PANIC=1`
+    /// trigger is set; the panic hook restores the terminal before the
+    /// previous hook runs. Release builds ignore the variable.
     pub fn start() -> io::Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();

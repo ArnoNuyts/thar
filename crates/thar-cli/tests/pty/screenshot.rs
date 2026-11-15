@@ -279,3 +279,43 @@ fn escape(text: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
 }
+
+/// Regenerate the paste-fix PR asset: a real frame after a bracketed paste.
+///
+/// ```sh
+/// cargo test -p thar-cli --test pty -- --ignored cp6_paste_fix_screenshot
+/// ```
+#[test]
+#[ignore = "manual asset generator: regenerates docs/rust-port/assets/cp6-paste-fix.png"]
+fn cp6_paste_fix_screenshot() {
+    let directory = TempDir::new("paste-screenshot");
+    let todo = directory.write("todo.txt", crate::FIXTURE.as_bytes());
+    let mut session = Session::open(&todo);
+
+    session.wait_text("READ-ONLY");
+    session.send(b"/");
+    session.wait_text(" /   /");
+    // The terminal's bracketed-paste sequence, exactly as a real terminal
+    // sends it: the query must read "milk", not "klim".
+    session.send(b"\x1b[200~milk\x1b[201~");
+    session.wait_text("/ milk");
+    session.wait_todo_text("buy milk");
+
+    let image = session.with_screen(svg);
+    let svg_path = directory.join("cp6-paste-fix.svg");
+    std::fs::write(&svg_path, &image).expect("write the SVG frame");
+
+    let png_path = asset_path("cp6-paste-fix.png");
+    std::fs::create_dir_all(png_path.parent().expect("the asset has a directory"))
+        .expect("create docs/rust-port/assets");
+    rasterize(&svg_path, &png_path);
+    println!("wrote {}", png_path.display());
+
+    session.send(crate::ENTER);
+    session.send(b"q");
+    assert_eq!(
+        session.wait_exit(crate::TIMEOUT).exit_code(),
+        0,
+        "the screenshot run must exit cleanly"
+    );
+}
