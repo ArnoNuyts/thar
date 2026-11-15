@@ -18,16 +18,16 @@ toast.
 The private `add_days`/`add_months` helpers from `recurrence.rs` (and their
 Hinnant civil-day conversions) moved into `date.rs` and are now the one copy:
 
-| Function | Semantics |
-| --- | --- |
-| `add_days(base, i64)` | whole calendar days, negative allowed |
-| `add_weeks(base, i64)` | seven calendar days per week |
-| `add_months(base, i64)` | date-fns `addMonths`, **clamping** the day: `2024-01-31 + 1m = 2024-02-29` |
-| `add_years(base, i64)` | twelve months, so `2024-02-29 + 1y = 2025-02-28` |
-| `start_of_month` / `end_of_month` | first/last day of the same month |
-| `days_in_month(year, month)` | now public; `0` for an invalid month |
-| `weekday(date)` | Monday `0` … Sunday `6` |
-| `start_of_week_monday(date)` | `startOfWeek(date, { weekStartsOn: 1 })` |
+| Function                          | Semantics                                                                  |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `add_days(base, i64)`             | whole calendar days, negative allowed                                      |
+| `add_weeks(base, i64)`            | seven calendar days per week                                               |
+| `add_months(base, i64)`           | date-fns `addMonths`, **clamping** the day: `2024-01-31 + 1m = 2024-02-29` |
+| `add_years(base, i64)`            | twelve months, so `2024-02-29 + 1y = 2025-02-28`                           |
+| `start_of_month` / `end_of_month` | first/last day of the same month                                           |
+| `days_in_month(year, month)`      | now public; `0` for an invalid month                                       |
+| `weekday(date)`                   | Monday `0` … Sunday `6`                                                    |
+| `start_of_week_monday(date)`      | `startOfWeek(date, { weekStartsOn: 1 })`                                   |
 
 Every operation returns `None` when the result leaves years 1..=9999, and
 overflowing counts are `None` rather than a panic. `Recurrence::plan` now calls
@@ -45,13 +45,13 @@ at the first supported day.
 view (the TypeScript component's render-time `isSameMonth` sync). It is
 Monday-first, renders four to six whole weeks, and handles:
 
-| Key | Action |
-| --- | --- |
-| Up / Down | −1 / +1 week |
-| Left / Right | −1 / +1 day |
+| Key                       | Action        |
+| ------------------------- | ------------- |
+| Up / Down                 | −1 / +1 week  |
+| Left / Right              | −1 / +1 day   |
 | Shift/Ctrl + Left / Right | −1 / +1 month |
-| Enter | submit |
-| anything else | ignored |
+| Enter                     | submit        |
+| anything else             | ignored       |
 
 There is no mouse handling, matching `Calendar.tsx`. The renderer draws the
 `MMMM yyyy` title, the `Mo Tu We Th Fr Sa Su` header, three-column cells, the
