@@ -213,8 +213,8 @@ components do not change in Phases 1–3.
 
 ## 5. Safe porting checkpoints
 
-`feature/rust-port` is a long-lived branch. Advance it in small checkpoint
-commits, each independently reversible. The rule is:
+`feature/rust-port` is a long-lived branch. Advance it with small checkpoint
+PRs, each independently reversible. The rule is:
 
 > **No checkpoint may change behaviour and implementation at the same time.**
 > A pure port is allowed; a new feature is not.
@@ -357,9 +357,9 @@ must never wait for the port.
   the port branch into a release line until a checkpoint is explicitly
   shippable.
 - **Security first:** fix and release on `release/next`/`main` as usual. Once
-  the security release is tagged, immediately merge it into the port branch —
-  do not wait for the next checkpoint or a weekly sync — and re-run the port
-  gates.
+  the security release is tagged, open the sync PR into the port branch
+  immediately — do not wait for the next checkpoint or a weekly sync — and
+  re-run the port gates.
 - **Routine sync:** forward-merge `release/next` before starting each
   checkpoint and at least every two weeks. Weekly is a convenience, not a
   release gate. If `main` and `release/next` diverge, merge the line that
@@ -376,10 +376,11 @@ must never wait for the port.
   CP3/CP4 (opt-in flags) once their gates pass, instead of holding all nine
   checkpoints in one PR. The forward-merge rule above applies unchanged.
 - **Protected branch:** `feature/rust-port` requires a PR, dismisses stale
-  approvals, blocks force pushes and deletions, and applies to admins too. Do
-  not try to push to it directly; open a PR.
-- One checkpoint per commit (or a tiny PR into this branch), with the gate
-  result in the commit message. Tag `rust-port/cpN` after each gate.
+  approvals, requires conversation resolution, blocks force pushes and
+  deletions, and applies to admins too. Do not try to push to it directly;
+  open a PR.
+- One checkpoint per PR (one commit on the branch), with the gate result in
+  the commit message. Tag `rust-port/cpN` after each gate.
 - Keep `npm test` green at every commit. If a checkpoint cannot finish in a
   week, split it; do not let a red intermediate state live on the branch.
 - Stop conditions: any serialization byte mismatch, any data-loss report, or
@@ -660,7 +661,7 @@ generous for the scaffold and should be tightened after Phase 2 (target
 | WASM boundary overhead                                | Low      | Coarse batch API; benchmark core calls at 50/3 k/10 k; never per-row FFI                                                                                                              |
 | CI flakiness / slow Rust builds                       | Low      | `rust-cache`, single fmt/clippy/test job, path filters, `lto` only in release                                                                                                         |
 | Toolchain churn (1.99.1 pin)                          | Low      | Bump `rust-toolchain.toml` and the CI action together in one PR                                                                                                                       |
-| Long-lived branch drift                               | Medium   | Forward-merge `release/next` after every security release and before each checkpoint; land completed checkpoints on `release/next`; tag each green CP; never rebase the shared branch |
+| Long-lived branch drift                               | Medium   | Forward-merge `release/next` after every security release and before each checkpoint; land completed checkpoints on `feature/rust-port`; tag each green CP; never rebase the shared branch |
 | Partial port lives forever                            | High     | Every checkpoint has a gate and a removal plan; CP5/CP8 explicitly delete dual paths                                                                                                  |
 
 ## 11. Rollout and rollback
