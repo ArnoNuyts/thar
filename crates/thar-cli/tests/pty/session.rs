@@ -129,6 +129,17 @@ impl Session {
         Self::spawn(directory, &args, environment)
     }
 
+    /// Run `thar-rs --write --file <file>` at an explicit terminal size.
+    pub fn open_write_sized(file: &Path, cols: u16, rows: u16) -> Self {
+        let directory = file.parent().unwrap_or_else(|| Path::new("."));
+        let args = [
+            OsStr::new("--write"),
+            OsStr::new("--file"),
+            file.as_os_str(),
+        ];
+        Self::spawn_sized(directory, &args, &[], cols, rows)
+    }
+
     /// Run `thar-rs` with no arguments in `directory` (the default
     /// `./todo.txt` path).
     pub fn start(directory: &Path, environment: &[(&str, &str)]) -> Self {
@@ -136,10 +147,20 @@ impl Session {
     }
 
     fn spawn(directory: &Path, args: &[&OsStr], environment: &[(&str, &str)]) -> Self {
+        Self::spawn_sized(directory, args, environment, COLS, ROWS)
+    }
+
+    fn spawn_sized(
+        directory: &Path,
+        args: &[&OsStr],
+        environment: &[(&str, &str)],
+        cols: u16,
+        rows: u16,
+    ) -> Self {
         let pair = native_pty_system()
             .openpty(PtySize {
-                rows: ROWS,
-                cols: COLS,
+                rows,
+                cols,
                 pixel_width: 0,
                 pixel_height: 0,
             })
@@ -173,8 +194,8 @@ impl Session {
 
         let mut reader = pair.master.try_clone_reader().expect("clone the reader");
         let writer = pair.master.take_writer().expect("take the writer");
-        let rows = NonZeroU16::new(ROWS).expect("ROWS is non-zero");
-        let cols = NonZeroU16::new(COLS).expect("COLS is non-zero");
+        let rows = NonZeroU16::new(rows).expect("rows is non-zero");
+        let cols = NonZeroU16::new(cols).expect("cols is non-zero");
         let output = Arc::new(Mutex::new(Output {
             parser: Parser::new(rows, cols, 0),
             raw: Vec::new(),

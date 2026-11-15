@@ -245,18 +245,18 @@ impl UpdateModal {
         }
     }
 
-    /// Relative cell column inside the modal for a 1-based mouse column.
+    /// Relative cell column inside the modal body for a 1-based mouse column.
     fn relative_column(&self, rect: ModalRect, mouse: MouseInput) -> Option<u16> {
         let column = mouse.x.checked_sub(1)?;
-        let start = rect.area.x;
-        let end = rect.area.x.saturating_add(rect.area.width);
-        (start..end).contains(&column).then_some(column - start)
+        let start = rect.body.x;
+        let end = start.saturating_add(rect.body.width);
+        (start..end).contains(&column).then(|| column - start)
     }
 
     /// Proportional action index for a relative cell column.
     fn index_at(&self, rect: ModalRect, column: u16) -> usize {
         let actions = self.actions().len().max(1);
-        let width = usize::from(rect.area.width.max(1));
+        let width = usize::from(rect.body.width.max(1));
         let column = usize::from(column);
         (column * actions / width).min(actions - 1)
     }
@@ -380,8 +380,9 @@ impl Modal for UpdateModal {
 
         let actions = self.actions();
         let count = u16::try_from(actions.len()).unwrap_or(1).max(1);
-        let modal_width = rect.area.width;
-        let half = modal_width / count;
+        let content_left = rect.body.x.saturating_add(1);
+        let content_width = rect.body.width.saturating_sub(2);
+        let span = content_width / count;
 
         for (index, action) in actions.iter().enumerate() {
             let active = self.selected == index || self.hovered == Some(index);
@@ -391,20 +392,21 @@ impl Modal for UpdateModal {
             } else {
                 format!("‹ {label} ›")
             };
-            let label_width = u16::try_from(rendered.chars().count()).unwrap_or(modal_width);
-            let offset = u16::try_from(index).unwrap_or(0).saturating_mul(half);
+            let offset = u16::try_from(index).unwrap_or(0).saturating_mul(span);
             let width = if index + 1 == actions.len() {
-                modal_width.saturating_sub(offset)
+                content_width.saturating_sub(offset)
             } else {
-                half
+                span
             };
-            let inner = offset.saturating_add(width.saturating_sub(label_width) / 2);
-            let area = Rect::new(
-                rect.area.x.saturating_add(inner),
-                button_y,
-                label_width.min(rect.area.width.saturating_sub(inner)),
-                1,
-            );
+            // If the decorated label does not fit, fall back to the bare label;
+            // a tiny terminal clips rather than painting over the frame.
+            let text = if u16::try_from(rendered.chars().count()).unwrap_or(u16::MAX) <= width {
+                rendered
+            } else {
+                label.to_owned()
+            };
+            let text: String = text.chars().take(usize::from(width)).collect();
+            let area = Rect::new(content_left.saturating_add(offset), button_y, width, 1);
             let color = if self.hovered == Some(index) {
                 theme::WARNING
             } else if self.selected == index {
@@ -418,7 +420,7 @@ impl Modal for UpdateModal {
                 Modifier::empty()
             });
             frame.render_widget(
-                Paragraph::new(Span::styled(rendered, style)).alignment(Alignment::Center),
+                Paragraph::new(Span::styled(text, style)).alignment(Alignment::Center),
                 area,
             );
         }

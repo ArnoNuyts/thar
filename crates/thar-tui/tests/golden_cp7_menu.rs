@@ -79,6 +79,21 @@ fn body_row(app: &App, backend: &TestBackend, row: u16) -> String {
         .to_owned()
 }
 
+/// Assert the frame is intact and every body row keeps its pad column.
+fn assert_modal_pillars(screen: &[String], rect: geometry::ModalRect) {
+    let left_border = usize::from(rect.area.x);
+    let left_pad = left_border + 1;
+    let right_border = usize::from(rect.area.x + rect.area.width - 1);
+    let right_pad = right_border - 1;
+    for y in rect.body.y..rect.body.y + rect.body.height {
+        let line: Vec<char> = screen[usize::from(y)].chars().collect();
+        assert_eq!(line[left_border], '│', "left border at row {y}");
+        assert_eq!(line[left_pad], ' ', "left padding at row {y}");
+        assert_eq!(line[right_pad], ' ', "right padding at row {y}");
+        assert_eq!(line[right_border], '│', "right border at row {y}");
+    }
+}
+
 fn cell(backend: &TestBackend, x: u16, y: u16) -> (String, Option<Color>) {
     let cell = &backend.buffer()[(x, y)];
     (cell.symbol().to_owned(), cell.style().fg)
@@ -259,6 +274,7 @@ fn eighty_by_twenty_four_wraps_the_single_delete_message_without_truncation() {
         screen[button_row].contains("« Confirm »") && screen[button_row].contains("‹ Cancel ›"),
         "buttons are not on the row after the message: {screen:#?}"
     );
+    assert_modal_pillars(&screen, rect);
 }
 
 #[test]
@@ -301,14 +317,6 @@ fn one_hundred_by_thirty_pins_the_update_screen() {
             .iter()
             .any(|line| line.contains("https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0"))
     );
-    let release = screen
-        .iter()
-        .find(|line| line.contains("releases/tag/v0.5.0"))
-        .expect("release URL row");
-    assert!(
-        release.trim_end().ends_with(" │"),
-        "the update content touches the right border: {release:?}"
-    );
     let buttons = screen
         .iter()
         .find(|line| line.contains('«'))
@@ -316,6 +324,36 @@ fn one_hundred_by_thirty_pins_the_update_screen() {
     assert!(buttons.contains("« Update now »"), "{buttons:?}");
     assert!(buttons.contains("‹ Later ›"), "{buttons:?}");
     assert!(buttons.contains("‹ Skip this version ›"), "{buttons:?}");
+    assert_modal_pillars(&screen, rect);
+}
+
+#[test]
+fn eighty_by_twenty_four_update_keeps_the_buttons_inside_the_frame() {
+    let mut app = app(&["one"]);
+    app.resize(80, 24);
+    app.update_model = Some(UpdateModel {
+        current_version: "0.4.0".to_owned(),
+        latest_version: Some("0.5.0".to_owned()),
+        install_kind: InstallKind::NpmGlobal,
+        command: "npm install -g @arnoarnoarno/thar@latest".to_owned(),
+        release_url: "https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0".to_owned(),
+        can_self_update: true,
+    });
+    app.open_modal(thar_tui::ModalId::Update);
+    let backend = draw(&app, 80, 24);
+    let rect = modal_area(&app);
+    let screen = screen_lines(&backend);
+
+    // The three buttons must stay between the pad columns at the narrow size;
+    // the long Skip label falls back to its bare text instead of the border.
+    assert_modal_pillars(&screen, rect);
+    let buttons = screen
+        .iter()
+        .find(|line| line.contains("Later"))
+        .expect("a button row");
+    assert!(buttons.contains("Update now"), "{buttons:?}");
+    assert!(buttons.contains("Later"), "{buttons:?}");
+    assert!(buttons.contains("Skip this version"), "{buttons:?}");
 }
 
 #[test]
