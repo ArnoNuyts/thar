@@ -1,10 +1,12 @@
 //! `thar-core`: the pure `todo.txt` domain model for the Thar Rust port.
 //!
-//! This crate is the first half of checkpoint CP2 in
+//! This crate is the domain half of checkpoints CP2 and CP3a in
 //! `docs/rust-port/PLAN.md`. It owns parsing, serialization, dates, limits, and
-//! file validation, and it is deliberately tiny: no I/O, no clock, no ambient
-//! time, no `unsafe`, and no third-party dependencies. The clock enters as a
-//! [`TodoDate`] argument; the filesystem stays in the host.
+//! file validation, plus recurrence planning, the immutable setters and
+//! `toggle_state`, sort/hidden-filter/search, the contiguous-context row model,
+//! and the pure navigation helpers. It is deliberately tiny: no I/O, no clock,
+//! no ambient time, no `unsafe`, and no third-party dependencies. The clock
+//! enters as a [`TodoDate`] argument; the filesystem stays in the host.
 //!
 //! # TypeScript parity contract
 //!
@@ -55,6 +57,7 @@ mod error;
 mod js;
 mod limits;
 mod model;
+mod recurrence;
 mod scan;
 mod validation;
 
@@ -64,7 +67,11 @@ pub use limits::{
     DEFAULT_MAX_FILE_BYTES, DEFAULT_MAX_LINE_CHARS, DEFAULT_MAX_READ_TODOS, MAX_PASTE_TODOS,
     MAX_TODO_CHARS, MAX_TODOS, ReadLimits,
 };
-pub use model::{Priority, State, TagValue, Todo, TodoId, serialize_file};
+pub use model::{Priority, State, TagValue, Todo, TodoId, ToggleResult, serialize_file};
+pub use recurrence::{
+    MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, RecurrenceUnit, is_valid_recurrence,
+    plan_recurrence,
+};
 pub use validation::{is_blank_line, validate_file_bytes, validate_file_content};
 
 /// Crate version, surfaced through the WASM smoke test.

@@ -1,6 +1,6 @@
 [package]
 name = "thar-core"
-description = "Pure todo.txt domain model for Thar: parse, serialize, dates, limits, validation"
+description = "Pure todo.txt domain model for Thar: parse, serialize, dates, recurrence, setters, query, rows, navigation, limits, validation"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
