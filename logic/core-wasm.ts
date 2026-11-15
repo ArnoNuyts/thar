@@ -13,37 +13,52 @@ import { fileURLToPath } from "node:url";
 
 import { startOfDay } from "date-fns";
 
-import { IndexType } from "../types/enums.ts";
+import { IndexType, TodoStateEnum } from "../types/enums.ts";
+import type { UpperCaseLetter } from "../types/types.ts";
 import {
   isEnglishCollator,
   defaultCollatorLocale,
 } from "../utils/collation-locale.ts";
 import { extractSearchTerms } from "../utils/search-utils.ts";
-import { formatDateTag } from "./dates.ts";
+import { formatDateTag, parseDateTag } from "./dates.ts";
 import { createIndexes } from "./indexes.ts";
 import type { IndexEntry } from "./indexes.ts";
-import { getReadLimits, type ReadLimits } from "./limits.ts";
+import {
+  getReadLimits,
+  type ReadLimits,
+  TodoControlCharacterError,
+  TodoFileValidationError,
+  TodoFileTooLargeError,
+  TodoLineCountLimitError,
+  TodoLineLengthLimitError,
+} from "./limits.ts";
 import { filterBySearch, filterHidden, sortByImportance } from "./Todos.ts";
 import type { Todos } from "./Todos.ts";
-import type { Todo } from "./todo.ts";
+import { Todo, type TodoParts } from "./todo.ts";
 
 /**
  * Opt-in bridge to the Rust core compiled to WebAssembly (CP2b).
  *
  * The TypeScript implementation is still the source of truth by default:
  * nothing here changes what the TUI displays, saves, or exports unless
- * `THAR_CORE=rust` is set. The module offers four entry points:
+ * `THAR_CORE=rust` is set. The module offers five entry points:
  *
  * - {@link parseFileWithCore}, a thin batch adapter over `thar-wasm`'s
- *   `parseFile`/`parseFileWithLimits`;
+ *   `parseFile`/`parseFileWithLimits`, used by the read path and the shadow
+ *   check;
+ * - {@link parseTodosWithCore}, the wired read path (CP3b2c): one Rust parse,
+ *   validated into {@link Todo} instances through `Todo.fromParts`, with the
+ *   TypeScript reader as the fallback;
  * - {@link buildRowsWithCore}, the opt-in row builder that calls the merged
  *   `buildRows` export and maps its rows back to `IndexEntry`;
  * - {@link serializeTodosWithCore}, the opt-in (CP4) whole-file serializer the
  *   write path byte-compares against the TypeScript oracle before saving;
  * - {@link shadowCheckTodoFile}, the `THAR_SHADOW=1` differential check that
- *   compares Rust against the already-parsed TypeScript result.
+ *   compares Rust against the already-parsed TypeScript result. In
+ *   `THAR_CORE=rust` mode it is superseded: the read path already parses with
+ *   Rust, so no second parse or shadow record happens.
  *
- * All four are defensive: a missing, unbuildable or broken package, a
+ * All five are defensive: a missing, unbuildable or broken package, a
  * malformed envelope, an absent export, a rejected `today`, and a host collation
  * locale the Rust sort does not implement all resolve to `undefined` plus at
  * most one debug log. Nothing here may throw into the TUI, and nothing here
@@ -88,12 +103,58 @@ export interface CoreTodoRecord {
   isOverdue: boolean;
   toString: string;
   hash: string;
+  /**
+   * Round-trip flag, CP3b2c. Optional on the type so the shadow check keeps
+   * working against a package built before the parse-path fields existed; the
+   * read path requires it and falls back to TypeScript when it is absent.
+   */
+  datesInText?: boolean;
+  /** Round-trip flag, CP3b2c. See {@link datesInText}. */
+  completionDateInText?: boolean;
+  /** 0-based load-order id, CP3b2c. See {@link datesInText}. */
+  id?: number;
+}
+
+/**
+ * One parsed record the read path can rebuild a `Todo` from.
+ *
+ * The CP1 record plus exactly the three fields that cannot be recovered from
+ * the serialized line. A package without them (older build) is treated as
+ * unavailable and the TypeScript reader runs instead.
+ */
+export type CoreParseTodoRecord = CoreTodoRecord & {
+  datesInText: boolean;
+  completionDateInText: boolean;
+  id: number;
+};
+
+/**
+ * The rejection object of the Rust parse envelope.
+ *
+ * Only `name`, `code` and `message` are always present; the numeric fields
+ * belong to the error variant, in the CP1 order (see
+ * `crates/thar-wasm/src/lib.rs`). The read path maps a code back to the
+ * TypeScript error class and confirms the numbers by regenerating its message,
+ * so a stale or truncated rejection falls back to the TypeScript validator.
+ */
+export interface CoreParseError {
+  name: string;
+  code: string;
+  message: string;
+  lineNumber?: number;
+  length?: number;
+  maxLineChars?: number;
+  lineCount?: number;
+  maxReadTodos?: number;
+  actualBytes?: number;
+  maxBytes?: number;
+  codePoint?: number;
 }
 
 /** Successful or rejected envelope from the Rust parse. */
 export type CoreParseResult =
   | { ok: true; todos: CoreTodoRecord[] }
-  | { ok: false; error: { name: string; code: string; message: string } };
+  | { ok: false; error: CoreParseError };
 
 /** The subset of the wasm-bindgen package this module uses. */
 interface CoreModule {
@@ -176,10 +237,11 @@ const errorName = (error: unknown): string =>
 /**
  * The requested implementation, from `THAR_CORE=ts|rust`.
  *
- * `rust` opts into the Rust row builder for the main list
- * ({@link buildRowsWithCore}); the TypeScript `sortByImportance → filterHidden
- * → filterBySearch → createIndexes` path stays the fallback and remains the
- * default. `ts`, an unset variable and anything else mean `ts`.
+ * `rust` opts into the Rust parse ({@link parseTodosWithCore}) and the Rust row
+ * builder for the main list ({@link buildRowsWithCore}); the TypeScript
+ * `validateTodoFileContent → new Todo` reader and the `sortByImportance →
+ * filterHidden → filterBySearch → createIndexes` pipeline stay the fallback and
+ * remain the default. `ts`, an unset variable and anything else mean `ts`.
  */
 export const getCoreMode = (): CoreMode =>
   process.env.THAR_CORE === "rust" ? "rust" : "ts";
@@ -227,6 +289,13 @@ const isNullableString = (value: unknown): value is string | null =>
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
 
+const isNonNegativeInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0;
+
+/** A 1-based line number: the guard's `index` starts at 1. */
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1;
+
 /** One `[key, value]` pair of the CP1 `tags` field. */
 const isTagPair = (value: unknown): value is [string, string | string[]] =>
   Array.isArray(value) &&
@@ -260,7 +329,14 @@ const isCoreTodoRecord = (value: unknown): value is CoreTodoRecord => {
     typeof record.isVisibleInOverview === "boolean" &&
     typeof record.isOverdue === "boolean" &&
     typeof record.toString === "string" &&
-    typeof record.hash === "string"
+    typeof record.hash === "string" &&
+    // CP3b2c fields: accepted when present, required by the read-path
+    // normalizer. The shadow check keeps working with an older package.
+    (record.datesInText === undefined ||
+      typeof record.datesInText === "boolean") &&
+    (record.completionDateInText === undefined ||
+      typeof record.completionDateInText === "boolean") &&
+    (record.id === undefined || isNonNegativeInteger(record.id))
   );
 };
 
@@ -337,6 +413,280 @@ export const parseFileWithCore = (
     }
     return undefined;
   }
+};
+
+/** Local calendar day, matching `startOfDay(new Date())` in `logic/todo.ts`. */
+export const todayFromClock = (): string =>
+  formatDateTag(startOfDay(new Date()));
+
+/**
+ * Whether the first real read-path parse problem has been reported.
+ *
+ * A todo file is loaded on every change and on startup; a package that cannot
+ * rebuild the list would otherwise log on every load. One bounded line per
+ * process is enough to notice, and the TypeScript reader keeps running.
+ */
+let parseLogged = false;
+
+/** One bounded, content-free fallback line. */
+const logParseFallback = (reason: string): void => {
+  if (parseLogged) return;
+  parseLogged = true;
+  debugLog(`thar core: ${reason}; using the TypeScript reader`);
+};
+
+const DATE_TAG_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const PRIORITY_PATTERN = /^[A-Z]$/;
+
+/** The result of reading one wire date field. */
+type CoreDateRead = { ok: true; date: Date | undefined } | { ok: false };
+
+/**
+ * Normalize one `completionDate`/`creationDate` field.
+ *
+ * A date must be the exact `YYYY-MM-DD` calendar day the TypeScript parser
+ * would produce, so a lenient or lossy value is a malformed record rather than
+ * a silently shifted date.
+ */
+const readRecordDate = (value: string | null): CoreDateRead => {
+  if (value === null) return { ok: true, date: undefined };
+  if (!DATE_TAG_PATTERN.test(value)) return { ok: false };
+  const date = parseDateTag(value);
+  if (date === undefined || formatDateTag(date) !== value) {
+    return { ok: false };
+  }
+  return { ok: true, date };
+};
+
+/**
+ * Normalize the ordered `[key, value]` tag pairs into the object `Todo` uses.
+ *
+ * Object keys preserve insertion order, which is the serialization order. A
+ * duplicate key cannot come from the Rust parser (it groups repeated tags into
+ * an array), so it means the envelope is wrong; so does an empty key/value,
+ * which no scanned line can produce.
+ */
+const readRecordTags = (
+  pairs: [string, string | string[]][],
+): Record<string, string | string[]> | undefined => {
+  const tags: Record<string, string | string[]> = {};
+  for (const [key, value] of pairs) {
+    if (key.length === 0) return undefined;
+    if (Object.hasOwn(tags, key)) return undefined;
+    if (typeof value === "string") {
+      if (value.length === 0) return undefined;
+      tags[key] = value;
+    } else {
+      if (value.length === 0 || value.some((item) => item.length === 0)) {
+        return undefined;
+      }
+      tags[key] = [...value];
+    }
+  }
+  return tags;
+};
+
+/**
+ * Validate one parse record and turn it into typed `TodoParts`.
+ *
+ * Returns `undefined` for anything unexpected — a missing flag or id, an
+ * invalid priority or calendar date, a duplicate or empty tag, a state that
+ * disagrees with `isDone`, or a `hash` that is not the serialized line. The
+ * caller then falls back to the TypeScript reader rather than accepting a
+ * todo the app would serialize differently.
+ */
+export const parseRecordToTodoParts = (
+  record: CoreTodoRecord,
+): TodoParts | undefined => {
+  if (!isCoreTodoRecord(record)) return undefined;
+  if (
+    typeof record.datesInText !== "boolean" ||
+    typeof record.completionDateInText !== "boolean" ||
+    !isNonNegativeInteger(record.id)
+  ) {
+    return undefined;
+  }
+  if (record.hash !== record.toString) return undefined;
+
+  const completion = readRecordDate(record.completionDate);
+  const creation = readRecordDate(record.creationDate);
+  if (!completion.ok || !creation.ok) return undefined;
+
+  let priority: UpperCaseLetter | undefined;
+  if (record.priority !== null) {
+    if (!PRIORITY_PATTERN.test(record.priority)) return undefined;
+    priority = record.priority as UpperCaseLetter;
+  }
+
+  const tags = readRecordTags(record.tags);
+  if (tags === undefined) return undefined;
+
+  // A literal completion date is a leading token in `text`, so the flag
+  // without a date (or a `done` flag that disagrees with the state) is a
+  // malformed record.
+  if (record.completionDateInText && completion.date === undefined) {
+    return undefined;
+  }
+  const state =
+    record.state === "done" ? TodoStateEnum.done : TodoStateEnum.todo;
+  if (record.isDone !== (state === TodoStateEnum.done)) return undefined;
+
+  return {
+    text: record.text,
+    state,
+    priority,
+    completionDate: completion.date,
+    creationDate: creation.date,
+    projects: [...record.projects],
+    contexts: [...record.contexts],
+    tags,
+    datesInText: record.datesInText,
+    completionDateInText: record.completionDateInText,
+  };
+};
+
+/** The number of lines the TypeScript reader keeps (non-blank, in order). */
+const nonBlankLineCount = (text: string): number =>
+  text
+    .split("\n")
+    .reduce((count, line) => (line.trim().length > 0 ? count + 1 : count), 0);
+
+/**
+ * Map a Rust rejection back to the exact TypeScript error.
+ *
+ * The numeric fields are re-checked by regenerating the TypeScript message: a
+ * reader error's message embeds its line, length or byte count, so a match
+ * proves the numbers are the ones the oracle would have reported. Any mismatch
+ * returns `undefined` and the caller runs the TypeScript validator, which
+ * throws the true error.
+ */
+const coreValidationError = (
+  error: CoreParseError,
+): TodoFileValidationError | undefined => {
+  let mapped: TodoFileValidationError;
+  switch (error.code) {
+    case "FILE_TOO_LARGE":
+      if (
+        !isPositiveInteger(error.actualBytes) ||
+        !isPositiveInteger(error.maxBytes)
+      ) {
+        return undefined;
+      }
+      mapped = new TodoFileTooLargeError(error.actualBytes, error.maxBytes);
+      break;
+    case "TOO_MANY_LINES":
+      if (
+        !isPositiveInteger(error.lineCount) ||
+        !isPositiveInteger(error.maxReadTodos)
+      ) {
+        return undefined;
+      }
+      mapped = new TodoLineCountLimitError(error.lineCount, error.maxReadTodos);
+      break;
+    case "LINE_TOO_LONG":
+      if (
+        !isPositiveInteger(error.lineNumber) ||
+        !isNonNegativeInteger(error.length) ||
+        !isPositiveInteger(error.maxLineChars)
+      ) {
+        return undefined;
+      }
+      mapped = new TodoLineLengthLimitError(
+        error.lineNumber,
+        error.length,
+        error.maxLineChars,
+      );
+      break;
+    case "CONTROL_CHARACTER":
+      if (
+        !isPositiveInteger(error.lineNumber) ||
+        !isNonNegativeInteger(error.codePoint)
+      ) {
+        return undefined;
+      }
+      mapped = new TodoControlCharacterError(error.lineNumber, error.codePoint);
+      break;
+    default:
+      return undefined;
+  }
+  return mapped.message === error.message ? mapped : undefined;
+};
+
+/**
+ * `THAR_CORE=rust`: parse the todo file with the Rust core and rebuild the
+ * list as real {@link Todo} instances.
+ *
+ * This is the wired read path (CP3b2c). One `parseFileWithLimits` call replaces
+ * the TypeScript `validateTodoFileContent → filter(blank) → new Todo(line)`
+ * chain:
+ *
+ * - a legitimate limit/control rejection is mapped back to the same
+ *   `TodoFileValidationError` subclass, message and fields the TypeScript
+ *   validator would have thrown, so the user sees no difference;
+ * - every record is validated and rebuilt through `Todo.fromParts`, so tags
+ *   stay array-valued and the two round-trip flags survive without a second
+ *   parse;
+ * - the record count must equal the file's non-blank line count, each `id`
+ *   must be its array position, and each rebuilt line must equal the record's
+ *   `toString`/`hash`, so a dropped, reordered or lossy envelope falls back
+ *   instead of changing the list;
+ * - `undefined` means "use the TypeScript reader": `ts` mode, a missing or
+ *   broken package, a malformed envelope, a thrown error, a rejection the
+ *   mapper cannot prove, or any record/count/order mismatch. The first such
+ *   problem in a process logs one bounded, content-free line.
+ *
+ * `today` is the local calendar day; it only affects the envelope's
+ * `isOverdue`/`isVisibleInOverview` fields, which the reconstructed todo
+ * recomputes from its own clock-sensitive getters. `limits` must be the
+ * effective `ReadLimits` of the load, exactly as for the TypeScript reader.
+ */
+export const parseTodosWithCore = (
+  text: string,
+  today: string,
+  limits: ReadLimits,
+): Todos | undefined => {
+  if (getCoreMode() !== "rust") return undefined;
+
+  const parsed = parseFileWithCore(text, today, limits);
+  if (!parsed) return undefined;
+
+  if (!parsed.ok) {
+    const mapped = coreValidationError(parsed.error);
+    if (mapped) throw mapped;
+    logParseFallback(`rejected ${parsed.error.name}/${parsed.error.code}`);
+    return undefined;
+  }
+
+  const expected = nonBlankLineCount(text);
+  if (parsed.todos.length !== expected) {
+    logParseFallback(
+      `parseFile returned ${parsed.todos.length} record(s) for ${expected} line(s)`,
+    );
+    return undefined;
+  }
+
+  const todos: Todos = [];
+  for (let index = 0; index < parsed.todos.length; index++) {
+    const record = parsed.todos[index];
+    if (record.id !== index) {
+      logParseFallback(
+        `parseFile record ${index} has load id ${String(record.id)}`,
+      );
+      return undefined;
+    }
+    const parts = parseRecordToTodoParts(record);
+    if (!parts) {
+      logParseFallback(`parseFile record ${index} is malformed`);
+      return undefined;
+    }
+    const todo = Todo.fromParts(parts);
+    if (todo.toString() !== record.toString || todo.getHash() !== record.hash) {
+      logParseFallback(`parseFile record ${index} does not round-trip`);
+      return undefined;
+    }
+    todos.push(todo);
+  }
+  return todos;
 };
 
 /**
@@ -476,13 +826,6 @@ const rowInputFor = (
   rowInputCache.set(todos, parts);
   return parts;
 };
-
-const isNonNegativeInteger = (value: unknown): value is number =>
-  typeof value === "number" && Number.isInteger(value) && value >= 0;
-
-/** A 1-based line number: the guard's `index` starts at 1. */
-const isPositiveInteger = (value: unknown): value is number =>
-  typeof value === "number" && Number.isInteger(value) && value >= 1;
 
 /**
  * One structural read of a `buildRows` response.
@@ -1077,9 +1420,6 @@ interface ShadowRejected {
 
 type ShadowRecord = ShadowMismatch | ShadowRejected;
 
-/** Local calendar day, matching `startOfDay(new Date())` in `logic/todo.ts`. */
-const todayFromClock = (): string => formatDateTag(startOfDay(new Date()));
-
 /** Stable, content-free digest of one serialized todo line. */
 const shortHash = (line: string): string =>
   createHash("sha256")
@@ -1207,6 +1547,11 @@ const appendShadowRecord = (record: ShadowRecord): void => {
  * here may throw: a broken package or an unwritable cache path only produces one
  * debug line, and the TypeScript result is always what the app keeps using.
  *
+ * Superseded in `THAR_CORE=rust` mode: the wired read path already parsed with
+ * Rust ({@link parseTodosWithCore}), so the reader does not call this at all
+ * and no second parse happens. It remains the differential check for `ts`
+ * mode, where no Rust parse would otherwise run.
+ *
  * The record is written **per load**, not once per process: a file that keeps
  * disagreeing appends one record on every load, and the 64 KiB cap eventually
  * truncates the oldest ones. That is deliberate for the CP2 dogfood — the log
@@ -1263,6 +1608,7 @@ export const resetCoreBridgeForTests = (): void => {
   coreModule = undefined;
   packageLogged = false;
   adapterLogged = false;
+  parseLogged = false;
   rowBuilderLogged = false;
   serializerLogged = false;
   injectedRowBuilder = undefined;

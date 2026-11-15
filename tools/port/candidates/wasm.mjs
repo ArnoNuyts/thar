@@ -165,6 +165,35 @@ const contractError = (error) => {
   return record;
 };
 
+/**
+ * The CP1 contract's record field set, in order.
+ *
+ * `parseFile` also returns the two round-trip flags and the load-order id
+ * (CP3b2c's read path needs them), but CP1 pins the parsed field set below.
+ * Projecting explicitly keeps the frozen corpus contract byte-identical while
+ * the envelope grows; a new field is a deliberate decision here, not a silent
+ * diff.
+ */
+const CP1_RECORD_FIELDS = [
+  "text",
+  "state",
+  "priority",
+  "completionDate",
+  "creationDate",
+  "projects",
+  "contexts",
+  "tags",
+  "isDone",
+  "isHidden",
+  "isVisibleInOverview",
+  "isOverdue",
+  "toString",
+  "hash",
+];
+
+const contractTodo = (todo) =>
+  Object.fromEntries(CP1_RECORD_FIELDS.map((field) => [field, todo[field]]));
+
 const recordFor = (fixture, raw, core, clock, today, limits, readLimits) => {
   const sha256 = sha256Hex(raw);
   // `Buffer#toString` decodes lossily (U+FFFD), exactly like the Node reader.
@@ -200,7 +229,7 @@ const recordFor = (fixture, raw, core, clock, today, limits, readLimits) => {
     };
   }
 
-  const todos = envelope.todos;
+  const todos = envelope.todos.map(contractTodo);
   // CP1 defines the write shape as `todos.map(toString).join("\n") + "\n"`.
   const serialized = todos.map((todo) => todo.toString).join("\n") + "\n";
 

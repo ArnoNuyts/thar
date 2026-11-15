@@ -23,10 +23,14 @@
 //! A record uses the CP1 contract field names and order exactly (`text`,
 //! `state`, `priority`, `completionDate`, `creationDate`, `projects`,
 //! `contexts`, `tags`, `isDone`, `isHidden`, `isVisibleInOverview`,
-//! `isOverdue`, `toString`, `hash`). The error object uses the contract order
-//! too: `name`, `code`, the numeric fields the variant carries (in the CP1
-//! order `lineNumber`, `length`, `maxLineChars`, `lineCount`, `maxReadTodos`,
-//! `actualBytes`, `maxBytes`, `codePoint`), then `message`.
+//! `isOverdue`, `toString`, `hash`), followed by the three fields a host needs
+//! to rebuild the identical todo without re-parsing the line: `datesInText`,
+//! `completionDateInText` and `id` (the 0-based load order). CP1 pins only the
+//! first fourteen; its candidate projects exactly those. The error object uses
+//! the contract order too: `name`, `code`, the numeric fields the variant
+//! carries (in the CP1 order `lineNumber`, `length`, `maxLineChars`,
+//! `lineCount`, `maxReadTodos`, `actualBytes`, `maxBytes`, `codePoint`), then
+//! `message`.
 //!
 //! [`build_rows`] takes a structured request (documented in the `rows` module)
 //! and answers with
@@ -369,6 +373,17 @@ fn push_record(out: &mut String, todo: &Todo, today: TodoDate) {
     push_json_string(out, &line);
     out.push_str(",\"hash\":");
     push_json_string(out, &line);
+
+    // Beyond the CP1 record set: the two round-trip flags cannot be recovered
+    // from the serialized line, and the load-order id is what lets a host
+    // reject an envelope whose records were reordered. The read path rebuilds
+    // a `Todo` from these fields instead of parsing the line a second time.
+    out.push_str(",\"datesInText\":");
+    push_json_bool(out, todo.dates_in_text);
+    out.push_str(",\"completionDateInText\":");
+    push_json_bool(out, todo.completion_date_in_text);
+    out.push_str(",\"id\":");
+    push_json_number(out, todo.id.value());
     out.push('}');
 }
 
@@ -485,13 +500,15 @@ mod tests {
              \"projects\":[],\"contexts\":[],\"tags\":[],\
              \"isDone\":false,\"isHidden\":false,\
              \"isVisibleInOverview\":true,\"isOverdue\":false,\
-             \"toString\":\"one\",\"hash\":\"one\"},\
+             \"toString\":\"one\",\"hash\":\"one\",\
+             \"datesInText\":false,\"completionDateInText\":false,\"id\":0},\
              {\"text\":\"two\",\"state\":\"todo\",\"priority\":null,\
              \"completionDate\":null,\"creationDate\":null,\
              \"projects\":[],\"contexts\":[],\"tags\":[],\
              \"isDone\":false,\"isHidden\":false,\
              \"isVisibleInOverview\":true,\"isOverdue\":false,\
-             \"toString\":\"two\",\"hash\":\"two\"}]}"
+             \"toString\":\"two\",\"hash\":\"two\",\
+             \"datesInText\":false,\"completionDateInText\":false,\"id\":1}]}"
         );
     }
 
@@ -527,6 +544,28 @@ mod tests {
         assert_eq!(record["isVisibleInOverview"], false);
         assert_eq!(record["isOverdue"], true);
         assert_eq!(record["toString"], record["hash"]);
+    }
+
+    #[test]
+    fn emits_the_round_trip_flags_and_the_load_order_id() {
+        let json = parse(
+            "x 2023-02-29 impossible completion date stays literal\n\
+             x 2024-03-02 2024-03-01 done\n\
+             plain\n",
+            "2026-11-15",
+        );
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let todos = value["todos"].as_array().expect("records");
+
+        // A line whose dates stayed literal marks both flags, and the id is
+        // the load order, not the physical line.
+        assert_eq!(todos[0]["datesInText"], true);
+        assert_eq!(todos[0]["completionDateInText"], false);
+        assert_eq!(todos[0]["id"], 0);
+        assert_eq!(todos[1]["datesInText"], false);
+        assert_eq!(todos[1]["completionDateInText"], false);
+        assert_eq!(todos[1]["id"], 1);
+        assert_eq!(todos[2]["id"], 2);
     }
 
     #[test]
