@@ -386,6 +386,7 @@ fn render_action_bar(frame: &mut Frame, app: &App, layout: Layout) {
     let load_error = app.load_error.as_deref().filter(|_| !app.rows().is_empty());
     let message = toast
         .or(load_error)
+        .or(app.save_error.as_deref())
         .map(|text| bound(sanitize_for_display(text), status_limit));
 
     let mut right = Vec::new();

@@ -132,6 +132,7 @@ mod tests {
 
     #[test]
     fn replaces_a_file_and_preserves_mode() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let directory = temp_dir("atomic-replace");
         let path = directory.join("todo.txt");
