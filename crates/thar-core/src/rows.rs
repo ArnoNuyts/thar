@@ -14,28 +14,59 @@
 //! navigation model, not a rendering detail: mouse coordinates and scroll
 //! padding count the header rows too.
 //!
+//! # Row building
+//!
+//! [`build_rows`] composes the pieces the host runs on every search keystroke:
+//! [`sort_by_importance`] → [`filter_hidden`] (unless hidden todos are shown) →
+//! [`filter_by_search`] → [`create_rows`]. It returns a [`Rows`] that owns the
+//! row list plus the ordered input indexes behind the todo rows, so the host
+//! maps rows back to its own objects without a second lookup pass.
+//!
+//! Search input is host-normalized: [`RowInput::views`] holds one
+//! [`SearchView`] per todo, already lowercased by the host, and
+//! [`RowInput::terms`] holds already-extracted terms. Empty `terms` match
+//! everything. Contexts collate with the en-US ICU order of
+//! [`sort_by_importance`] (see `docs/rust-port/PLAN.md` §13).
+//!
+//! Names the programme supplies (project/context/tag names that never come out
+//! of a `todo.txt` line) are **opaque** here: the row builder does not
+//! normalize, validate, or collate anything it did not parse itself. They
+//! become part of the contract in CP3b2/CP4.
+//!
 //! # Example
 //!
 //! ```
-//! use thar_core::{NONE_CONTEXT, Row, Todo, TodoId, create_rows};
+//! use thar_core::{
+//!     NONE_CONTEXT, Row, SearchView, Todo, TodoDate, TodoId, build_rows,
+//! };
 //!
 //! let todos = vec![
 //!     Todo::parse_line("one @home", TodoId::new(0)),
 //!     Todo::parse_line("two", TodoId::new(1)),
 //! ];
-//! let rows = create_rows(todos.iter());
+//! let views = [
+//!     SearchView { text: "one @home", contexts: &["home"], projects: &[] },
+//!     SearchView { text: "two", contexts: &[], projects: &[] },
+//! ];
+//! let today = TodoDate::parse("2026-11-15").expect("a valid date");
+//! let rows = build_rows(&todos, &views, &[], false, today)
+//!     .expect("views and todos are aligned");
+//! // No first context sorts first, so `two` leads with the `None` header.
 //! assert_eq!(
-//!     rows,
-//!     vec![
-//!         Row::Context { name: "home", todo_count: 1 },
-//!         Row::Todo { todo: &todos[0], number: 1 },
+//!     rows.rows(),
+//!     [
 //!         Row::Context { name: NONE_CONTEXT, todo_count: 1 },
-//!         Row::Todo { todo: &todos[1], number: 2 },
+//!         Row::Todo { todo: &todos[1], number: 1 },
+//!         Row::Context { name: "home", todo_count: 1 },
+//!         Row::Todo { todo: &todos[0], number: 2 },
 //!     ]
 //! );
+//! assert_eq!(rows.todo_indexes(), [1, 0]);
 //! ```
 
+use crate::date::TodoDate;
 use crate::model::{Todo, TodoId};
+use crate::query::{SearchView, sort_by_importance, view_matches};
 
 /// Header name for the group of todos without a context.
 pub const NONE_CONTEXT: &str = "None";
@@ -77,6 +108,27 @@ impl Row<'_> {
 }
 
 /// Build the row model for `todos`, which must already be sorted and filtered.
+///
+/// # Example
+///
+/// ```
+/// use thar_core::{NONE_CONTEXT, Row, Todo, TodoId, create_rows};
+///
+/// let todos = vec![
+///     Todo::parse_line("one @home", TodoId::new(0)),
+///     Todo::parse_line("two", TodoId::new(1)),
+/// ];
+/// let rows = create_rows(todos.iter());
+/// assert_eq!(
+///     rows,
+///     vec![
+///         Row::Context { name: "home", todo_count: 1 },
+///         Row::Todo { todo: &todos[0], number: 1 },
+///         Row::Context { name: NONE_CONTEXT, todo_count: 1 },
+///         Row::Todo { todo: &todos[1], number: 2 },
+///     ]
+/// );
+/// ```
 #[must_use]
 pub fn create_rows<'a>(todos: impl IntoIterator<Item = &'a Todo>) -> Vec<Row<'a>> {
     let mut rows: Vec<Row<'a>> = Vec::new();
@@ -136,9 +188,179 @@ impl<'a> Group<'a> {
     }
 }
 
+/// A complete row-building request.
+///
+/// `views` must be aligned with `todos`: `views[i]` is the host-normalized
+/// search input for `todos[i]`. Only the query changes per keystroke, so the
+/// host builds the views once per load or mutation and reuses them.
+///
+/// The views borrow their own strings, so they do not have to live as long as
+/// the todos: the built rows only reference the todos.
+#[derive(Clone, Copy, Debug)]
+pub struct RowInput<'todos, 'views> {
+    /// Todos in load order, with their ids assigned by the host.
+    pub todos: &'todos [Todo],
+    /// One host-normalized search view per todo, in the same order.
+    pub views: &'views [SearchView<'views>],
+    /// Host-normalized search terms; empty matches everything.
+    pub terms: &'views [&'views str],
+    /// True to keep hidden todos (the oracle's `showHidden` toggle).
+    pub show_hidden: bool,
+    /// Local calendar day used by the overdue and threshold rules.
+    pub today: TodoDate,
+}
+
+/// A built row model.
+///
+/// The row list is exactly what [`create_rows`] produces for the visible,
+/// sorted, searched todos. [`Rows::todo_indexes`] is the same list spelled out
+/// as input indexes, which is what the host needs to map a row back to its own
+/// todo objects.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rows<'a> {
+    rows: Vec<Row<'a>>,
+    todo_indexes: Vec<usize>,
+}
+
+impl<'a> Rows<'a> {
+    /// The rows, headers included.
+    #[must_use]
+    pub fn rows(&self) -> &[Row<'a>] {
+        &self.rows
+    }
+
+    /// Input indexes of the todo rows, in row order.
+    ///
+    /// There is exactly one entry per [`Row::Todo`], so the n-th todo row
+    /// carries `todo_indexes()[n - 1]` (todo numbers are 1-based). The slice is
+    /// the sorted, filtered, searched order, which is also the order the
+    /// TypeScript `createIndexes` input has.
+    #[must_use]
+    pub fn todo_indexes(&self) -> &[usize] {
+        &self.todo_indexes
+    }
+
+    /// True when no row was produced (an empty visible list).
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    /// Number of rows, headers included.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+}
+
+/// Why a row build was rejected before producing any rows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowError {
+    /// `views` is not aligned with `todos`.
+    ///
+    /// The host owns the search views; a mismatch means it built them for a
+    /// different list, so no row could be trusted.
+    ViewCountMismatch {
+        /// Number of todos supplied.
+        todos: usize,
+        /// Number of search views supplied.
+        views: usize,
+    },
+}
+
+impl core::fmt::Display for RowError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::ViewCountMismatch { todos, views } => write!(
+                f,
+                "search views ({views}) must be aligned with todos ({todos})"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RowError {}
+
+impl<'todos, 'views> RowInput<'todos, 'views> {
+    /// Build the rows for this request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RowError::ViewCountMismatch`] when `views` is not aligned with
+    /// `todos`; nothing else can fail.
+    pub fn build(&self) -> Result<Rows<'todos>, RowError> {
+        build_rows(
+            self.todos,
+            self.views,
+            self.terms,
+            self.show_hidden,
+            self.today,
+        )
+    }
+}
+
+/// Sort, filter, search, and group a todo list into rows.
+///
+/// This is the host's per-keystroke composition (`sortByImportance` →
+/// `filterHidden` unless hidden todos are shown → `filterBySearch` →
+/// `createIndexes`), kept in one place so the order of the stages cannot drift
+/// between callers.
+///
+/// The returned rows borrow `todos` only; the views and terms are read during
+/// the call, so a caller can free them afterwards.
+///
+/// # Errors
+///
+/// Returns [`RowError::ViewCountMismatch`] when `views` is not aligned with
+/// `todos`.
+pub fn build_rows<'todos, 'views>(
+    todos: &'todos [Todo],
+    views: &'views [SearchView<'views>],
+    terms: &[&str],
+    show_hidden: bool,
+    today: TodoDate,
+) -> Result<Rows<'todos>, RowError> {
+    if todos.len() != views.len() {
+        return Err(RowError::ViewCountMismatch {
+            todos: todos.len(),
+            views: views.len(),
+        });
+    }
+
+    let mut order = sort_by_importance(todos, today);
+
+    if !show_hidden {
+        // Same predicate as `filter_hidden`; applying it to the sorted indexes
+        // keeps the sort's order instead of scanning the list twice.
+        order.retain(|&index| {
+            todos
+                .get(index)
+                .is_some_and(|todo| todo.is_visible_in_overview(today))
+        });
+    }
+
+    if !terms.is_empty() {
+        // Same predicate as `filter_by_search`, applied to the sorted list so
+        // the views do not need to be copied into a second slice.
+        order.retain(|&index| {
+            views
+                .get(index)
+                .is_some_and(|view| view_matches(view, terms))
+        });
+    }
+
+    let rows = create_rows(order.iter().filter_map(|&index| todos.get(index)));
+
+    Ok(Rows {
+        rows,
+        todo_indexes: order,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{NONE_CONTEXT, Row, create_rows};
+    use super::{NONE_CONTEXT, Row, RowError, SearchView, build_rows, create_rows};
+    use crate::date::TodoDate;
     use crate::model::{Todo, TodoId};
 
     fn todos(lines: &[&str]) -> Vec<Todo> {
@@ -147,6 +369,16 @@ mod tests {
             .enumerate()
             .map(|(index, line)| Todo::parse_line(line, TodoId::new(index as u64)))
             .collect()
+    }
+
+    /// The host lowercases; ASCII inputs make `str::to_lowercase` equivalent.
+    /// These tests pass the views explicitly so the boundary stays visible.
+    fn view<'a>(text: &'a str, contexts: &'a [&'a str]) -> SearchView<'a> {
+        SearchView {
+            text,
+            contexts,
+            projects: &[],
+        }
     }
 
     fn headers<'a>(rows: &[Row<'a>]) -> Vec<(&'a str, usize)> {
@@ -240,5 +472,175 @@ mod tests {
                 number: 1
             }
         );
+    }
+
+    fn today() -> TodoDate {
+        TodoDate::parse("2026-11-15").expect("valid today")
+    }
+
+    #[test]
+    fn build_rows_composes_sort_hidden_search_and_grouping() {
+        let list = todos(&[
+            "x done @work",
+            "zebra @work",
+            "hidden @work h:1",
+            "future @work t:2026-11-16",
+            "alpha @home",
+            "beta",
+        ]);
+        let views = [
+            view("x done @work", &["work"]),
+            view("zebra @work", &["work"]),
+            view("hidden @work", &["work"]),
+            view("future @work", &["work"]),
+            view("alpha @home", &["home"]),
+            view("beta", &[]),
+        ];
+
+        // Both hidden todos are dropped by the default overview; done todos
+        // stay visible, so the search narrows to the open and done work todos.
+        let rows = build_rows(&list, &views, &["@work"], false, today()).expect("aligned");
+        assert_eq!(
+            rows.rows(),
+            [
+                Row::Context {
+                    name: "work",
+                    todo_count: 2
+                },
+                Row::Todo {
+                    todo: &list[1],
+                    number: 1
+                },
+                Row::Todo {
+                    todo: &list[0],
+                    number: 2
+                },
+            ]
+        );
+        assert_eq!(rows.todo_indexes(), [1, 0]);
+
+        // With hidden todos shown, `filterHidden` is skipped entirely: the
+        // hidden and future-threshold work todos come back too, and the done
+        // one sorts last inside the same group.
+        let shown = build_rows(&list, &views, &["@work"], true, today()).expect("aligned");
+        assert_eq!(
+            shown.rows(),
+            [
+                Row::Context {
+                    name: "work",
+                    todo_count: 4
+                },
+                Row::Todo {
+                    todo: &list[1],
+                    number: 1
+                },
+                Row::Todo {
+                    todo: &list[2],
+                    number: 2
+                },
+                Row::Todo {
+                    todo: &list[3],
+                    number: 3
+                },
+                Row::Todo {
+                    todo: &list[0],
+                    number: 4
+                },
+            ]
+        );
+        assert_eq!(shown.todo_indexes(), [1, 2, 3, 0]);
+    }
+
+    #[test]
+    fn build_rows_matches_every_term_and_empty_terms_match_all() {
+        let list = todos(&["buy milk @home", "walk dog", "buy bread"]);
+        let views = [
+            view("buy milk @home", &["home"]),
+            view("walk dog", &[]),
+            view("buy bread", &[]),
+        ];
+
+        let all = build_rows(&list, &views, &[], false, today()).expect("aligned");
+        // No first context sorts first, in input order, then `@home`.
+        assert_eq!(all.todo_indexes(), [1, 2, 0]);
+
+        let narrowed =
+            build_rows(&list, &views, &["buy", "milk"], false, today()).expect("aligned");
+        assert_eq!(narrowed.todo_indexes(), [0]);
+        assert_eq!(
+            narrowed.rows(),
+            [
+                Row::Context {
+                    name: "home",
+                    todo_count: 1
+                },
+                Row::Todo {
+                    todo: &list[0],
+                    number: 1
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn build_rows_reports_a_view_misalignment_instead_of_panicking() {
+        let list = todos(&["one", "two"]);
+        let views = [view("one", &[])];
+
+        assert_eq!(
+            build_rows(&list, &views, &[], false, today()).expect_err("misaligned"),
+            RowError::ViewCountMismatch { todos: 2, views: 1 }
+        );
+    }
+
+    #[test]
+    fn build_rows_keeps_the_none_header_and_numbers_across_groups() {
+        let list = todos(&["one", "two @home", "three"]);
+        let views = [
+            view("one", &[]),
+            view("two @home", &["home"]),
+            view("three", &[]),
+        ];
+
+        let rows = build_rows(&list, &views, &[], false, today()).expect("aligned");
+        assert_eq!(
+            rows.rows(),
+            [
+                Row::Context {
+                    name: NONE_CONTEXT,
+                    todo_count: 2
+                },
+                Row::Todo {
+                    todo: &list[0],
+                    number: 1
+                },
+                Row::Todo {
+                    todo: &list[2],
+                    number: 2
+                },
+                Row::Context {
+                    name: "home",
+                    todo_count: 1
+                },
+                Row::Todo {
+                    todo: &list[1],
+                    number: 3
+                },
+            ]
+        );
+        assert_eq!(rows.todo_indexes(), [0, 2, 1]);
+        assert_eq!(rows.len(), 5);
+        assert!(!rows.is_empty());
+    }
+
+    #[test]
+    fn build_rows_of_an_empty_list_has_no_rows() {
+        let list: Vec<Todo> = Vec::new();
+        let views: Vec<SearchView<'_>> = Vec::new();
+        let rows = build_rows(&list, &views, &[], false, today()).expect("aligned");
+
+        assert!(rows.is_empty());
+        assert_eq!(rows.len(), 0);
+        assert!(rows.todo_indexes().is_empty());
     }
 }

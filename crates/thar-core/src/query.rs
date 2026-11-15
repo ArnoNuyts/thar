@@ -223,25 +223,48 @@ pub fn filter_by_search(views: &[SearchView<'_>], terms: &[&str]) -> Vec<usize> 
 
     let mut matches = Vec::new();
     for (index, view) in views.iter().enumerate() {
-        let matched = terms.iter().all(|term| {
-            let normalized = term.strip_prefix(['@', '+']).unwrap_or(term);
-            view.text.contains(term)
-                || view
-                    .contexts
-                    .iter()
-                    .any(|context| context.contains(normalized))
-                || view
-                    .projects
-                    .iter()
-                    .any(|project| project.contains(normalized))
-        });
-
-        if matched {
+        if view_matches(view, terms) {
             matches.push(index);
         }
     }
 
     matches
+}
+
+/// True when `view` matches every term in `terms`.
+///
+/// This is the predicate [`filter_by_search`] applies, exposed on its own so a
+/// caller that already holds a filtered or reordered list (the row builder)
+/// can apply the same rule without materializing a second view slice.
+///
+/// `terms` are already normalized by the host; see [`SearchView`]. A term
+/// matches the view text directly, or a context/project after its leading `@`
+/// or `+` is removed. Empty `terms` match every view.
+///
+/// # Example
+///
+/// ```
+/// use thar_core::{SearchView, view_matches};
+///
+/// let view = SearchView { text: "buy milk +work", contexts: &[], projects: &["work"] };
+/// assert!(view_matches(&view, &["milk"]));
+/// assert!(view_matches(&view, &["@work"]));
+/// assert!(!view_matches(&view, &["eggs"]));
+/// ```
+#[must_use]
+pub fn view_matches(view: &SearchView<'_>, terms: &[&str]) -> bool {
+    terms.iter().all(|term| {
+        let normalized = term.strip_prefix(['@', '+']).unwrap_or(term);
+        view.text.contains(term)
+            || view
+                .contexts
+                .iter()
+                .any(|context| context.contains(normalized))
+            || view
+                .projects
+                .iter()
+                .any(|project| project.contains(normalized))
+    })
 }
 
 #[cfg(test)]
@@ -441,6 +464,26 @@ mod tests {
         assert_eq!(
             filter_by_search(&[view("aβ\u{0301}σ.", &[], &[])], &["aβ\u{0301}ς."]),
             Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn search_never_folds_case_itself() {
+        // The host lowercases both sides. A view that still has uppercase text
+        // and a term that still has uppercase letters must not match: folding
+        // here would hide a host that forgot to normalize, and Rust's mapping is
+        // not JavaScript's anyway (Final_Sigma, Unicode version).
+        assert_eq!(
+            filter_by_search(&[view("MILK", &[], &[])], &["milk"]),
+            Vec::<usize>::new()
+        );
+        assert_eq!(
+            filter_by_search(&[view("milk", &[], &[])], &["Milk"]),
+            Vec::<usize>::new()
+        );
+        assert_eq!(
+            filter_by_search(&[view("milk", &[], &[])], &["milk"]),
+            vec![0]
         );
     }
 

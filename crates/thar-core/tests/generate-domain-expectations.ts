@@ -358,6 +358,11 @@ const SEARCH_CASES: Array<{ line: string; query: string }> = [
   // Case_Ignorable characters, so the term and the text fold differently.
   { line: "aσ.", query: "aΣ.Α" },
   { line: "aβ\u0301σ.", query: "aβ\u0301Σ." },
+  // The reverse direction: the sigma sits in the line and the query carries
+  // the already-folded form. A port that folds one side but not the other is
+  // caught by one of the four shapes.
+  { line: "aΣ.Α", query: "aσ." },
+  { line: "aβ\u0301Σ.", query: "aβ\u0301σ." },
   { line: "aσ.\u0301a", query: "aΣ.\u0301a" },
   { line: "aς.", query: "aΣ." },
   // Term extraction: lowercasing, ASCII-only `\w` stripping, and prefixes.
