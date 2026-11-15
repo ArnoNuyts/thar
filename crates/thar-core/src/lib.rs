@@ -71,7 +71,10 @@ mod rows;
 mod scan;
 mod validation;
 
-pub use date::TodoDate;
+pub use date::{
+    TodoDate, add_days, add_months, add_weeks, add_years, days_in_month, end_of_month,
+    start_of_month, start_of_week_monday, weekday,
+};
 pub use error::CoreError;
 pub use input::{
     TodoInputError, TodoInputErrorCode, validate_default_batch, validate_todo_batch,

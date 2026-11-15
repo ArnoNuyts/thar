@@ -25,6 +25,10 @@ pub mod text;
 pub mod update;
 
 mod create_edit;
+mod date;
+mod priority;
+mod recurrence;
+mod tag;
 
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;

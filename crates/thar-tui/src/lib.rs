@@ -3,6 +3,7 @@
 //! The crate is split so each layer can be tested without a terminal:
 //!
 //! - [`app`] owns the state, the mutation API, and the save debounce;
+//! - [`calendar`] is the Monday-first month grid used by the date modal;
 //! - [`display`] escapes control characters before anything reaches the
 //!   terminal;
 //! - [`list`] builds the owned row model from the `thar-core` domain;
@@ -33,6 +34,7 @@
 #![deny(missing_docs)]
 
 pub mod app;
+pub mod calendar;
 pub mod display;
 pub mod editor;
 pub mod history;
