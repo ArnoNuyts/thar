@@ -80,21 +80,20 @@ impl Row<'_> {
 #[must_use]
 pub fn create_rows<'a>(todos: impl IntoIterator<Item = &'a Todo>) -> Vec<Row<'a>> {
     let mut rows: Vec<Row<'a>> = Vec::new();
-    // `Some(Some(name))` is a named group, `Some(None)` the uncategorised one,
-    // and the outer `None` means no group has started yet.
-    let mut group: Option<Option<&'a str>> = None;
+    let mut group = Group::Unstarted;
     let mut header = 0;
 
     for (number, todo) in todos.into_iter().enumerate() {
         let context = todo.contexts.first().map(String::as_str);
+        let next = Group::of(context);
 
-        if group != Some(context) {
+        if group != next {
             rows.push(Row::Context {
                 name: context.unwrap_or(NONE_CONTEXT),
                 todo_count: 0,
             });
             header = rows.len() - 1;
-            group = Some(context);
+            group = next;
         }
 
         rows.push(Row::Todo {
@@ -110,6 +109,31 @@ pub fn create_rows<'a>(todos: impl IntoIterator<Item = &'a Todo>) -> Vec<Row<'a>
     }
 
     rows
+}
+
+/// The context group the previous row belonged to.
+///
+/// `Unstarted` and `Uncategorised` both mean "no first context" but must not
+/// compare equal: the first uncategorised todo needs its `None` header, while a
+/// later uncategorised todo continues the same group.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Group<'a> {
+    /// No row has been emitted yet.
+    Unstarted,
+    /// The group of todos without a first context.
+    Uncategorised,
+    /// A group whose header shows this first context.
+    Named(&'a str),
+}
+
+impl<'a> Group<'a> {
+    /// The group a todo's first context belongs to.
+    fn of(context: Option<&'a str>) -> Self {
+        match context {
+            Some(name) => Self::Named(name),
+            None => Self::Uncategorised,
+        }
+    }
 }
 
 #[cfg(test)]

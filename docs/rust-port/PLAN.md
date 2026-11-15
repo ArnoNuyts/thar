@@ -366,12 +366,13 @@ recorded. Do not start the next checkpoint while one is red.
   builders in the merged module, so they clone on write and cannot mutate a
   borrowed todo; `Clone` deep-copies the project/context lists and tag arrays.
 - `tests/domain-expectations.json` pins the port against the TypeScript
-  oracle: per corpus fixture the sorted/visible indexes, the row encoding and
-  the search results for a fixed query list, plus a deterministic 1 000-todo
-  list, the collation probe, the case-folding table, the search-term table and
-  the recurrence/setter/toggle cases. The Rust tests read it and never
-  regenerate it; `tests/generate-domain-expectations.ts` documents how it was
-  produced.
+  oracle: per corpus fixture the sorted/visible indexes, the row encoding, the
+  per-todo normalized search view, and the search results for a fixed query
+  list replayed from host-normalized terms, plus a deterministic 1 000-todo
+  list, the collation probe, the search-case table (sigma and astral-dot
+  shapes) and the recurrence/setter/toggle cases. The Rust tests read it and
+  never regenerate it; `tests/generate-domain-expectations.ts` documents how it
+  was produced.
 - **Collation:** no host input is needed. Context names are scanned with
   `[\w.\-]+` (`A-Za-z0-9_.-`), and for that alphabet the ICU default order is
   `_ - . 0..9` then case-insensitive letters with lowercase before uppercase
@@ -380,15 +381,17 @@ recorded. Do not start the next checkpoint while one is red.
   and 485 strings. Priority comparison uses the same order restricted to
   `A`..`Z`. The oracle's order depends on the host locale/ICU version, so the
   expectations record Node and ICU and would need regeneration if the ICU
-  default order changed.
-- **Case folding:** `js_lowercase` matches `String.prototype.toLowerCase`
-  including the Greek final-sigma rule for directly adjacent cased letters.
-  JavaScript additionally skips case-ignorable characters (combining marks,
-  `.`, `:`, …) when deciding sigma; that residual cannot change a search
-  result, because the query normalizer strips every non-ASCII character from
-  the ends of a term, so a term never ends in `σ`/`ς` and only non-final
-  sigmas can match. The deviation is documented on `js_lowercase` and the
-  committed case-folding table covers the agreeing cases.
+  default order changed. CI and development run `en-US`; the locale assumption
+  is open decision 8 in §13.
+- **Case folding and search terms are host-provided.** `String.prototype.toLowerCase`
+  applies the Unicode `Final_Sigma` rule (skipping `Case_Ignorable` on both
+  sides) and `extractSearchTerms` is a JavaScript regex pipeline; Rust's
+  Unicode version can trail the host's. `thar-core` therefore takes
+  `SearchView`s (already lowercased text/contexts/projects) and
+  already-normalized terms instead of folding or splitting them. CP3b's
+  adapter computes one view per todo on load or mutation; only the terms change
+  per keystroke. The committed search cases cover the internal-final-sigma
+  shapes that a naive per-character fold gets wrong.
 - `reconcileNavState` is deliberately not ported: it keys its cache on object
   identity, which has no portable equivalent; the host knows whether the list
   changed and composes the pure helpers instead.
@@ -832,6 +835,14 @@ tightens the constants and the README together.
    Phase 7.
 7. **Browser build:** optional Ratzilla demo after Phase 7; do not let it
    block the native port.
+8. **Context collation locale:** `thar-core` implements the en-US ICU order for
+   the `[A-Za-z0-9_.-]` context alphabet; the TypeScript oracle calls
+   `localeCompare`, whose order depends on the host default locale. CI and
+   development machines run `en-US`. Before CP3b ships, either pin
+   `Intl.Collator("en-US")` in the oracle (and keep the comparator) or pass
+   host-computed context ranks across the boundary. Risk if left open: a
+   developer or user on another locale sees a different context order between
+   the TS and Rust paths.
 
 ## 14. Definition of done
 

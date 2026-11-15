@@ -33,8 +33,7 @@ pub struct SelectionRange {
 }
 
 /// `Math.max(min, Math.min(max, value))`.
-#[must_use]
-pub fn clamp(value: isize, min: isize, max: isize) -> isize {
+pub(crate) fn clamp(value: isize, min: isize, max: isize) -> isize {
     value.min(max).max(min)
 }
 
@@ -273,13 +272,23 @@ fn first_visible_matching(rows: &[Row<'_>], candidates: &[&Todo]) -> Option<Todo
 }
 
 /// Convert a row position to the signed arithmetic type used by the oracle.
+///
+/// Every value is a `Vec` length or a row index derived from one, so it fits an
+/// `isize` on every supported target: a `Vec` above `isize::MAX` elements cannot
+/// be allocated. The cast is still checked in debug builds so a future caller
+/// with synthetic input fails loudly instead of wrapping.
 fn row_index(value: usize) -> isize {
-    isize::try_from(value).unwrap_or(isize::MAX)
+    debug_assert!(
+        isize::try_from(value).is_ok(),
+        "row position {value} exceeds isize::MAX"
+    );
+    value as isize
 }
 
 /// Convert a clamped, non-negative value back to a row position.
 fn position(value: isize) -> usize {
-    usize::try_from(value).unwrap_or(0)
+    debug_assert!(value >= 0, "row position {value} is negative");
+    value as usize
 }
 
 #[cfg(test)]
