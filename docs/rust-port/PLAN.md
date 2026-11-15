@@ -43,6 +43,12 @@ All numbers below were measured on this machine with the app's own benchmark
 (`npx vite-node scripts/benchmark-list.tsx`, 120×40 fake terminal, arrow keys,
 200 keys, median of 3 runs) unless noted.
 
+> **CP0 updated these numbers.** [`baseline.md`](./baseline.md) §6 re-measures
+> every row on the same machine and is the authoritative pre-port baseline for
+> later checkpoints. Where the two differ (3 000-todo keypress, Ink/React at
+> 3 000, Node startup, the memory row), gate on `baseline.md`, not on the prose
+> figures below.
+
 | Path                                                     |  50 todos | 3 000 todos |            Share of keypress |
 | -------------------------------------------------------- | --------: | ----------: | ---------------------------: |
 | Wall p50 per key                                         |   22.1 ms |     29.9 ms |                            — |
@@ -67,7 +73,9 @@ Additional facts:
 
 **Conclusion:** the Todo model is not the bottleneck. The renderer is. The
 core port is for correctness, portability and the WASM path; the TUI port is
-what delivers the speed-up.
+what delivers the speed-up. [`baseline.md`](./baseline.md) is the CP0
+measurement of this conclusion, including a headline table, the startup split
+and the RSS breakdown.
 
 ### Performance targets
 
@@ -396,7 +404,7 @@ Deliverables:
 
 - [x] This plan and the checkpoint ladder (§5).
 - [ ] `testdata/port/` corpus and exact-byte characterization tests.
-- [ ] `docs/rust-port/baseline.md` with benchmark/startup/memory baselines.
+- [x] `docs/rust-port/baseline.md` with benchmark/startup/memory baselines.
 - [ ] TS-only differential harness with a seeded-bug proof.
 - [ ] Node CI job that runs the harness.
 
