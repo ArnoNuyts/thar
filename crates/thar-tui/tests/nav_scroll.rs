@@ -197,3 +197,20 @@ fn a_zero_row_list_leaves_the_offset_alone() {
     assert_eq!(app.offset, 0);
     assert!(app.visible_rows().is_empty());
 }
+
+#[test]
+fn focusing_or_blurring_an_already_visible_search_bar_keeps_the_viewport() {
+    // A non-empty query keeps the bar visible while the list owns focus, so
+    // focusing or blurring it does not change the list height. The wheel
+    // offset must survive, just like Ink only reconciles on a height change.
+    let mut app = with_tasks(40, 80, 10);
+    app.set_query("task");
+    nav::scroll(&mut app, 5);
+    let offset = app.offset;
+    assert!(offset > 0);
+
+    input::apply(&mut app, input::Command::SearchFocus);
+    assert_eq!(app.offset, offset);
+    input::apply(&mut app, input::Command::SearchBlur);
+    assert_eq!(app.offset, offset);
+}
