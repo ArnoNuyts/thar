@@ -314,12 +314,14 @@ export const compareContracts = (
   }
 
   for (let index = shared; index < actual.length; index++) {
+    collector.record = options.recordLabel?.(actual[index], index);
     collector.add(
       "<corpus>",
       childPath("records", index),
       undefined,
       fixtureNameOf(actual[index]),
     );
+    collector.record = undefined;
   }
 
   return {

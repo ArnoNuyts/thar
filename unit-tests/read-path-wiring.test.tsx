@@ -28,8 +28,8 @@ import { waitFor } from "./test-utils.ts";
 /**
  * CP3b2a: the main list uses the gated Rust row builder only when
  * `THAR_CORE=rust`, and the TypeScript indexes are the fallback for every
- * failure path. The injected builder is the CP3b1 stand-in until the real
- * WASM export lands.
+ * failure path. The injected builder keeps the hook test independent of a
+ * `pkg/` build; the real export is covered in `unit-tests/core-wasm.test.ts`.
  */
 
 const savedCore = process.env.THAR_CORE;

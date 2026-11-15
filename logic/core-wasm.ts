@@ -504,6 +504,10 @@ type CoreRowRead =
  * Only the merged contract's field names are accepted (`type`, `contextName`,
  * `todoCount`, `index`, `number`): a package that emits a different shape must
  * fall back, not be guessed at.
+ *
+ * The envelope's `order` array is deliberately ignored: the per-row `index` is
+ * the authoritative input position, and the grouping checks in
+ * {@link toIndexEntries} reject an order that disagrees with those indexes.
  */
 const readRowEnvelope = (raw: string): CoreRowRead => {
   const parsed: unknown = JSON.parse(raw);
@@ -678,21 +682,6 @@ export const buildRowsWithCore = (
   // second sort implementation.
   let builder = injectedRowBuilder;
   if (!builder) {
-    // The Rust sort implements en-US ICU. On a host whose `localeCompare`
-    // default differs, the same contexts can order differently, so falling back
-    // is a correctness guard (PLAN §13 decision 8), not a perf feature.
-    const locale = injectedCollatorLocale ?? defaultCollatorLocale();
-    if (!isEnglishCollator(locale)) {
-      if (!rowBuilderLogged) {
-        rowBuilderLogged = true;
-        debugLog(
-          `thar core: locale ${locale}, rust rows need en-US; ` +
-            "using the TypeScript row builder",
-        );
-      }
-      return undefined;
-    }
-
     const core = loadCoreModule();
     // `loadCoreModule` already logs the missing package once per process.
     if (!core) return undefined;
@@ -703,6 +692,22 @@ export const buildRowsWithCore = (
         rowBuilderLogged = true;
         debugLog(
           "thar core: buildRows is not exported; using the TypeScript row builder",
+        );
+      }
+      return undefined;
+    }
+
+    // The Rust sort implements en-US ICU. On a host whose `localeCompare`
+    // default differs, the same contexts can order differently, so falling back
+    // is a correctness guard (PLAN §13 decision 8), not a perf feature. Checked
+    // after the package so a missing build is the more actionable diagnostic.
+    const locale = injectedCollatorLocale ?? defaultCollatorLocale();
+    if (!isEnglishCollator(locale)) {
+      if (!rowBuilderLogged) {
+        rowBuilderLogged = true;
+        debugLog(
+          `thar core: locale ${locale}, rust rows need en-US; ` +
+            "using the TypeScript row builder",
         );
       }
       return undefined;
