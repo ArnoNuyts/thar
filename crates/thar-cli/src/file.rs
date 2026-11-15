@@ -15,6 +15,7 @@
 
 use std::fs::File;
 use std::io::{self, Read};
+use std::path::Path;
 
 use thar_core::{CoreError, ReadLimits, Todo, parse_file, validate_file_bytes};
 
@@ -90,11 +91,29 @@ pub fn load(path: &str) -> Result<LoadedFile, LoadError> {
 ///
 /// See [`load`].
 pub fn load_with_limits(path: &str, limits: &ReadLimits) -> Result<LoadedFile, LoadError> {
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(missing_file()),
-        Err(error) => return Err(LoadError::Io(error)),
-    };
+    match read_bytes(Path::new(path), limits) {
+        Ok(bytes) => Ok(LoadedFile {
+            todos: parse_bytes(&bytes, limits)?,
+            error: None,
+        }),
+        Err(LoadError::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(missing_file()),
+        Err(error) => Err(error),
+    }
+}
+
+/// Read the bytes of `path`, enforcing the byte limit, without decoding.
+///
+/// The reload path uses this so it can hold the exact bytes it parsed and make
+/// them the [`thar_store::SaveGuard`] baseline; [`load_with_limits`] is this
+/// plus [`parse_bytes`]. A missing file stays an error here: unlike the initial
+/// load, a delete after startup must not silently become an empty list.
+///
+/// # Errors
+///
+/// Returns [`LoadError::Io`] for a read failure and [`LoadError::Validation`]
+/// when the file is larger than `limits.max_file_bytes`.
+pub fn read_bytes(path: &Path, limits: &ReadLimits) -> Result<Vec<u8>, LoadError> {
+    let mut file = File::open(path).map_err(LoadError::Io)?;
 
     // Read one byte past the limit instead of trusting `metadata().len()`: a
     // FIFO or a growing file reports a small (or zero) length, and a stat ->
@@ -123,16 +142,30 @@ pub fn load_with_limits(path: &str, limits: &ReadLimits) -> Result<LoadedFile, L
     }
 
     validate_file_bytes(bytes.len() as u64, limits)?;
+    Ok(bytes)
+}
 
-    let text = String::from_utf8_lossy(&bytes);
+/// Decode and parse bytes read from a todo file.
+///
+/// Decoding is lossy, so invalid UTF-8 becomes `U+FFFD`, exactly like
+/// `String::from_utf8_lossy` on the Node side. The byte limit is checked again
+/// against the decoded text, because a lossy decode can grow past the on-disk
+/// byte count and `Buffer.byteLength(data, "utf8")` in the TypeScript reader
+/// measures the decoded text.
+///
+/// # Errors
+///
+/// Returns [`LoadError::Validation`] for a byte/line/character limit violation.
+pub fn parse_bytes(bytes: &[u8], limits: &ReadLimits) -> Result<Vec<Todo>, LoadError> {
+    validate_file_bytes(bytes.len() as u64, limits)?;
+
+    let text = String::from_utf8_lossy(bytes);
 
     // `Buffer.byteLength(data, "utf8")` in the TypeScript reader measures the
     // decoded text, so a lossy decode can grow past the on-disk byte count.
     validate_file_bytes(text.len() as u64, limits)?;
 
-    let todos = parse_file(&text, limits)?;
-
-    Ok(LoadedFile { todos, error: None })
+    Ok(parse_file(&text, limits)?)
 }
 
 fn missing_file() -> LoadedFile {

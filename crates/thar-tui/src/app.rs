@@ -193,6 +193,32 @@ impl App {
         crate::nav::reflow(self);
     }
 
+    /// Apply a successful file reload: replace the list and leave the read-only
+    /// recovery state.
+    ///
+    /// [`App::set_todos`] already clears both undo stacks, the pending save and
+    /// the save error; the external file wins over unsaved in-memory edits.
+    /// Clearing `load_error` re-enables writes through [`App::writable`], which
+    /// is the Ink app's recovery path after a fixed file.
+    pub fn reloaded(&mut self, todos: Vec<Todo>) {
+        self.set_todos(todos);
+        self.load_error = None;
+    }
+
+    /// Record a failed file reload.
+    ///
+    /// The last good list stays in memory, but it must not be written: the
+    /// pending save is cancelled and [`App::writable`] turns false until a
+    /// later reload succeeds. The message is already bounded by the caller and
+    /// is shown as one toast.
+    pub fn reload_failed(&mut self, message: impl Into<String>) {
+        let message = message.into();
+        self.load_error = Some(message.clone());
+        self.dirty = false;
+        self.dirty_at = None;
+        self.push_toast(message);
+    }
+
     /// Current terminal size and rows.
     #[must_use]
     pub fn layout(&self) -> Layout {

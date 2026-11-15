@@ -144,6 +144,19 @@ impl SaveGuard {
         self.last_bytes = bytes.clone();
         Ok(bytes)
     }
+
+    /// Adopt bytes the host has just read from disk as the save baseline.
+    ///
+    /// The file watcher reads a file once, decodes and parses those exact
+    /// bytes, and then hands them here. Re-reading the path inside the guard
+    /// would open a race in which the file changes again between the parse and
+    /// the baseline, so the reload path passes the bytes it parsed instead.
+    ///
+    /// This does not write anything; a caller that passes bytes which are not
+    /// the current file content would defeat the external-edit guard.
+    pub fn set_baseline(&mut self, bytes: Vec<u8>) {
+        self.last_bytes = bytes;
+    }
 }
 
 /// Create an empty todo file if it does not exist.

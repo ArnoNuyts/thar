@@ -13,8 +13,9 @@
 //! - [`clipboard`] shells out to the platform clipboard commands;
 //! - [`error`] is the bounded error type shown in the action bar.
 //!
-//! There is no watcher here yet: reloads and debouncing are host behaviour and
-//! arrive with the file-sync workstream.
+//! There is no watcher here. Reloads, debouncing and self-write suppression are
+//! host behaviour and live in `thar-cli::sync`; this crate only reads bytes and
+//! writes them back.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
