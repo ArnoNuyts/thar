@@ -123,7 +123,7 @@ fn cp7_editor_screenshot() {
     session.wait_text("Create new todo");
     session.send(b"buy oat milk for the week +th");
     session.wait_text("» buy oat milk for the week +th");
-    session.wait_text("│  +thar");
+    session.wait_text("│   +thar");
 
     let image = session.with_screen(svg);
     let svg_path = directory.join("cp7-editor.svg");
@@ -139,7 +139,7 @@ fn cp7_editor_screenshot() {
     // list, the second closes the screen, then `q` quits. The wait between the
     // two keeps crossterm from folding both bytes into one key event.
     session.send(ESC);
-    session.wait_no_text("│  +thar");
+    session.wait_no_text("│   +thar");
     session.send(ESC);
     session.wait_no_text("Create new todo");
     session.send(b"q");
