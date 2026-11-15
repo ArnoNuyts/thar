@@ -11,9 +11,9 @@
 //! 30-cell modal: 80×24 proves the vertically compact layout and 100×30 proves
 //! the frame the PTY screenshot uses.
 //!
-//! The modal chrome always contributes three rows above the body (the top
-//! border plus two padding rows) and two below, so a body of `n` rows is a
-//! block of `n + 5` lines and body row `i` is block line `3 + i`.
+//! The modal chrome always contributes three rows above the body (the outer
+//! padding, the title, and the content-box padding) and two below, so a body of
+//! `n` rows is a block of `n + 5` lines and body row `i` is block line `3 + i`.
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -59,17 +59,20 @@ fn screen_lines(backend: &TestBackend) -> Vec<String> {
         .collect()
 }
 
-/// The modal box: from the top border row through the bottom border row.
+/// The modal block: from the outer top padding row through the outer bottom
+/// padding row. The accent bar marks the title and body rows, so it locates the
+/// block without relying on a box border.
 fn modal_block(lines: &[String]) -> Vec<String> {
-    let start = lines
+    let first = lines
         .iter()
-        .position(|line| line.contains('┌'))
-        .unwrap_or_else(|| panic!("no modal top border:\n{}", lines.join("\n")));
-    let end = start
-        + lines[start..]
-            .iter()
-            .position(|line| line.contains('└'))
-            .unwrap_or_else(|| panic!("no modal bottom border:\n{}", lines.join("\n")));
+        .position(|line| line.contains('┃'))
+        .unwrap_or_else(|| panic!("no modal accent bar:\n{}", lines.join("\n")));
+    let last = lines
+        .iter()
+        .rposition(|line| line.contains('┃'))
+        .unwrap_or(first);
+    let start = first.saturating_sub(1);
+    let end = (last + 1).min(lines.len().saturating_sub(1));
     lines[start..=end].to_vec()
 }
 
@@ -107,23 +110,23 @@ fn the_due_date_list_matches_at_80x24() {
     assert_eq!(
         block,
         vec![
-            "                    ┌─────────────Set Due Date─────────────┐",
-            "                    │                                      │",
-            "                    │                                      │",
-            "                    │  » Today                             │",
-            "                    │    Tomorrow                          │",
-            "                    │    Next Week                         │",
-            "                    │    Next Month                        │",
-            "                    │    Custom                            │",
-            "                    │    Reset                             │",
-            "                    │                                      │",
-            "                    └──────────────────────────────────────┘",
+            "",
+            "                     ┃ Set Due Date",
+            "                     ┃",
+            "                     ┃  » Today",
+            "                     ┃    Tomorrow",
+            "                     ┃    Next Week",
+            "                     ┃    Next Month",
+            "                     ┃    Custom",
+            "                     ┃    Reset",
+            "                     ┃",
+            "",
         ],
         "the due list must match the 80x24 frame exactly"
     );
     // 50% of 80 is 40 cells, centred at column 20.
     assert!(
-        block[0].starts_with(&format!("{}┌", " ".repeat(20))),
+        block[1].starts_with(&format!("{}┃ Set Due Date", " ".repeat(21))),
         "{block:#?}"
     );
     assert!(
@@ -143,9 +146,9 @@ fn the_due_date_list_matches_at_80x24() {
     let buffer = terminal.backend().buffer();
     let top = lines
         .iter()
-        .position(|line| line.contains('┌'))
-        .expect("top");
-    let marker = &buffer[(23, u16::try_from(top + 3).expect("row"))];
+        .position(|line| line.contains('┃'))
+        .expect("title row");
+    let marker = &buffer[(24, u16::try_from(top + 2).expect("row"))];
     assert_eq!(marker.symbol(), "»");
     assert_eq!(marker.style().fg, Some(Color::Rgb(0xAF, 0x76, 0xB7)));
 }
@@ -161,25 +164,25 @@ fn the_calendar_step_matches_at_100x30() {
     assert_eq!(
         block,
         vec![
-            "                                   ┌────────Set Due Date────────┐",
-            "                                   │                            │",
-            "                                   │                            │",
-            "                                   │          May 2024          │",
-            "                                   │   Mo Tu We Th Fr Sa Su     │",
-            "                                   │   29 30  1  2  3  4  5     │",
-            "                                   │    6  7  8  9 10 11 12     │",
-            "                                   │   13 14 15 16 17 18 19     │",
-            "                                   │   20 21 22 23 24 25 26     │",
-            "                                   │   27 28 29 30 31  1  2     │",
-            "                                   │    Selected: 2024-05-06    │",
-            "                                   │                            │",
-            "                                   └────────────────────────────┘",
+            "",
+            "                                    ┃ Set Due Date",
+            "                                    ┃",
+            "                                    ┃         May 2024",
+            "                                    ┃   Mo Tu We Th Fr Sa Su",
+            "                                    ┃   29 30  1  2  3  4  5",
+            "                                    ┃    6  7  8  9 10 11 12",
+            "                                    ┃   13 14 15 16 17 18 19",
+            "                                    ┃   20 21 22 23 24 25 26",
+            "                                    ┃   27 28 29 30 31  1  2",
+            "                                    ┃   Selected: 2024-05-06",
+            "                                    ┃",
+            "",
         ],
         "the calendar must match the 100x30 frame exactly"
     );
-    // 30 cells wide, centred in 100: columns 35..64.
+    // 30 cells wide, centred in 100: columns 35..64, bar at 36.
     assert!(
-        block[0].starts_with(&format!("{}┌", " ".repeat(35))),
+        block[1].starts_with(&format!("{}┃ Set Due Date", " ".repeat(36))),
         "{block:#?}"
     );
 
@@ -217,10 +220,10 @@ fn the_priority_screen_matches_at_80x24() {
     let lines = draw(&app, 80, 24);
     let block = modal_block(&lines);
     assert_eq!(block.len(), 12, "{block:#?}");
-    assert!(block[0].contains("Set Priority"), "{block:#?}");
-    // 30 cells, centred: columns 25..54.
+    assert!(block[1].contains("Set Priority"), "{block:#?}");
+    // 30 cells, centred: columns 25..54, bar at 26.
     assert!(
-        block[0].starts_with(&format!("{}┌", " ".repeat(25))),
+        block[1].starts_with(&format!("{}┃ Set Priority", " ".repeat(26))),
         "{block:#?}"
     );
     assert!(block[3].contains("» A"), "{block:#?}");
@@ -237,7 +240,7 @@ fn the_recurrence_base_matches_at_80x24() {
     let lines = draw(&app, 80, 24);
     let block = modal_block(&lines);
     assert_eq!(block.len(), 10, "{block:#?}");
-    assert!(block[0].contains("Set Recurrence Base"), "{block:#?}");
+    assert!(block[1].contains("Set Recurrence Base"), "{block:#?}");
     for (index, label) in ["Daily", "Weekly", "Monthly", "Yearly", "Reset"]
         .iter()
         .enumerate()
@@ -259,7 +262,7 @@ fn the_recurrence_amount_matches_at_80x24() {
     let block = modal_block(&lines);
     assert_eq!(block.len(), 7, "{block:#?}");
     assert!(
-        block[0].contains("Set Recurrence Interval (Weekly)"),
+        block[1].contains("Set Recurrence Interval (Weekly)"),
         "{block:#?}"
     );
     assert!(block[3].contains("Every 3 week(s)"), "{block:#?}");
@@ -279,10 +282,10 @@ fn the_tag_editor_matches_at_100x30() {
     let lines = draw(&app, 100, 30);
     let block = modal_block(&lines);
     assert_eq!(block.len(), 9, "{block:#?}");
-    assert!(block[0].contains("Modify Projects"), "{block:#?}");
-    // 40 cells, centred: columns 30..69.
+    assert!(block[1].contains("Modify Projects"), "{block:#?}");
+    // 40 cells, centred: columns 30..69, bar at 31.
     assert!(
-        block[0].starts_with(&format!("{}┌", " ".repeat(30))),
+        block[1].starts_with(&format!("{}┃ Modify Projects", " ".repeat(31))),
         "{block:#?}"
     );
     assert!(block[3].contains("» New:"), "{block:#?}");
@@ -301,12 +304,12 @@ fn the_tag_editor_matches_at_100x30() {
     let top = u16::try_from(
         lines
             .iter()
-            .position(|line| line.contains('┌'))
-            .expect("top"),
+            .position(|line| line.contains('┃'))
+            .expect("title row"),
     )
     .expect("row");
-    let personal = &buffer[(35, top + 5)];
-    let work = &buffer[(35, top + 6)];
+    let personal = &buffer[(36, top + 4)];
+    let work = &buffer[(36, top + 5)];
     assert_eq!(personal.symbol(), "[");
     assert_eq!(personal.style().fg, Some(Color::Rgb(0xDD, 0xB1, 0x4D)));
     assert_eq!(work.symbol(), "[");
@@ -322,7 +325,7 @@ fn a_context_editor_matches_at_80x24() {
     let lines = draw(&app, 80, 24);
     let block = modal_block(&lines);
     assert_eq!(block.len(), 9, "{block:#?}");
-    assert!(block[0].contains("Modify Contexts"), "{block:#?}");
+    assert!(block[1].contains("Modify Contexts"), "{block:#?}");
     assert!(block[3].contains('@'), "{block:#?}");
     assert!(block[5].contains("[?] home"), "{block:#?}");
     assert!(block[6].contains("[x] office"), "{block:#?}");

@@ -133,12 +133,13 @@ impl ConfirmModal {
 
     /// Content width shared by wrapping and rendering.
     ///
-    /// The modal box keeps one border column plus one padding column on each
-    /// side, so the usable text is four columns narrower than the box.
+    /// The modal box keeps one outer padding column on each side, the
+    /// accent-bar column, and one content-padding column on each side, so the
+    /// usable text is five columns narrower than the box.
     fn content_width(&self) -> u16 {
         self.width_for()
             .resolve(self.terminal_width)
-            .saturating_sub(4)
+            .saturating_sub(5)
     }
 
     fn button_row(&self) -> u16 {
@@ -174,14 +175,6 @@ impl ConfirmModal {
         }
     }
 
-    /// Relative cell column inside the modal body for a 1-based mouse column.
-    fn relative_column(&self, rect: ModalRect, mouse: MouseInput) -> Option<u16> {
-        let column = mouse.x.checked_sub(1)?;
-        let start = rect.body.x;
-        let end = start.saturating_add(rect.body.width);
-        (start..end).contains(&column).then(|| column - start)
-    }
-
     /// Label-exact hover hit test, matching `getHoveredButtonIndex`.
     fn hovered_at(&self, rect: ModalRect, mouse: MouseInput) -> Option<usize> {
         let row = geometry::body_row(rect, mouse)?;
@@ -189,7 +182,7 @@ impl ConfirmModal {
             return None;
         }
         // The body has one pad column, so the labels start one cell in.
-        let column = self.relative_column(rect, mouse)?.checked_sub(1)?;
+        let column = geometry::body_column(rect, mouse)?.checked_sub(1)?;
 
         let content_width = rect.body.width.saturating_sub(2);
         let left_half = content_width / 2;
@@ -278,10 +271,16 @@ impl Modal for ConfirmModal {
                 if row != self.button_row() {
                     return Outcome::Continue;
                 }
-                let Some(column) = self.relative_column(rect, mouse) else {
+                let Some(column) = geometry::body_column(rect, mouse) else {
                     return Outcome::Continue;
                 };
-                let index = if column < rect.body.width / 2 { 0 } else { 1 };
+                let content_column = column.saturating_sub(1);
+                let content_width = rect.body.width.saturating_sub(2);
+                let index = if content_column < content_width / 2 {
+                    0
+                } else {
+                    1
+                };
                 self.hovered = Some(index);
                 self.selected = index;
                 self.activate(index)
@@ -451,7 +450,7 @@ mod tests {
             80,
             30,
         );
-        // 50% of 80 = 40 wide, 36 content columns, so 160 characters need 5
+        // 50% of 80 = 40 wide, 35 content columns, so 160 characters need 5
         // lines (79 * 2 = 158 plus the trailing space). The body is 5 + 2.
         assert_eq!(modal.body_rows(), 7);
     }
@@ -463,7 +462,7 @@ mod tests {
         let button_y = rect.body.y + modal.button_row();
         let left = MouseInput {
             kind: MouseKind::LeftClick,
-            x: rect.area.x + 2,
+            x: rect.area.x + 3,
             y: button_y + 1,
             shift: false,
         };

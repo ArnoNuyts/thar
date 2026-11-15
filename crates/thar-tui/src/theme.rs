@@ -50,8 +50,8 @@ pub const TAG_CONTEXT: Color = PRIMARY;
 /// `+project` tag colour.
 pub const TAG_PROJECT: Color = INFO;
 
-/// Background of a modal surface.
-pub const MODAL_BACKGROUND: Color = rgb(0x202020);
+/// Background of a modal surface (`COLORS.modalBackground`).
+pub const MODAL_BACKGROUND: Color = rgb(0x262626);
 /// Background of a selected row in a menu or calendar.
 pub const SELECTED_BACKGROUND: Color = rgb(0x3A3A3A);
 /// Background of a primary button.
@@ -85,6 +85,7 @@ mod tests {
         assert_eq!(super::PRIMARY, Color::Rgb(0xF4, 0xBF, 0x75));
         assert_eq!(super::DANGER, Color::Rgb(0xCE, 0x77, 0x68));
         assert_eq!(super::FOCUS_BACKGROUND, Color::Rgb(0xEC, 0xEC, 0xEC));
+        assert_eq!(super::MODAL_BACKGROUND, Color::Rgb(0x26, 0x26, 0x26));
         assert_eq!(
             super::priority_color('B'),
             Some(Color::Rgb(0xAF, 0x76, 0xB7))

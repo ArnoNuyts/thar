@@ -104,9 +104,10 @@ One `TextModal` with a `Create`/`Edit` mode:
 - Rendering: `» ` prompt, the character under the cursor in an inverse cell,
   then a bordered Save/Cancel row and the Ink help line. Suggestions are a
   floating popup (`view::suggestion`) sized to the longest name and anchored
-  under the typed `+`/`@`; it is painted after the modal, can cover the modal
-  border/buttons like the Ink root-level overlay, and never changes the modal's
-  fixed body height.
+  under the typed `+`/`@`; it is painted after the modal, can cover the body
+  and buttons like the Ink root-level overlay, and never changes the modal's
+  fixed body height. The modal chrome itself is the Ink one: a left accent bar
+  and a primary title chip, not a box border.
 
 The registry returns `Some` for `CreateTodo`/`EditTodo` and `None` for every
 other id, so the host keeps its bounded "not available" toast for the screens

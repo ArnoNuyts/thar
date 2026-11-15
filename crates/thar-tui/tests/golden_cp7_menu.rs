@@ -63,14 +63,14 @@ fn modal_area(app: &App) -> geometry::ModalRect {
     )
 }
 
-/// One body row of the active modal, with the border/padding columns removed.
+/// One body row of the active modal, with the padding columns removed.
 fn body_row(app: &App, backend: &TestBackend, row: u16) -> String {
     let rect = modal_area(app);
     let lines = screen_lines(backend);
     let y = usize::from(rect.body.y + row);
     let line: Vec<char> = lines[y].chars().collect();
-    let start = usize::from(rect.body.x + 2);
-    let width = usize::from(rect.body.width.saturating_sub(4));
+    let start = usize::from(rect.body.x + 1);
+    let width = usize::from(rect.body.width.saturating_sub(2));
     line.into_iter()
         .skip(start)
         .take(width)
@@ -79,18 +79,25 @@ fn body_row(app: &App, backend: &TestBackend, row: u16) -> String {
         .to_owned()
 }
 
-/// Assert the frame is intact and every body row keeps its pad column.
+/// Assert the chrome is intact: one outer padding column, a thick accent bar
+/// on every body row, and no box border anywhere in the modal block.
 fn assert_modal_pillars(screen: &[String], rect: geometry::ModalRect) {
-    let left_border = usize::from(rect.area.x);
-    let left_pad = left_border + 1;
-    let right_border = usize::from(rect.area.x + rect.area.width - 1);
-    let right_pad = right_border - 1;
-    for y in rect.body.y..rect.body.y + rect.body.height {
+    let outer_pad = usize::from(rect.area.x);
+    let bar = outer_pad + 1;
+    for y in rect.body.y.saturating_sub(1)..rect.body.y + rect.body.height {
         let line: Vec<char> = screen[usize::from(y)].chars().collect();
-        assert_eq!(line[left_border], '│', "left border at row {y}");
-        assert_eq!(line[left_pad], ' ', "left padding at row {y}");
-        assert_eq!(line[right_pad], ' ', "right padding at row {y}");
-        assert_eq!(line[right_border], '│', "right border at row {y}");
+        assert_eq!(line[outer_pad], ' ', "outer padding at row {y}");
+        assert_eq!(line[bar], '┃', "accent bar at row {y}");
+    }
+    let block: String = screen
+        .iter()
+        .skip(usize::from(rect.area.y))
+        .take(usize::from(rect.area.height))
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n");
+    for glyph in ['│', '┌', '┐', '└', '┘'] {
+        assert!(!block.contains(glyph), "box glyph {glyph} in:\n{block}");
     }
 }
 
@@ -108,10 +115,10 @@ fn eighty_by_twenty_four_pins_the_single_todo_menu() {
     let rect = modal_area(&app);
     assert_eq!((rect.area.x, rect.area.y), (20, 2));
     assert_eq!((rect.area.width, rect.area.height), (40, 21));
-    assert_eq!((rect.body.x, rect.body.y), (21, 5));
+    assert_eq!((rect.body.x, rect.body.y), (22, 5));
 
     let screen = screen_lines(&backend);
-    assert!(screen[2].contains("Todo menu"), "{screen:#?}");
+    assert!(screen[3].contains("Todo menu"), "{screen:#?}");
 
     let rows: Vec<String> = (0..16).map(|row| body_row(&app, &backend, row)).collect();
     assert!(rows[0].starts_with("» Edit"), "{rows:#?}");
@@ -126,7 +133,7 @@ fn eighty_by_twenty_four_pins_the_single_todo_menu() {
     assert!(rows[15].ends_with('v'));
 
     // The marker is the secondary colour and the shortcut the primary one.
-    let (marker, marker_colour) = cell(&backend, rect.body.x + 2, rect.body.y);
+    let (marker, marker_colour) = cell(&backend, rect.body.x + 1, rect.body.y);
     assert_eq!(marker, "»");
     assert_eq!(marker_colour, Some(Color::Rgb(0xAF, 0x76, 0xB7)));
     let shortcut_x = rect.body.x + rect.body.width - 3;
@@ -157,7 +164,7 @@ fn one_hundred_by_thirty_pins_the_multi_select_menu() {
     assert_eq!((rect.area.width, rect.area.height), (50, 15));
 
     let screen = screen_lines(&backend);
-    assert!(screen[8].contains("Multi-select menu"), "{screen:#?}");
+    assert!(screen[9].contains("Multi-select menu"), "{screen:#?}");
 
     let rows: Vec<String> = (0..10).map(|row| body_row(&app, &backend, row)).collect();
     assert_eq!(
@@ -198,7 +205,7 @@ fn one_hundred_by_thirty_pins_the_archive_confirmation() {
     assert_eq!(rect.body.height, 3);
 
     let screen = screen_lines(&backend);
-    assert!(screen[11].contains("Archive Completed"), "{screen:#?}");
+    assert!(screen[12].contains("Archive Completed"), "{screen:#?}");
     assert!(
         screen
             .iter()
@@ -225,7 +232,7 @@ fn eighty_by_twenty_four_pins_the_delete_confirmation() {
         screen.iter().any(|line| line.contains("Delete Todos")),
         "{screen:#?}"
     );
-    // The message is longer than the 36 content columns, so it wraps.
+    // The message is longer than the 35 content columns, so it wraps.
     assert!(screen.iter().any(|line| line.contains("Are you sure")));
     assert!(screen.iter().any(|line| line.contains("delete 2")));
     assert!(screen.iter().any(|line| line.contains("todos?")));
@@ -249,22 +256,16 @@ fn eighty_by_twenty_four_wraps_the_single_delete_message_without_truncation() {
 
     // The one-todo message is long enough that the old wrap/draw mismatch
     // truncated its first line. Both halves must reach the screen intact.
-    assert!(
-        screen.iter().any(|line| line.contains("delete this")),
-        "the first wrapped line dropped a character: {screen:#?}"
-    );
-    // The text keeps one blank column inside the right border; touching the
-    // border is the layout bug this test pins.
     let first = screen
         .iter()
-        .find(|line| line.contains("delete this"))
+        .find(|line| line.contains("you want to delete"))
         .expect("first message line");
     assert!(
-        first.trim_end().ends_with("this │"),
-        "the message touches the right border: {first:?}"
+        first.trim_end().ends_with("delete"),
+        "the first wrapped line lost its last word: {first:?}"
     );
     assert!(
-        screen.iter().any(|line| line.contains("todo?")),
+        screen.iter().any(|line| line.contains("this todo?")),
         "the second wrapped line is missing: {screen:#?}"
     );
 
@@ -295,7 +296,7 @@ fn one_hundred_by_thirty_pins_the_update_screen() {
     assert_eq!((rect.area.width, rect.area.x), (70, 15));
 
     let screen = screen_lines(&backend);
-    assert!(screen[rect.area.y as usize].contains("Update available"));
+    assert!(screen[rect.area.y as usize + 1].contains("Update available"));
     assert!(
         screen
             .iter()

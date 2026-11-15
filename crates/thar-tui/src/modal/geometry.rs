@@ -46,6 +46,9 @@ pub struct ModalRect {
     /// The whole modal box, including chrome.
     pub area: Rect,
     /// The body rows, where the screen draws.
+    ///
+    /// Starts after the outer padding and the accent bar, and includes the
+    /// content-padding columns; screens inset one more cell for the text.
     pub body: Rect,
 }
 
@@ -73,13 +76,13 @@ pub fn resolve(terminal: Rect, width: ModalWidth, body_rows: u16) -> ModalRect {
         height,
     );
     let body_height = height.saturating_sub(TOP_CHROME + BOTTOM_CHROME);
-    // The overlay draws `Borders::ALL` on `area`; the body must sit inside the
-    // left and right border columns, or every screen erases its own frame and
-    // mouse columns disagree with the painted cells.
+    // The overlay draws a one-cell outer padding and the thick accent bar on
+    // the left, so the body starts two columns in. Screens inset one more cell
+    // on each side for the content-box padding.
     let body = Rect::new(
-        area.x.saturating_add(1),
+        area.x.saturating_add(2),
         area.y.saturating_add(TOP_CHROME),
-        area.width.saturating_sub(2).max(1),
+        area.width.saturating_sub(3).max(1),
         body_height.min(body_rows),
     );
     ModalRect { area, body }
@@ -136,8 +139,8 @@ mod tests {
         assert_eq!(rect.area.y, 10);
         assert_eq!(rect.body.y, 10 + TOP_CHROME);
         assert_eq!(rect.body.height, 6);
-        assert_eq!(rect.body.x, rect.area.x + 1);
-        assert_eq!(rect.body.width, rect.area.width - 2);
+        assert_eq!(rect.body.x, rect.area.x + 2);
+        assert_eq!(rect.body.width, rect.area.width - 3);
         assert!(rect.body.x + rect.body.width <= rect.area.x + rect.area.width);
     }
 

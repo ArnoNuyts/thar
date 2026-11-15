@@ -148,16 +148,19 @@ Gates: `cargo fmt --all --check`, `cargo clippy --locked --workspace
   network check, skip cache, install detection and the updater are CP8.
 - **Skip is session-only.** There is no persisted skipped-version cache yet, so
   the badge/announcement cannot be suppressed across restarts.
-- **Content width uses the full-bordered box.** The Ink modal has only a left
-  border, so it wraps at `modalWidth - 3`; the ratatui overlay draws a full
-  border and wraps at `modalWidth - 4` (border plus one padding cell on each
-  side). Both the renderer and the mouse map read the same wrapper, so rows and
-  clicks stay aligned; only the break column differs from Ink.
+- **Content width matches the rendered Ink box.** The visible Ink content box
+  is `modalWidth - 5`: one outer padding column on each side, the thick accent
+  bar, and one content-padding column on each side. Both the renderer and the
+  mouse map read
+  that same width, so rows and clicks stay aligned. Ink's `countWrappedLines`
+  helper still measures at `modalWidth - 3`; that helper is wider than the box
+  it wraps for, so the Rust port uses the true rendered width instead.
 - **Paste confirmation threshold is 10, cap is 100.** The Ink command confirms
   above ten lines and `validateTodoBatch` caps a batch at `MAX_PASTE_TODOS`.
   Bracketed paste into the list keeps its existing direct add + cap path; this
   workstream only changed the `v` command.
-- **Modal chrome.** The shared overlay draws a four-sided `Block` (all CP7
-  screens inherit it); the Ink modal uses an underline-only title and a left
-  border.
+- **Modal chrome.** The shared overlay follows the Ink `Modal`: one cell of
+  list background as padding, a thick primary bar down the left edge, a
+  primary-background title chip with inverse text, and a `#262626` body on the
+  `#181818` list. There is no four-sided box border.
 - No performance or benchmark work was done.

@@ -160,6 +160,26 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
                 if contents.trim().is_empty() {
                     continue;
                 }
+                // Draw the thick accent bar as a rectangle. The mono fallback
+                // font's `┃` is shorter than the 20px cell, so a run of them
+                // reads as a dashed line instead of the solid bar a terminal
+                // paints. Only the thick bar is special-cased: a literal `│`
+                // in content or a scrollbar must stay real text.
+                if let Some(width) = vertical_bar_width(contents) {
+                    let fill = if run.dim {
+                        format!("fill=\"{}\" fill-opacity=\"0.6\"", hex(run.foreground))
+                    } else {
+                        format!("fill=\"{}\"", hex(run.foreground))
+                    };
+                    svg.push_str(&format!(
+                        "    <rect x=\"{}\" y=\"{}\" width=\"{width}\" height=\"{CELL_HEIGHT}\" {fill} />\n",
+                        MARGIN
+                            + u32::from(*column) * CELL_WIDTH
+                            + (CELL_WIDTH - width) / 2,
+                        MARGIN + u32::from(row) * CELL_HEIGHT,
+                    ));
+                    continue;
+                }
                 svg.push_str(&format!(
                     "    <text x=\"{}\" y=\"{}\" {attributes} xml:space=\"preserve\">{}</text>\n",
                     MARGIN + u32::from(*column) * CELL_WIDTH,
@@ -172,6 +192,11 @@ pub(crate) fn svg(screen: &vt100::Screen) -> String {
 
     svg.push_str("  </g>\n</svg>\n");
     svg
+}
+
+/// Width of a thick accent bar, or `None` for ordinary text.
+fn vertical_bar_width(contents: &str) -> Option<u32> {
+    (contents == "┃").then_some(5)
 }
 
 /// One run of cells that share a foreground, background, bold and dim.
@@ -344,7 +369,7 @@ fn cp6_paste_fix_screenshot() {
 mod tests {
     use std::num::NonZeroU16;
 
-    use super::runs;
+    use super::{runs, svg, vertical_bar_width};
 
     fn cells(input: &str, cols: u16) -> Vec<(u16, String)> {
         let mut parser = vt100::Parser::new(
@@ -368,6 +393,24 @@ mod tests {
         );
         assert_eq!(cells[0].1, "日");
         assert_eq!(cells[3].1, "a");
+    }
+
+    #[test]
+    fn only_the_thick_bar_is_drawn_as_a_rect() {
+        assert_eq!(vertical_bar_width("┃"), Some(5));
+        assert_eq!(vertical_bar_width("│"), None);
+        assert_eq!(vertical_bar_width("|"), None);
+
+        let mut parser = vt100::Parser::new(
+            NonZeroU16::new(2).expect("rows"),
+            NonZeroU16::new(4).expect("cols"),
+            0,
+        );
+        parser.process("┃│x".as_bytes());
+        let svg = svg(parser.screen());
+        assert!(svg.contains("width=\"5\""), "{svg}");
+        assert!(!svg.contains(">┃</text>"), "{svg}");
+        assert!(svg.contains(">│</text>"), "{svg}");
     }
 
     #[test]
