@@ -56,6 +56,8 @@
     "port:contract:rows": "vite-node tools/port/rows-cli.ts --check --candidate-self --selftest",
     "port:contract:rows:wasm": "vite-node tools/port/rows-cli.ts --check --candidate \"node tools/port/candidates/wasm-rows.mjs\"",
     "port:bench:rows": "vite-node tools/port/bench-rows.ts",
+    "port:contract:write": "vite-node tools/port/write-cli.ts --check --candidate-self --selftest",
+    "port:contract:write:wasm": "vite-node tools/port/write-cli.ts --check --candidate \"node tools/port/candidates/wasm-write.mjs\"",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint .",
     "fmt": "oxfmt .",
