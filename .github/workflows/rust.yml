@@ -19,7 +19,15 @@ on:
       - "logic/core-wasm.ts"
       - "logic/limits.ts"
       - "unit-tests/core-wasm.test.ts"
+      # The wasm job runs `npm ci`, `vitest` and `vite-node`, so dependency,
+      # lockfile and Vite/TypeScript config changes can break it. Path filters
+      # are workflow-level, so a Node-only dependency bump re-runs the cargo
+      # job too; that is accepted — an unnecessary cached cargo run is cheaper
+      # than a red wasm job discovered after merge.
       - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "tsconfig.json"
       - ".github/workflows/rust.yml"
   pull_request:
     paths:
@@ -32,7 +40,11 @@ on:
       - "logic/core-wasm.ts"
       - "logic/limits.ts"
       - "unit-tests/core-wasm.test.ts"
+      # Keep in sync with the push filter above.
       - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "tsconfig.json"
       - ".github/workflows/rust.yml"
   workflow_dispatch:
 
@@ -161,6 +173,13 @@ jobs:
 
       - name: Install Node dependencies
         run: npm ci
+
+      # The real-package test in this file is skipped in the Node matrix, where
+      # `crates/thar-wasm/pkg/` does not exist; running it here proves the
+      # adapter against the package this job just built (it also covers the
+      # fake-package tests, which must keep passing next to a real one).
+      - name: Adapter tests against the built package
+        run: npx vitest run unit-tests/core-wasm.test.ts
 
       # The CP1 oracle stays the Node `port-contract` job; this run proves the
       # Rust candidate agrees with it over the whole corpus, including the
