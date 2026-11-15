@@ -23,7 +23,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::App;
 use crate::layout::{action_item_at, checkbox_columns};
-use crate::modal::ModalId;
+use crate::modal::{Action, ConfirmRequest, ModalId};
 use crate::nav;
 
 /// Message shown for every key that would modify `todo.txt`.
@@ -108,6 +108,16 @@ pub enum Command {
     Undo,
     /// Redo the last undo.
     Redo,
+    /// Confirm and archive every completed todo.
+    Archive,
+    /// Confirm and delete the selected todos.
+    DeleteSelected,
+    /// Copy the selected todos to the clipboard.
+    CopySelected,
+    /// Read the clipboard and add its lines as todos.
+    Paste,
+    /// Open the update screen when the host supplied a model.
+    Update,
     /// Show a bounded static message.
     Toast(&'static str),
     /// A command CP6 does not support; the payload is the toast to show.
@@ -177,24 +187,21 @@ fn writable_list_key(app: &App, key: KeyEvent) -> Option<Command> {
         KeyCode::Char('+') if !ctrl && !alt => Some(Command::Open(ModalId::AddProject)),
         KeyCode::Char('@') if !ctrl && !alt => Some(Command::Open(ModalId::AddContext)),
         KeyCode::Enter => Some(Command::Open(menu_for(app))),
-        KeyCode::Char('a') if !ctrl && !alt => Some(Command::Toast(
-            "Archive arrives with the command menu workstream",
-        )),
-        KeyCode::Char('c') if !ctrl && !alt => Some(Command::Toast(
-            "Copy arrives with the command menu workstream",
-        )),
-        KeyCode::Char('v') if !ctrl && !alt => Some(Command::Toast(
-            "Paste arrives with the command menu workstream",
-        )),
-        KeyCode::Char('u') if !ctrl && !alt => Some(Command::Toast(
-            "Update check arrives with the update screen",
-        )),
-        KeyCode::Delete => Some(Command::Toast(
-            "Delete arrives with the command menu workstream",
-        )),
+        KeyCode::Char('a') if !ctrl && !alt => Some(Command::Archive),
+        KeyCode::Char('c') if !ctrl && !alt => Some(Command::CopySelected),
+        KeyCode::Char('v') if !ctrl && !alt => Some(Command::Paste),
+        KeyCode::Char('u') if !ctrl && !alt => Some(if app.update_model.is_some() {
+            Command::Open(ModalId::Update)
+        } else {
+            Command::Toast(NO_UPDATE_MESSAGE)
+        }),
+        KeyCode::Delete => Some(Command::DeleteSelected),
         _ => list_key(key),
     }
 }
+
+/// Bounded message when `u` is pressed without update information.
+pub const NO_UPDATE_MESSAGE: &str = "No update available";
 
 fn menu_for(app: &App) -> ModalId {
     if app.range.is_empty() {
@@ -521,6 +528,23 @@ pub fn apply(app: &mut App, command: Command) {
         Command::Redo => {
             app.redo();
         }
+        Command::Archive => {
+            app.apply_action(Action::Confirm(ConfirmRequest::archive()));
+        }
+        Command::DeleteSelected => {
+            let ids = selected_ids(app);
+            if ids.is_empty() {
+                app.push_toast("Nothing to delete");
+            } else {
+                app.apply_action(Action::Confirm(ConfirmRequest::delete(ids)));
+            }
+        }
+        Command::CopySelected => {
+            let ids = selected_ids(app);
+            app.apply_action(Action::Copy { ids });
+        }
+        Command::Paste => app.apply_action(Action::Paste),
+        Command::Update => app.open_modal(ModalId::Update),
         Command::Toast(message) => app.push_toast(message),
         Command::Rejected(message) => app.push_toast(message),
     }
@@ -576,9 +600,11 @@ fn delete_query(app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::{
-        Command, MouseInput, MouseKind, READ_ONLY_MESSAGE, apply, command_for_key, handle_mouse,
+        Command, MouseInput, MouseKind, NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE, apply,
+        command_for_key, command_for_key_in, handle_mouse,
     };
     use crate::app::App;
+    use crate::modal::{ModalId, UpdateModel};
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::time::{Duration, Instant};
     use thar_core::{Todo, TodoDate, TodoId};
@@ -703,5 +729,94 @@ mod tests {
             Instant::now(),
         );
         assert_eq!(app.cursor, before);
+    }
+
+    #[test]
+    fn the_writable_list_keys_reach_the_new_commands() {
+        let mut app = app(&["one", "two"]);
+        app.read_only = false;
+        let plain = |code| key(code, KeyModifiers::NONE);
+
+        assert_eq!(
+            command_for_key_in(&app, plain(KeyCode::Char('a'))),
+            Some(Command::Archive)
+        );
+        assert_eq!(
+            command_for_key_in(&app, plain(KeyCode::Char('c'))),
+            Some(Command::CopySelected)
+        );
+        assert_eq!(
+            command_for_key_in(&app, plain(KeyCode::Char('v'))),
+            Some(Command::Paste)
+        );
+        assert_eq!(
+            command_for_key_in(&app, plain(KeyCode::Delete)),
+            Some(Command::DeleteSelected)
+        );
+        assert_eq!(
+            command_for_key_in(&app, plain(KeyCode::Char('u'))),
+            Some(Command::Toast(NO_UPDATE_MESSAGE))
+        );
+
+        app.update_model = Some(UpdateModel::default());
+        assert_eq!(
+            command_for_key_in(&app, plain(KeyCode::Char('u'))),
+            Some(Command::Open(ModalId::Update))
+        );
+    }
+
+    #[test]
+    fn the_read_only_keymap_rejects_every_new_writable_key() {
+        let mut app = app(&["one"]);
+        for code in [
+            KeyCode::Char('a'),
+            KeyCode::Char('c'),
+            KeyCode::Char('v'),
+            KeyCode::Char('u'),
+            KeyCode::Delete,
+        ] {
+            assert_eq!(
+                command_for_key_in(&app, key(code, KeyModifiers::NONE)),
+                Some(Command::Rejected(READ_ONLY_MESSAGE)),
+                "{code:?} must stay read-only"
+            );
+        }
+        app.read_only = false;
+        assert_ne!(
+            command_for_key_in(&app, key(KeyCode::Char('a'), KeyModifiers::NONE)),
+            Some(Command::Rejected(READ_ONLY_MESSAGE))
+        );
+    }
+
+    #[test]
+    fn archive_and_delete_apply_through_a_confirmation() {
+        let mut archive_app = app(&["one", "two"]);
+        archive_app.read_only = false;
+        apply(&mut archive_app, Command::Archive);
+        assert_eq!(
+            archive_app.modals.top().map(|modal| modal.title()),
+            Some("Archive Completed")
+        );
+
+        let mut delete_app = app(&["one", "two"]);
+        delete_app.read_only = false;
+        apply(&mut delete_app, Command::DeleteSelected);
+        let modal = delete_app.modals.top().expect("delete confirmation");
+        assert_eq!(modal.title(), "Delete Todo");
+        assert_eq!(modal.id(), ModalId::Confirm);
+    }
+
+    #[test]
+    fn copy_and_paste_become_host_effects() {
+        let mut app = app(&["one @home", "two"]);
+        app.read_only = false;
+        apply(&mut app, Command::CopySelected);
+        assert_eq!(
+            app.take_effects(),
+            vec![crate::Effect::Copy("two".to_owned())]
+        );
+
+        apply(&mut app, Command::Paste);
+        assert_eq!(app.take_effects(), vec![crate::Effect::Paste]);
     }
 }
