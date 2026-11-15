@@ -12,12 +12,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
 
-/// Environment variables that change loader behaviour or enter the test hook.
-pub const CONFIG_ENV: [&str; 4] = [
+/// Environment variables that change loader behaviour or enter a test hook.
+pub const CONFIG_ENV: [&str; 6] = [
     "THAR_MAX_FILE_BYTES",
     "THAR_MAX_READ_TODOS",
     "THAR_MAX_LINE_CHARS",
     "THAR_TUI_PANIC",
+    "THAR_SAVE_CRASH",
+    "THAR_CRASH_TARGET",
 ];
 
 /// A uniquely named temporary directory, removed on drop.

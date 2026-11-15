@@ -9,6 +9,11 @@
 //! deliberately not attempted: it is not portably available, and CP7's gate is
 //! "no partial file / no content change on failure", not crash-consistency
 //! beyond the rename.
+//!
+//! A debug-only hook (`THAR_SAVE_CRASH=before-rename`) stops the process
+//! between the temp-file flush and the rename so the data-safety suite can
+//! prove the target keeps its previous bytes across a crash. Release builds
+//! ignore the variable, and the shipped rename path is unchanged.
 
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -67,7 +72,33 @@ fn write_and_replace(temporary: &Path, target: &Path, data: &[u8], mode: u32) ->
         // fail a save. The rename below still prevents a partial target.
         let _ = file.sync_all();
     }
+    crash_before_rename();
     fs::rename(temporary, target)
+}
+
+/// Test-only crash hook: stop the process between the temp-file flush and the
+/// rename.
+///
+/// A data-safety test spawns a child with `THAR_SAVE_CRASH=before-rename` and
+/// observes the target: it must still hold the old bytes. The fully written
+/// temporary file is left behind because an exiting process cannot clean up; it
+/// is never renamed into place, so it is inert and the next save writes a fresh
+/// one.
+///
+/// The child exits with status 9, the same signal-free crash the TypeScript
+/// oracle uses (`process.exit(9)`), so no core dump is produced.
+///
+/// Debug builds only: a release binary must never exit because an environment
+/// variable is set. CI runs the data-safety suite in the development profile.
+fn crash_before_rename() {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+    let requested = std::env::var_os("THAR_SAVE_CRASH")
+        .is_some_and(|value| value == std::ffi::OsStr::new("before-rename"));
+    if requested {
+        std::process::exit(9);
+    }
 }
 
 fn temporary_path(target: &Path) -> PathBuf {

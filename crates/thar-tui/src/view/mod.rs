@@ -289,7 +289,11 @@ fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
                 )),
                 Line::from(""),
                 Line::from(Span::styled(
-                    "The read-only build does not create todo files.",
+                    if app.read_only {
+                        "The read-only build does not create todo files."
+                    } else {
+                        "Fix the todo file to resume saving."
+                    },
                     Style::default()
                         .fg(theme::MUTED)
                         .add_modifier(Modifier::DIM),
@@ -364,10 +368,14 @@ fn render_action_bar(frame: &mut Frame, app: &App, layout: Layout) {
         spans.push(Span::raw(format!(" {label}  ")));
     }
 
-    let (indicator, indicator_color) = if app.read_only {
-        (READ_ONLY_LABEL, theme::DANGER)
-    } else {
+    let (indicator, indicator_color) = if app.writable() {
         (WRITE_LABEL, theme::SUCCESS)
+    } else {
+        // A write session whose last reload failed shows READ-ONLY until the
+        // file is readable again, matching the Ink app's recovery state. The
+        // `--write` flag itself is unchanged, so the list still accepts
+        // in-memory edits without saving them.
+        (READ_ONLY_LABEL, theme::DANGER)
     };
     let indicator_width = indicator.chars().count() + 1;
     let right_limit = usize::from(layout.width.saturating_sub(action_width).saturating_sub(1));

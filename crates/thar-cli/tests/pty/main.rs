@@ -21,6 +21,7 @@ mod support;
 mod cp7_calendar;
 mod cp7_editor;
 mod cp7_menu;
+mod cp7_sync;
 mod cp7_write;
 
 use session::{Session, TIMEOUT};

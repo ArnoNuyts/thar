@@ -207,6 +207,46 @@ impl App {
         crate::nav::reflow(self);
     }
 
+    /// Apply a successful file reload: replace the list and leave the read-only
+    /// recovery state.
+    ///
+    /// [`App::set_todos`] already clears both undo stacks, the pending save and
+    /// the save error; the external file wins over unsaved in-memory edits.
+    /// Clearing `load_error` re-enables writes through [`App::writable`], which
+    /// is the Ink app's recovery path after a fixed file.
+    pub fn reloaded(&mut self, todos: Vec<Todo>) {
+        self.set_todos(todos);
+        self.load_error = None;
+    }
+
+    /// Clear a previous reload failure after the file was rewritten with the
+    /// bytes this session already accepts.
+    ///
+    /// This is the "same bytes restored" recovery path: there is no new list to
+    /// adopt, but [`App::writable`] must turn true again and the banner must
+    /// disappear.
+    pub fn recovered(&mut self) {
+        self.load_error = None;
+        self.save_error = None;
+        self.save_retry_at = None;
+    }
+
+    /// Record a failed file reload.
+    ///
+    /// The last good list stays in memory, but it must not be written: the
+    /// pending save is cancelled and [`App::writable`] turns false until a
+    /// later reload succeeds. The message is already bounded by the caller and
+    /// is shown as one toast.
+    pub fn reload_failed(&mut self, message: impl Into<String>) {
+        let message = message.into();
+        self.load_error = Some(message.clone());
+        self.dirty = false;
+        self.dirty_at = None;
+        self.save_retry_at = None;
+        self.save_error = None;
+        self.push_toast(message);
+    }
+
     /// Current terminal size and rows.
     #[must_use]
     pub fn layout(&self) -> Layout {

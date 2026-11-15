@@ -5,7 +5,9 @@
 //! first save, refuses to overwrite an external edit, and replaces the file
 //! atomically through [`thar_store`]. The read-only path links no writer in
 //! practice: [`load`] reads and parses, [`terminal`] owns the terminal, and a
-//! missing file is not created unless `--write` was passed.
+//! missing file is not created unless `--write` was passed. [`sync`] polls the
+//! file for external edits in both modes and owns the reload and read-only
+//! recovery policy (see `docs/rust-port/CP7-SYNC.md`).
 //!
 //! The CLI surface mirrors `logic/cli.ts` for the flags the port supports:
 //! `-f/--file`, `-h/--help`, `-v/--version`, `--write`, `--read-only`,
@@ -20,12 +22,17 @@
 
 pub mod cli;
 pub mod file;
+pub mod sync;
 pub mod terminal;
 
 use std::process::ExitCode;
 
 pub use cli::{CliError, CliOptions, DEFAULT_FILENAME, format_usage, parse_cli_args};
-pub use file::{LoadError, LoadedFile, get_read_limits, load, load_with_limits, read_limits_from};
+pub use file::{
+    LoadError, LoadedFile, get_read_limits, load, load_with_limits, parse_bytes, read_bytes,
+    read_limits_from,
+};
+pub use sync::{FileSync, ReloadOutcome};
 pub use terminal::{run_tui, run_tui_with_store, today_local};
 
 /// Crate version, also printed by `thar-rs --version`.
@@ -88,6 +95,8 @@ pub fn run(args: &[String]) -> ExitCode {
     app.read_only = !options.write;
 
     if app.read_only {
+        // The read-only binary still watches the file: an external edit
+        // refreshes the view and can only toast, because no writer is linked.
         match run_tui(&mut app) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
@@ -96,6 +105,10 @@ pub fn run(args: &[String]) -> ExitCode {
             }
         }
     } else {
+        // Open the save guard whenever `--write` is set, even when `load_error`
+        // is already set (a file deleted between the create and the read). The
+        // session then writes nothing until the watcher reloads a file that
+        // exists again, which is the Ink app's recovery path.
         let policy = if options.no_backup {
             thar_store::BackupPolicy::None
         } else {

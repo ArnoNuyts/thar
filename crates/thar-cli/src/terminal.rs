@@ -9,8 +9,19 @@
 //! loop.
 //!
 //! The loop is deliberately small: draw, wait for one event (with a timeout for
-//! the nearest toast expiry or local midnight), apply it, repeat. All state
-//! transitions live in `thar-tui`; this module only translates crossterm.
+//! the nearest toast expiry, save debounce, local midnight or file-watch poll),
+//! apply it, repeat. All state transitions live in `thar-tui`; this module only
+//! translates crossterm and the filesystem.
+//!
+//! # File sync
+//!
+//! The loop owns one [`FileSync`]: after every event (or timeout) it polls the
+//! todo file, and a debounced external change replaces the list, clears the
+//! undo history, refreshes the save baseline and toasts "File reloaded". A
+//! failed reload keeps the last good list, cancels a pending save and enters
+//! the read-only recovery state; the next successful reload clears it. The
+//! policy is documented in `crates/thar-cli/src/sync.rs` and
+//! `docs/rust-port/CP7-SYNC.md`.
 
 use std::io::{self, Stdout};
 use std::panic;
@@ -28,10 +39,13 @@ use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use thar_core::{MAX_PASTE_TODOS, TodoDate};
+use thar_core::{MAX_PASTE_TODOS, ReadLimits, TodoDate};
 use thar_store::SaveGuard;
 use thar_tui::input::{self, LastClick, MouseInput, MouseKind};
 use thar_tui::{App, Effect, view};
+
+use crate::file::{get_read_limits, parse_bytes};
+use crate::sync::{FileSync, RELOADED_MESSAGE, ReloadOutcome, bounded_message};
 
 /// Poll timeout used only when the host clock cannot produce a midnight.
 const CLOCK_FALLBACK: Duration = Duration::from_secs(60);
@@ -43,8 +57,7 @@ const MIN_POLL: Duration = Duration::from_millis(1);
 ///
 /// A PTY test sets this to `1` to prove the panic hook restores the terminal.
 /// It is inert unless the value is exactly `1`, and the trigger is compiled
-/// out of release builds (`cfg!(debug_assertions)`), so a release binary can
-/// never be crashed by an environment variable.
+/// out of release builds.
 const PANIC_ENV: &str = "THAR_TUI_PANIC";
 
 /// A panic hook owned by the session so it can be restored after the TUI exits.
@@ -80,9 +93,10 @@ fn until_next_local_midnight(now: &jiff::Zoned) -> Option<Duration> {
     Duration::try_from(remaining).ok()
 }
 
-/// Poll timeout: the nearest of the toast expiry, the save debounce and the
-/// next local midnight.
-fn next_poll_timeout(app: &App, now: Instant) -> Duration {
+/// Poll timeout: the nearest of the toast expiry, the save debounce, the file
+/// watcher's next metadata check or reload deadline, and the next local
+/// midnight.
+fn next_poll_timeout(app: &App, now: Instant, sync: &FileSync) -> Duration {
     let midnight = until_next_local_midnight(&jiff::Zoned::now()).unwrap_or(CLOCK_FALLBACK);
     let timeout = app
         .toast_timeout(now)
@@ -90,7 +104,7 @@ fn next_poll_timeout(app: &App, now: Instant) -> Duration {
     let timeout = app
         .save_timeout(now)
         .map_or(timeout, |save| timeout.min(save));
-    timeout.max(MIN_POLL)
+    timeout.min(sync.poll_timeout(now)).max(MIN_POLL)
 }
 
 /// Restore everything the TUI may have changed, including the cursor.
@@ -132,9 +146,8 @@ impl TerminalSession {
     ///
     /// # Panics
     ///
-    /// Panics only in a debug build when the test-only `THAR_TUI_PANIC=1`
-    /// trigger is set; the panic hook restores the terminal before the
-    /// previous hook runs. Release builds ignore the variable.
+    /// Panics only when the test-only `THAR_TUI_PANIC=1` trigger is set; the
+    /// panic hook restores the terminal before the previous hook runs.
     pub fn start() -> io::Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
@@ -204,6 +217,13 @@ impl TerminalSession {
         app: &mut App,
         mut store: Option<&mut SaveGuard>,
     ) -> io::Result<()> {
+        // The reload path must use the same limits as the initial load, so an
+        // environment override cannot make a reload accept a file the startup
+        // read would reject (or the reverse). `run` already turned an invalid
+        // override into exit code 2; the default is only a library-caller
+        // fallback.
+        let limits = get_read_limits().unwrap_or_default();
+        let mut sync = FileSync::new(app.filename.as_str(), limits);
         let mut last_click: Option<LastClick> = None;
 
         loop {
@@ -213,7 +233,7 @@ impl TerminalSession {
             let now = Instant::now();
             app.expire_toast(now);
             if app.save_due(now) {
-                flush_save(app, store.as_deref_mut());
+                flush_save(app, store.as_deref_mut(), &mut sync);
             }
             self.terminal.draw(|frame| view::render(frame, app))?;
 
@@ -223,7 +243,7 @@ impl TerminalSession {
                 // exactly the data-safety failure this checkpoint exists to
                 // prevent.
                 if app.dirty {
-                    flush_save(app, store.as_deref_mut());
+                    flush_save(app, store.as_deref_mut(), &mut sync);
                 }
                 if app.dirty {
                     return Err(io::Error::other(
@@ -237,7 +257,7 @@ impl TerminalSession {
             // the terminal's own cursor stays hidden on every frame.
             self.terminal.hide_cursor()?;
 
-            let timeout = next_poll_timeout(app, Instant::now());
+            let timeout = next_poll_timeout(app, Instant::now(), &sync);
             if event::poll(timeout)? {
                 match event::read()? {
                     Event::Key(key) => {
@@ -281,6 +301,18 @@ impl TerminalSession {
                     Event::FocusGained | Event::FocusLost => {}
                 }
             }
+
+            // After every event or timeout: reload an externally edited file.
+            // A reload that lands while a save is pending drops the in-memory
+            // edit (the external file wins) because `App::reloaded` clears the
+            // pending save, which is the Ink hook's `onLoad` behaviour.
+            apply_reload(
+                app,
+                &mut sync,
+                store.as_deref_mut(),
+                &limits,
+                Instant::now(),
+            );
 
             process_effects(app, store.as_deref_mut());
 
@@ -327,7 +359,16 @@ pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()
 }
 
 /// Write the dirty list now and record the outcome on the app.
-fn flush_save(app: &mut App, store: Option<&mut SaveGuard>) {
+///
+/// A successful save records the self-write window on the watcher and adopts
+/// the written bytes as the comparison baseline, so the save's own metadata
+/// change does not schedule a reload. A failed save (including
+/// [`thar_store::StoreError::ChangedOnDisk`]) keeps the target untouched, shows
+/// one bounded message, keeps the list dirty and retries after the app's
+/// backoff. The watcher normally reloads the external file first, which clears
+/// the dirty state and rebaselines both the guard and the watcher; a quit
+/// before that happens exits non-zero rather than reporting a false save.
+fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync) {
     let Some(store) = store else {
         if app.read_only {
             app.mark_saved();
@@ -340,8 +381,53 @@ fn flush_save(app: &mut App, store: Option<&mut SaveGuard>) {
         return;
     };
     match store.save(&app.todos) {
-        Ok(_) => app.mark_saved(),
+        Ok(_) => {
+            // The window starts after the rename, not before the serialization,
+            // so a slow filesystem cannot shorten it.
+            sync.note_write(Instant::now());
+            sync.adopt(store.last_bytes());
+            app.mark_saved();
+        }
         Err(error) => app.mark_save_failed(error.to_string()),
+    }
+}
+
+/// Apply one watcher outcome: reload the list, or enter read-only recovery.
+///
+/// On success the parsed bytes become both the watcher baseline and the save
+/// guard baseline in one step, so the bytes that were parsed are exactly the
+/// bytes a later save compares against.
+fn apply_reload(
+    app: &mut App,
+    sync: &mut FileSync,
+    store: Option<&mut SaveGuard>,
+    limits: &ReadLimits,
+    now: Instant,
+) {
+    let outcome = match sync.poll(now) {
+        Some(outcome) => outcome,
+        None => return,
+    };
+
+    match outcome {
+        ReloadOutcome::Changed(bytes) => match parse_bytes(&bytes, limits) {
+            Ok(todos) => {
+                app.reloaded(todos);
+                if let Some(store) = store {
+                    store.set_baseline(bytes.clone());
+                }
+                sync.adopt(&bytes);
+                app.push_toast(RELOADED_MESSAGE);
+            }
+            Err(error) => app.reload_failed(bounded_message(&error.to_string())),
+        },
+        ReloadOutcome::Unchanged => {
+            if app.load_error.is_some() {
+                app.recovered();
+                app.push_toast(RELOADED_MESSAGE);
+            }
+        }
+        ReloadOutcome::Unreadable(message) => app.reload_failed(message),
     }
 }
 
@@ -365,6 +451,12 @@ fn archive(app: &mut App, store: Option<&mut SaveGuard>) {
         app.push_toast(thar_tui::app::NOT_SAVED_MESSAGE);
         return;
     };
+    // `done.txt` is a write. A session in read-only recovery must not append
+    // to it either, matching the Ink provider's archive guard.
+    if !app.writable() {
+        app.push_toast(thar_tui::app::NOT_SAVED_MESSAGE);
+        return;
+    }
 
     let todos = app.todos_by_ids(&ids);
     let done = done_path(&app.filename);
