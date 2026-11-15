@@ -73,8 +73,9 @@ impl ListModel {
     ///
     /// `query` is normalized inside the call (one allocation per keystroke);
     /// `views` must be aligned with `todos`, which [`crate::app::App`] keeps an
-    /// invariant. A misalignment is an internal bug, not user data: it produces
-    /// an empty model instead of a panic so the TUI keeps running.
+    /// invariant. A misalignment is an internal bug, not user data: debug
+    /// builds assert, and release builds return an empty model so the TUI
+    /// keeps running.
     #[must_use]
     pub fn build(
         todos: &[Todo],
@@ -277,5 +278,22 @@ mod tests {
         assert_eq!(rows.visible(1, 10).len(), 2);
         assert_eq!(rows.visible(99, 10).len(), 0);
         assert_eq!(rows.visible(0, 0).len(), 0);
+    }
+
+    /// The host owns view alignment. Debug builds make the internal bug loud;
+    /// release builds take the `Self::default()` path instead of panicking.
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "search views must be aligned with todos")]
+    fn misaligned_views_are_a_debug_assertion() {
+        let list = todos(&["one"]);
+        let views = Vec::new();
+        let _ = ListModel::build(
+            &list,
+            &views,
+            "",
+            false,
+            TodoDate::parse("2026-11-15").expect("valid date"),
+        );
     }
 }

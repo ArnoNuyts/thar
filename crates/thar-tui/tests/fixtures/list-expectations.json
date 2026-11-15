@@ -1,0 +1,5761 @@
+{
+  "oracle": {
+    "source": "TypeScript pipeline (logic/Todos.ts, logic/indexes.ts, logic/todo-file-validation.ts)",
+    "clockLocal": "2026-11-15T12:00:00",
+    "generatedAt": "2026-11-15",
+    "node": "v26.12.0",
+    "icu": "78.3",
+    "unicode": "17.0",
+    "notes": [
+      "Generated once with crates/thar-tui/tests/generate-list-expectations.ts; the Rust test never regenerates it.",
+      "Each case records the input-list indexes (order) and the createIndexes encoding (rows) after sortByImportance, filterHidden unless showHidden, and filterBySearch.",
+      "rows entries are 'context:<name>:<count>' or 'todo:<number>'; todo numbers are 1-based across the whole list and headers include None.",
+      "Lists above 500 entries are stored as {count, sha256} of the newline-joined values.",
+      "Known rejection fixtures in testdata/port are absent; thar-core's corpus parity owns them."
+    ]
+  },
+  "queries": [
+    "",
+    "   ",
+    "work",
+    "@work",
+    "+project",
+    "alpha beta",
+    "!!!",
+    "MILK",
+    "due:",
+    "h:1",
+    "@",
+    "a.b",
+    "ΟΔΟΣ"
+  ],
+  "hiddenModes": [false, true],
+  "fixtures": {
+    "blank-lines.txt": {
+      "todoCount": 4,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        }
+      ]
+    },
+    "bom.txt": {
+      "todoCount": 2,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        }
+      ]
+    },
+    "crlf.txt": {
+      "todoCount": 4,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [1],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [1],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [1],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [1],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [3, 2, 0, 1],
+          "rows": [
+            "context:None:1",
+            "todo:1",
+            "context:ctx:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3",
+            "context:None:1",
+            "todo:4"
+          ]
+        }
+      ]
+    },
+    "due-threshold-hidden.txt": {
+      "todoCount": 17,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [0, 1, 2, 3, 4, 5, 6, 8, 12, 13, 14, 15],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 8, 12, 13, 14, 15],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [0, 1, 2, 3, 4, 5, 6, 8, 12, 13, 14, 15],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [0, 1, 2, 3, 4, 5, 6],
+          "rows": [
+            "context:None:7",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [0, 1, 2, 3, 4, 5, 6, 8, 12, 13, 14, 15],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 8, 12, 13, 14, 15],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [0, 1, 16, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+          "rows": [
+            "context:None:17",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [0, 1, 16, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+          "rows": [
+            "context:None:17",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [0, 1, 16, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+          "rows": [
+            "context:None:17",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [0, 1, 16, 2, 3, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [0, 1, 16, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+          "rows": [
+            "context:None:17",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 16, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+          "rows": [
+            "context:None:17",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17"
+          ]
+        }
+      ]
+    },
+    "empty.txt": {
+      "todoCount": 0,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [],
+          "rows": []
+        }
+      ]
+    },
+    "invalid-utf8.txt": {
+      "todoCount": 4,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        }
+      ]
+    },
+    "large-10000.txt": {
+      "todoCount": 10000,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": {
+            "count": 9000,
+            "sha256": "701a01a0974e98c14bcc83aa576e0ae304fe58356caabc82845323b2cf8ce0ec"
+          },
+          "rows": {
+            "count": 9006,
+            "sha256": "b01ffcf321babdc6d616390d44ce8643f6ad382ff107e1ab92b45a9b71a4b861"
+          }
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": {
+            "count": 9000,
+            "sha256": "701a01a0974e98c14bcc83aa576e0ae304fe58356caabc82845323b2cf8ce0ec"
+          },
+          "rows": {
+            "count": 9006,
+            "sha256": "b01ffcf321babdc6d616390d44ce8643f6ad382ff107e1ab92b45a9b71a4b861"
+          }
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": {
+            "count": 1000,
+            "sha256": "27c2bd2b105ad0dc918b52f8a62d1e533b69643e93ad947581c1f255fde409d1"
+          },
+          "rows": {
+            "count": 1001,
+            "sha256": "8a87efd48a1b164f79d8dca316ce96253c7d10b4456072f90945bf8ac1c80e1d"
+          }
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": {
+            "count": 1000,
+            "sha256": "27c2bd2b105ad0dc918b52f8a62d1e533b69643e93ad947581c1f255fde409d1"
+          },
+          "rows": {
+            "count": 1001,
+            "sha256": "8a87efd48a1b164f79d8dca316ce96253c7d10b4456072f90945bf8ac1c80e1d"
+          }
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": {
+            "count": 9000,
+            "sha256": "701a01a0974e98c14bcc83aa576e0ae304fe58356caabc82845323b2cf8ce0ec"
+          },
+          "rows": {
+            "count": 9006,
+            "sha256": "b01ffcf321babdc6d616390d44ce8643f6ad382ff107e1ab92b45a9b71a4b861"
+          }
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": {
+            "count": 1000,
+            "sha256": "bfa1fa72f564e39769fa2455fccbf1dfdba8f488e0239b49befa5f1665e41ccd"
+          },
+          "rows": {
+            "count": 1001,
+            "sha256": "22754eb656eff1cd40f44f6c2b834382d734744bb7e929933b4ecb1b74698040"
+          }
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": {
+            "count": 9000,
+            "sha256": "701a01a0974e98c14bcc83aa576e0ae304fe58356caabc82845323b2cf8ce0ec"
+          },
+          "rows": {
+            "count": 9006,
+            "sha256": "b01ffcf321babdc6d616390d44ce8643f6ad382ff107e1ab92b45a9b71a4b861"
+          }
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": {
+            "count": 9000,
+            "sha256": "701a01a0974e98c14bcc83aa576e0ae304fe58356caabc82845323b2cf8ce0ec"
+          },
+          "rows": {
+            "count": 9006,
+            "sha256": "b01ffcf321babdc6d616390d44ce8643f6ad382ff107e1ab92b45a9b71a4b861"
+          }
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": {
+            "count": 10000,
+            "sha256": "7fc746a14d7354425bc2ffa9d16c50a6d8b465dda87652312e2cb04d88213ec4"
+          },
+          "rows": {
+            "count": 10006,
+            "sha256": "28b29b302550c585e62f78f027a4e57dfd6b8406c85a1d5465d9779c37abc63c"
+          }
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": {
+            "count": 10000,
+            "sha256": "7fc746a14d7354425bc2ffa9d16c50a6d8b465dda87652312e2cb04d88213ec4"
+          },
+          "rows": {
+            "count": 10006,
+            "sha256": "28b29b302550c585e62f78f027a4e57dfd6b8406c85a1d5465d9779c37abc63c"
+          }
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": {
+            "count": 1000,
+            "sha256": "27c2bd2b105ad0dc918b52f8a62d1e533b69643e93ad947581c1f255fde409d1"
+          },
+          "rows": {
+            "count": 1001,
+            "sha256": "8a87efd48a1b164f79d8dca316ce96253c7d10b4456072f90945bf8ac1c80e1d"
+          }
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": {
+            "count": 1000,
+            "sha256": "27c2bd2b105ad0dc918b52f8a62d1e533b69643e93ad947581c1f255fde409d1"
+          },
+          "rows": {
+            "count": 1001,
+            "sha256": "8a87efd48a1b164f79d8dca316ce96253c7d10b4456072f90945bf8ac1c80e1d"
+          }
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": {
+            "count": 10000,
+            "sha256": "7fc746a14d7354425bc2ffa9d16c50a6d8b465dda87652312e2cb04d88213ec4"
+          },
+          "rows": {
+            "count": 10006,
+            "sha256": "28b29b302550c585e62f78f027a4e57dfd6b8406c85a1d5465d9779c37abc63c"
+          }
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": {
+            "count": 1000,
+            "sha256": "bfa1fa72f564e39769fa2455fccbf1dfdba8f488e0239b49befa5f1665e41ccd"
+          },
+          "rows": {
+            "count": 1001,
+            "sha256": "22754eb656eff1cd40f44f6c2b834382d734744bb7e929933b4ecb1b74698040"
+          }
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": {
+            "count": 10000,
+            "sha256": "7fc746a14d7354425bc2ffa9d16c50a6d8b465dda87652312e2cb04d88213ec4"
+          },
+          "rows": {
+            "count": 10006,
+            "sha256": "28b29b302550c585e62f78f027a4e57dfd6b8406c85a1d5465d9779c37abc63c"
+          }
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": {
+            "count": 10000,
+            "sha256": "7fc746a14d7354425bc2ffa9d16c50a6d8b465dda87652312e2cb04d88213ec4"
+          },
+          "rows": {
+            "count": 10006,
+            "sha256": "28b29b302550c585e62f78f027a4e57dfd6b8406c85a1d5465d9779c37abc63c"
+          }
+        }
+      ]
+    },
+    "leading-dates-done-invalid.txt": {
+      "todoCount": 4,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3],
+          "rows": ["context:None:4", "todo:1", "todo:2", "todo:3", "todo:4"]
+        }
+      ]
+    },
+    "leading-dates-done.txt": {
+      "todoCount": 8,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [3, 7, 0, 1, 2, 4, 5, 6],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        }
+      ]
+    },
+    "leading-dates-open.txt": {
+      "todoCount": 11,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "rows": [
+            "context:None:11",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11"
+          ]
+        }
+      ]
+    },
+    "long-line-8192.txt": {
+      "todoCount": 1,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [0],
+          "rows": ["context:None:1", "todo:1"]
+        }
+      ]
+    },
+    "no-trailing-newline.txt": {
+      "todoCount": 3,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [2, 0, 1],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:home:1",
+            "todo:3"
+          ]
+        }
+      ]
+    },
+    "priorities.txt": {
+      "todoCount": 10,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 8],
+          "rows": [
+            "context:None:9",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 8],
+          "rows": [
+            "context:None:9",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [6],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [6],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 8],
+          "rows": [
+            "context:None:9",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [6],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 8],
+          "rows": [
+            "context:None:9",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 8],
+          "rows": [
+            "context:None:9",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 9, 8],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:context:1",
+            "todo:9",
+            "context:None:1",
+            "todo:10"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 9, 8],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:context:1",
+            "todo:9",
+            "context:None:1",
+            "todo:10"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [6],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [6],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [9],
+          "rows": ["context:context:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 9, 8],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:context:1",
+            "todo:9",
+            "context:None:1",
+            "todo:10"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [6],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 9, 8],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:context:1",
+            "todo:9",
+            "context:None:1",
+            "todo:10"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [6, 0, 5, 7, 1, 2, 3, 4, 9, 8],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:context:1",
+            "todo:9",
+            "context:None:1",
+            "todo:10"
+          ]
+        }
+      ]
+    },
+    "projects-contexts.txt": {
+      "todoCount": 15,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [2],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [2],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [0, 2, 3, 5, 6, 9, 10, 11, 13, 14, 4, 1, 8, 7, 12],
+          "rows": [
+            "context:None:10",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "context:alpha:1",
+            "todo:11",
+            "context:beta:1",
+            "todo:12",
+            "context:ctx_two:1",
+            "todo:13",
+            "context:example.com:1",
+            "todo:14",
+            "context:trailing.:1",
+            "todo:15"
+          ]
+        }
+      ]
+    },
+    "real-world-lf.txt": {
+      "todoCount": 51,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [
+            8, 26, 48, 6, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44, 33, 50,
+            16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43, 12, 5,
+            9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:1",
+            "todo:3",
+            "context:booking:1",
+            "todo:4",
+            "context:errands:2",
+            "todo:5",
+            "todo:6",
+            "context:family:2",
+            "todo:7",
+            "todo:8",
+            "context:home:3",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "context:office:7",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "context:phone:2",
+            "todo:19",
+            "todo:20",
+            "context:reading:1",
+            "todo:21",
+            "context:review:2",
+            "todo:22",
+            "todo:23",
+            "context:shopping:2",
+            "todo:24",
+            "todo:25",
+            "context:travel:1",
+            "todo:26",
+            "context:work:1",
+            "todo:27",
+            "context:writing:7",
+            "todo:28",
+            "todo:29",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "context:None:2",
+            "todo:35",
+            "todo:36",
+            "context:admin:1",
+            "todo:37",
+            "context:booking:1",
+            "todo:38",
+            "context:computer:1",
+            "todo:39",
+            "context:health:2",
+            "todo:40",
+            "todo:41",
+            "context:home:3",
+            "todo:42",
+            "todo:43",
+            "todo:44",
+            "context:office:1",
+            "todo:45",
+            "context:review:3",
+            "todo:46",
+            "todo:47",
+            "todo:48",
+            "context:writing:1",
+            "todo:49"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [
+            8, 26, 48, 6, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44, 33, 50,
+            16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43, 12, 5,
+            9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:1",
+            "todo:3",
+            "context:booking:1",
+            "todo:4",
+            "context:errands:2",
+            "todo:5",
+            "todo:6",
+            "context:family:2",
+            "todo:7",
+            "todo:8",
+            "context:home:3",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "context:office:7",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "context:phone:2",
+            "todo:19",
+            "todo:20",
+            "context:reading:1",
+            "todo:21",
+            "context:review:2",
+            "todo:22",
+            "todo:23",
+            "context:shopping:2",
+            "todo:24",
+            "todo:25",
+            "context:travel:1",
+            "todo:26",
+            "context:work:1",
+            "todo:27",
+            "context:writing:7",
+            "todo:28",
+            "todo:29",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "context:None:2",
+            "todo:35",
+            "todo:36",
+            "context:admin:1",
+            "todo:37",
+            "context:booking:1",
+            "todo:38",
+            "context:computer:1",
+            "todo:39",
+            "context:health:2",
+            "todo:40",
+            "todo:41",
+            "context:home:3",
+            "todo:42",
+            "todo:43",
+            "todo:44",
+            "context:office:1",
+            "todo:45",
+            "context:review:3",
+            "todo:46",
+            "todo:47",
+            "todo:48",
+            "context:writing:1",
+            "todo:49"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [0, 40, 33, 45, 28, 7, 49, 1],
+          "rows": [
+            "context:office:3",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "context:work:1",
+            "todo:4",
+            "context:writing:2",
+            "todo:5",
+            "todo:6",
+            "context:office:1",
+            "todo:7",
+            "context:writing:1",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [0, 40, 33, 45, 28, 7, 49, 1],
+          "rows": [
+            "context:office:3",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "context:work:1",
+            "todo:4",
+            "context:writing:2",
+            "todo:5",
+            "todo:6",
+            "context:office:1",
+            "todo:7",
+            "context:writing:1",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [
+            8, 26, 48, 6, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44, 33, 50,
+            16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43, 12, 5,
+            9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:1",
+            "todo:3",
+            "context:booking:1",
+            "todo:4",
+            "context:errands:2",
+            "todo:5",
+            "todo:6",
+            "context:family:2",
+            "todo:7",
+            "todo:8",
+            "context:home:3",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "context:office:7",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "context:phone:2",
+            "todo:19",
+            "todo:20",
+            "context:reading:1",
+            "todo:21",
+            "context:review:2",
+            "todo:22",
+            "todo:23",
+            "context:shopping:2",
+            "todo:24",
+            "todo:25",
+            "context:travel:1",
+            "todo:26",
+            "context:work:1",
+            "todo:27",
+            "context:writing:7",
+            "todo:28",
+            "todo:29",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "context:None:2",
+            "todo:35",
+            "todo:36",
+            "context:admin:1",
+            "todo:37",
+            "context:booking:1",
+            "todo:38",
+            "context:computer:1",
+            "todo:39",
+            "context:health:2",
+            "todo:40",
+            "todo:41",
+            "context:home:3",
+            "todo:42",
+            "todo:43",
+            "todo:44",
+            "context:office:1",
+            "todo:45",
+            "context:review:3",
+            "todo:46",
+            "todo:47",
+            "todo:48",
+            "context:writing:1",
+            "todo:49"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [4],
+          "rows": ["context:errands:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [
+            8, 26, 48, 6, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44, 33, 50,
+            16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43, 12, 5,
+            9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:1",
+            "todo:3",
+            "context:booking:1",
+            "todo:4",
+            "context:errands:2",
+            "todo:5",
+            "todo:6",
+            "context:family:2",
+            "todo:7",
+            "todo:8",
+            "context:home:3",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "context:office:7",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "context:phone:2",
+            "todo:19",
+            "todo:20",
+            "context:reading:1",
+            "todo:21",
+            "context:review:2",
+            "todo:22",
+            "todo:23",
+            "context:shopping:2",
+            "todo:24",
+            "todo:25",
+            "context:travel:1",
+            "todo:26",
+            "context:work:1",
+            "todo:27",
+            "context:writing:7",
+            "todo:28",
+            "todo:29",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "context:None:2",
+            "todo:35",
+            "todo:36",
+            "context:admin:1",
+            "todo:37",
+            "context:booking:1",
+            "todo:38",
+            "context:computer:1",
+            "todo:39",
+            "context:health:2",
+            "todo:40",
+            "todo:41",
+            "context:home:3",
+            "todo:42",
+            "todo:43",
+            "todo:44",
+            "context:office:1",
+            "todo:45",
+            "context:review:3",
+            "todo:46",
+            "todo:47",
+            "todo:48",
+            "context:writing:1",
+            "todo:49"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [
+            8, 26, 48, 6, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44, 33, 50,
+            16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43, 12, 5,
+            9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:1",
+            "todo:3",
+            "context:booking:1",
+            "todo:4",
+            "context:errands:2",
+            "todo:5",
+            "todo:6",
+            "context:family:2",
+            "todo:7",
+            "todo:8",
+            "context:home:3",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "context:office:7",
+            "todo:12",
+            "todo:13",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "context:phone:2",
+            "todo:19",
+            "todo:20",
+            "context:reading:1",
+            "todo:21",
+            "context:review:2",
+            "todo:22",
+            "todo:23",
+            "context:shopping:2",
+            "todo:24",
+            "todo:25",
+            "context:travel:1",
+            "todo:26",
+            "context:work:1",
+            "todo:27",
+            "context:writing:7",
+            "todo:28",
+            "todo:29",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "context:None:2",
+            "todo:35",
+            "todo:36",
+            "context:admin:1",
+            "todo:37",
+            "context:booking:1",
+            "todo:38",
+            "context:computer:1",
+            "todo:39",
+            "context:health:2",
+            "todo:40",
+            "todo:41",
+            "context:home:3",
+            "todo:42",
+            "todo:43",
+            "todo:44",
+            "context:office:1",
+            "todo:45",
+            "context:review:3",
+            "todo:46",
+            "todo:47",
+            "todo:48",
+            "context:writing:1",
+            "todo:49"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [
+            8, 26, 48, 27, 6, 10, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44,
+            33, 50, 16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43,
+            12, 5, 9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:2",
+            "todo:3",
+            "todo:4",
+            "context:booking:1",
+            "todo:5",
+            "context:demo:1",
+            "todo:6",
+            "context:errands:2",
+            "todo:7",
+            "todo:8",
+            "context:family:2",
+            "todo:9",
+            "todo:10",
+            "context:home:3",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "context:office:7",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "todo:19",
+            "todo:20",
+            "context:phone:2",
+            "todo:21",
+            "todo:22",
+            "context:reading:1",
+            "todo:23",
+            "context:review:2",
+            "todo:24",
+            "todo:25",
+            "context:shopping:2",
+            "todo:26",
+            "todo:27",
+            "context:travel:1",
+            "todo:28",
+            "context:work:1",
+            "todo:29",
+            "context:writing:7",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "todo:35",
+            "todo:36",
+            "context:None:2",
+            "todo:37",
+            "todo:38",
+            "context:admin:1",
+            "todo:39",
+            "context:booking:1",
+            "todo:40",
+            "context:computer:1",
+            "todo:41",
+            "context:health:2",
+            "todo:42",
+            "todo:43",
+            "context:home:3",
+            "todo:44",
+            "todo:45",
+            "todo:46",
+            "context:office:1",
+            "todo:47",
+            "context:review:3",
+            "todo:48",
+            "todo:49",
+            "todo:50",
+            "context:writing:1",
+            "todo:51"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [
+            8, 26, 48, 27, 6, 10, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44,
+            33, 50, 16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43,
+            12, 5, 9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:2",
+            "todo:3",
+            "todo:4",
+            "context:booking:1",
+            "todo:5",
+            "context:demo:1",
+            "todo:6",
+            "context:errands:2",
+            "todo:7",
+            "todo:8",
+            "context:family:2",
+            "todo:9",
+            "todo:10",
+            "context:home:3",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "context:office:7",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "todo:19",
+            "todo:20",
+            "context:phone:2",
+            "todo:21",
+            "todo:22",
+            "context:reading:1",
+            "todo:23",
+            "context:review:2",
+            "todo:24",
+            "todo:25",
+            "context:shopping:2",
+            "todo:26",
+            "todo:27",
+            "context:travel:1",
+            "todo:28",
+            "context:work:1",
+            "todo:29",
+            "context:writing:7",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "todo:35",
+            "todo:36",
+            "context:None:2",
+            "todo:37",
+            "todo:38",
+            "context:admin:1",
+            "todo:39",
+            "context:booking:1",
+            "todo:40",
+            "context:computer:1",
+            "todo:41",
+            "context:health:2",
+            "todo:42",
+            "todo:43",
+            "context:home:3",
+            "todo:44",
+            "todo:45",
+            "todo:46",
+            "context:office:1",
+            "todo:47",
+            "context:review:3",
+            "todo:48",
+            "todo:49",
+            "todo:50",
+            "context:writing:1",
+            "todo:51"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [0, 40, 33, 45, 28, 7, 49, 1],
+          "rows": [
+            "context:office:3",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "context:work:1",
+            "todo:4",
+            "context:writing:2",
+            "todo:5",
+            "todo:6",
+            "context:office:1",
+            "todo:7",
+            "context:writing:1",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [0, 40, 33, 45, 28, 7, 49, 1],
+          "rows": [
+            "context:office:3",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "context:work:1",
+            "todo:4",
+            "context:writing:2",
+            "todo:5",
+            "todo:6",
+            "context:office:1",
+            "todo:7",
+            "context:writing:1",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [
+            8, 26, 48, 27, 6, 10, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44,
+            33, 50, 16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43,
+            12, 5, 9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:2",
+            "todo:3",
+            "todo:4",
+            "context:booking:1",
+            "todo:5",
+            "context:demo:1",
+            "todo:6",
+            "context:errands:2",
+            "todo:7",
+            "todo:8",
+            "context:family:2",
+            "todo:9",
+            "todo:10",
+            "context:home:3",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "context:office:7",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "todo:19",
+            "todo:20",
+            "context:phone:2",
+            "todo:21",
+            "todo:22",
+            "context:reading:1",
+            "todo:23",
+            "context:review:2",
+            "todo:24",
+            "todo:25",
+            "context:shopping:2",
+            "todo:26",
+            "todo:27",
+            "context:travel:1",
+            "todo:28",
+            "context:work:1",
+            "todo:29",
+            "context:writing:7",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "todo:35",
+            "todo:36",
+            "context:None:2",
+            "todo:37",
+            "todo:38",
+            "context:admin:1",
+            "todo:39",
+            "context:booking:1",
+            "todo:40",
+            "context:computer:1",
+            "todo:41",
+            "context:health:2",
+            "todo:42",
+            "todo:43",
+            "context:home:3",
+            "todo:44",
+            "todo:45",
+            "todo:46",
+            "context:office:1",
+            "todo:47",
+            "context:review:3",
+            "todo:48",
+            "todo:49",
+            "todo:50",
+            "context:writing:1",
+            "todo:51"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [4],
+          "rows": ["context:errands:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [
+            8, 26, 48, 27, 6, 10, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44,
+            33, 50, 16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43,
+            12, 5, 9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:2",
+            "todo:3",
+            "todo:4",
+            "context:booking:1",
+            "todo:5",
+            "context:demo:1",
+            "todo:6",
+            "context:errands:2",
+            "todo:7",
+            "todo:8",
+            "context:family:2",
+            "todo:9",
+            "todo:10",
+            "context:home:3",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "context:office:7",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "todo:19",
+            "todo:20",
+            "context:phone:2",
+            "todo:21",
+            "todo:22",
+            "context:reading:1",
+            "todo:23",
+            "context:review:2",
+            "todo:24",
+            "todo:25",
+            "context:shopping:2",
+            "todo:26",
+            "todo:27",
+            "context:travel:1",
+            "todo:28",
+            "context:work:1",
+            "todo:29",
+            "context:writing:7",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "todo:35",
+            "todo:36",
+            "context:None:2",
+            "todo:37",
+            "todo:38",
+            "context:admin:1",
+            "todo:39",
+            "context:booking:1",
+            "todo:40",
+            "context:computer:1",
+            "todo:41",
+            "context:health:2",
+            "todo:42",
+            "todo:43",
+            "context:home:3",
+            "todo:44",
+            "todo:45",
+            "todo:46",
+            "context:office:1",
+            "todo:47",
+            "context:review:3",
+            "todo:48",
+            "todo:49",
+            "todo:50",
+            "context:writing:1",
+            "todo:51"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [
+            8, 26, 48, 27, 6, 10, 41, 4, 31, 20, 24, 11, 47, 0, 40, 23, 13, 44,
+            33, 50, 16, 2, 14, 3, 35, 38, 17, 34, 45, 19, 30, 28, 7, 22, 37, 43,
+            12, 5, 9, 25, 29, 18, 36, 15, 32, 42, 49, 21, 39, 46, 1
+          ],
+          "rows": [
+            "context:None:2",
+            "todo:1",
+            "todo:2",
+            "context:admin:2",
+            "todo:3",
+            "todo:4",
+            "context:booking:1",
+            "todo:5",
+            "context:demo:1",
+            "todo:6",
+            "context:errands:2",
+            "todo:7",
+            "todo:8",
+            "context:family:2",
+            "todo:9",
+            "todo:10",
+            "context:home:3",
+            "todo:11",
+            "todo:12",
+            "todo:13",
+            "context:office:7",
+            "todo:14",
+            "todo:15",
+            "todo:16",
+            "todo:17",
+            "todo:18",
+            "todo:19",
+            "todo:20",
+            "context:phone:2",
+            "todo:21",
+            "todo:22",
+            "context:reading:1",
+            "todo:23",
+            "context:review:2",
+            "todo:24",
+            "todo:25",
+            "context:shopping:2",
+            "todo:26",
+            "todo:27",
+            "context:travel:1",
+            "todo:28",
+            "context:work:1",
+            "todo:29",
+            "context:writing:7",
+            "todo:30",
+            "todo:31",
+            "todo:32",
+            "todo:33",
+            "todo:34",
+            "todo:35",
+            "todo:36",
+            "context:None:2",
+            "todo:37",
+            "todo:38",
+            "context:admin:1",
+            "todo:39",
+            "context:booking:1",
+            "todo:40",
+            "context:computer:1",
+            "todo:41",
+            "context:health:2",
+            "todo:42",
+            "todo:43",
+            "context:home:3",
+            "todo:44",
+            "todo:45",
+            "todo:46",
+            "context:office:1",
+            "todo:47",
+            "context:review:3",
+            "todo:48",
+            "todo:49",
+            "todo:50",
+            "context:writing:1",
+            "todo:51"
+          ]
+        }
+      ]
+    },
+    "recurrence.txt": {
+      "todoCount": 13,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [10],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [10],
+          "rows": ["context:None:1", "todo:1"]
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+          "rows": [
+            "context:None:13",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12",
+            "todo:13"
+          ]
+        }
+      ]
+    },
+    "sort-order.txt": {
+      "todoCount": 12,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [0, 3],
+          "rows": ["context:work:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [0, 3],
+          "rows": ["context:work:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [4, 9],
+          "rows": ["context:None:1", "todo:1", "context:alpha:1", "todo:2"]
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [0, 3],
+          "rows": ["context:work:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [0, 3],
+          "rows": ["context:work:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [4, 9],
+          "rows": ["context:None:1", "todo:1", "context:alpha:1", "todo:2"]
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [4, 1, 10, 11, 9, 8, 7, 6, 5, 0, 2, 3],
+          "rows": [
+            "context:None:4",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "context:alpha:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "context:home:1",
+            "todo:9",
+            "context:work:1",
+            "todo:10",
+            "context:None:1",
+            "todo:11",
+            "context:work:1",
+            "todo:12"
+          ]
+        }
+      ]
+    },
+    "tabs.txt": {
+      "todoCount": 6,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [3, 0, 2, 4, 5, 1],
+          "rows": [
+            "context:None:6",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6"
+          ]
+        }
+      ]
+    },
+    "tags.txt": {
+      "todoCount": 12,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [3, 2],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [3, 2],
+          "rows": ["context:None:2", "todo:1", "todo:2"]
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [3, 8, 0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+          "rows": [
+            "context:None:12",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8",
+            "todo:9",
+            "todo:10",
+            "todo:11",
+            "todo:12"
+          ]
+        }
+      ]
+    },
+    "unicode.txt": {
+      "todoCount": 8,
+      "cases": [
+        {
+          "showHidden": false,
+          "query": "",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "   ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "!!!",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "@",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": false,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": false,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "   ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@work",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "+project",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "alpha beta",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "!!!",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "MILK",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "due:",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "h:1",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "@",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        },
+        {
+          "showHidden": true,
+          "query": "a.b",
+          "order": [],
+          "rows": []
+        },
+        {
+          "showHidden": true,
+          "query": "ΟΔΟΣ",
+          "order": [0, 1, 2, 3, 4, 5, 6, 7],
+          "rows": [
+            "context:None:8",
+            "todo:1",
+            "todo:2",
+            "todo:3",
+            "todo:4",
+            "todo:5",
+            "todo:6",
+            "todo:7",
+            "todo:8"
+          ]
+        }
+      ]
+    }
+  }
+}

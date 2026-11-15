@@ -1520,6 +1520,8 @@ name = "thar-tui"
 version = "0.1.0"
 dependencies = [
  "ratatui",
+ "serde_json",
+ "sha2",
  "thar-core",
 ]
 
