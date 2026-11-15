@@ -17,17 +17,21 @@
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyEvent;
-use thar_core::{MAX_TODOS, Priority, Todo, TodoDate, TodoId};
+use thar_core::{MAX_PASTE_TODOS, MAX_TODOS, Priority, Todo, TodoDate, TodoId};
 
 use crate::history::History;
 use crate::input::MouseInput;
 use crate::layout::Layout;
 use crate::list::{ListModel, ListRow};
-use crate::modal::{self, Action, ModalId, Outcome, Stack, TagKind};
+use crate::modal::{self, Action, ConfirmRequest, ModalId, Outcome, Stack, TagKind, UpdateModel};
 use crate::search::{OwnedView, view_for};
 
 /// Debounce before a mutation is written, matching the Ink app.
 pub const SAVE_DEBOUNCE: Duration = Duration::from_millis(50);
+
+/// Lines above which a clipboard paste asks for confirmation, matching
+/// `useTodoCommands`.
+pub const PASTE_CONFIRM_THRESHOLD: usize = 10;
 
 /// Backoff before retrying a failed save.
 pub const SAVE_RETRY: Duration = Duration::from_secs(1);
@@ -105,6 +109,9 @@ pub struct App {
     pub history: History,
     /// The one active modal, if any.
     pub modals: Stack,
+    /// Update information supplied by the host. `None` means the list's `u`
+    /// key cannot open the update screen; CP7 does not check for updates.
+    pub update_model: Option<UpdateModel>,
     /// True when the in-memory list differs from the last saved bytes.
     pub dirty: bool,
     /// When the first unsaved mutation happened, for the save debounce.
@@ -163,6 +170,7 @@ impl App {
             next_id,
             history: History::default(),
             modals: Stack::default(),
+            update_model: None,
             dirty: false,
             dirty_at: None,
             save_error: None,
@@ -391,6 +399,7 @@ impl App {
         }
         self.width = width;
         self.height = height;
+        self.modals.resize(width, height);
         crate::nav::reflow(self);
     }
 
@@ -709,6 +718,40 @@ impl App {
             .collect()
     }
 
+    /// Split clipboard text into todo lines and add them, confirming above ten.
+    ///
+    /// The clipboard read stays in the terminal (it needs the host); this
+    /// method owns the limits and the confirmation so both are testable
+    /// without a clipboard. A batch larger than [`MAX_PASTE_TODOS`] is
+    /// rejected before any confirmation, matching `validateTodoBatch` in
+    /// `useTodoCommands`.
+    pub fn receive_clipboard(&mut self, text: &str) {
+        let lines: Vec<String> = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+            .collect();
+        if lines.is_empty() {
+            return;
+        }
+        if lines.len() > MAX_PASTE_TODOS {
+            self.push_toast(format!(
+                "Too many todos in one paste; the limit is {MAX_PASTE_TODOS}"
+            ));
+            return;
+        }
+        if lines.len() > PASTE_CONFIRM_THRESHOLD {
+            self.modals.open(modal::registry_menu::confirm(
+                ConfirmRequest::paste(lines.len(), lines),
+                self.width,
+                self.height,
+            ));
+            return;
+        }
+        self.apply_action(Action::PasteLines { lines });
+    }
+
     /// Take the host effects queued by commands.
     pub fn take_effects(&mut self) -> Vec<Effect> {
         std::mem::take(&mut self.effects)
@@ -898,9 +941,23 @@ impl App {
                 self.effects.push(Effect::Paste);
                 self.modals.close();
             }
+            Action::PasteLines { lines } => {
+                let added = self.add_todos(&lines);
+                if !added.is_empty() && self.writable() {
+                    self.push_toast(format!("Pasted {} todo(s)", added.len()));
+                }
+                self.modals.close();
+            }
             Action::ArchiveCompleted => {
                 self.effects.push(Effect::ArchiveCompleted);
                 self.modals.close();
+            }
+            Action::Confirm(request) => {
+                self.modals.open(modal::registry_menu::confirm(
+                    request,
+                    self.width,
+                    self.height,
+                ));
             }
         }
     }
@@ -909,6 +966,8 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::{App, SAVE_DEBOUNCE};
+    use crate::modal::{Action, Modal};
+    use ratatui::crossterm::event::KeyEvent;
     use std::time::{Duration, Instant};
     use thar_core::{Todo, TodoDate, TodoId};
 
@@ -1018,6 +1077,101 @@ mod tests {
         app.mark_saved();
         assert!(!app.dirty && app.save_deadline().is_none());
         assert!(SAVE_DEBOUNCE >= Duration::from_millis(1));
+    }
+
+    #[test]
+    fn a_large_paste_confirms_before_adding_anything() {
+        let mut app = app(&["one"]);
+        let text = (1..=11)
+            .map(|index| format!("pasted {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        app.receive_clipboard(&text);
+        assert_eq!(app.todos.len(), 1, "nothing is added before confirmation");
+        let modal = app.modals.top().expect("paste confirmation");
+        assert_eq!(modal.title(), "Paste Multiple Todos");
+        assert_eq!(
+            app.modals.top().map(|modal| modal.id()),
+            Some(crate::modal::ModalId::Confirm)
+        );
+
+        let enter = KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        );
+        assert!(app.handle_modal_key(enter));
+        assert_eq!(app.todos.len(), 12);
+        assert!(!app.modals.is_open());
+        assert!(app.dirty);
+        assert_eq!(app.toast_message(Instant::now()), Some("Pasted 11 todo(s)"));
+    }
+
+    #[test]
+    fn a_ten_line_paste_adds_without_a_confirmation() {
+        let mut app = app(&["one"]);
+        let text = (1..=10)
+            .map(|index| format!("pasted {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        app.receive_clipboard(&text);
+        assert_eq!(app.todos.len(), 11);
+        assert!(!app.modals.is_open());
+    }
+
+    #[test]
+    fn a_paste_over_the_hard_limit_is_rejected_with_one_message() {
+        let mut app = app(&["one"]);
+        let text = (1..=101)
+            .map(|index| format!("pasted {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        app.receive_clipboard(&text);
+        assert_eq!(app.todos.len(), 1);
+        assert!(!app.modals.is_open());
+        let message = app.toast_message(Instant::now()).expect("toast");
+        assert!(message.contains("limit is 100"), "{message}");
+    }
+
+    #[test]
+    fn the_delete_confirmation_carries_the_delete_action() {
+        let mut app = app(&["one", "two"]);
+        let ids = vec![app.todos[1].id];
+        app.apply_action(Action::Confirm(crate::modal::ConfirmRequest::delete(
+            ids.clone(),
+        )));
+        assert_eq!(
+            app.modals.top().map(|modal| modal.id()),
+            Some(crate::modal::ModalId::Confirm)
+        );
+        assert_eq!(app.modals.top().map(Modal::title), Some("Delete Todo"));
+
+        let enter = KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        );
+        app.handle_modal_key(enter);
+        assert_eq!(app.todos.len(), 1);
+        assert_eq!(app.todos[0].text, "one");
+    }
+
+    #[test]
+    fn the_archive_confirmation_queues_the_host_effect() {
+        let mut app = app(&["x 2026-11-01 done", "open"]);
+        app.apply_action(Action::Confirm(crate::modal::ConfirmRequest::archive()));
+        let enter = KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        );
+        app.handle_modal_key(enter);
+        assert_eq!(app.take_effects(), vec![crate::Effect::ArchiveCompleted]);
+        assert!(!app.modals.is_open());
+    }
+
+    #[test]
+    fn the_update_model_is_absent_by_default() {
+        let app = app(&["one"]);
+        assert!(app.update_model.is_none());
     }
 
     #[test]

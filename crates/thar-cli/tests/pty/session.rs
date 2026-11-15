@@ -112,13 +112,21 @@ impl Session {
 
     /// Run `thar-rs --write --file <file>`.
     pub fn open_write(file: &Path) -> Self {
+        Self::open_write_with(file, &[])
+    }
+
+    /// Run `thar-rs --write --file <file>` with extra environment overrides.
+    ///
+    /// Used to point `PATH` at a directory with no clipboard command, so the
+    /// failure toast can be asserted without touching the host clipboard.
+    pub fn open_write_with(file: &Path, environment: &[(&str, &str)]) -> Self {
         let directory = file.parent().unwrap_or_else(|| Path::new("."));
         let args = [
             OsStr::new("--write"),
             OsStr::new("--file"),
             file.as_os_str(),
         ];
-        Self::spawn(directory, &args, &[])
+        Self::spawn(directory, &args, environment)
     }
 
     /// Run `thar-rs` with no arguments in `directory` (the default
