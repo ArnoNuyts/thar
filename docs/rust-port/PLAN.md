@@ -765,6 +765,60 @@ revert.
   p50/p95 targets from §2. Ship it as a separate binary; do not change `thar`.
 - Rollback: stop shipping the binary; the Ink app is untouched.
 
+**Landed.** CP6 is implemented as a second binary, `thar-rs`, in the existing
+workspace; the Ink app, `bin/thar.js` and the npm entry point are untouched.
+
+- `crates/thar-tui` holds the app state (`App`), the owned row model
+  (`ListModel`, rebuilt only when the query/hidden flag/day/todo list changes),
+  navigation and scroll-padding, search normalization, the keyboard and SGR
+  mouse keymap, the shared layout/hit-test geometry, the theme, and the view.
+- `crates/thar-cli` holds the binary: `cli.rs` (`-f/--file`, `-h/--help`,
+  `-v/--version`, `--no-update-check`; `update` is rejected with a bounded
+  message), `file.rs` (read-only loader, no create path), `terminal.rs` (raw
+  mode, alternate screen, mouse capture, bracketed paste, a restore-on-panic
+  hook, and the draw/event loop) and `main.rs`.
+- Read-only proof: no write API is linked; mutating keys answer with one
+  bounded toast; a missing file is reported and is not created; a directory
+  argument fails cleanly. `tests/pty/main.rs` asserts a real PTY session leaves
+  the file bytes, mtime and directory entries untouched; `tests/read_only.rs`
+  covers the non-TTY startup paths, and `tests/no_write.rs` scans both
+  `thar-cli/src` and `thar-tui/src` for write-capable APIs.
+- PTY evidence (`crates/thar-cli/tests/pty`, `portable-pty` + `vt100` as
+  dev-dependencies only; 100×30, `TERM=xterm-256color`, polling waits and no
+  fixed sleeps):
+  - initial screen: todo text, `"None"`/`home`/`work` context headers, the
+    action-bar labels from `layout::ACTION_ITEMS`, `READ-ONLY`, and no
+    missing-file note for a present file;
+  - keys: Down/Up, Ctrl+Down/Up across context groups, Home/End, `/` focus,
+    a live query, the no-results state, Enter keeping the filter, Escape
+    clearing it, `H` showing `[HIDDEN TODOS VISIBLE]` plus the previously
+    hidden rows, and `q` exiting 0;
+  - mouse: SGR wheel up/down scrolls without moving the cursor, left click
+    selects a row, shift-click (button 4) extends the range across three rows,
+    and a double-click inside 350 ms shows the read-only toast;
+  - lifecycle: Ctrl+C exits 0 and the raw stream contains the
+    leave-alternate-screen, disable-mouse, disable-bracketed-paste and
+    show-cursor sequences; `THAR_TUI_PANIC=1` exits non-zero with the panic
+    message emitted after the same restore sequences;
+  - a missing file in an empty directory renders an empty list and creates
+    nothing.
+- CI: `.github/workflows/rust.yml` gains a `pty` job matrixed over
+  `ubuntu-latest` and `macos-latest` (`cargo test -p thar-cli --test pty`) and a
+  `windows` job that runs `cargo check -p thar-cli --all-targets`. The PTY
+  target is `#![cfg(unix)]`, so the Windows job compiles the dependency tree
+  and the other targets without pretending portable-pty can run there.
+- `docs/rust-port/assets/cp6-tui.png` is a real frame captured from the PTY at
+  100×30 and rendered from the parsed `vt100` cells (background, colours, text
+  runs). The generator is the `#[ignore]`d `cp6_screenshot` test in
+  `tests/pty/screenshot.rs`; it is never part of CI.
+
+**Still open at CP6.** The §2 p50/p95 targets are not measured by this
+checkpoint, so no benchmark or performance claim is made here, and the one-week
+read-only navigation dogfood has not happened yet. The view-styling parity pass
+(colours, scrollbar, empty/load-error states) is part of this checkpoint and is
+covered by `crates/thar-tui/tests/golden.rs`. Writes and the 11 modals are CP7;
+distribution and cutover are CP8.
+
 ### CP7 — TUI writes opt-in
 
 - Add `--write`; the default remains read-only. Before the first write, keep a
@@ -913,16 +967,34 @@ team is comfortable making the Rust core the default for the next release.
 
 Checkpoint: CP6 (separate `thar-rs` binary, read-only).
 
-- `thar-cli` binary that opens a file and renders a read-only list.
-- Terminal lifecycle + panic hook + mouse capture + bracketed paste.
-- Virtual list, context headers, selection, scroll padding, scrollbar.
-- Search input and filtering; action bar; hidden indicator; toaster.
-- Mouse wheel/click/shift-click/double-click.
-- `--version`, `--help`, `--no-update-check` parity.
-- Ship as `thar-rs` (or `THAR_UI=ratatui`), not the default.
+- [x] `thar-cli` binary that opens a file and renders a read-only list.
+- [x] Terminal lifecycle + panic hook + mouse capture + bracketed paste.
+- [x] Virtual list, context headers, selection, scroll padding.
+- [x] Search input and filtering; action bar; hidden indicator; toaster.
+- [x] Mouse wheel/click/shift-click/double-click.
+- [x] `--version`, `--help`, `--no-update-check` parity.
+- [x] Ship as `thar-rs`, not the default.
+- [x] View-styling parity pass (scrollbar, per-tag colours, empty and
+      load-error states) — pinned by the `thar-tui` golden frames.
+- [ ] §2 p50/p95 measured on a real PTY.
+- [ ] Read-only navigation dogfooded for a week.
 
-Exit criteria: Perf targets met on a real PTY; mouse parity checklist complete;
+Exit criteria: perf targets met on a real PTY; mouse parity checklist complete;
 read-only navigation dogfooded for a week.
+
+**Landed at CP6.** The binary, the read-only loader, the terminal session and
+the event loop are in `crates/thar-cli`; the state, rows, navigation, search,
+input, layout and view are in `crates/thar-tui`. `cargo test -p thar-tui`,
+`cargo test -p thar-cli` and the workspace suite are green, and the macOS PTY
+job runs the same integration test Linux does. The gate evidence is the PTY
+suite described in CP6 (real 100×30 PTY: initial frame, keyboard, search,
+hidden view, SGR mouse wheel/click/shift-click/double-click, Ctrl+C and panic
+restore, missing file) plus the `docs/rust-port/assets/cp6-tui.png` frame
+captured from that PTY. Windows is compile-only (`cargo check --all-targets`)
+because portable-pty is Unix-focused.
+
+Nothing in the Ink app changed: `thar` still starts the TypeScript UI, and the
+rollback is to stop shipping `thar-rs`.
 
 ### Phase 5 — Editing, commands, modals (2–3 weeks)
 
@@ -1049,6 +1121,17 @@ Jobs:
   --locked --workspace --all-features`. The row-perf measurement in
   `crates/thar-core/tests/rows_perf.rs` is `#[ignore]`d: it is a manual
   release-mode report, not a CI gate.
+- **pty** (ubuntu + macos matrix, `fail-fast: false`): `cargo test --locked
+  -p thar-cli --test pty`. This is CP6's real-terminal gate: it spawns
+  `thar-rs` on a portable-pty pair and asserts keyboard, search, hidden view
+  and SGR mouse behaviour, Ctrl+C/panic restore and the missing-file contract
+  against a `vt100`-parsed screen. The `test` job runs the same target on
+  Ubuntu; macOS is added because the kernel PTY, termios and mouse decoding
+  differ. `portable-pty` and `vt100` are dev-dependencies only.
+- **windows** (windows-latest): `cargo check --locked -p thar-cli
+  --all-targets`. portable-pty is Unix-focused, so Windows compiles the crate,
+  the binary and every test target but runs no PTY test; the PTY test target is
+  `#![cfg(unix)]` and therefore empty there.
 - **wasm** (ubuntu):
   - installs Rust 1.99.1 + `wasm32-unknown-unknown` (`dtolnay/rust-toolchain`);
   - caches with `Swatinem/rust-cache@v2` (key `wasm`);
@@ -1104,7 +1187,8 @@ surface 84 632 / 37 292.
 
 - **Native matrix**: linux x64/arm64 (gnu/musl), macOS x64/arm64, Windows
   x64. Native tests + build on each PR after Phase 4.
-- **PTY tests**: Linux and macOS runners; Windows smoke only.
+- **PTY tests**: installed for Linux and macOS at CP6 (§9.1); the Windows
+  smoke stays compile-only until a ConPTY runner exists.
 - **Release workflow**: tag-driven, builds binaries + WASM, checksums,
   codesigns/notarizes, publishes GitHub release and npm packages.
 - **Supply chain**: `cargo-deny` (licenses/advisories) and `cargo-audit`

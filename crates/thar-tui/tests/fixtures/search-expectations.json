@@ -1,0 +1,1790 @@
+{
+  "oracle": {
+    "source": "TypeScript implementation (logic/todo.ts, utils/search-utils.ts)",
+    "generatedAt": "2026-11-15",
+    "node": "v26.12.0",
+    "icu": "78.3",
+    "unicode": "17.0",
+    "notes": [
+      "Generated once with crates/thar-tui/tests/generate-search-expectations.ts; tests never regenerate it.",
+      "normalize entries are String.prototype.toLowerCase(input); the Rust port must apply Final_Sigma with Case_Ignorable skipping.",
+      "views entries are [line, text, contexts, projects] after the oracle's per-field toLowerCase.",
+      "terms entries are extractSearchTerms(query), including JavaScript's \\s set and ASCII-only \\w stripping.",
+      "The two-character query grid exercises wrapper punctuation and whitespace edges."
+    ]
+  },
+  "normalize": [
+    {
+      "input": "aσ.",
+      "lower": "aσ."
+    },
+    {
+      "input": "aβ́σ.",
+      "lower": "aβ́σ."
+    },
+    {
+      "input": "aΣ.Α",
+      "lower": "aσ.α"
+    },
+    {
+      "input": "aβ́Σ.",
+      "lower": "aβ́ς."
+    },
+    {
+      "input": "aσ.́a",
+      "lower": "aσ.́a"
+    },
+    {
+      "input": "aς.",
+      "lower": "aς."
+    },
+    {
+      "input": "MILK",
+      "lower": "milk"
+    },
+    {
+      "input": "walk dog @home",
+      "lower": "walk dog @home"
+    },
+    {
+      "input": "task @A.b @x",
+      "lower": "task @a.b @x"
+    },
+    {
+      "input": "task @a.b @a😀b",
+      "lower": "task @a.b @a😀b"
+    },
+    {
+      "input": "ΟΔΟΣ ΝΕΑ",
+      "lower": "οδος νεα"
+    },
+    {
+      "input": "buy milk +work",
+      "lower": "buy milk +work"
+    },
+    {
+      "input": "ΑΣ",
+      "lower": "ας"
+    },
+    {
+      "input": "ΑΣ.",
+      "lower": "ας."
+    },
+    {
+      "input": "ΑΣ Α",
+      "lower": "ας α"
+    },
+    {
+      "input": "ΑΣΑ",
+      "lower": "ασα"
+    },
+    {
+      "input": "Σ",
+      "lower": "σ"
+    },
+    {
+      "input": "Α.Σ",
+      "lower": "α.ς"
+    },
+    {
+      "input": "ΑΣ'",
+      "lower": "ας'"
+    },
+    {
+      "input": "Σ.",
+      "lower": "σ."
+    },
+    {
+      "input": "ΑΣΣ",
+      "lower": "ασς"
+    },
+    {
+      "input": "ΑΣΣΑ",
+      "lower": "ασσα"
+    },
+    {
+      "input": "ΣΣ",
+      "lower": "σς"
+    },
+    {
+      "input": "ΑΣ2",
+      "lower": "ας2"
+    },
+    {
+      "input": "ΑΣ_",
+      "lower": "ας_"
+    },
+    {
+      "input": "ΑΣ!",
+      "lower": "ας!"
+    },
+    {
+      "input": "ΑΣ!Α",
+      "lower": "ας!α"
+    },
+    {
+      "input": "1Σ",
+      "lower": "1σ"
+    },
+    {
+      "input": "ΣΑ",
+      "lower": "σα"
+    },
+    {
+      "input": "aΣ́",
+      "lower": "aς́"
+    },
+    {
+      "input": "aΣ́b",
+      "lower": "aσ́b"
+    },
+    {
+      "input": "áΣ",
+      "lower": "áς"
+    },
+    {
+      "input": "aΣ.́b",
+      "lower": "aσ.́b"
+    },
+    {
+      "input": "aΣ.́",
+      "lower": "aς.́"
+    },
+    {
+      "input": "ΑΣ́",
+      "lower": "ας́"
+    },
+    {
+      "input": "ΑΣ́Α",
+      "lower": "ασ́α"
+    },
+    {
+      "input": "ΑΣ­Α",
+      "lower": "ασ­α"
+    },
+    {
+      "input": "ΑΣ'Α",
+      "lower": "ασ'α"
+    },
+    {
+      "input": "ΑΣʰΑ",
+      "lower": "ασʰα"
+    },
+    {
+      "input": "ÄÖÜ",
+      "lower": "äöü"
+    },
+    {
+      "input": "İ",
+      "lower": "i̇"
+    },
+    {
+      "input": "ẞ",
+      "lower": "ß"
+    },
+    {
+      "input": "ǅ",
+      "lower": "ǆ"
+    },
+    {
+      "input": "Ǆ",
+      "lower": "ǆ"
+    },
+    {
+      "input": "Ⅷ",
+      "lower": "ⅷ"
+    },
+    {
+      "input": "𐐀𐐨",
+      "lower": "𐐨𐐨"
+    },
+    {
+      "input": "ẞΣ",
+      "lower": "ßς"
+    },
+    {
+      "input": "𐐀Σ",
+      "lower": "𐐨ς"
+    },
+    {
+      "input": "aΣ́A",
+      "lower": "aσ́a"
+    },
+    {
+      "input": "áΣ́",
+      "lower": "áς́"
+    },
+    {
+      "input": "Σ́",
+      "lower": "σ́"
+    },
+    {
+      "input": "aΣ́́A",
+      "lower": "aσ́́a"
+    },
+    {
+      "input": "aΣ⃝",
+      "lower": "aς⃝"
+    },
+    {
+      "input": "aΣ⃝A",
+      "lower": "aσ⃝a"
+    },
+    {
+      "input": "a⃝Σ",
+      "lower": "a⃝ς"
+    },
+    {
+      "input": "a⃝Σ⃝",
+      "lower": "a⃝ς⃝"
+    },
+    {
+      "input": "Σ⃝",
+      "lower": "σ⃝"
+    },
+    {
+      "input": "aΣ⃝⃝A",
+      "lower": "aσ⃝⃝a"
+    },
+    {
+      "input": "aΣ­",
+      "lower": "aς­"
+    },
+    {
+      "input": "aΣ­A",
+      "lower": "aσ­a"
+    },
+    {
+      "input": "a­Σ",
+      "lower": "a­ς"
+    },
+    {
+      "input": "a­Σ­",
+      "lower": "a­ς­"
+    },
+    {
+      "input": "Σ­",
+      "lower": "σ­"
+    },
+    {
+      "input": "aΣ­­A",
+      "lower": "aσ­­a"
+    },
+    {
+      "input": "aΣ﻿",
+      "lower": "aς﻿"
+    },
+    {
+      "input": "aΣ﻿A",
+      "lower": "aσ﻿a"
+    },
+    {
+      "input": "a﻿Σ",
+      "lower": "a﻿ς"
+    },
+    {
+      "input": "a﻿Σ﻿",
+      "lower": "a﻿ς﻿"
+    },
+    {
+      "input": "Σ﻿",
+      "lower": "σ﻿"
+    },
+    {
+      "input": "aΣ﻿﻿A",
+      "lower": "aσ﻿﻿a"
+    },
+    {
+      "input": "aΣʰ",
+      "lower": "aςʰ"
+    },
+    {
+      "input": "aΣʰA",
+      "lower": "aσʰa"
+    },
+    {
+      "input": "aʰΣ",
+      "lower": "aʰς"
+    },
+    {
+      "input": "aʰΣʰ",
+      "lower": "aʰςʰ"
+    },
+    {
+      "input": "Σʰ",
+      "lower": "σʰ"
+    },
+    {
+      "input": "aΣʰʰA",
+      "lower": "aσʰʰa"
+    },
+    {
+      "input": "aΣ˂",
+      "lower": "aς˂"
+    },
+    {
+      "input": "aΣ˂A",
+      "lower": "aσ˂a"
+    },
+    {
+      "input": "a˂Σ",
+      "lower": "a˂ς"
+    },
+    {
+      "input": "a˂Σ˂",
+      "lower": "a˂ς˂"
+    },
+    {
+      "input": "Σ˂",
+      "lower": "σ˂"
+    },
+    {
+      "input": "aΣ˂˂A",
+      "lower": "aσ˂˂a"
+    },
+    {
+      "input": "aΣ'",
+      "lower": "aς'"
+    },
+    {
+      "input": "aΣ'A",
+      "lower": "aσ'a"
+    },
+    {
+      "input": "a'Σ",
+      "lower": "a'ς"
+    },
+    {
+      "input": "a'Σ'",
+      "lower": "a'ς'"
+    },
+    {
+      "input": "Σ'",
+      "lower": "σ'"
+    },
+    {
+      "input": "aΣ''A",
+      "lower": "aσ''a"
+    },
+    {
+      "input": "aΣ’",
+      "lower": "aς’"
+    },
+    {
+      "input": "aΣ’A",
+      "lower": "aσ’a"
+    },
+    {
+      "input": "a’Σ",
+      "lower": "a’ς"
+    },
+    {
+      "input": "a’Σ’",
+      "lower": "a’ς’"
+    },
+    {
+      "input": "Σ’",
+      "lower": "σ’"
+    },
+    {
+      "input": "aΣ’’A",
+      "lower": "aσ’’a"
+    },
+    {
+      "input": "aΣ:",
+      "lower": "aς:"
+    },
+    {
+      "input": "aΣ:A",
+      "lower": "aσ:a"
+    },
+    {
+      "input": "a:Σ",
+      "lower": "a:ς"
+    },
+    {
+      "input": "a:Σ:",
+      "lower": "a:ς:"
+    },
+    {
+      "input": "Σ:",
+      "lower": "σ:"
+    },
+    {
+      "input": "aΣ::A",
+      "lower": "aσ::a"
+    },
+    {
+      "input": "aΣ״",
+      "lower": "aς״"
+    },
+    {
+      "input": "aΣ״A",
+      "lower": "aσ״a"
+    },
+    {
+      "input": "a״Σ",
+      "lower": "a״ς"
+    },
+    {
+      "input": "a״Σ״",
+      "lower": "a״ς״"
+    },
+    {
+      "input": "Σ״",
+      "lower": "σ״"
+    },
+    {
+      "input": "aΣ״״A",
+      "lower": "aσ״״a"
+    },
+    {
+      "input": "aΣ.",
+      "lower": "aς."
+    },
+    {
+      "input": "aΣ.A",
+      "lower": "aσ.a"
+    },
+    {
+      "input": "a.Σ",
+      "lower": "a.ς"
+    },
+    {
+      "input": "a.Σ.",
+      "lower": "a.ς."
+    },
+    {
+      "input": "aΣ..A",
+      "lower": "aσ..a"
+    }
+  ],
+  "views": [
+    {
+      "line": "aΣ.Α @ΟΔΟΣ +Σ",
+      "text": "aσ.α @οδος +σ",
+      "contexts": [],
+      "projects": []
+    },
+    {
+      "line": "aβ́Σ. @áΣ +B",
+      "text": "aβ́ς. @áς +b",
+      "contexts": ["a"],
+      "projects": ["b"]
+    },
+    {
+      "line": "x İ @ẞ +ǅ",
+      "text": "i̇ @ß +ǆ",
+      "contexts": [],
+      "projects": []
+    },
+    {
+      "line": "MILK @Home +Work",
+      "text": "milk @home +work",
+      "contexts": ["home"],
+      "projects": ["work"]
+    },
+    {
+      "line": "aΣ A @aΣ +aΣ",
+      "text": "aς a @aς +aς",
+      "contexts": ["a"],
+      "projects": ["a"]
+    },
+    {
+      "line": "task @A.b +a-1",
+      "text": "task @a.b +a-1",
+      "contexts": ["a.b"],
+      "projects": ["a-1"]
+    },
+    {
+      "line": "ΟΔΟΣ ΝΕΑ @ΟΔΟΣ +ΟΔΟΣ",
+      "text": "οδος νεα @οδος +οδος",
+      "contexts": [],
+      "projects": []
+    },
+    {
+      "line": "𐐀𐐨 @𐐀 +𐐨",
+      "text": "𐐨𐐨 @𐐨 +𐐨",
+      "contexts": [],
+      "projects": []
+    },
+    {
+      "line": "İstanbul @İ +İ",
+      "text": "i̇stanbul @i̇ +i̇",
+      "contexts": [],
+      "projects": []
+    },
+    {
+      "line": "áΣ́ @x +y",
+      "text": "áς́ @x +y",
+      "contexts": ["x"],
+      "projects": ["y"]
+    }
+  ],
+  "terms": [
+    {
+      "query": "",
+      "terms": []
+    },
+    {
+      "query": "   ",
+      "terms": []
+    },
+    {
+      "query": "work",
+      "terms": ["work"]
+    },
+    {
+      "query": "@work",
+      "terms": ["@work"]
+    },
+    {
+      "query": "+project",
+      "terms": ["+project"]
+    },
+    {
+      "query": "alpha beta",
+      "terms": ["alpha", "beta"]
+    },
+    {
+      "query": "!!!",
+      "terms": []
+    },
+    {
+      "query": "MILK",
+      "terms": ["milk"]
+    },
+    {
+      "query": "due:",
+      "terms": ["due"]
+    },
+    {
+      "query": "h:1",
+      "terms": ["h:1"]
+    },
+    {
+      "query": "@",
+      "terms": []
+    },
+    {
+      "query": "a.b",
+      "terms": ["a.b"]
+    },
+    {
+      "query": "ΟΔΟΣ",
+      "terms": []
+    },
+    {
+      "query": "/@work +bug/",
+      "terms": ["@work", "+bug"]
+    },
+    {
+      "query": "/@home/",
+      "terms": ["@home"]
+    },
+    {
+      "query": "milk,",
+      "terms": ["milk"]
+    },
+    {
+      "query": "..abc..",
+      "terms": ["abc.."]
+    },
+    {
+      "query": "-x-",
+      "terms": ["x-"]
+    },
+    {
+      "query": "@@@",
+      "terms": []
+    },
+    {
+      "query": "+/",
+      "terms": []
+    },
+    {
+      "query": "a@b+",
+      "terms": ["a@b"]
+    },
+    {
+      "query": "ασ",
+      "terms": []
+    },
+    {
+      "query": "xσx",
+      "terms": ["xσx"]
+    },
+    {
+      "query": "aΣ.Α",
+      "terms": ["aσ."]
+    },
+    {
+      "query": "aβ́Σ.",
+      "terms": ["aβ́ς."]
+    },
+    {
+      "query": "ΑΣ",
+      "terms": []
+    },
+    {
+      "query": "ΑΣ ΝΕΑ",
+      "terms": []
+    },
+    {
+      "query": "@ΑΣ",
+      "terms": []
+    },
+    {
+      "query": "+Σ",
+      "terms": []
+    },
+    {
+      "query": "@!!!",
+      "terms": []
+    },
+    {
+      "query": "-@!",
+      "terms": []
+    },
+    {
+      "query": "_x_",
+      "terms": ["_x_"]
+    },
+    {
+      "query": "😀x😀",
+      "terms": ["x"]
+    },
+    {
+      "query": "😀",
+      "terms": []
+    },
+    {
+      "query": "́á",
+      "terms": ["a"]
+    },
+    {
+      "query": "a'b",
+      "terms": ["a'b"]
+    },
+    {
+      "query": "'a'",
+      "terms": ["a"]
+    },
+    {
+      "query": "``a``",
+      "terms": ["a"]
+    },
+    {
+      "query": "a/b",
+      "terms": ["a/b"]
+    },
+    {
+      "query": "a\\b",
+      "terms": ["a\\b"]
+    },
+    {
+      "query": "a:b",
+      "terms": ["a:b"]
+    },
+    {
+      "query": "a;b",
+      "terms": ["a;b"]
+    },
+    {
+      "query": "a,b",
+      "terms": ["a,b"]
+    },
+    {
+      "query": "a!b",
+      "terms": ["a!b"]
+    },
+    {
+      "query": "!a!",
+      "terms": ["a"]
+    },
+    {
+      "query": "€a€",
+      "terms": ["a"]
+    },
+    {
+      "query": "alphabeta",
+      "terms": ["alphabeta"]
+    },
+    {
+      "query": "alpha﻿beta",
+      "terms": ["alpha", "beta"]
+    },
+    {
+      "query": "a b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a　b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a\u000bb",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a\fb",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a\rb",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a\tb",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "a b",
+      "terms": ["a", "b"]
+    },
+    {
+      "query": "aa",
+      "terms": ["aa"]
+    },
+    {
+      "query": "aA",
+      "terms": ["aa"]
+    },
+    {
+      "query": "aΣ",
+      "terms": ["a"]
+    },
+    {
+      "query": "a0",
+      "terms": ["a0"]
+    },
+    {
+      "query": "a_",
+      "terms": ["a_"]
+    },
+    {
+      "query": "a@",
+      "terms": ["a"]
+    },
+    {
+      "query": "a+",
+      "terms": ["a"]
+    },
+    {
+      "query": "a.",
+      "terms": ["a."]
+    },
+    {
+      "query": "a-",
+      "terms": ["a-"]
+    },
+    {
+      "query": "a!",
+      "terms": ["a"]
+    },
+    {
+      "query": "a/",
+      "terms": ["a"]
+    },
+    {
+      "query": "a ",
+      "terms": ["a"]
+    },
+    {
+      "query": "a ",
+      "terms": ["a"]
+    },
+    {
+      "query": "a",
+      "terms": ["a"]
+    },
+    {
+      "query": "a﻿",
+      "terms": ["a"]
+    },
+    {
+      "query": "á",
+      "terms": ["a"]
+    },
+    {
+      "query": "Aa",
+      "terms": ["aa"]
+    },
+    {
+      "query": "AA",
+      "terms": ["aa"]
+    },
+    {
+      "query": "AΣ",
+      "terms": ["a"]
+    },
+    {
+      "query": "A0",
+      "terms": ["a0"]
+    },
+    {
+      "query": "A_",
+      "terms": ["a_"]
+    },
+    {
+      "query": "A@",
+      "terms": ["a"]
+    },
+    {
+      "query": "A+",
+      "terms": ["a"]
+    },
+    {
+      "query": "A.",
+      "terms": ["a."]
+    },
+    {
+      "query": "A-",
+      "terms": ["a-"]
+    },
+    {
+      "query": "A!",
+      "terms": ["a"]
+    },
+    {
+      "query": "A/",
+      "terms": ["a"]
+    },
+    {
+      "query": "A ",
+      "terms": ["a"]
+    },
+    {
+      "query": "A ",
+      "terms": ["a"]
+    },
+    {
+      "query": "A",
+      "terms": ["a"]
+    },
+    {
+      "query": "A﻿",
+      "terms": ["a"]
+    },
+    {
+      "query": "Á",
+      "terms": ["a"]
+    },
+    {
+      "query": "Σa",
+      "terms": ["a"]
+    },
+    {
+      "query": "ΣA",
+      "terms": ["a"]
+    },
+    {
+      "query": "ΣΣ",
+      "terms": []
+    },
+    {
+      "query": "Σ0",
+      "terms": ["0"]
+    },
+    {
+      "query": "Σ_",
+      "terms": ["_"]
+    },
+    {
+      "query": "Σ@",
+      "terms": []
+    },
+    {
+      "query": "Σ+",
+      "terms": []
+    },
+    {
+      "query": "Σ.",
+      "terms": []
+    },
+    {
+      "query": "Σ-",
+      "terms": []
+    },
+    {
+      "query": "Σ!",
+      "terms": []
+    },
+    {
+      "query": "Σ/",
+      "terms": []
+    },
+    {
+      "query": "Σ ",
+      "terms": []
+    },
+    {
+      "query": "Σ ",
+      "terms": []
+    },
+    {
+      "query": "Σ",
+      "terms": []
+    },
+    {
+      "query": "Σ﻿",
+      "terms": []
+    },
+    {
+      "query": "Σ́",
+      "terms": []
+    },
+    {
+      "query": "0a",
+      "terms": ["0a"]
+    },
+    {
+      "query": "0A",
+      "terms": ["0a"]
+    },
+    {
+      "query": "0Σ",
+      "terms": ["0"]
+    },
+    {
+      "query": "00",
+      "terms": ["00"]
+    },
+    {
+      "query": "0_",
+      "terms": ["0_"]
+    },
+    {
+      "query": "0@",
+      "terms": ["0"]
+    },
+    {
+      "query": "0+",
+      "terms": ["0"]
+    },
+    {
+      "query": "0.",
+      "terms": ["0."]
+    },
+    {
+      "query": "0-",
+      "terms": ["0-"]
+    },
+    {
+      "query": "0!",
+      "terms": ["0"]
+    },
+    {
+      "query": "0/",
+      "terms": ["0"]
+    },
+    {
+      "query": "0 ",
+      "terms": ["0"]
+    },
+    {
+      "query": "0 ",
+      "terms": ["0"]
+    },
+    {
+      "query": "0",
+      "terms": ["0"]
+    },
+    {
+      "query": "0﻿",
+      "terms": ["0"]
+    },
+    {
+      "query": "0́",
+      "terms": ["0"]
+    },
+    {
+      "query": "_a",
+      "terms": ["_a"]
+    },
+    {
+      "query": "_A",
+      "terms": ["_a"]
+    },
+    {
+      "query": "_Σ",
+      "terms": ["_"]
+    },
+    {
+      "query": "_0",
+      "terms": ["_0"]
+    },
+    {
+      "query": "__",
+      "terms": ["__"]
+    },
+    {
+      "query": "_@",
+      "terms": ["_"]
+    },
+    {
+      "query": "_+",
+      "terms": ["_"]
+    },
+    {
+      "query": "_.",
+      "terms": ["_."]
+    },
+    {
+      "query": "_-",
+      "terms": ["_-"]
+    },
+    {
+      "query": "_!",
+      "terms": ["_"]
+    },
+    {
+      "query": "_/",
+      "terms": ["_"]
+    },
+    {
+      "query": "_ ",
+      "terms": ["_"]
+    },
+    {
+      "query": "_ ",
+      "terms": ["_"]
+    },
+    {
+      "query": "_",
+      "terms": ["_"]
+    },
+    {
+      "query": "_﻿",
+      "terms": ["_"]
+    },
+    {
+      "query": "_́",
+      "terms": ["_"]
+    },
+    {
+      "query": "@a",
+      "terms": ["@a"]
+    },
+    {
+      "query": "@A",
+      "terms": ["@a"]
+    },
+    {
+      "query": "@Σ",
+      "terms": []
+    },
+    {
+      "query": "@0",
+      "terms": ["@0"]
+    },
+    {
+      "query": "@_",
+      "terms": ["@_"]
+    },
+    {
+      "query": "@@",
+      "terms": []
+    },
+    {
+      "query": "@+",
+      "terms": []
+    },
+    {
+      "query": "@.",
+      "terms": ["@."]
+    },
+    {
+      "query": "@-",
+      "terms": ["@-"]
+    },
+    {
+      "query": "@!",
+      "terms": []
+    },
+    {
+      "query": "@/",
+      "terms": []
+    },
+    {
+      "query": "@ ",
+      "terms": []
+    },
+    {
+      "query": "@ ",
+      "terms": []
+    },
+    {
+      "query": "@",
+      "terms": []
+    },
+    {
+      "query": "@﻿",
+      "terms": []
+    },
+    {
+      "query": "@́",
+      "terms": []
+    },
+    {
+      "query": "+a",
+      "terms": ["+a"]
+    },
+    {
+      "query": "+A",
+      "terms": ["+a"]
+    },
+    {
+      "query": "+0",
+      "terms": ["+0"]
+    },
+    {
+      "query": "+_",
+      "terms": ["+_"]
+    },
+    {
+      "query": "+@",
+      "terms": []
+    },
+    {
+      "query": "++",
+      "terms": []
+    },
+    {
+      "query": "+.",
+      "terms": ["+."]
+    },
+    {
+      "query": "+-",
+      "terms": ["+-"]
+    },
+    {
+      "query": "+!",
+      "terms": []
+    },
+    {
+      "query": "+ ",
+      "terms": []
+    },
+    {
+      "query": "+ ",
+      "terms": []
+    },
+    {
+      "query": "+",
+      "terms": []
+    },
+    {
+      "query": "+﻿",
+      "terms": []
+    },
+    {
+      "query": "+́",
+      "terms": []
+    },
+    {
+      "query": ".a",
+      "terms": ["a"]
+    },
+    {
+      "query": ".A",
+      "terms": ["a"]
+    },
+    {
+      "query": ".Σ",
+      "terms": []
+    },
+    {
+      "query": ".0",
+      "terms": ["0"]
+    },
+    {
+      "query": "._",
+      "terms": ["_"]
+    },
+    {
+      "query": ".@",
+      "terms": []
+    },
+    {
+      "query": ".+",
+      "terms": []
+    },
+    {
+      "query": "..",
+      "terms": []
+    },
+    {
+      "query": ".-",
+      "terms": []
+    },
+    {
+      "query": ".!",
+      "terms": []
+    },
+    {
+      "query": "./",
+      "terms": []
+    },
+    {
+      "query": ". ",
+      "terms": []
+    },
+    {
+      "query": ". ",
+      "terms": []
+    },
+    {
+      "query": ".",
+      "terms": []
+    },
+    {
+      "query": ".﻿",
+      "terms": []
+    },
+    {
+      "query": ".́",
+      "terms": []
+    },
+    {
+      "query": "-a",
+      "terms": ["a"]
+    },
+    {
+      "query": "-A",
+      "terms": ["a"]
+    },
+    {
+      "query": "-Σ",
+      "terms": []
+    },
+    {
+      "query": "-0",
+      "terms": ["0"]
+    },
+    {
+      "query": "-_",
+      "terms": ["_"]
+    },
+    {
+      "query": "-@",
+      "terms": []
+    },
+    {
+      "query": "-+",
+      "terms": []
+    },
+    {
+      "query": "-.",
+      "terms": []
+    },
+    {
+      "query": "--",
+      "terms": []
+    },
+    {
+      "query": "-!",
+      "terms": []
+    },
+    {
+      "query": "-/",
+      "terms": []
+    },
+    {
+      "query": "- ",
+      "terms": []
+    },
+    {
+      "query": "- ",
+      "terms": []
+    },
+    {
+      "query": "-",
+      "terms": []
+    },
+    {
+      "query": "-﻿",
+      "terms": []
+    },
+    {
+      "query": "-́",
+      "terms": []
+    },
+    {
+      "query": "!a",
+      "terms": ["a"]
+    },
+    {
+      "query": "!A",
+      "terms": ["a"]
+    },
+    {
+      "query": "!Σ",
+      "terms": []
+    },
+    {
+      "query": "!0",
+      "terms": ["0"]
+    },
+    {
+      "query": "!_",
+      "terms": ["_"]
+    },
+    {
+      "query": "!@",
+      "terms": []
+    },
+    {
+      "query": "!+",
+      "terms": []
+    },
+    {
+      "query": "!.",
+      "terms": []
+    },
+    {
+      "query": "!-",
+      "terms": []
+    },
+    {
+      "query": "!!",
+      "terms": []
+    },
+    {
+      "query": "!/",
+      "terms": []
+    },
+    {
+      "query": "! ",
+      "terms": []
+    },
+    {
+      "query": "! ",
+      "terms": []
+    },
+    {
+      "query": "!",
+      "terms": []
+    },
+    {
+      "query": "!﻿",
+      "terms": []
+    },
+    {
+      "query": "!́",
+      "terms": []
+    },
+    {
+      "query": "/a",
+      "terms": ["a"]
+    },
+    {
+      "query": "/A",
+      "terms": ["a"]
+    },
+    {
+      "query": "/Σ",
+      "terms": []
+    },
+    {
+      "query": "/0",
+      "terms": ["0"]
+    },
+    {
+      "query": "/_",
+      "terms": ["_"]
+    },
+    {
+      "query": "/@",
+      "terms": []
+    },
+    {
+      "query": "/+",
+      "terms": []
+    },
+    {
+      "query": "/.",
+      "terms": []
+    },
+    {
+      "query": "/-",
+      "terms": []
+    },
+    {
+      "query": "/!",
+      "terms": []
+    },
+    {
+      "query": "//",
+      "terms": []
+    },
+    {
+      "query": "/ ",
+      "terms": []
+    },
+    {
+      "query": "/ ",
+      "terms": []
+    },
+    {
+      "query": "/",
+      "terms": []
+    },
+    {
+      "query": "/﻿",
+      "terms": []
+    },
+    {
+      "query": "/́",
+      "terms": []
+    },
+    {
+      "query": " a",
+      "terms": ["a"]
+    },
+    {
+      "query": " A",
+      "terms": ["a"]
+    },
+    {
+      "query": " Σ",
+      "terms": []
+    },
+    {
+      "query": " 0",
+      "terms": ["0"]
+    },
+    {
+      "query": " _",
+      "terms": ["_"]
+    },
+    {
+      "query": " @",
+      "terms": []
+    },
+    {
+      "query": " +",
+      "terms": []
+    },
+    {
+      "query": " .",
+      "terms": []
+    },
+    {
+      "query": " -",
+      "terms": []
+    },
+    {
+      "query": " !",
+      "terms": []
+    },
+    {
+      "query": " /",
+      "terms": []
+    },
+    {
+      "query": "  ",
+      "terms": []
+    },
+    {
+      "query": "  ",
+      "terms": []
+    },
+    {
+      "query": " ",
+      "terms": []
+    },
+    {
+      "query": " ﻿",
+      "terms": []
+    },
+    {
+      "query": " ́",
+      "terms": []
+    },
+    {
+      "query": " a",
+      "terms": ["a"]
+    },
+    {
+      "query": " A",
+      "terms": ["a"]
+    },
+    {
+      "query": " Σ",
+      "terms": []
+    },
+    {
+      "query": " 0",
+      "terms": ["0"]
+    },
+    {
+      "query": " _",
+      "terms": ["_"]
+    },
+    {
+      "query": " @",
+      "terms": []
+    },
+    {
+      "query": " +",
+      "terms": []
+    },
+    {
+      "query": " .",
+      "terms": []
+    },
+    {
+      "query": " -",
+      "terms": []
+    },
+    {
+      "query": " !",
+      "terms": []
+    },
+    {
+      "query": " /",
+      "terms": []
+    },
+    {
+      "query": "  ",
+      "terms": []
+    },
+    {
+      "query": "  ",
+      "terms": []
+    },
+    {
+      "query": " ",
+      "terms": []
+    },
+    {
+      "query": " ﻿",
+      "terms": []
+    },
+    {
+      "query": " ́",
+      "terms": []
+    },
+    {
+      "query": "a",
+      "terms": ["a"]
+    },
+    {
+      "query": "A",
+      "terms": ["a"]
+    },
+    {
+      "query": "Σ",
+      "terms": []
+    },
+    {
+      "query": "0",
+      "terms": ["0"]
+    },
+    {
+      "query": "_",
+      "terms": ["_"]
+    },
+    {
+      "query": "@",
+      "terms": []
+    },
+    {
+      "query": "+",
+      "terms": []
+    },
+    {
+      "query": ".",
+      "terms": []
+    },
+    {
+      "query": "-",
+      "terms": []
+    },
+    {
+      "query": "!",
+      "terms": []
+    },
+    {
+      "query": "/",
+      "terms": []
+    },
+    {
+      "query": " ",
+      "terms": []
+    },
+    {
+      "query": " ",
+      "terms": []
+    },
+    {
+      "query": "",
+      "terms": []
+    },
+    {
+      "query": "﻿",
+      "terms": []
+    },
+    {
+      "query": "́",
+      "terms": []
+    },
+    {
+      "query": "﻿a",
+      "terms": ["a"]
+    },
+    {
+      "query": "﻿A",
+      "terms": ["a"]
+    },
+    {
+      "query": "﻿Σ",
+      "terms": []
+    },
+    {
+      "query": "﻿0",
+      "terms": ["0"]
+    },
+    {
+      "query": "﻿_",
+      "terms": ["_"]
+    },
+    {
+      "query": "﻿@",
+      "terms": []
+    },
+    {
+      "query": "﻿+",
+      "terms": []
+    },
+    {
+      "query": "﻿.",
+      "terms": []
+    },
+    {
+      "query": "﻿-",
+      "terms": []
+    },
+    {
+      "query": "﻿!",
+      "terms": []
+    },
+    {
+      "query": "﻿/",
+      "terms": []
+    },
+    {
+      "query": "﻿ ",
+      "terms": []
+    },
+    {
+      "query": "﻿ ",
+      "terms": []
+    },
+    {
+      "query": "﻿",
+      "terms": []
+    },
+    {
+      "query": "﻿﻿",
+      "terms": []
+    },
+    {
+      "query": "﻿́",
+      "terms": []
+    },
+    {
+      "query": "́a",
+      "terms": ["a"]
+    },
+    {
+      "query": "́A",
+      "terms": ["a"]
+    },
+    {
+      "query": "́Σ",
+      "terms": []
+    },
+    {
+      "query": "́0",
+      "terms": ["0"]
+    },
+    {
+      "query": "́_",
+      "terms": ["_"]
+    },
+    {
+      "query": "́@",
+      "terms": []
+    },
+    {
+      "query": "́+",
+      "terms": []
+    },
+    {
+      "query": "́.",
+      "terms": []
+    },
+    {
+      "query": "́-",
+      "terms": []
+    },
+    {
+      "query": "́!",
+      "terms": []
+    },
+    {
+      "query": "́/",
+      "terms": []
+    },
+    {
+      "query": "́ ",
+      "terms": []
+    },
+    {
+      "query": "́ ",
+      "terms": []
+    },
+    {
+      "query": "́",
+      "terms": []
+    },
+    {
+      "query": "́﻿",
+      "terms": []
+    },
+    {
+      "query": "́́",
+      "terms": []
+    }
+  ]
+}
