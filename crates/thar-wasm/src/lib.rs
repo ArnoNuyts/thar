@@ -178,9 +178,11 @@ fn parse_envelope(text: &str, today: &str, limits: &ReadLimits) -> Result<String
     let parsed =
         validate_file_bytes(text.len() as u64, limits).and_then(|()| parse_core_file(text, limits));
 
-    // A record spells out every field, so the envelope is larger than the
-    // input; one and a half times plus the envelope keys is a close estimate
-    // without doubling the peak allocation of a large `todo.txt`.
+    // A record spells out every field, so a file of short lines expands far
+    // more than the input does. 50% of the input plus 256 bytes is right-sized
+    // for typical todo lines; a miss only costs an amortized `String` growth,
+    // while reserving more would double the peak allocation on a large
+    // `todo.txt`.
     let mut out = String::with_capacity(text.len().saturating_mul(3) / 2 + 256);
     match parsed {
         Ok(todos) => {
@@ -332,7 +334,7 @@ fn push_optional_date(out: &mut String, date: Option<TodoDate>) {
         Some(date) => {
             // Digits and `-` need no escaping, and `Display` writes straight
             // into `out`, so this does not allocate a temporary `String`.
-            write!(out, "\"{date}\"").expect("writing to a String cannot fail");
+            push_fmt(out, format_args!("\"{date}\""));
         }
         None => out.push_str("null"),
     }
@@ -350,6 +352,15 @@ fn push_json_string_array(out: &mut String, values: &[String]) {
     out.push(']');
 }
 
+/// Append formatted arguments without an unreachable `expect`.
+///
+/// `fmt::Write` for `String` is infallible, so a `write!` here can never return
+/// `Err`. The `Result` is dropped in this one documented place rather than
+/// repeated as `.expect(…)` at every call site.
+fn push_fmt(out: &mut String, args: fmt::Arguments<'_>) {
+    let _ = out.write_fmt(args);
+}
+
 /// Append `true` or `false`.
 fn push_json_bool(out: &mut String, value: bool) {
     out.push_str(if value { "true" } else { "false" });
@@ -357,7 +368,7 @@ fn push_json_bool(out: &mut String, value: bool) {
 
 /// Append a JSON number.
 fn push_json_number(out: &mut String, value: u64) {
-    write!(out, "{value}").expect("writing to a String cannot fail");
+    push_fmt(out, format_args!("{value}"));
 }
 
 /// Append a one-character JSON string (a priority letter).
@@ -389,7 +400,7 @@ fn push_json_string(out: &mut String, value: &str) {
             '\u{2028}' => out.push_str("\\u2028"),
             '\u{2029}' => out.push_str("\\u2029"),
             control if (control as u32) < 0x20 => {
-                write!(out, "\\u{:04x}", control as u32).expect("writing to a String cannot fail");
+                push_fmt(out, format_args!("\\u{:04x}", control as u32));
             }
             other => out.push(other),
         }
