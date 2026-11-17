@@ -35,9 +35,9 @@ third-party dependency.
 and `too-many-todos` and validates every line before any is accepted, so a
 batch is atomic. `validate_default_batch` is the `MAX_PASTE_TODOS` wrapper.
 
-`TodoInputError` is an enum whose `code()` returns the stable TypeScript
-`TodoInputErrorCode` string, with a bounded `message`/`Display` that never
-echoes the rejected payload — every message is asserted in a table test.
+`TodoInputError` is an enum whose `Display` is the bounded user-facing message
+and never echoes the rejected payload — every message is asserted in a table
+test.
 
 ### Editor (`thar-tui/src/editor.rs`)
 
@@ -107,9 +107,9 @@ request after an `Action::Confirm`.
 
 ## Read-only contract
 
-- The one keymap runs through `command_for_key_in`; a read-only process maps
+- The one keymap runs through `command_for_key`; a read-only process maps
   every `Command::mutates()` intent (including `n`/`e`) to
-  `Command::Rejected(READ_ONLY_MESSAGE)` and the `READ-ONLY` badge stays.
+  `Command::Toast(READ_ONLY_MESSAGE)` and the `READ-ONLY` badge stays.
 - `thar-tui` gained no I/O: the screens return `Action`s, and the host applies
   them. `crates/thar-cli/tests/no_write.rs` (the CP6 source scan) still scans
   every source file; `clipboard.rs` has its own forbidden list that allows only

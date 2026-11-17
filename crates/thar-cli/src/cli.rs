@@ -92,7 +92,8 @@ pub fn format_usage(version: &str) -> String {
         "  -v, --version         Show version".to_owned(),
         "  --write               Allow edits; default is read-only".to_owned(),
         "  --read-only           Force the read-only default".to_owned(),
-        "  --no-backup           Do not keep todo.txt.bak before the first save".to_owned(),
+        "  --no-backup           Skip todo.txt.bak before the first save (needs --write)"
+            .to_owned(),
         "  --no-update-check     Accepted for CLI parity".to_owned(),
         String::new(),
         "Without --write this binary never creates, saves, or archives todos.".to_owned(),

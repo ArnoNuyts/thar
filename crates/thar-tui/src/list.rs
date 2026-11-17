@@ -3,8 +3,9 @@
 //! `thar_core::build_rows` returns rows that borrow the todos
 //! ([`thar_core::Row`]). A long-lived `App` cannot store those, and rebuilding
 //! them every frame would put the sort on the render path. [`ListModel`]
-//! therefore owns a row list of indices into `App.todos`: it is rebuilt only
-//! when the query, hidden-view toggle, today, or the todo list changes.
+//! therefore owns a row list of indices into `App`'s load-order todo list: it is
+//! rebuilt only when the query, hidden-view toggle, today, or the todo list
+//! changes.
 //!
 //! The row semantics are CP3b1's, unchanged: context headers (including the
 //! `"None"` group) are rows, todo numbers are 1-based across the whole list, and
@@ -12,8 +13,9 @@
 
 use std::borrow::Borrow;
 
-use thar_core::{Row, Todo, TodoDate, build_rows};
+use thar_core::{Row, RowError, Rows, Todo, TodoDate, build_rows};
 
+use crate::entry::TodoEntry;
 use crate::search::OwnedView;
 
 /// One row in the owned list model.
@@ -28,7 +30,7 @@ pub enum ListRow {
     },
     /// A todo row, pointing into the host's load-order todo list.
     Todo {
-        /// Index into `App.todos`.
+        /// Index into the app's load-order todo list.
         todo_index: usize,
         /// 1-based number among todo rows, headers excluded.
         number: usize,
@@ -74,28 +76,53 @@ impl ListModel {
     /// Build the row list from the load-order todos and their cached views.
     ///
     /// `query` is normalized inside the call (one allocation per keystroke);
-    /// `views` must be aligned with `todos`, which [`crate::app::App`] keeps an
-    /// invariant. A misalignment is an internal bug, not user data: debug
-    /// builds assert, and release builds return an empty model so the TUI
-    /// keeps running.
+    /// `views` must be aligned with `todos`, which is the caller's invariant.
+    /// [`crate::app::App`] cannot break that invariant any more because it keeps
+    /// one entry per todo that supplies both halves; this entry point stays for
+    /// callers that hold the two slices separately.
     ///
     /// `todos` may be any slice of values that borrow a [`Todo`], so the app can
     /// keep its per-todo `Rc<Todo>` sharing intact and still build rows.
-    #[must_use]
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RowError::ViewCountMismatch`] when `views` is not aligned with
+    /// `todos`. A misalignment means at least one row would point at a foreign
+    /// view, so no row is produced instead of a silently truncated list.
     pub fn build<T: Borrow<Todo>>(
         todos: &[T],
         views: &[OwnedView],
         query: &str,
         show_hidden: bool,
         today: TodoDate,
+    ) -> Result<Self, RowError> {
+        let terms = crate::search::extract_search_terms(query);
+        let rows = build_rows(todos, views, &terms, show_hidden, today)?;
+        Ok(Self::from_rows(rows))
+    }
+
+    /// Build the row list from the app's one-entry-per-todo list.
+    ///
+    /// One [`TodoEntry`] supplies both the todo (`Borrow<Todo>`) and its cached
+    /// search view (`SearchViewLike`), and the *same* slice is handed to
+    /// [`build_rows`] for both roles. The view count therefore cannot disagree
+    /// with the todo count: alignment is structural, not an invariant the caller
+    /// has to maintain, which is why this constructor needs no error case.
+    #[must_use]
+    pub(crate) fn from_entries(
+        entries: &[TodoEntry],
+        query: &str,
+        show_hidden: bool,
+        today: TodoDate,
     ) -> Self {
         let terms = crate::search::extract_search_terms(query);
+        let rows = build_rows(entries, entries, &terms, show_hidden, today)
+            .expect("one entry supplies both the todo and its search view");
+        Self::from_rows(rows)
+    }
 
-        let Ok(rows) = build_rows(todos, views, &terms, show_hidden, today) else {
-            debug_assert!(false, "search views must be aligned with todos");
-            return Self::default();
-        };
-
+    /// Map the borrowed core rows onto the owned row list.
+    fn from_rows(rows: Rows<'_>) -> Self {
         let mut todo_number = 0;
         let mut owned = Vec::with_capacity(rows.len());
         for row in rows.rows() {
@@ -155,8 +182,9 @@ impl ListModel {
 #[cfg(test)]
 mod tests {
     use super::{ListModel, ListRow};
+    use crate::entry::TodoEntry;
     use crate::search::view_for;
-    use thar_core::{Todo, TodoDate, TodoId};
+    use thar_core::{RowError, Todo, TodoDate, TodoId};
 
     fn todos(lines: &[&str]) -> Vec<Todo> {
         lines
@@ -166,16 +194,14 @@ mod tests {
             .collect()
     }
 
+    fn today() -> TodoDate {
+        "2026-11-15".parse::<TodoDate>().expect("valid date")
+    }
+
     fn build(lines: &[&str], query: &str) -> ListModel {
         let list = todos(lines);
         let views: Vec<_> = list.iter().map(view_for).collect();
-        ListModel::build(
-            &list,
-            &views,
-            query,
-            false,
-            "2026-11-15".parse::<TodoDate>().expect("valid date"),
-        )
+        ListModel::build(&list, &views, query, false, today()).expect("aligned")
     }
 
     #[test]
@@ -265,20 +291,27 @@ mod tests {
         assert_eq!(rows.visible(0, 0).len(), 0);
     }
 
-    /// The host owns view alignment. Debug builds make the internal bug loud;
-    /// release builds take the `Self::default()` path instead of panicking.
+    /// The one-entry-per-todo path must produce exactly the same rows as the
+    /// separate-slices path for the same list and query.
     #[test]
-    #[cfg(debug_assertions)]
-    #[should_panic(expected = "search views must be aligned with todos")]
-    fn misaligned_views_are_a_debug_assertion() {
+    fn entries_build_the_same_rows_as_a_plain_pair() {
+        let list = todos(&["one @home", "two", "three @home"]);
+        let views: Vec<_> = list.iter().map(view_for).collect();
+        let paired = ListModel::build(&list, &views, "  ", false, today()).expect("aligned");
+
+        let entries: Vec<TodoEntry> = list.into_iter().map(TodoEntry::new).collect();
+        let owned = ListModel::from_entries(&entries, "  ", false, today());
+        assert_eq!(owned, paired);
+    }
+
+    /// A misaligned pair is rejected instead of quietly producing no rows: the
+    /// old fallback could hide the whole list in release builds.
+    #[test]
+    fn misaligned_views_are_reported() {
         let list = todos(&["one"]);
         let views = Vec::new();
-        let _ = ListModel::build(
-            &list,
-            &views,
-            "",
-            false,
-            "2026-11-15".parse::<TodoDate>().expect("valid date"),
-        );
+        let error = ListModel::build(&list, &views, "", false, today())
+            .expect_err("one todo but no views must be rejected");
+        assert_eq!(error, RowError::ViewCountMismatch { todos: 1, views: 0 });
     }
 }

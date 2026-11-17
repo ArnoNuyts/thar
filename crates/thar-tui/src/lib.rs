@@ -20,6 +20,7 @@
 //! - [`modal`] owns the one active screen, its geometry, and the action
 //!   vocabulary;
 //! - `history` keeps the undo/redo snapshots, sharing unchanged todos;
+//! - `entry` pairs each todo handle with its cached search view;
 //! - [`view`] draws one frame;
 //! - [`layout`] is the geometry shared by rendering and hit-testing;
 //! - [`search`] provides the native host's search normalization.
@@ -39,6 +40,7 @@ pub mod app;
 pub mod calendar;
 pub mod display;
 pub mod editor;
+mod entry;
 pub mod event;
 mod history;
 pub mod input;

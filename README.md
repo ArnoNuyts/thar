@@ -113,10 +113,11 @@ npm start          # dev run; works without Rust (falls back to TypeScript)
 
 Running from source without a built WASM package is supported: the app logs one
 line and uses the TypeScript core. To get the Rust core locally, or to produce
-an npm tarball, you need Rust 1.99.1 and `wasm-pack`:
+an npm tarball, you need Rust 1.99.1 and `wasm-pack` 0.14 or newer (CI pins
+0.15.1):
 
 ```sh
-npm run build:wasm   # wasm-pack build ... --out-dir pkg --locked
+npm run build:wasm   # wasm-pack build ... --profile wasm --out-dir pkg --locked
 npm run build
 ```
 
