@@ -723,7 +723,7 @@ mod tests {
     fn history_groups_one_step_per_applied_action() {
         let mut app = app(&["one +work", "two +work +personal"]);
         select_all(&mut app);
-        let before: Vec<String> = app.todos().iter().map(Todo::to_string).collect();
+        let before: Vec<String> = app.todos().iter().map(|todo| todo.to_string()).collect();
         app.open_modal(ModalId::AddProject);
 
         // Custom "newproj" is typed at the custom row.
@@ -751,7 +751,7 @@ mod tests {
         for _ in 0..3 {
             assert!(app.undo(now()));
         }
-        let after: Vec<String> = app.todos().iter().map(Todo::to_string).collect();
+        let after: Vec<String> = app.todos().iter().map(|todo| todo.to_string()).collect();
         assert_eq!(after, before);
     }
 

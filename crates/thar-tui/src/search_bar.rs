@@ -142,9 +142,4 @@ impl SearchBar {
         self.suggestions.clear();
         true
     }
-
-    /// Close the popup, keeping the query.
-    pub fn suggestion_close(&mut self) {
-        self.suggestions.clear();
-    }
 }

@@ -37,10 +37,7 @@ batch is atomic. `validate_default_batch` is the `MAX_PASTE_TODOS` wrapper.
 
 `TodoInputError` is an enum whose `code()` returns the stable TypeScript
 `TodoInputErrorCode` string, with a bounded `message`/`Display` that never
-echoes the rejected payload — every message is asserted in a table test. A
-Rust `&str` is always well-formed UTF-16, so the TypeScript
-`unpaired-surrogate` branch has no Rust counterpart and is not part of the
-enum.
+echoes the rejected payload — every message is asserted in a table test.
 
 ### Editor (`thar-tui/src/editor.rs`)
 
@@ -65,7 +62,7 @@ in the module header.
 
 ### Suggestions (`thar-tui/src/suggest.rs`)
 
-- `TagSources::collect(&[Todo])` walks **every** todo (hidden rows included),
+- `TagSources::collect` walks **every** todo (hidden rows included),
   de-duplicates projects and contexts, and sorts them (the `[\w.\-_]` alphabet
   is ASCII, so byte order is the JavaScript default sort order).
 - `match_tag_word_start(left)` reproduces the two oracle shapes —
@@ -113,8 +110,9 @@ other workstreams own.
   process still maps `n`/`e` to `Command::Rejected(READ_ONLY_MESSAGE)` and the
   `READ-ONLY` badge stays.
 - `thar-tui` gained no I/O: the screens return `Action`s, and the host applies
-  them. `crates/thar-cli/tests/no_write.rs` (the CP6 source scan) is unchanged
-  and green.
+  them. `crates/thar-cli/tests/no_write.rs` (the CP6 source scan) still scans
+  every source file; `clipboard.rs` has its own forbidden list that allows only
+  the child-pipe `write_all(`.
 - The PTY suite's existing read-only tests still pass, including
   `a_real_pty_session_leaves_the_file_and_directory_untouched`.
 
@@ -124,7 +122,7 @@ New tests, all passing:
 
 | File                                         | Count         | Covers                                                                                                                                                                              |
 | -------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/thar-core/src/input.rs`              | 6             | validation table (accepted + every code), exact messages, UTF-16 cap, unpaired surrogate, batch atomicity/capacity                                                                  |
+| `crates/thar-core/src/input.rs`              | 6             | validation table (accepted + every code), exact messages, UTF-16 cap, batch atomicity/capacity                                                                                      |
 | `crates/thar-tui/src/editor.rs`              | 6             | 27-row keymap table, consumed/not-consumed keys, paste rules, char cursor, replace-range clamping                                                                                   |
 | `crates/thar-tui/src/suggest.rs`             | 5             | source collection, word-start shapes, prefix filtering, wrap, apply                                                                                                                 |
 | `crates/thar-tui/src/modal/create_edit.rs`   | 16            | prefill, create/edit outcomes, empty/invalid/control/leading-date rejection, Tab/Shift+Tab, Escape ordering, suggestions + apply, paste, overlong grandfathering, suggestion window |

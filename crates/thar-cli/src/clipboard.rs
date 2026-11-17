@@ -43,22 +43,22 @@ impl std::error::Error for ClipboardError {}
 /// to start because it does not exist, or [`ClipboardError::Failed`] when a
 /// command started but failed (or a non-zero exit).
 pub fn copy(text: &str) -> Result<(), ClipboardError> {
-    let mut last_error = None;
+    let mut last_failure = None;
     let mut all_not_found = true;
 
     for (program, args) in copy_commands() {
         match run_with_stdin(program, args, text.as_bytes()) {
             Ok(()) => return Ok(()),
             Err(failure) => {
-                if failure.spawn_kind != Some(io::ErrorKind::NotFound) {
+                if !failure.spawned_missing() {
                     all_not_found = false;
                 }
-                last_error = Some(failure.message);
+                last_failure = Some(failure);
             }
         }
     }
 
-    Err(aggregate(last_error, all_not_found))
+    Err(aggregate(last_failure, all_not_found))
 }
 
 /// Read the system clipboard as text.
@@ -70,7 +70,7 @@ pub fn copy(text: &str) -> Result<(), ClipboardError> {
 /// command ran but failed (a non-zero exit, unreadable output, or invalid
 /// UTF-8).
 pub fn paste() -> Result<String, ClipboardError> {
-    let mut last_error = None;
+    let mut last_failure = None;
     let mut all_not_found = true;
 
     for (program, args) in paste_commands() {
@@ -81,46 +81,68 @@ pub fn paste() -> Result<String, ClipboardError> {
             }
             Ok(output) => {
                 all_not_found = false;
-                last_error = Some(format!(
+                last_failure = Some(CommandFailure::ran(format!(
                     "{program} exited with {}",
                     output.status.code().unwrap_or(-1)
-                ));
+                )));
             }
             Err(error) => {
                 if error.kind() != io::ErrorKind::NotFound {
                     all_not_found = false;
                 }
-                last_error = Some(format!("{program}: {error}"));
+                last_failure = Some(CommandFailure::spawn(program, error));
             }
         }
     }
 
-    Err(aggregate(last_error, all_not_found))
+    Err(aggregate(last_failure, all_not_found))
 }
 
 /// One failed clipboard command, with enough information to classify it.
-struct CommandFailure {
-    /// `Some(NotFound)` only when the process could not be spawned because the
-    /// program is missing; `None` means the command started and then failed.
-    spawn_kind: Option<io::ErrorKind>,
-    /// A bounded description for [`ClipboardError::Failed`].
-    message: String,
+enum CommandFailure {
+    /// The process could not be spawned. The original [`io::Error`] is kept so
+    /// the classification uses its kind without losing the OS detail.
+    Spawn {
+        /// The command that could not be started.
+        program: &'static str,
+        /// The original spawn error.
+        error: io::Error,
+    },
+    /// The command started and then failed; the message is already bounded.
+    Ran {
+        /// A bounded description for [`ClipboardError::Failed`].
+        message: String,
+    },
 }
 
 impl CommandFailure {
     /// A command that started and then failed.
     fn ran(message: impl Into<String>) -> Self {
-        Self {
-            spawn_kind: None,
+        Self::Ran {
             message: message.into(),
         }
     }
 
     /// A command that could not be spawned.
-    fn spawn(program: &str, error: io::Error) -> Self {
-        Self {
-            spawn_kind: Some(error.kind()),
-            message: format!("{program}: {error}"),
+    fn spawn(program: &'static str, error: io::Error) -> Self {
+        Self::Spawn { program, error }
+    }
+
+    /// True only when the command itself was missing, so the candidate list can
+    /// still classify every failure as [`ClipboardError::Unavailable`].
+    fn spawned_missing(&self) -> bool {
+        match self {
+            Self::Spawn { error, .. } => error.kind() == io::ErrorKind::NotFound,
+            Self::Ran { .. } => false,
+        }
+    }
+
+    /// The bounded payload, produced only when this becomes a
+    /// [`ClipboardError::Failed`].
+    fn into_message(self) -> String {
+        match self {
+            Self::Spawn { program, error } => format!("{program}: {error}"),
+            Self::Ran { message } => message,
         }
     }
 }
@@ -130,10 +152,11 @@ impl CommandFailure {
 /// `Unavailable` is reserved for the case where every candidate failed to
 /// spawn with [`io::ErrorKind::NotFound`] (or the list was empty), so a missing
 /// tool shows the install hint. Any command that actually ran and failed is a
-/// [`ClipboardError::Failed`] with the last bounded message.
-fn aggregate(last_error: Option<String>, all_not_found: bool) -> ClipboardError {
-    match last_error {
-        Some(message) if !all_not_found => ClipboardError::Failed(message),
+/// [`ClipboardError::Failed`] with the last bounded message, which is the only
+/// place the failure is stringified.
+fn aggregate(last_failure: Option<CommandFailure>, all_not_found: bool) -> ClipboardError {
+    match last_failure {
+        Some(failure) if !all_not_found => ClipboardError::Failed(failure.into_message()),
         _ => ClipboardError::Unavailable,
     }
 }
@@ -208,7 +231,8 @@ fn paste_commands() -> &'static [(&'static str, &'static [&'static str])] {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClipboardError, aggregate, copy_commands, paste_commands};
+    use super::{ClipboardError, CommandFailure, aggregate, copy_commands, paste_commands};
+    use std::io;
 
     #[test]
     fn every_platform_has_at_least_one_command() {
@@ -223,8 +247,19 @@ mod tests {
 
     #[test]
     fn every_missing_program_is_unavailable_with_the_install_hint() {
-        let missing = Some("xclip: No such file or directory (os error 2)".to_owned());
-        let error = aggregate(missing, true);
+        let missing = CommandFailure::spawn("xclip", io::Error::from(io::ErrorKind::NotFound));
+        assert!(missing.spawned_missing());
+        match &missing {
+            CommandFailure::Spawn { error, .. } => {
+                assert_eq!(
+                    error.kind(),
+                    io::ErrorKind::NotFound,
+                    "the original io::Error is kept, not only its kind"
+                );
+            }
+            CommandFailure::Ran { .. } => panic!("expected a spawn failure"),
+        }
+        let error = aggregate(Some(missing), true);
         assert_eq!(error, ClipboardError::Unavailable);
         assert_eq!(
             error.to_string(),
@@ -235,7 +270,9 @@ mod tests {
     #[test]
     fn a_command_that_ran_and_failed_is_not_unavailable() {
         let message = "xclip exited with 1".to_owned();
-        let error = aggregate(Some(message.clone()), false);
+        let failure = CommandFailure::ran(message.clone());
+        assert!(!failure.spawned_missing());
+        let error = aggregate(Some(failure), false);
         assert_eq!(error, ClipboardError::Failed(message));
         assert_eq!(error.to_string(), "Clipboard failed: xclip exited with 1");
     }

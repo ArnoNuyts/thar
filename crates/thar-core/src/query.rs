@@ -52,13 +52,17 @@
 
 use core::cmp::Ordering;
 
+use std::borrow::Borrow;
+
 use crate::date::TodoDate;
 use crate::model::{Priority, Todo};
 
 /// Order todo indexes by importance at `today`.
 ///
 /// The order is stable: equal keys keep their input order. The input slice is
-/// never mutated.
+/// never mutated. `todos` may hold any value that borrows a [`Todo`] (for
+/// example `Rc<Todo>`), so a host that shares its list can sort it in place
+/// without cloning.
 ///
 /// # Example
 ///
@@ -73,16 +77,19 @@ use crate::model::{Priority, Todo};
 /// assert_eq!(sort_by_importance(&todos, today), vec![1, 0]);
 /// ```
 #[must_use]
-pub fn sort_by_importance(todos: &[Todo], today: TodoDate) -> Vec<usize> {
+pub fn sort_by_importance<T: Borrow<Todo>>(todos: &[T], today: TodoDate) -> Vec<usize> {
     // Precompute the keys once: `is_overdue` and the first-context lookup are
     // cheap, but the comparator runs O(n log n) times per keystroke.
     let keys: Vec<SortKey<'_>> = todos
         .iter()
-        .map(|todo| SortKey {
-            done: todo.is_done(),
-            context: todo.contexts.first().map(String::as_str),
-            overdue: todo.is_overdue(today),
-            priority: todo.priority,
+        .map(|todo| {
+            let todo = todo.borrow();
+            SortKey {
+                done: todo.is_done(),
+                context: todo.contexts.first().map(String::as_str),
+                overdue: todo.is_overdue(today),
+                priority: todo.priority,
+            }
         })
         .collect();
 

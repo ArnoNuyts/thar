@@ -10,6 +10,8 @@
 //! `"None"` group) are rows, todo numbers are 1-based across the whole list, and
 //! consecutive todos with the same first context form one group.
 
+use std::borrow::Borrow;
+
 use thar_core::{Row, Todo, TodoDate, build_rows};
 
 use crate::search::OwnedView;
@@ -76,9 +78,12 @@ impl ListModel {
     /// invariant. A misalignment is an internal bug, not user data: debug
     /// builds assert, and release builds return an empty model so the TUI
     /// keeps running.
+    ///
+    /// `todos` may be any slice of values that borrow a [`Todo`], so the app can
+    /// keep its per-todo `Rc<Todo>` sharing intact and still build rows.
     #[must_use]
-    pub fn build(
-        todos: &[Todo],
+    pub fn build<T: Borrow<Todo>>(
+        todos: &[T],
         views: &[OwnedView],
         query: &str,
         show_hidden: bool,

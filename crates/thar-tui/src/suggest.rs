@@ -36,8 +36,10 @@ impl TagSources {
     ///
     /// Matching `collectTagSources` in the oracle, the whole list contributes,
     /// not just the visible rows, and the result is de-duplicated and sorted.
+    /// The argument is any iterator of `&Todo`, so a caller that shares todos
+    /// through `Rc<Todo>` can collect references without cloning the values.
     #[must_use]
-    pub fn collect(todos: &[Todo]) -> Self {
+    pub fn collect<'a>(todos: impl IntoIterator<Item = &'a Todo>) -> Self {
         let mut projects: Vec<String> = Vec::new();
         let mut contexts: Vec<String> = Vec::new();
 
@@ -345,7 +347,10 @@ mod tests {
         assert_eq!(sources.contexts, ["home", "work"]);
         assert!(sources.contains(TagKind::Project, "thar"));
         assert!(!sources.contains(TagKind::Context, "thar"));
-        assert_eq!(TagSources::collect(&[]), TagSources::default());
+        assert_eq!(
+            TagSources::collect(std::iter::empty::<&Todo>()),
+            TagSources::default()
+        );
     }
 
     #[test]

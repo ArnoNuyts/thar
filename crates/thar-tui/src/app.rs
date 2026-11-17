@@ -14,6 +14,10 @@
 //! mutate them through the mutation API, which records history, reconciles the
 //! selection and schedules the save in one place.
 //!
+//! The list owns one `Rc<Todo>` per todo. A mutation replaces only the touched
+//! element with a new handle, so an undo snapshot shares every untouched todo
+//! with the live list instead of deep-cloning the whole file.
+//!
 //! # Read-only and write modes
 //!
 //! The binary is read-only unless `--write` is passed. In read-only mode the
@@ -27,6 +31,7 @@
 //! from inside a transition.
 
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyEvent;
@@ -83,7 +88,7 @@ impl Toast {
 /// together: [`crate::nav`] is the only writer outside `App`, and it keeps the
 /// anchor and range consistent with the cursor.
 #[derive(Debug, Default)]
-pub struct Selection {
+pub(crate) struct Selection {
     pub(crate) cursor: Option<TodoId>,
     pub(crate) anchor: Option<TodoId>,
     pub(crate) range: Vec<TodoId>,
@@ -94,9 +99,11 @@ pub struct Selection {
 /// `Clean` means the list matches the last accepted bytes. `Pending` is the
 /// debounce window after the first unsaved mutation. `Retrying` keeps the list
 /// dirty after a failed save and delays the next attempt by [`SAVE_RETRY`]
-/// while holding the last error.
+/// while holding the last error. A new mutation resets the debounce window but
+/// keeps the last error so the status bar does not forget a failure the user
+/// has already seen.
 #[derive(Debug, Default)]
-pub enum SaveState {
+pub(crate) enum SaveState {
     /// No unsaved mutation.
     #[default]
     Clean,
@@ -104,6 +111,8 @@ pub enum SaveState {
     Pending {
         /// Time of the first unsaved mutation.
         since: Instant,
+        /// The last save error, kept across the new debounce window.
+        error: Option<String>,
     },
     /// A save failed; retry at `at` and show `error`.
     Retrying {
@@ -116,12 +125,16 @@ pub enum SaveState {
 
 impl SaveState {
     /// Mark the list dirty at `now`, starting a fresh debounce window.
-    pub fn mark_dirty(&mut self, now: Instant) {
-        *self = Self::Pending { since: now };
+    ///
+    /// The last error is preserved: a mutation after a failed save re-enables
+    /// the retry deadline, but it does not make the failure disappear.
+    pub(crate) fn mark_dirty(&mut self, now: Instant) {
+        let error = self.save_error().map(str::to_owned);
+        *self = Self::Pending { since: now, error };
     }
 
     /// Record a successful save.
-    pub fn mark_saved(&mut self) {
+    pub(crate) fn mark_saved(&mut self) {
         *self = Self::Clean;
     }
 
@@ -149,8 +162,9 @@ impl SaveState {
     #[must_use]
     pub fn save_error(&self) -> Option<&str> {
         match self {
+            Self::Clean => None,
+            Self::Pending { error, .. } => error.as_deref(),
             Self::Retrying { error, .. } => Some(error),
-            Self::Clean | Self::Pending { .. } => None,
         }
     }
 
@@ -159,7 +173,7 @@ impl SaveState {
     pub fn deadline(&self) -> Option<Instant> {
         match self {
             Self::Clean => None,
-            Self::Pending { since } => Some(*since + SAVE_DEBOUNCE),
+            Self::Pending { since, .. } => Some(*since + SAVE_DEBOUNCE),
             Self::Retrying { at, .. } => Some(*at),
         }
     }
@@ -181,7 +195,9 @@ impl SaveState {
 /// The complete TUI state.
 pub struct App {
     filename: PathBuf,
-    todos: Vec<Todo>,
+    /// Per-todo handles: history snapshots share untouched todos with the live
+    /// list, and every mutation replaces only the element it changed.
+    todos: Vec<Rc<Todo>>,
     views: Vec<OwnedView>,
     list: ListModel,
     row_of: Vec<Option<usize>>,
@@ -231,7 +247,7 @@ impl App {
 
         let mut app = Self {
             filename: filename.into(),
-            todos,
+            todos: todos.into_iter().map(Rc::new).collect(),
             views,
             list: ListModel::default(),
             row_of: Vec::new(),
@@ -268,10 +284,13 @@ impl App {
         &self.filename
     }
 
-    /// Todos in load order; row indexes point into this slice.
+    /// Todos in load order; row indexes point into the underlying list.
+    ///
+    /// The return value is a cheap snapshot of borrowed handles, not a clone of
+    /// the todos, so sharing does not require callers to know about `Rc`.
     #[must_use]
-    pub fn todos(&self) -> &[Todo] {
-        &self.todos
+    pub fn todos(&self) -> Vec<&Todo> {
+        self.todos.iter().map(Rc::as_ref).collect()
     }
 
     /// Current search query, before normalization.
@@ -457,9 +476,9 @@ impl App {
     /// Replace the whole list (initial load or a reload) and reset selection
     /// metadata that refers to the previous list.
     pub fn set_todos(&mut self, todos: Vec<Todo>) {
-        self.todos = todos;
-        self.views = self.todos.iter().map(view_for).collect();
-        self.tag_sources = TagSources::collect(&self.todos);
+        self.todos = todos.into_iter().map(Rc::new).collect();
+        self.views = self.todos.iter().map(|todo| view_for(todo)).collect();
+        self.tag_sources = TagSources::collect(self.todos.iter().map(Rc::as_ref));
         self.refresh_search_suggestions();
         self.selection.range.clear();
         self.selection.anchor = None;
@@ -618,13 +637,13 @@ impl App {
     /// Todo for a load-order index.
     #[must_use]
     pub fn todo_at(&self, index: usize) -> Option<&Todo> {
-        self.todos.get(index)
+        self.todos.get(index).map(Rc::as_ref)
     }
 
     /// Todo for an id.
     #[must_use]
     pub fn todo_by_id(&self, id: TodoId) -> Option<&Todo> {
-        self.todos.iter().find(|todo| todo.id == id)
+        self.todos.iter().find(|todo| todo.id == id).map(Rc::as_ref)
     }
 
     /// The cursor todo, if it is still visible.
@@ -643,6 +662,7 @@ impl App {
         self.todos
             .iter()
             .filter(|todo| self.selection.range.contains(&todo.id))
+            .map(Rc::as_ref)
             .collect()
     }
 
@@ -778,19 +798,22 @@ impl App {
 
     /// Replace the search views after a whole-list change.
     fn rebuild_views(&mut self) {
-        self.views = self.todos.iter().map(view_for).collect();
+        self.views = self.todos.iter().map(|todo| view_for(todo)).collect();
     }
 
     /// Append one parsed todo and its search view.
     fn push_todo(&mut self, todo: Todo) {
         self.views.push(view_for(&todo));
-        self.todos.push(todo);
+        self.todos.push(Rc::new(todo));
     }
 
     /// Replace one todo and its search view at `index`.
+    ///
+    /// Only the touched element gets a fresh handle; every other todo stays
+    /// shared with the history snapshot that preceded the mutation.
     fn replace_todo(&mut self, index: usize, todo: Todo) {
         self.views[index] = view_for(&todo);
-        self.todos[index] = todo;
+        self.todos[index] = Rc::new(todo);
     }
 
     /// Gate a mutating command.
@@ -812,13 +835,13 @@ impl App {
     }
 
     /// Mark the list dirty at `now` so the event loop schedules a save.
-    pub fn mark_dirty(&mut self, now: Instant) {
+    pub(crate) fn mark_dirty(&mut self, now: Instant) {
         self.save.mark_dirty(now);
     }
 
     /// Finish a mutation: reconcile the row model and schedule a save.
     fn finish_mutation(&mut self, now: Instant) {
-        self.tag_sources = TagSources::collect(&self.todos);
+        self.tag_sources = TagSources::collect(self.todos.iter().map(Rc::as_ref));
         self.refresh_search_suggestions();
         crate::nav::rebuild(self);
         if self.load_error.is_some() {
@@ -877,14 +900,14 @@ impl App {
         self.record_history();
         for id in ids {
             if let Some(index) = self.index_of(*id) {
-                let updated = update(&self.todos[index]);
+                let updated = update(self.todos[index].as_ref());
                 self.replace_todo(index, updated);
             }
         }
         self.finish_mutation(now);
     }
 
-    /// Append one todo per line and select the first added todo.
+    /// Append one todo per line and select the last added todo.
     ///
     /// Returns the new ids; an empty result means the command was refused.
     pub fn add_todos(&mut self, texts: &[String], now: Instant) -> Vec<TodoId> {
@@ -906,8 +929,8 @@ impl App {
             added.push(id);
         }
         self.finish_mutation(now);
-        if let Some(first) = added.first().copied() {
-            self.selection.cursor = Some(first);
+        if let Some(last) = added.last().copied() {
+            self.selection.cursor = Some(last);
             self.selection.range.clear();
             self.selection.anchor = None;
             crate::nav::reflow(self);
@@ -1044,7 +1067,7 @@ impl App {
         self.todos
             .iter()
             .filter(|todo| ids.contains(&todo.id))
-            .map(Todo::to_string)
+            .map(|todo| todo.to_string())
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -1055,7 +1078,7 @@ impl App {
         self.todos
             .iter()
             .filter(|todo| ids.contains(&todo.id))
-            .cloned()
+            .map(|todo| todo.as_ref().clone())
             .collect()
     }
 
@@ -1083,7 +1106,15 @@ impl App {
     /// A batch above [`PASTE_CONFIRM_THRESHOLD`] (but within the core limit)
     /// opens the existing confirmation screen; a smaller batch is applied
     /// immediately.
+    ///
+    /// The shared mutation gate runs before splitting, validation, or opening a
+    /// confirmation, so a read-only session rejects every paste with exactly
+    /// one [`crate::input::READ_ONLY_MESSAGE`] toast. The write path reaches
+    /// [`App::add_todos`], whose second gate call is a no-op.
     pub fn receive_clipboard(&mut self, text: &str, now: Instant) {
+        if !self.begin_mutation(now) {
+            return;
+        }
         let lines: Vec<String> = text
             .lines()
             .map(js_trim)
@@ -1359,11 +1390,29 @@ mod tests {
     }
 
     #[test]
+    fn a_read_only_paste_uses_the_shared_gate_and_adds_nothing() {
+        let mut app = app(&["one"]);
+        app.set_read_only(true);
+        let at = now();
+        let text = (1..=11)
+            .map(|index| format!("pasted {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        app.receive_clipboard(&text, at);
+        assert_eq!(app.todos.len(), 1, "a read-only paste adds nothing");
+        assert!(!app.modals.is_open(), "no confirmation may open");
+        assert_eq!(app.toast_message(at), Some(crate::input::READ_ONLY_MESSAGE));
+        assert_eq!(app.history.undo_len(), 0);
+        assert!(!app.is_dirty());
+    }
+
+    #[test]
     fn toggle_records_one_undo_step_and_marks_dirty() {
         let mut app = app(&["one", "two"]);
         let ids = vec![app.todos[0].id, app.todos[1].id];
         app.toggle_ids(&ids, now());
-        assert!(app.todos.iter().all(Todo::is_done));
+        assert!(app.todos.iter().all(|todo| todo.is_done()));
         assert!(app.is_dirty() && app.save_deadline().is_some());
         assert_eq!(app.history.undo_len(), 1);
         assert_eq!(app.history.redo_len(), 0);
@@ -1372,7 +1421,7 @@ mod tests {
         assert!(app.todos.iter().all(|todo| !todo.is_done()));
         assert_eq!(app.history.redo_len(), 1);
         assert!(app.redo(now()));
-        assert!(app.todos.iter().all(Todo::is_done));
+        assert!(app.todos.iter().all(|todo| todo.is_done()));
     }
 
     #[test]
@@ -1383,7 +1432,12 @@ mod tests {
         assert_ne!(added[0], app.todos[0].id);
         assert_ne!(added[1], added[0]);
         assert_eq!(app.todos[2].id, added[0]);
-        assert_eq!(app.cursor(), Some(added[0]));
+        assert_eq!(app.todos[3].id, added[1]);
+        assert_eq!(
+            app.cursor(),
+            Some(added[1]),
+            "the oracle selects the last pasted todo"
+        );
 
         app.remove_ids(&[app.todos[1].id], now());
         assert_eq!(app.todos.len(), 3);
@@ -1631,6 +1685,37 @@ mod tests {
     }
 
     #[test]
+    fn a_new_mutation_keeps_the_last_save_error() {
+        let mut app = app(&["one"]);
+        let id = app.todos[0].id;
+        let failed_at = now();
+        app.toggle_ids(&[id], failed_at);
+        app.mark_save_failed(failed_at, "disk full");
+        assert_eq!(app.toast_message(failed_at), Some("Save failed: disk full"));
+
+        // A new edit resets the debounce deadline but must not forget the
+        // failure the status bar already reported.
+        let mutating_at = failed_at + Duration::from_millis(10);
+        app.toggle_ids(&[id], mutating_at);
+        assert_eq!(app.save_error(), Some("disk full"));
+        let deadline = app.save_deadline().expect("a fresh debounce deadline");
+        assert_eq!(deadline, mutating_at + SAVE_DEBOUNCE);
+
+        // The same message after the toast expired is not news.
+        let retry_at = failed_at + super::TOAST_DURATION + Duration::from_millis(1);
+        app.expire_toast(retry_at);
+        app.mark_save_failed(retry_at, "disk full");
+        assert_eq!(app.toast_message(retry_at), None);
+
+        // A different message still shows one toast.
+        app.mark_save_failed(retry_at, "permission denied");
+        assert_eq!(
+            app.toast_message(retry_at),
+            Some("Save failed: permission denied")
+        );
+    }
+
+    #[test]
     fn save_state_transitions_are_pure() {
         let at = now();
         let mut state = SaveState::default();
@@ -1667,7 +1752,7 @@ mod tests {
 
         app.toggle_ids(&[app.todos[0].id], now());
         assert!(app.is_dirty());
-        let todos = app.todos.clone();
+        let todos = app.todos().into_iter().cloned().collect();
         app.set_todos(todos);
         assert!(!app.is_dirty());
         assert_eq!(app.save_deadline(), None);

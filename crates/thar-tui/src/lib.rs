@@ -17,7 +17,7 @@
 //!   suggestion list;
 //! - [`modal`] owns the one active screen, its geometry, and the action
 //!   vocabulary;
-//! - [`history`] keeps the undo/redo snapshots;
+//! - [`history`] keeps the undo/redo snapshots, sharing unchanged todos;
 //! - [`view`] draws one frame;
 //! - [`layout`] is the geometry shared by rendering and hit-testing;
 //! - [`search`] provides the native host's search normalization.
@@ -50,7 +50,7 @@ pub mod suggest;
 pub mod theme;
 pub mod view;
 
-pub use app::{App, Effect, SaveState, Selection};
+pub use app::{App, Effect};
 pub use history::History;
 pub use layout::Layout;
 pub use list::{ListModel, ListRow};

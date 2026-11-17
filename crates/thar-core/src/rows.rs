@@ -65,6 +65,8 @@
 //! assert_eq!(rows.todo_indexes(), [1, 0]);
 //! ```
 
+use std::borrow::Borrow;
+
 use crate::date::TodoDate;
 use crate::model::{Todo, TodoId};
 use crate::query::{SearchView, sort_by_importance, view_matches};
@@ -268,14 +270,16 @@ impl std::error::Error for RowError {}
 /// between callers.
 ///
 /// The returned rows borrow `todos` only; the views and terms are read during
-/// the call, so a caller can free them afterwards.
+/// the call, so a caller can free them afterwards. `todos` may hold any value
+/// that borrows a [`Todo`] (for example `Rc<Todo>`), which lets a host keep
+/// shared undo snapshots without cloning the list.
 ///
 /// # Errors
 ///
 /// Returns [`RowError::ViewCountMismatch`] when `views` is not aligned with
 /// `todos`.
-pub fn build_rows<'todos, 'views>(
-    todos: &'todos [Todo],
+pub fn build_rows<'todos, 'views, T: Borrow<Todo>>(
+    todos: &'todos [T],
     views: &'views [SearchView<'views>],
     terms: &[&str],
     show_hidden: bool,
@@ -298,7 +302,7 @@ pub fn build_rows<'todos, 'views>(
             debug_assert!(index < todos.len(), "sort index {index} out of range");
             todos
                 .get(index)
-                .is_some_and(|todo| todo.is_visible_in_overview(today))
+                .is_some_and(|todo| todo.borrow().is_visible_in_overview(today))
         });
     }
 
@@ -319,7 +323,7 @@ pub fn build_rows<'todos, 'views>(
     // desync cannot be introduced silently, and keep `get` total in release.
     let rows = create_rows(order.iter().filter_map(|&index| {
         debug_assert!(index < todos.len(), "sort index {index} out of range");
-        todos.get(index)
+        todos.get(index).map(Borrow::borrow)
     }));
 
     Ok(Rows {

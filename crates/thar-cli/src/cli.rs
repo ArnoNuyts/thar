@@ -166,8 +166,7 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
             Some("--write") => write = true,
             Some("--read-only") => read_only_flag = true,
             Some("--no-backup") => no_backup = true,
-            Some("-f" | "--file") => {
-                let name = flag.unwrap_or("--file");
+            Some(name @ ("-f" | "--file")) => {
                 let value = iterator
                     .next()
                     .ok_or_else(|| CliError::new(format!("{name} requires a path.")))?;

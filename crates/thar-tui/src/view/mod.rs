@@ -74,18 +74,20 @@ pub fn render(frame: &mut Frame, app: &App) {
 
 fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
     let row = Rect::new(0, layout.search_row(), layout.width, 1);
-    let prompt = Style::default().fg(if app.search_focused() {
+    let focused = app.search_focused();
+    let prompt = Style::default().fg(if focused {
         theme::SECONDARY
     } else {
         theme::MUTED
     });
-    let query = Style::default().fg(theme::FOREGROUND);
+    let query_style = Style::default().fg(theme::FOREGROUND);
 
     // Cursor position is a character index into the **raw** query. Sanitizing
     // the whole query first would make it longer (a C1 control becomes six
     // cells), so the index would land on the wrong cell. Slice first, then
-    // sanitize each piece.
-    let raw: Vec<char> = app.query().chars().collect();
+    // sanitize each piece. Read the query once per frame.
+    let query = app.query();
+    let raw: Vec<char> = query.chars().collect();
     let cursor = app.query_cursor().min(raw.len());
     let before = sanitize_for_display(&raw[..cursor].iter().collect::<String>());
     let at = raw.get(cursor).map_or_else(
@@ -99,12 +101,15 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
     );
 
     let mut spans = vec![Span::styled(" / ", prompt)];
-    if app.search_focused() {
-        spans.push(Span::styled(before, query));
-        spans.push(Span::styled(at, query.add_modifier(Modifier::REVERSED)));
-        spans.push(Span::styled(after, query));
+    if focused {
+        spans.push(Span::styled(before, query_style));
+        spans.push(Span::styled(
+            at,
+            query_style.add_modifier(Modifier::REVERSED),
+        ));
+        spans.push(Span::styled(after, query_style));
     } else {
-        spans.push(Span::styled(sanitize_for_display(&app.query()), query));
+        spans.push(Span::styled(sanitize_for_display(&query), query_style));
     }
     spans.push(Span::styled(" / ", prompt));
 

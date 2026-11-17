@@ -23,6 +23,44 @@ const FORBIDDEN: [&str; 12] = [
     ".truncate(",
 ];
 
+/// The same list without `write_all(`.
+///
+/// `clipboard.rs` legitimately writes clipboard text to a **child process
+/// pipe**; every filesystem write API is still forbidden in that file. Keeping
+/// the list local instead of skipping the file means a future `std::fs::write`
+/// there cannot hide behind the pipe exception.
+const CLIPBOARD_FORBIDDEN: [&str; 11] = [
+    "fs::write",
+    "File::create",
+    "File::options",
+    "OpenOptions",
+    "fs::rename",
+    "fs::remove_file",
+    "fs::remove_dir",
+    "remove_dir_all",
+    "create_new",
+    "set_len(",
+    ".truncate(",
+];
+
+/// The write APIs forbidden in one source file.
+fn forbidden_apis(path: &Path) -> &'static [&'static str] {
+    if path.file_name().is_some_and(|name| name == "clipboard.rs") {
+        &CLIPBOARD_FORBIDDEN
+    } else {
+        &FORBIDDEN
+    }
+}
+
+/// Every forbidden API present in `source`.
+fn violations(path: &Path, source: &str) -> Vec<&'static str> {
+    forbidden_apis(path)
+        .iter()
+        .copied()
+        .filter(|api| source.contains(api))
+        .collect()
+}
+
 fn rust_sources(directory: &Path, found: &mut Vec<PathBuf>) {
     let entries = std::fs::read_dir(directory)
         .unwrap_or_else(|error| panic!("read {}: {error}", directory.display()));
@@ -54,13 +92,6 @@ fn the_tui_crates_contain_no_write_path() {
 
     let mut found_read = false;
     for path in &sources {
-        // `clipboard.rs` pipes clipboard text to a child process. Its
-        // `write_all(` writes to a pipe, not to a file, so it is not the kind
-        // of write this guard forbids. The rest of the module uses no
-        // filesystem API at all.
-        if path.file_name().is_some_and(|name| name == "clipboard.rs") {
-            continue;
-        }
         let source = std::fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
         if source.contains("File::open")
@@ -69,15 +100,39 @@ fn the_tui_crates_contain_no_write_path() {
         {
             found_read = true;
         }
-        for forbidden in FORBIDDEN {
-            assert!(
-                !source.contains(forbidden),
-                "{} contains the write API `{forbidden}`; CP6 must stay read-only",
-                path.display()
-            );
-        }
+        let violations = violations(path, &source);
+        assert!(
+            violations.is_empty(),
+            "{} contains the write API {violations:?}; CP6 must stay read-only",
+            path.display()
+        );
     }
 
     // Guard against a scanner that silently reads the wrong tree.
     assert!(found_read, "the scanner did not see the loader's read path");
+}
+
+#[test]
+fn clipboard_is_scanned_except_for_the_child_pipe_write() {
+    let path = Path::new("clipboard.rs");
+    assert!(
+        violations(path, "stdin.write_all(input)?").is_empty(),
+        "the child-pipe write is the one allowed write in clipboard.rs"
+    );
+    assert_eq!(
+        violations(path, "std::fs::write(&path, bytes)?;"),
+        ["fs::write"],
+        "a filesystem write in clipboard.rs must still be rejected"
+    );
+    assert_eq!(
+        violations(path, "let file = OpenOptions::new().create(true);"),
+        ["OpenOptions"],
+        "every filesystem API stays forbidden in clipboard.rs"
+    );
+
+    // The same source in another file is a violation even for `write_all(`.
+    assert_eq!(
+        violations(Path::new("terminal.rs"), "stdin.write_all(input)?;"),
+        ["write_all("]
+    );
 }

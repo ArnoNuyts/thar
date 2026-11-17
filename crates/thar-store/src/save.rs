@@ -72,13 +72,20 @@ impl SaveGuard {
 
     /// Serialize and atomically replace the file.
     ///
+    /// The argument is any iterator of `&Todo`, so a caller that shares todos
+    /// through `Rc<Todo>` can save without cloning the values.
+    ///
     /// # Errors
     ///
     /// Returns [`StoreError::ChangedOnDisk`] when the target no longer matches
     /// [`SaveGuard::last_bytes`], [`StoreError::Invalid`] when the text
     /// violates the file limits, and [`StoreError::Io`] for a filesystem
     /// failure. The target is untouched on every error.
-    pub fn save(&mut self, todos: &[Todo]) -> Result<Saved, StoreError> {
+    pub fn save<'a>(
+        &mut self,
+        todos: impl IntoIterator<Item = &'a Todo>,
+    ) -> Result<Saved, StoreError> {
+        let todos: Vec<&Todo> = todos.into_iter().collect();
         if todos.len() > MAX_TODOS {
             return Err(StoreError::TooManyTodos {
                 count: todos.len(),
@@ -86,7 +93,7 @@ impl SaveGuard {
             });
         }
 
-        let text = serialize_file(todos);
+        let text = serialize_file(todos.iter().copied());
         validate_file_content(&text, &ReadLimits::DEFAULT)?;
         let bytes = text.into_bytes();
 

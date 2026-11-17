@@ -862,7 +862,9 @@ undo/redo commands, while the modal screens arrive in parallel workstreams.
   CP6 invariant that could not survive CP7.
 - **Undo/redo.** `thar-tui::history` snapshots the whole list per mutation, one
   step per command (matching `todo-context.tsx`), clears both stacks on a load,
-  and is exposed through `z`/`Z`. Recurring toggles append their next instance.
+  and is exposed through `z`/`Z`. Snapshots store `Rc<Todo>` handles, so a
+  mutation replaces only the touched todo and shares the rest with history.
+  Recurring toggles append their next instance.
 - **Command seam.** The list keymap reports the new intents, `App` owns the
   mutation and the debounce (`SAVE_DEBOUNCE = 50 ms`), and `Effect` carries the
   host-only work (archive, clipboard) back to the event loop. `input::apply`

@@ -910,10 +910,13 @@ fn collect_tags(scanned: Vec<ScannedTag<'_>>) -> Vec<(String, TagValue)> {
 /// Serialize todos exactly as the file writer does: lines joined by `\n` plus
 /// one trailing newline. Serializing no todos yields `"\n"`, matching
 /// `lines.join("\n") + "\n"` in `logic/todo-file-helpers.ts`.
+///
+/// The argument is any iterator of `&Todo`, so a caller that shares todos
+/// through `Rc<Todo>` can pass its reference list without cloning the values.
 #[must_use]
-pub fn serialize_file(todos: &[Todo]) -> String {
+pub fn serialize_file<'a>(todos: impl IntoIterator<Item = &'a Todo>) -> String {
     let mut output = String::new();
-    for (index, todo) in todos.iter().enumerate() {
+    for (index, todo) in todos.into_iter().enumerate() {
         if index > 0 {
             output.push('\n');
         }
@@ -1183,7 +1186,7 @@ mod tests {
     fn serialize_file_joins_with_a_final_newline() {
         let todos = vec![parse("one"), parse("two")];
         assert_eq!(serialize_file(&todos), "one\ntwo\n");
-        assert_eq!(serialize_file(&[]), "\n");
+        assert_eq!(serialize_file(std::iter::empty::<&Todo>()), "\n");
     }
 
     #[test]

@@ -385,8 +385,8 @@ fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync,
     match store.save(app.todos()) {
         Ok(_) => {
             // The window starts after the rename, not before the serialization,
-            // so a slow filesystem cannot shorten it.
-            sync.note_write(Instant::now());
+            // so a slow filesystem cannot shorten it. Reuse the event's `now`.
+            sync.note_write(now);
             sync.adopt(store.last_bytes());
             app.mark_saved();
         }
@@ -517,9 +517,13 @@ fn is_pastable(character: char) -> bool {
 ///
 /// The search bar keeps its one-line filter. The list hands the raw text to
 /// [`App::receive_clipboard`], which owns splitting, trimming, the core
-/// validation (including control characters), the paste limit and the large
-/// paste confirmation. Modals receive their paste through
-/// [`App::handle_modal_paste`] before this function runs.
+/// validation (including control characters), the paste limit, the large paste
+/// confirmation and the shared read-only gate. Modals receive their paste
+/// through [`App::handle_modal_paste`] before this function runs.
+///
+/// There is deliberately no read-only early return here: the list paste must go
+/// through [`App::receive_clipboard`] so the one mutation gate produces the
+/// bounded toast instead of silently dropping the paste.
 fn paste_into_focused(app: &mut App, text: &str, now: Instant) {
     if app.search_focused() {
         let text: String = text
@@ -527,10 +531,6 @@ fn paste_into_focused(app: &mut App, text: &str, now: Instant) {
             .filter(|character| is_pastable(*character))
             .collect();
         input::insert_query_text(app, &text);
-        return;
-    }
-
-    if app.is_read_only() {
         return;
     }
 
@@ -597,6 +597,29 @@ mod tests {
         assert!(!is_pastable('\u{001B}'));
         assert!(!is_pastable('\u{007F}'));
         assert!(!is_pastable('\u{2028}'));
+    }
+
+    #[test]
+    fn a_read_only_list_paste_hits_the_shared_gate() {
+        let mut app = App::new(
+            "todo.txt",
+            Vec::new(),
+            TodoDate::new(2026, 11, 17).expect("valid date"),
+        );
+        let now = Instant::now();
+        let text = (1..=11)
+            .map(|index| format!("pasted {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        paste_into_focused(&mut app, &text, now);
+        assert!(app.todos().is_empty(), "a read-only paste adds nothing");
+        assert!(!app.modals().is_open(), "no confirmation may open");
+        assert_eq!(
+            app.toast_message(now),
+            Some(thar_tui::input::READ_ONLY_MESSAGE)
+        );
+        assert!(!app.is_dirty());
     }
 
     #[test]
