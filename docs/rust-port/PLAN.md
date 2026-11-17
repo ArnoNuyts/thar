@@ -1250,11 +1250,17 @@ surface 84 632 / 37 292.
 ### 9.2 Add in later phases
 
 - **Native matrix**: linux x64/arm64 (gnu/musl), macOS x64/arm64, Windows
-  x64. Native tests + build on each PR after Phase 4.
+  x64. PR CI covers the host toolchains (Linux tests, macOS PTY, Windows
+  compile plus a static-CRT release link); the release workflow builds the
+  shippable archives.
 - **PTY tests**: installed for Linux and macOS at CP6 (§9.1); the Windows
   smoke stays compile-only until a ConPTY runner exists.
-- **Release workflow**: tag-driven, builds binaries + WASM, checksums,
-  codesigns/notarizes, publishes GitHub release and npm packages.
+- **Release workflow**: installed at CP7. `release.yml` builds `thar-rs` on
+  Linux x64/arm64 (gnu), macOS x64/arm64 and Windows x64, attaches
+  `thar-{linux,macos,windows}-{x64,arm64}` archives and `.sha256` files to both
+  beta and stable GitHub releases, and publishes the npm package. Still open:
+  musl, Windows arm64, codesigning/notarization, and per-platform npm
+  packages.
 - **Supply chain**: `cargo-deny` (licenses/advisories) and `cargo-audit`
   weekly; pin third-party actions by SHA once the workflow stabilises (the
   existing CI uses version tags, so follow the repo convention for now).
@@ -1264,7 +1270,9 @@ surface 84 632 / 37 292.
 ### 9.3 Distribution plan (Phase 7)
 
 - Rust binaries:
-  `thar-{linux,macos,windows}-{x64,arm64}` archives with `.sha256`.
+  `thar-{linux,macos,windows}-{x64,arm64}` archives with `.sha256`. CP7 ships
+  Linux x64/arm64, macOS x64/arm64 and Windows x64; Windows arm64 and musl
+  remain.
 - npm: root package with `optionalDependencies` per platform, or a
   checksummed `postinstall` download. Keep `bin/thar.js` as a thin launcher so
   `npx @arnoarnoarno/thar` keeps working.
