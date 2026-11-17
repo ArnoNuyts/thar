@@ -30,6 +30,11 @@ jobs:
       contents: write
       id-token: write
     environment: npm
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      skip: ${{ steps.check.outputs.skip }}
+      tag_exists: ${{ steps.check.outputs.tag_exists }}
 
     steps:
       - name: Setup repo
@@ -223,3 +228,108 @@ jobs:
                 "${start_args[@]}"
             fi
           fi
+
+  # `thar-rs` is the Rust TUI binary (docs/rust-port/PLAN.md, CP6/CP8). Build
+  # it on a native host per target: macOS cannot be cross-compiled from Linux,
+  # and native arm64 Linux keeps the glibc ABI honest. The job waits for
+  # `publish` because that step creates the GitHub release the archives attach
+  # to; npm publication must not depend on these platform builds.
+  native:
+    name: native (${{ matrix.target }})
+    needs: publish
+    # A normal release creates the tag/release in `publish`; an idempotent
+    # re-run skips publishing but the tag still exists, so the native assets can
+    # be rebuilt and re-attached with `--clobber`.
+    if: needs.publish.outputs.skip != 'true' || needs.publish.outputs.tag_exists == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 22.04 keeps the glibc floor at 2.35, so the archive runs on
+          # the oldest still-supported LTS hosts.
+          - target: linux-x64
+            os: ubuntu-22.04
+          - target: linux-arm64
+            os: ubuntu-22.04-arm
+          - target: macos-x64
+            os: macos-15-intel
+          - target: macos-arm64
+            os: macos-15
+          - target: windows-x64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: native-${{ matrix.target }}
+
+      - name: Build thar-rs
+        env:
+          # Report the release tag's version from `thar-rs --version` instead
+          # of the crate's independent 0.1.0 development version.
+          THAR_BUILD_VERSION: ${{ needs.publish.outputs.version }}
+        run: cargo build --locked --release -p thar-cli
+
+      - name: Smoke test (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ./target/release/thar-rs --version
+          ./target/release/thar-rs --help >/dev/null
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\target\release\thar-rs.exe --version
+          .\target\release\thar-rs.exe --help | Out-Null
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          asset="thar-${TARGET}.tar.gz"
+          mkdir -p stage
+          cp target/release/thar-rs README.md LICENSE stage/
+          tar -czf "$asset" -C stage thar-rs README.md LICENSE
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$asset" > "$asset.sha256"
+          else
+            shasum -a 256 "$asset" > "$asset.sha256"
+          fi
+          ls -l "$asset" "$asset.sha256"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          $asset = "thar-$env:TARGET.zip"
+          New-Item -ItemType Directory -Force stage | Out-Null
+          Copy-Item target/release/thar-rs.exe stage
+          Copy-Item README.md, LICENSE stage
+          Compress-Archive -Path "stage/*" -DestinationPath $asset
+          $hash = (Get-FileHash -Algorithm SHA256 $asset).Hash.ToLower()
+          "$hash  $asset" | Out-File -Encoding ascii "$asset.sha256"
+          Get-Item $asset, "$asset.sha256" | Format-Table Name, Length
+
+      - name: Attach to the GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.publish.outputs.tag }}
+        run: gh release upload "$TAG" thar-* --clobber

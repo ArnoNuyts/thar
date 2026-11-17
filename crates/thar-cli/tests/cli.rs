@@ -25,11 +25,7 @@ fn version_exits_zero_and_prints_only_the_version() {
     for flag in ["--version", "-v"] {
         let output = thar().arg(flag).output().expect("run thar-rs");
         assert_eq!(output.status.code(), Some(0), "{flag}");
-        assert_eq!(
-            stdout(&output).trim_end(),
-            env!("CARGO_PKG_VERSION"),
-            "{flag}"
-        );
+        assert_eq!(stdout(&output).trim_end(), thar_cli::VERSION, "{flag}");
         assert!(stderr(&output).is_empty(), "{flag}");
     }
 }

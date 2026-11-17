@@ -34,8 +34,15 @@ pub use file::{
 pub use sync::{FileSync, ReloadOutcome};
 pub use terminal::{run_tui, run_tui_with_store, today_local};
 
-/// Crate version, also printed by `thar-rs --version`.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Version printed by `thar-rs --version`.
+///
+/// Release builds set `THAR_BUILD_VERSION` to the npm release version so a
+/// downloaded binary reports the same version as its tag. Local builds and the
+/// Rust workspace keep using the crate version.
+pub const VERSION: &str = match option_env!("THAR_BUILD_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 /// Entry point used by `main.rs` and the unit tests.
 ///
