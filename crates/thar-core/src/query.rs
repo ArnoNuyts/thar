@@ -232,11 +232,7 @@ impl SearchViewLike for SearchView<'_> {
 
 impl SearchViewLike for OwnedSearchView {
     fn as_view(&self) -> SearchView<'_> {
-        SearchView {
-            text: &self.text,
-            contexts: &self.contexts,
-            projects: &self.projects,
-        }
+        OwnedSearchView::as_view(self)
     }
 }
 

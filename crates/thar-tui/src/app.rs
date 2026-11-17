@@ -39,8 +39,7 @@ use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyEvent;
 use thar_core::{
-    MAX_PASTE_TODOS, Priority, Recurrence, Todo, TodoDate, TodoId, TodoInputError, js_trim,
-    validate_todo_batch,
+    Priority, Recurrence, Todo, TodoDate, TodoId, TodoInputError, js_trim, validate_default_batch,
 };
 
 use crate::display::sanitize_for_display;
@@ -126,19 +125,9 @@ impl<'a> Todos<'a> {
         self.todos.is_empty()
     }
 
-    /// The todo at a load-order index.
-    #[must_use]
-    pub fn get(&self, index: usize) -> Option<&'a Todo> {
-        self.todos.get(index).map(TodoEntry::todo)
-    }
-
     /// A fresh iterator over every todo, in load order.
-    #[must_use]
-    pub fn iter(&self) -> Todos<'a> {
-        Todos {
-            todos: self.todos,
-            position: 0,
-        }
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &'a Todo> + 'a {
+        self.todos.iter().map(|entry| entry.todo())
     }
 }
 
@@ -998,7 +987,7 @@ impl App {
     /// Append one todo per line and select the last added todo when visible.
     ///
     /// The batch is validated as a whole by
-    /// [`thar_core::validate_todo_batch`] before any history is recorded, so a
+    /// [`thar_core::validate_default_batch`] before any history is recorded, so a
     /// rejected line adds nothing. An empty batch, a read-only session, and a
     /// command refused by the mutation gate all return `Ok(vec![])`; the gate
     /// has already shown its own toast.
@@ -1009,7 +998,7 @@ impl App {
     ///
     /// # Errors
     ///
-    /// Returns the [`TodoInputError`] from [`thar_core::validate_todo_batch`]:
+    /// Returns the [`TodoInputError`] from [`thar_core::validate_default_batch`]:
     /// the batch limit, the list capacity, or the first bad line.
     pub fn add_todos(
         &mut self,
@@ -1019,7 +1008,7 @@ impl App {
         if texts.is_empty() || !self.begin_mutation(now) {
             return Ok(Vec::new());
         }
-        validate_todo_batch(texts, self.entries.len(), MAX_PASTE_TODOS)?;
+        validate_default_batch(texts, self.entries.len())?;
 
         self.record_history();
         let today = self.today;
@@ -1229,7 +1218,7 @@ impl App {
     /// method owns the limits and the confirmation so both are testable
     /// without a clipboard. Lines are split, `thar_core::js_trim`-trimmed and
     /// empty lines dropped, then the whole batch is validated by
-    /// [`thar_core::validate_todo_batch`] before anything is added or a
+    /// [`thar_core::validate_default_batch`] before anything is added or a
     /// confirmation opens. That makes the paste path share the core rules: a
     /// leading date, an over-long line, a control character, and a batch over
     /// [`thar_core::MAX_PASTE_TODOS`] are all rejected with the core message
@@ -1256,7 +1245,7 @@ impl App {
         if lines.is_empty() {
             return;
         }
-        if let Err(error) = validate_todo_batch(&lines, self.entries.len(), MAX_PASTE_TODOS) {
+        if let Err(error) = validate_default_batch(&lines, self.entries.len()) {
             self.push_toast_at(format!("Paste failed: {error}"), now);
             return;
         }
@@ -1625,6 +1614,19 @@ mod tests {
         let copy = &app.todos()[1];
         assert!(!copy.is_done());
         assert_eq!(copy.date_tag("due"), "2026-11-22".parse::<TodoDate>().ok());
+    }
+
+    #[test]
+    fn a_bad_recurrence_still_completes_the_todo_and_toasts() {
+        let mut app = app(&["task rec:1D"]);
+        let id = app.todos()[0].id;
+        app.toggle_ids(&[id], now());
+        assert!(app.todos()[0].is_done(), "the completion is stored");
+        assert_eq!(app.todos().len(), 1, "no next instance is added");
+        assert_eq!(
+            app.toast_message(now()),
+            Some("Invalid recurrence value; no new todo was created")
+        );
     }
 
     #[test]

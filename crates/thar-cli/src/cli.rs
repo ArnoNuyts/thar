@@ -105,16 +105,17 @@ pub fn format_usage(version: &str) -> String {
 
 /// Parse the arguments after the program name.
 ///
-/// Flags are matched through [`OsStr::to_str`], so a non-UTF-8 argument is
-/// always a positional file path; `--file` consumes the next argument as an
-/// [`OsString`] without decoding it. Help wins over version, matching the
-/// startup order in [`crate::run`].
+/// Flags are matched through [`OsStr::to_str`]. A non-UTF-8 argument is a
+/// positional file path unless it starts with `-`, which is rejected as an
+/// unknown option; `--` still allows such a path. `--file` consumes the next
+/// argument as an [`OsString`] without decoding it. Help wins over version,
+/// matching the startup order in [`crate::run`].
 ///
 /// # Errors
 ///
 /// Returns a [`CliError`] for an unknown option, a missing `--file` value, an
-/// empty path, more than one file argument, or `--write` together with
-/// `--read-only`.
+/// empty path, more than one file argument, `--write` together with
+/// `--read-only`, or `--no-backup` without `--write`.
 pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
     if argv.first().and_then(|argument| argument.to_str()) == Some("update") {
         let rest = &argv[1..];

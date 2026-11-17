@@ -230,7 +230,7 @@ jobs:
 
       # wasm-pack uses a system `wasm-opt` when binaryen is on PATH, so on CI
       # this apt install is the optimizer that runs. The crate's
-      # `[package.metadata.wasm-pack.profile.release]` flags only cover the
+      # `[package.metadata.wasm-pack.profile.custom]` flags only cover the
       # bundled binaryen fallback used by developers without it; keep both.
       - name: Install binaryen
         run: |

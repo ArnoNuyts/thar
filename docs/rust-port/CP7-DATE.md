@@ -84,7 +84,7 @@ it while hover moves the marker. Emits `Action::SetPriority`.
 Step one is Daily, Weekly, Monthly, Yearly, plus Reset only when the reference
 todo has a `rec:` tag. Step two is the amount: digits only, starting at `"1"`,
 where the first typed digit replaces the default and choosing a base resets it.
-Enter validates `amount + unit` with `is_valid_recurrence`; a rejection shows
+Enter parses `amount + unit` into a `Recurrence`; a rejection shows
 the bounded toast `Recurrence must be a whole number from 1 to 9999` and keeps
 the screen open. Escape returns to the base step, then closes. The amount step's
 chrome names the chosen base (`Set Recurrence Interval (Weekly)`). Base rows

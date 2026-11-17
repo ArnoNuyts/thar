@@ -1361,6 +1361,20 @@ mod tests {
     }
 
     #[test]
+    fn recurrence_is_stored_canonically() {
+        let plus = "+1d".parse::<Recurrence>().expect("valid");
+        let zeros = "0001d".parse::<Recurrence>().expect("valid");
+        assert_eq!(
+            parse("task").set_recurrence(plus).to_string(),
+            "task rec:1d"
+        );
+        assert_eq!(
+            parse("task").set_recurrence(zeros).to_string(),
+            "task rec:1d"
+        );
+    }
+
+    #[test]
     fn recurrence_is_validated_when_it_is_parsed() {
         let todo = parse("task");
         assert_eq!(
