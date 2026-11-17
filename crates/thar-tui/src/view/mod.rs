@@ -47,7 +47,7 @@ const WRITE_LABEL: &str = "WRITE";
 /// Draw one frame.
 pub fn render(frame: &mut Frame, app: &App) {
     let area = frame.area();
-    let layout = Layout::new(area.width, area.height, app.search_visible());
+    let layout = Layout::new(area.width, area.height, app.search().visible());
 
     frame.render_widget(
         Block::default().style(Style::default().bg(theme::BACKGROUND)),
@@ -74,7 +74,7 @@ pub fn render(frame: &mut Frame, app: &App) {
 
 fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
     let row = Rect::new(0, layout.search_row(), layout.width, 1);
-    let focused = app.search_focused();
+    let focused = app.search().focused();
     let prompt = Style::default().fg(if focused {
         theme::SECONDARY
     } else {
@@ -86,8 +86,8 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
     // the whole query first would make it longer (a C1 control becomes six
     // cells), so the index would land on the wrong cell. Slice first, then
     // sanitize each piece. Read the query once per frame, without allocating.
-    let raw = app.query_chars();
-    let cursor = app.query_cursor().min(raw.len());
+    let raw = app.search().chars();
+    let cursor = app.search().cursor().min(raw.len());
     let before = sanitize_for_display(&raw[..cursor].iter().collect::<String>());
     let at = raw.get(cursor).map_or_else(
         || " ".to_owned(),
@@ -137,7 +137,7 @@ fn render_list(frame: &mut Frame, app: &App, layout: Layout) {
         return;
     }
 
-    let track = scrollbar::geometry(app.rows().len(), layout.list_height as usize, app.offset);
+    let track = scrollbar::geometry(app.rows().len(), layout.list_height as usize, app.offset());
     let content_width = if track.is_some() {
         layout.list_width
     } else {
@@ -293,7 +293,15 @@ fn text_spans(text: &str, base: Style, highlighted: bool) -> Vec<Span<'static>> 
 
 fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
     let area = Rect::new(0, layout.list_top, layout.width, layout.list_height);
-    let query = app.query().trim().to_owned();
+    // Read the editor's characters directly; only the no-results branch needs
+    // an owned string, and it is exactly the text the message has to show.
+    let chars = app.search().chars();
+    let has_query = chars.iter().any(|character| !character.is_whitespace());
+    let query: String = if has_query {
+        chars.iter().collect::<String>().trim().to_owned()
+    } else {
+        String::new()
+    };
 
     let lines = if query.is_empty() {
         if let Some(error) = app.load_error() {
@@ -647,7 +655,7 @@ mod tests {
             crate::input::Command::SearchLeft,
             std::time::Instant::now(),
         );
-        assert_eq!(app.query_cursor(), 1);
+        assert_eq!(app.search().cursor(), 1);
 
         let mut terminal = Terminal::new(TestBackend::new(40, 10)).expect("test terminal");
         terminal

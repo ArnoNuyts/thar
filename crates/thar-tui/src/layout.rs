@@ -3,13 +3,14 @@
 //! The Ink layout is a single column: an optional search bar (two rows, content
 //! plus a bottom border), the list, and a two-row action bar (top border plus
 //! content). The list's last column is the scrollbar when it is scrollable.
-//! Mouse row coordinates are terminal rows (1-based in crossterm), so every
+//! Mouse row coordinates are terminal rows (crossterm reports 0-based cells;
+//! the host adds one), so every
 //! conversion lives here and is pinned by tests: the row-model `"None"` header
 //! counts as a list row, and a click must land on the same row the renderer
 //! drew.
 //!
-//! CP6 has no modals; overlays that later checkpoints add (suggestion popups,
-//! modals) will need their own hit-test registries rather than changing these
+//! Overlays (suggestion popups and modals) own their own hit-test registries
+//! in `view/overlay.rs` and `modal/geometry.rs` rather than changing these
 //! base rows.
 
 /// Rows occupied by the action bar: its top border and its content row.

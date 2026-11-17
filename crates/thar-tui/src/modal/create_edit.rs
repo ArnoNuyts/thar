@@ -528,7 +528,7 @@ pub fn extract_tags_and_contexts(query: &str) -> String {
 /// Build the create screen from the current app snapshot.
 #[must_use]
 pub fn create(app: &App) -> Box<dyn Modal> {
-    let prefill = extract_tags_and_contexts(&app.query());
+    let prefill = extract_tags_and_contexts(&app.search().query());
     let todos = app.todos();
     Box::new(TextModal {
         mode: Mode::Create,

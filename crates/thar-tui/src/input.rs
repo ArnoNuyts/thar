@@ -188,8 +188,8 @@ pub fn command_for_key(app: &App, key: KeyEvent) -> Option<Command> {
         return Some(Command::Quit);
     }
 
-    if app.search_focused() {
-        if app.search_suggestions().is_open() {
+    if app.search().focused() {
+        if app.search().suggestions().is_open() {
             match key.code {
                 KeyCode::Up => return Some(Command::SuggestionPrevious),
                 KeyCode::Down => return Some(Command::SuggestionNext),
@@ -323,14 +323,14 @@ pub fn handle_mouse(
 ) -> (Option<LastClick>, Option<Command>) {
     match mouse.kind {
         MouseKind::WheelUp => {
-            if app.search_focused() {
+            if app.search().focused() {
                 return (last_click, None);
             }
             nav::scroll(app, -1);
             (last_click, None)
         }
         MouseKind::WheelDown => {
-            if app.search_focused() {
+            if app.search().focused() {
                 return (last_click, None);
             }
             nav::scroll(app, 1);
@@ -450,7 +450,7 @@ pub fn handle_paste(app: &mut App, text: &str, now: Instant) {
     if app.handle_modal_paste(text, now) {
         return;
     }
-    if app.search_focused() {
+    if app.search().focused() {
         let text: String = text
             .chars()
             .filter(|character| is_pastable(*character))
@@ -635,7 +635,7 @@ mod tests {
         }
         assert_eq!(app.rows().iter().filter(|row| row.is_todo()).count(), 1);
         apply(&mut app, Command::SearchClear, now());
-        assert_eq!(app.query(), "");
+        assert_eq!(app.search().query(), "");
         assert_eq!(app.rows().iter().filter(|row| row.is_todo()).count(), 2);
     }
 
@@ -648,10 +648,10 @@ mod tests {
         }
         apply(&mut app, Command::SearchLeft, now());
         apply(&mut app, Command::SearchBackspace, now());
-        assert_eq!(app.query(), "ac");
-        assert_eq!(app.query_cursor(), 1);
+        assert_eq!(app.search().query(), "ac");
+        assert_eq!(app.search().cursor(), 1);
         apply(&mut app, Command::SearchDelete, now());
-        assert_eq!(app.query(), "a");
+        assert_eq!(app.search().query(), "a");
     }
 
     #[test]
@@ -755,7 +755,7 @@ mod tests {
         assert!(!READ_ONLY_MESSAGE.contains("write the docs"));
 
         assert_eq!(app.cursor(), Some(TodoId::new(0)));
-        assert_eq!(app.query(), "");
+        assert_eq!(app.search().query(), "");
     }
 
     #[test]
@@ -779,7 +779,7 @@ mod tests {
         let mut app = writable(&["one +thar @home"]);
         app.set_search_focused(true);
         app.set_query("+th");
-        assert!(app.search_suggestions().is_open());
+        assert!(app.search().suggestions().is_open());
 
         assert_eq!(
             command_for_key(&app, key(KeyCode::Up, KeyModifiers::NONE)),
@@ -795,8 +795,8 @@ mod tests {
         );
 
         apply(&mut app, Command::SuggestionApply, now());
-        assert_eq!(app.query(), "+thar ");
-        assert!(!app.search_suggestions().is_open());
+        assert_eq!(app.search().query(), "+thar ");
+        assert!(!app.search().suggestions().is_open());
         assert_eq!(app.rows().iter().filter(|row| row.is_todo()).count(), 1);
     }
 
@@ -973,8 +973,8 @@ mod tests {
         let mut app = writable(&["one"]);
         app.focus_search();
         handle_paste(&mut app, "do\tcs\u{001B}", now());
-        assert_eq!(app.query(), "docs");
-        assert_eq!(app.query_cursor(), 4);
+        assert_eq!(app.search().query(), "docs");
+        assert_eq!(app.search().cursor(), 4);
     }
 
     #[test]

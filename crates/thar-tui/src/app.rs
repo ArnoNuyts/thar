@@ -53,7 +53,7 @@ use crate::modal::{
     self, Action, ConfirmRequest, ModalId, OpenError, Outcome, Stack, TagKind, UpdateModel,
 };
 use crate::search_bar::SearchBar;
-use crate::suggest::{Suggestions, TagSources};
+use crate::suggest::TagSources;
 
 /// Debounce before a mutation is written, matching the Ink app.
 pub const SAVE_DEBOUNCE: Duration = Duration::from_millis(50);
@@ -204,11 +204,12 @@ pub struct App {
     search: SearchBar,
     tag_sources: TagSources,
     show_hidden: bool,
-    /// Cursor, anchor and range. Shared with `crate::nav`, the one module that
-    /// implements the selection transitions; no other crate sees this field.
-    pub(crate) selection: Selection,
+    /// Cursor, anchor and range. `crate::nav` is the one module that
+    /// implements the selection transitions; it reaches the field through the
+    /// crate-internal accessors below.
+    selection: Selection,
     /// First row drawn in the list viewport. Written by `crate::nav` only.
-    pub(crate) offset: usize,
+    offset: usize,
     width: u16,
     height: u16,
     toast: Option<Toast>,
@@ -296,34 +297,30 @@ impl App {
         }
     }
 
-    /// Current search query, before normalization.
+    /// The search bar: query, cursor, focus and suggestions.
+    ///
+    /// Read-only: every edit goes through `edit_query`, `move_query_cursor`,
+    /// `focus_search` or `blur_search`, which keep the row model and scroll
+    /// offset in step.
     #[must_use]
-    pub fn query(&self) -> String {
-        self.search.query()
+    pub fn search(&self) -> &SearchBar {
+        &self.search
     }
 
-    /// The current query as characters, without a second allocation.
+    /// Selection state for the navigation module.
     #[must_use]
-    pub(crate) fn query_chars(&self) -> &[char] {
-        self.search.chars()
+    pub(crate) fn selection(&self) -> &Selection {
+        &self.selection
     }
 
-    /// Cursor position in the query, in characters (not bytes).
-    #[must_use]
-    pub fn query_cursor(&self) -> usize {
-        self.search.cursor()
+    /// Mutable selection state for the navigation module.
+    pub(crate) fn selection_mut(&mut self) -> &mut Selection {
+        &mut self.selection
     }
 
-    /// True while the search bar has keyboard focus.
-    #[must_use]
-    pub fn search_focused(&self) -> bool {
-        self.search.focused()
-    }
-
-    /// Filtered project/context suggestions for the search bar.
-    #[must_use]
-    pub(crate) fn search_suggestions(&self) -> &Suggestions {
-        self.search.suggestions()
+    /// Set the viewport offset without clamping, for `crate::nav`.
+    pub(crate) fn set_offset_raw(&mut self, offset: usize) {
+        self.offset = offset;
     }
 
     /// Cursor todo id.
@@ -548,13 +545,7 @@ impl App {
     /// Current terminal size and rows.
     #[must_use]
     pub fn layout(&self) -> Layout {
-        Layout::new(self.width, self.height, self.search_visible())
-    }
-
-    /// The search bar is visible while focused or while it holds a query.
-    #[must_use]
-    pub(crate) fn search_visible(&self) -> bool {
-        self.search.visible()
+        Layout::new(self.width, self.height, self.search.visible())
     }
 
     /// Rebuild the row model from the current entries, query and flags.
@@ -584,10 +575,10 @@ impl App {
     /// The focused bar takes two rows, so the list height changes; the reflow
     /// keeps the cursor row visible at the new height.
     pub(crate) fn focus_search(&mut self) {
-        let was_visible = self.search_visible();
+        let was_visible = self.search.visible();
         self.search.focus();
         self.refresh_search_suggestions();
-        if self.search_visible() != was_visible {
+        if self.search.visible() != was_visible {
             crate::nav::reflow(self);
         } else {
             self.clamp_offset();
@@ -599,9 +590,9 @@ impl App {
     /// This is the production blur path (the mouse row click uses it too), so
     /// the row model and viewport stay consistent.
     pub(crate) fn blur_search(&mut self) {
-        let was_visible = self.search_visible();
+        let was_visible = self.search.visible();
         self.search.blur();
-        if self.search_visible() != was_visible {
+        if self.search.visible() != was_visible {
             crate::nav::reflow(self);
         } else {
             self.clamp_offset();
@@ -951,7 +942,7 @@ impl App {
         }
         let suggestions = self.search.suggestions();
         let start = suggestions.start();
-        let before: String = self.query_chars().iter().take(start).collect();
+        let before: String = self.search.chars().iter().take(start).collect();
         let width = u16::try_from(ratatui::text::Line::from(sanitize_for_display(&before)).width())
             .unwrap_or(u16::MAX);
         Some(crate::suggest::Overlay {
@@ -1630,7 +1621,7 @@ mod tests {
     }
 
     #[test]
-    fn the_save_deadline_is_the_debounce_from_the_first_mutation() {
+    fn the_save_deadline_is_the_trailing_debounce_from_the_latest_mutation() {
         let mut app = app(&["one"]);
         assert_eq!(app.save_deadline(), None);
         let at = now();

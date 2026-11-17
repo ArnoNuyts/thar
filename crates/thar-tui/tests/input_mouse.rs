@@ -352,7 +352,7 @@ fn clicking_a_row_while_search_is_focused_focuses_the_list() {
 
     let (_, command) = handle_mouse(&mut app, click(1, 4, false), None, Instant::now());
     assert_eq!(command, None);
-    assert!(!app.search_focused());
+    assert!(!app.search().focused());
     assert_eq!(cursor_text(&app).as_deref(), Some("one"));
 }
 
@@ -365,5 +365,5 @@ fn a_search_bar_click_is_not_a_row_click() {
     let (_, command) = handle_mouse(&mut app, click(1, 1, false), None, Instant::now());
     assert_eq!(command, None);
     assert_eq!(app.cursor(), before);
-    assert!(app.search_focused());
+    assert!(app.search().focused());
 }
