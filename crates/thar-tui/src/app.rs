@@ -27,8 +27,8 @@
 //! in `thar-cli`/`thar-store`; this crate only queues [`Effect`]s.
 //!
 //! Every mutation and modal action takes an explicit [`Instant`], so the save
-//! debounce and retry state are deterministic in tests and never read the clock
-//! from inside a transition.
+//! debounce and retry state are deterministic in tests. Convenience toasts that
+//! are not part of the save state may still use the host clock.
 
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -118,7 +118,7 @@ pub(crate) enum SaveState {
     Retrying {
         /// Earliest retry time.
         at: Instant,
-        /// Bounded save error message.
+        /// Save error message; the action bar bounds it when drawing.
         error: String,
     },
 }
@@ -415,10 +415,16 @@ impl App {
         &self.modals
     }
 
-    /// Undo/redo snapshots.
+    /// Number of undo steps, for tests and diagnostics.
     #[must_use]
-    pub fn history(&self) -> &History {
-        &self.history
+    pub fn undo_len(&self) -> usize {
+        self.history.undo_len()
+    }
+
+    /// Number of redo steps, for tests and diagnostics.
+    #[must_use]
+    pub fn redo_len(&self) -> usize {
+        self.history.redo_len()
     }
 
     /// True when the in-memory list differs from the last saved bytes.
@@ -1220,7 +1226,6 @@ impl App {
         match outcome {
             Outcome::Continue => {}
             Outcome::Close => self.modals.close(),
-            Outcome::Replace(modal) => self.modals.open(modal),
             Outcome::Actions(actions) => {
                 for action in actions {
                     self.apply_action(action, now);

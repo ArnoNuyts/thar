@@ -47,18 +47,6 @@ impl History {
         self.redo.clear();
     }
 
-    /// True when there is a state to go back to.
-    #[must_use]
-    pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
-    }
-
-    /// True when there is a state to go forward to.
-    #[must_use]
-    pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
-    }
-
     /// Number of undo steps, for tests and diagnostics.
     #[must_use]
     pub fn undo_len(&self) -> usize {
@@ -133,17 +121,17 @@ mod tests {
         let mut history = History::default();
         let original = vec![shared("one")];
         history.record(&original);
-        assert!(history.can_undo());
-        assert!(!history.can_redo());
+        assert_eq!(history.undo_len(), 1);
+        assert_eq!(history.redo_len(), 0);
 
         let mut current = vec![shared("two")];
         assert!(history.undo(&mut current));
         assert_eq!(current, original);
-        assert!(history.can_redo());
+        assert_eq!(history.redo_len(), 1);
 
         assert!(history.redo(&mut current));
         assert_eq!(current, vec![shared("two")]);
-        assert!(history.can_undo());
+        assert_eq!(history.undo_len(), 1);
     }
 
     #[test]
@@ -155,10 +143,10 @@ mod tests {
         history.record(&second);
         let mut current = second.clone();
         assert!(history.undo(&mut current));
-        assert!(history.can_redo());
+        assert_eq!(history.redo_len(), 1);
 
         history.record(&first);
-        assert!(!history.can_redo());
+        assert_eq!(history.redo_len(), 0);
         assert_eq!(history.undo_len(), 2);
     }
 
@@ -176,7 +164,7 @@ mod tests {
         for _ in 0..MAX_HISTORY {
             assert!(history.undo(&mut current));
         }
-        assert!(!history.can_undo());
+        assert_eq!(history.undo_len(), 0);
         assert_eq!(current, vec![shared("todo 5")]);
         assert_eq!(history.redo_len(), MAX_HISTORY);
     }
@@ -189,7 +177,8 @@ mod tests {
         assert!(!history.redo(&mut current));
         assert_eq!(current, vec![shared("one")]);
         history.clear();
-        assert!(!history.can_undo() && !history.can_redo());
+        assert_eq!(history.undo_len(), 0);
+        assert_eq!(history.redo_len(), 0);
     }
 
     #[test]

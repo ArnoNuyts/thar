@@ -5,7 +5,9 @@
 //! second run cannot replace the original with an already-edited copy. `--no-backup`
 //! (or `THAR_BACKUP=none`) disables it.
 
-use std::fs::{self, OpenOptions};
+#[cfg(unix)]
+use std::fs;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 

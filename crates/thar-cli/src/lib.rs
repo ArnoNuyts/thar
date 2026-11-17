@@ -62,7 +62,7 @@ pub fn run(args: &[OsString]) -> ExitCode {
             println!("{VERSION}");
             ExitCode::SUCCESS
         }
-        CliCommand::Update { .. } => {
+        CliCommand::Update => {
             eprintln!("thar-rs: self-update is not supported by this build.");
             ExitCode::from(2)
         }

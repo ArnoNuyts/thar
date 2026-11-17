@@ -106,7 +106,7 @@ pub enum Action {
     Toast(String),
     /// Replace the active modal with another screen.
     Open(ModalId),
-    /// Add one todo per line and select the first one.
+    /// Add one todo per line and select the last one.
     AddTodos(Vec<String>),
     /// Replace the text of each todo, preserving its tags.
     UpdateText {
@@ -208,8 +208,6 @@ pub enum Outcome {
     Close,
     /// Close and apply these actions in order.
     Actions(Vec<Action>),
-    /// Replace this modal with another one.
-    Replace(Box<dyn Modal>),
 }
 
 /// One screen.

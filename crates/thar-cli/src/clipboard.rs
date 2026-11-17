@@ -174,10 +174,14 @@ fn run_with_stdin(
         .spawn()
         .map_err(|error| CommandFailure::spawn(program, error))?;
 
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(input)
-            .map_err(|error| CommandFailure::ran(format!("{program}: {error}")))?;
+    if let Some(mut stdin) = child.stdin.take()
+        && let Err(error) = stdin.write_all(input)
+    {
+        // Reap the child instead of leaving a zombie on the error path.
+        drop(stdin);
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(CommandFailure::ran(format!("{program}: {error}")));
     }
 
     let status = child

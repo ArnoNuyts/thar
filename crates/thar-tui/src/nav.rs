@@ -7,7 +7,7 @@
 //! is contiguous over todo rows only. The uncategorised `"None"` header is a
 //! row like any other, so every row index here already accounts for it.
 //!
-//! [`scroll_to`] is a direct use of [`thar_core::calculate_scroll_offset`], the
+//! `scroll_to` is a direct use of [`thar_core::calculate_scroll_offset`], the
 //! ported `calculateScrollOffset`: the offset keeps the cursor and as much of
 //! the shift range as possible visible, with one row of padding.
 //!

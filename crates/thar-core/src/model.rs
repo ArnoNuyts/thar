@@ -750,7 +750,11 @@ impl fmt::Display for ToggleError {
     }
 }
 
-impl std::error::Error for ToggleError {}
+impl std::error::Error for ToggleError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
 
 /// Result of [`Todo::toggle_state`].
 ///

@@ -52,8 +52,8 @@
 //! # Serialization
 //!
 //! [`serialize_file`] is the whole-file write shape CP1 defines:
-//! `todos.map(toString).join("\n") + "\n"`, i.e. per-record
-//! [`thar_core::Todo::to_string`], joined with `"\n"`, plus one trailing `"\n"`
+//! `todos.map(toString).join("\n") + "\n"`, i.e. each `thar_core::Todo`'s
+//! `Display` output, joined with `"\n"`, plus one trailing `"\n"`
 //! (so zero todos produce `"\n"`). It also runs the write-time guard from
 //! `serializeTodosForWrite` (`logic/todo-file-helpers.ts`) before returning any
 //! text; see the `write` module for the rejection envelope.
@@ -141,7 +141,7 @@ pub fn parse_file(text: &str, today: &str) -> Result<String, JsError> {
 ///
 /// The limits arrive as `f64`, the JavaScript `Number` type, so the whole host
 /// range crosses without a `BigInt` round-trip (wasm-bindgen maps `u64`
-/// parameters to `BigInt`). They are clamped by [`js_u64`]/[`js_usize`]: a
+/// parameters to `BigInt`). They are clamped by `js_u64`/`js_usize`: a
 /// non-finite or non-positive value accepts nothing, and a value beyond the
 /// target range saturates instead of wrapping. `max_file_bytes` is a `u64`, so
 /// there is no 4 GiB cap; on wasm32 only `max_read_todos`/`max_line_chars`

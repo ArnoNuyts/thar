@@ -6,9 +6,9 @@
 
 This workstream ports the date/threshold screens, the month calendar, the
 priority screen, the two-step recurrence screen and the project/context tag
-editor. It fills the matching arms of `modal/registry_date.rs` and
-`modal/registry_meta.rs`, so the list keymap's `d`, `t`, `A`..`F`, `r`, `+` and
-`@` now open real screens instead of the foundation's bounded "not available"
+editor. It fills the matching arms of the one exhaustive
+`modal/registry.rs`, so the list keymap's `d`, `t`, `A`..`F`, `r`, `+` and `@`
+now open real screens instead of the foundation's bounded "not available"
 toast.
 
 ## What landed
@@ -110,10 +110,10 @@ custom input, row 1 is the separator (a no-op), and rows 2.. toggle tags.
 
 ### Registries
 
-`registry_date::open` builds the two date screens and `registry_meta::open`
-builds priority, recurrence and the two tag editors. `modal/mod.rs` gains the
-four private module declarations; `lib.rs` exports `calendar`. The update
-screen belongs to its own workstream and stays unavailable.
+The exhaustive `registry::open` builds the two date screens, priority,
+recurrence and the two tag editors. `modal/mod.rs` keeps the private screen
+modules; `lib.rs` exports `calendar`. The update screen remains unavailable
+unless the host supplies an update model.
 
 ## Tests and evidence
 

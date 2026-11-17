@@ -118,11 +118,11 @@ fn mode_bits_are_enforced(directory: &Path) -> bool {
     }
 }
 
-#[cfg(unix)]
 fn current_time() -> std::time::Instant {
     std::time::Instant::now()
 }
 
+#[cfg(unix)]
 #[test]
 fn a_read_only_directory_refuses_the_save_and_keeps_the_target() {
     let root = TempDir::new("write-safety-readonly-dir");
@@ -377,7 +377,7 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
     // Enter read-only recovery with one undo step outstanding, as a failed
     // reload would after an unsaved edit.
     let _ = app.add_todos(&["Unsaved".to_owned()], current_time());
-    assert_eq!(app.history().undo_len(), 1);
+    assert_eq!(app.undo_len(), 1);
     app.reload_failed("Cannot read the todo file: rejected");
     assert!(!app.writable());
 
@@ -394,11 +394,7 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
     assert!(app.load_error().is_none());
     assert!(app.writable(), "recovery must re-enable writes");
     assert_eq!(app.todos().len(), 2);
-    assert_eq!(
-        app.history().undo_len(),
-        0,
-        "a reload clears the undo history"
-    );
+    assert_eq!(app.undo_len(), 0, "a reload clears the undo history");
     assert!(
         !app.undo(current_time()),
         "nothing is left to undo after a reload"

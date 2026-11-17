@@ -24,12 +24,10 @@ pub enum CliCommand {
     /// Print the crate version and exit successfully.
     Version,
     /// The `update` subcommand was requested.
-    Update {
-        /// `--check` was passed: report without applying anything.
-        check_only: bool,
-        /// `--yes`/`-y` was passed: skip the confirmation.
-        yes: bool,
-    },
+    ///
+    /// `--check` and `--yes` are accepted for command-line parity; this build
+    /// reports that self-update is unsupported regardless.
+    Update,
     /// Open the TUI for one todo file.
     Run {
         /// Todo file to open.
@@ -38,8 +36,6 @@ pub enum CliCommand {
         write: bool,
         /// `--no-backup` was passed: skip the one `<file>.bak` safety copy.
         no_backup: bool,
-        /// Accepted for CLI parity; CP6 has no update check to disable.
-        no_update_check: bool,
     },
 }
 
@@ -118,20 +114,12 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
         {
             return Ok(CliCommand::Version);
         }
-        return Ok(CliCommand::Update {
-            check_only: rest
-                .iter()
-                .any(|argument| argument.to_str() == Some("--check")),
-            yes: rest
-                .iter()
-                .any(|argument| matches!(argument.to_str(), Some("--yes" | "-y"))),
-        });
+        return Ok(CliCommand::Update);
     }
 
     let mut file: Option<PathBuf> = None;
     let mut help = false;
     let mut version = false;
-    let mut no_update_check = false;
     let mut write = false;
     let mut read_only_flag = false;
     let mut no_backup = false;
@@ -162,7 +150,8 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
             Some("--") => end_of_options = true,
             Some("-h" | "--help") => help = true,
             Some("-v" | "--version") => version = true,
-            Some("--no-update-check") => no_update_check = true,
+            // Accepted for command-line parity; this build has no update check.
+            Some("--no-update-check") => {}
             Some("--write") => write = true,
             Some("--read-only") => read_only_flag = true,
             Some("--no-backup") => no_backup = true,
@@ -199,7 +188,6 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
         file: file.unwrap_or_else(|| PathBuf::from(DEFAULT_FILENAME)),
         write,
         no_backup,
-        no_update_check,
     })
 }
 
@@ -217,23 +205,22 @@ mod tests {
         parse_cli_args(&args(values)).expect("valid arguments")
     }
 
-    fn run(values: &[&str]) -> (PathBuf, bool, bool, bool) {
+    fn run(values: &[&str]) -> (PathBuf, bool, bool) {
         match parse(values) {
             CliCommand::Run {
                 file,
                 write,
                 no_backup,
-                no_update_check,
-            } => (file, write, no_backup, no_update_check),
+            } => (file, write, no_backup),
             other => panic!("expected a run command, got {other:?}"),
         }
     }
 
     #[test]
     fn defaults_to_todo_txt() {
-        let (file, write, no_backup, no_update_check) = run(&[]);
+        let (file, write, no_backup) = run(&[]);
         assert_eq!(file, Path::new(DEFAULT_FILENAME));
-        assert!(!write && !no_backup && !no_update_check);
+        assert!(!write && !no_backup);
         assert!(!matches!(
             parse(&[]),
             CliCommand::Help | CliCommand::Version
@@ -253,7 +240,10 @@ mod tests {
         assert_eq!(parse(&["-h"]), CliCommand::Help);
         assert_eq!(parse(&["-v"]), CliCommand::Version);
         assert_eq!(parse(&["--version"]), CliCommand::Version);
-        assert!(run(&["--no-update-check"]).3);
+        assert!(matches!(
+            parse(&["--no-update-check"]),
+            CliCommand::Run { .. }
+        ));
     }
 
     #[test]
@@ -278,48 +268,24 @@ mod tests {
 
     #[test]
     fn update_subcommand_is_recognized_but_not_a_file() {
-        assert_eq!(
-            parse(&["update", "--check"]),
-            CliCommand::Update {
-                check_only: true,
-                yes: false,
-            }
-        );
-        assert_eq!(
-            parse(&["update"]),
-            CliCommand::Update {
-                check_only: false,
-                yes: false,
-            }
-        );
-        assert_eq!(
-            parse(&["update", "--yes"]),
-            CliCommand::Update {
-                check_only: false,
-                yes: true,
-            }
-        );
-        assert_eq!(
-            parse(&["update", "-y", "--check"]),
-            CliCommand::Update {
-                check_only: true,
-                yes: true,
-            }
-        );
+        assert_eq!(parse(&["update", "--check"]), CliCommand::Update);
+        assert_eq!(parse(&["update"]), CliCommand::Update);
+        assert_eq!(parse(&["update", "--yes"]), CliCommand::Update);
+        assert_eq!(parse(&["update", "-y", "--check"]), CliCommand::Update);
         assert_eq!(parse(&["update", "--version"]), CliCommand::Version);
     }
 
     #[test]
     fn accepts_write_mode_and_backup_flags() {
-        let (file, write, no_backup, _) = run(&["--write", "work.txt"]);
+        let (file, write, no_backup) = run(&["--write", "work.txt"]);
         assert!(write);
         assert!(!no_backup);
         assert_eq!(file, Path::new("work.txt"));
 
-        let (_, write, no_backup, _) = run(&["--write", "--no-backup"]);
+        let (_, write, no_backup) = run(&["--write", "--no-backup"]);
         assert!(write && no_backup);
 
-        let (_, write, _, _) = run(&["--read-only"]);
+        let (_, write, _) = run(&["--read-only"]);
         assert!(!write);
     }
 

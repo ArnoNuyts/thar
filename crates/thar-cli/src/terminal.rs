@@ -385,8 +385,8 @@ fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync,
     match store.save(app.todos()) {
         Ok(_) => {
             // The window starts after the rename, not before the serialization,
-            // so a slow filesystem cannot shorten it. Reuse the event's `now`.
-            sync.note_write(now);
+            // so a slow filesystem cannot shorten it.
+            sync.note_write(Instant::now());
             sync.adopt(store.last_bytes());
             app.mark_saved();
         }

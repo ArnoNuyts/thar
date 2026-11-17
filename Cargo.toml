@@ -37,8 +37,8 @@ codegen-units = 1
 #
 # This is deliberately a separate profile so the native `thar-rs` release build
 # keeps `panic = "unwind"` (and the default speed optimization). wasm-pack 0.13
-# has no flag for a custom Cargo profile, so scripts/build-wasm.mjs passes the
-# same two settings to its internal release build with `--config`; the profile
+# has no flag for a custom Cargo profile, so scripts/build-wasm.mjs supplies the
+# same two settings through Cargo's profile environment variables; the profile
 # below covers direct `cargo build --profile wasm` runs.
 [profile.wasm]
 inherits = "release"

@@ -492,7 +492,7 @@ mod tests {
     fn actions(outcome: Outcome) -> Vec<Action> {
         match outcome {
             Outcome::Actions(actions) => actions,
-            Outcome::Continue | Outcome::Close | Outcome::Replace(_) => {
+            Outcome::Continue | Outcome::Close => {
                 panic!("unexpected outcome")
             }
         }
@@ -735,12 +735,12 @@ mod tests {
         app.handle_modal_key(key(KeyCode::Char(' ')), now());
         app.handle_modal_key(key(KeyCode::Down), now()); // work
         app.handle_modal_key(key(KeyCode::Char(' ')), now()); // All -> remove
-        assert_eq!(app.history().undo_len(), 0);
+        assert_eq!(app.undo_len(), 0);
 
         assert!(app.handle_modal_key(key(KeyCode::Enter), now()));
         assert!(!app.modals().is_open());
         // One undo step for the custom value plus one per pending change.
-        assert_eq!(app.history().undo_len(), 3);
+        assert_eq!(app.undo_len(), 3);
 
         assert!(app.todos()[0].projects.contains(&"newproj".to_owned()));
         assert!(app.todos()[1].projects.contains(&"newproj".to_owned()));

@@ -872,11 +872,10 @@ undo/redo commands, while the modal screens arrive in parallel workstreams.
 - **Modal host.** `thar-tui::modal` owns one active screen, the centred
   geometry (`3 + body + 2` chrome), the `Action` vocabulary (create, text,
   delete, toggle, dates, priority, recurrence, tags, undo/redo, view, copy,
-  paste, archive) and a registry split into `registry_editor`, `registry_date`,
-  `registry_meta` and `registry_menu`. Each parallel CP7 workstream fills only
-  its own registry file and screen modules; `view/overlay.rs` draws whatever
-  the stack holds. The four registry files are empty in this slice, so a key
-  for a not-yet-landed screen shows one bounded message.
+  paste, archive) and one exhaustive registry (`modal/registry.rs`) for every
+  screen id. `view/overlay.rs` draws whatever the stack holds. A screen the
+  host cannot build (the update screen without a model) shows one bounded
+  message; `Confirm` is opened with its request instead of by id.
 - **Tests and evidence.** `thar-store` 11 unit tests (atomic replace + mode,
   backup-once, external-edit refusal, deleted-target refusal, append, ensure);
   `thar-tui` app/history tests (stable ids, one-step group, undo/redo,

@@ -51,7 +51,6 @@
 //! decision in `docs/rust-port/PLAN.md` §13.
 
 use core::cmp::Ordering;
-
 use std::borrow::Borrow;
 
 use crate::date::TodoDate;

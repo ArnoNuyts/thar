@@ -17,7 +17,7 @@ third-party dependency.
 | One-line editor           | `crates/thar-tui/src/editor.rs`                | `components/ControlledTextInput.tsx`                                                                                                                                                             |
 | Tag sources + suggestions | `crates/thar-tui/src/suggest.rs`               | `logic/tag-sources.ts`, `logic/patterns.ts`, `hooks/useSuggestionInput.ts`                                                                                                                       |
 | Create/edit screens       | `crates/thar-tui/src/modal/create_edit.rs`     | `components/CreateTodoModal.tsx`, `components/EditTodoModal.tsx`, `components/ModalTodoInput.tsx`, `components/SuggestionInput.tsx`, `components/SuggestionOverlay.tsx`, `utils/search-utils.ts` |
-| Registry                  | `crates/thar-tui/src/modal/registry_editor.rs` | the modal host's dispatch table                                                                                                                                                                  |
+| Registry                  | `crates/thar-tui/src/modal/registry.rs`        | the modal host's one exhaustive dispatch table                                                                                                                                                   |
 
 ### Validation (`thar-core`)
 
@@ -100,15 +100,16 @@ One `TextModal` with a `Create`/`Edit` mode:
   fixed body height. The modal chrome itself is the Ink one: a left accent bar
   and a primary title chip, not a box border.
 
-The registry returns `Some` for `CreateTodo`/`EditTodo` and `None` for every
-other id, so the host keeps its bounded "not available" toast for the screens
-other workstreams own.
+The single exhaustive registry in `modal/registry.rs` builds every screen id.
+It returns `OpenError::Unavailable` only when the host did not supply the update
+model, and `OpenError::NeedsRequest` for `Confirm`, which is opened with its
+request after an `Action::Confirm`.
 
 ## Read-only contract
 
-- The new keymap is only reachable through `writable_list_key`; a read-only
-  process still maps `n`/`e` to `Command::Rejected(READ_ONLY_MESSAGE)` and the
-  `READ-ONLY` badge stays.
+- The one keymap runs through `command_for_key_in`; a read-only process maps
+  every `Command::mutates()` intent (including `n`/`e`) to
+  `Command::Rejected(READ_ONLY_MESSAGE)` and the `READ-ONLY` badge stays.
 - `thar-tui` gained no I/O: the screens return `Action`s, and the host applies
   them. `crates/thar-cli/tests/no_write.rs` (the CP6 source scan) still scans
   every source file; `clipboard.rs` has its own forbidden list that allows only

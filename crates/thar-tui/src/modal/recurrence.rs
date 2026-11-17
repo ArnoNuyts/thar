@@ -380,7 +380,7 @@ mod tests {
     fn actions(outcome: Outcome) -> Vec<Action> {
         match outcome {
             Outcome::Actions(actions) => actions,
-            Outcome::Continue | Outcome::Close | Outcome::Replace(_) => {
+            Outcome::Continue | Outcome::Close => {
                 panic!("unexpected outcome")
             }
         }
