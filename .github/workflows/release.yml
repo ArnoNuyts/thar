@@ -35,6 +35,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       skip: ${{ steps.check.outputs.skip }}
       tag_exists: ${{ steps.check.outputs.tag_exists }}
+      release_ready: ${{ steps.release_ready.outputs.ready }}
 
     steps:
       - name: Setup repo
@@ -118,6 +119,7 @@ jobs:
           TAG: ${{ steps.release.outputs.tag }}
           VERSION: ${{ steps.release.outputs.version }}
           CHANNEL: ${{ steps.release.outputs.channel }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag_exists=false
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
@@ -129,6 +131,11 @@ jobs:
             npm_exists=true
           fi
 
+          release_exists=false
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            release_exists=true
+          fi
+
           skip=false
           if [ "$npm_exists" = true ] && { [ "$CHANNEL" = "stable" ] || [ "$tag_exists" = true ]; }; then
             skip=true
@@ -137,11 +144,12 @@ jobs:
           {
             echo "tag_exists=$tag_exists"
             echo "npm_exists=$npm_exists"
+            echo "release_exists=$release_exists"
             echo "skip=$skip"
           } >> "$GITHUB_OUTPUT"
 
           if [ "$skip" = true ]; then
-            echo "$TAG is already released; skipping."
+            echo "$TAG is already published; skipping npm and the tag."
           fi
 
       - name: Create tag
@@ -189,7 +197,11 @@ jobs:
         run: npm publish --provenance --access public --tag "$DIST_TAG"
 
       - name: Create or update GitHub release
-        if: steps.check.outputs.skip != 'true'
+        # Runs for a fresh release, and also recovers an earlier run that
+        # created the tag and published npm but failed before creating the
+        # release notes. Without that recovery a re-run would skip publishing,
+        # yet `native` would upload to a release that does not exist.
+        if: steps.check.outputs.skip != 'true' || (steps.check.outputs.tag_exists == 'true' && steps.check.outputs.release_exists == 'false')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag }}
@@ -229,6 +241,19 @@ jobs:
             fi
           fi
 
+      - name: Check the GitHub release is ready
+        id: release_ready
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if [ -n "$TAG" ] && gh release view "$TAG" >/dev/null 2>&1; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # `thar-rs` is the Rust TUI binary (docs/rust-port/PLAN.md, CP6/CP8). Build
   # it on a native host per target: macOS cannot be cross-compiled from Linux,
   # and native arm64 Linux keeps the glibc ABI honest. The job waits for
@@ -237,10 +262,9 @@ jobs:
   native:
     name: native (${{ matrix.target }})
     needs: publish
-    # A normal release creates the tag/release in `publish`; an idempotent
-    # re-run skips publishing but the tag still exists, so the native assets can
-    # be rebuilt and re-attached with `--clobber`.
-    if: needs.publish.outputs.skip != 'true' || needs.publish.outputs.tag_exists == 'true'
+    # Upload only once `publish` has proved the release exists. This is true for
+    # a fresh release and for a re-run that recovered a missing release.
+    if: needs.publish.outputs.release_ready == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -249,14 +273,21 @@ jobs:
           # the oldest still-supported LTS hosts.
           - target: linux-x64
             os: ubuntu-22.04
+            rustflags: ""
           - target: linux-arm64
             os: ubuntu-22.04-arm
+            rustflags: ""
           - target: macos-x64
             os: macos-15-intel
+            rustflags: ""
           - target: macos-arm64
             os: macos-15
+            rustflags: ""
           - target: windows-x64
             os: windows-latest
+            # Static MSVC CRT: the archive then runs without a separately
+            # installed VC++ redistributable.
+            rustflags: "-C target-feature=+crt-static"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
@@ -279,19 +310,27 @@ jobs:
           # Report the release tag's version from `thar-rs --version` instead
           # of the crate's independent 0.1.0 development version.
           THAR_BUILD_VERSION: ${{ needs.publish.outputs.version }}
+          RUSTFLAGS: ${{ matrix.rustflags }}
         run: cargo build --locked --release -p thar-cli
 
       - name: Smoke test (Unix)
         if: runner.os != 'Windows'
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
         run: |
-          ./target/release/thar-rs --version
+          test "$(./target/release/thar-rs --version)" = "$VERSION"
           ./target/release/thar-rs --help >/dev/null
 
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
         run: |
-          .\target\release\thar-rs.exe --version
+          $reported = .\target\release\thar-rs.exe --version
+          if ($reported -ne $env:VERSION) {
+            throw "thar-rs.exe --version returned '$reported', expected '$env:VERSION'"
+          }
           .\target\release\thar-rs.exe --help | Out-Null
 
       - name: Package (Unix)
@@ -324,7 +363,10 @@ jobs:
           Copy-Item README.md, LICENSE stage
           Compress-Archive -Path "stage/*" -DestinationPath $asset
           $hash = (Get-FileHash -Algorithm SHA256 $asset).Hash.ToLower()
-          "$hash  $asset" | Out-File -Encoding ascii "$asset.sha256"
+          # Explicit LF so `sha256sum -c` works on Linux/macOS too; Windows
+          # PowerShell's Out-File would write CRLF and leave a trailing \r in
+          # the filename.
+          [System.IO.File]::WriteAllText("$asset.sha256", "$hash  $asset`n")
           Get-Item $asset, "$asset.sha256" | Format-Table Name, Length
 
       - name: Attach to the GitHub release

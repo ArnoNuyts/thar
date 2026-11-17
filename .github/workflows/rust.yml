@@ -183,7 +183,9 @@ jobs:
         run: cargo test --locked -p thar-cli --test pty
 
   # portable-pty is Unix-focused, so Windows gets a compile check instead of a
-  # PTY run: it still validates the crate, the binary and every test target.
+  # PTY run: it still validates the crate, the binary and every test target. It
+  # also links and runs the release binary, which is the only place the static
+  # CRT used by the release archive is exercised.
   windows:
     name: Windows compile check
     runs-on: windows-latest
@@ -203,6 +205,13 @@ jobs:
 
       - name: Check every target
         run: cargo check --locked -p thar-cli --all-targets
+
+      - name: Link and run the release binary
+        env:
+          RUSTFLAGS: "-C target-feature=+crt-static"
+        run: |
+          cargo build --locked --release -p thar-cli
+          .\target\release\thar-rs.exe --version
 
   wasm:
     name: wasm package + size budget

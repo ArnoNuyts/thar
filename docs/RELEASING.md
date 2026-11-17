@@ -41,15 +41,25 @@ version there before the next beta cycle.
    | `thar-macos-arm64.tar.gz` | `macos-15`         |
    | `thar-windows-x64.zip`    | `windows-latest`   |
 
-   Each archive contains `thar-rs`, `README.md` and `LICENSE`, plus a matching
-   `.sha256` file. Linux binaries target glibc 2.35 from the 22.04 runner.
-   macOS binaries are not code-signed or notarized yet (CP8); after downloading
-   one, clear the quarantine attribute or build from source.
+   Each archive contains `thar-rs` (`thar-rs.exe` on Windows), `README.md` and
+   `LICENSE`; the matching `.sha256` file is attached next to the archive.
+   Linux binaries target glibc 2.35 from the 22.04 runner, and the Windows build
+   links the static CRT so it needs no VC++ redistributable. macOS binaries are
+   not code-signed or notarized yet (CP8); after downloading one, clear the
+   quarantine attribute or build from source.
 
-The publish job is idempotent: if the npm version already exists, it skips.
+The publish job is idempotent: it skips when the resolved npm version and tag
+already exist (a stable release also skips when its npm version exists).
 Native builds run for a fresh release and can be re-run for an existing tag to
 rebuild or re-attach assets; they never block npm publication because they
-start after `publish` finishes.
+start after `publish` finishes. A re-run also recreates the GitHub release if
+an earlier attempt published npm and the tag but failed before creating it.
+
+Verify a download with the checksum next to it:
+
+```sh
+sha256sum -c thar-linux-x64.tar.gz.sha256
+```
 
 ## First publish
 
