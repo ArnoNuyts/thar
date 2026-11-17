@@ -30,8 +30,26 @@ version there before the next beta cycle.
 1. `verify` calls the CI workflow.
 2. `publish` creates the tag, publishes to npm, and creates or updates the
    GitHub release notes.
+3. `native` builds `thar-rs` on each supported host and attaches the archives
+   to that GitHub release:
+
+   | Asset                     | Host               |
+   | ------------------------- | ------------------ |
+   | `thar-linux-x64.tar.gz`   | `ubuntu-22.04`     |
+   | `thar-linux-arm64.tar.gz` | `ubuntu-22.04-arm` |
+   | `thar-macos-x64.tar.gz`   | `macos-15-intel`   |
+   | `thar-macos-arm64.tar.gz` | `macos-15`         |
+   | `thar-windows-x64.zip`    | `windows-latest`   |
+
+   Each archive contains `thar-rs`, `README.md` and `LICENSE`, plus a matching
+   `.sha256` file. Linux binaries target glibc 2.35 from the 22.04 runner.
+   macOS binaries are not code-signed or notarized yet (CP8); after downloading
+   one, clear the quarantine attribute or build from source.
 
 The publish job is idempotent: if the npm version already exists, it skips.
+Native builds run for a fresh release and can be re-run for an existing tag to
+rebuild or re-attach assets; they never block npm publication because they
+start after `publish` finishes.
 
 ## First publish
 

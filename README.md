@@ -103,6 +103,11 @@ against the real binary, and only compiles the crate on Windows. See
 [`docs/rust-port/PLAN.md`](docs/rust-port/PLAN.md) (CP6/CP7) for the evidence
 and for what remains before the Rust TUI becomes the default.
 
+Each release also publishes prebuilt `thar-rs` archives on the GitHub release
+page for Linux (x64/arm64), macOS (x64/arm64) and Windows (x64), with a
+`.sha256` checksum next to each archive. They report the release version and
+need no Rust toolchain; the macOS builds are not notarized yet.
+
 ### Building from source
 
 ```sh
