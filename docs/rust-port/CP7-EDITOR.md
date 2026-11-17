@@ -11,13 +11,13 @@ third-party dependency.
 
 ## What landed
 
-| Layer                     | Module                                         | Oracle                                                                                                                                                                                           |
-| ------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Write-side validation     | `crates/thar-core/src/input.rs`                | `logic/todo-input.ts`, `logic/limits.ts`                                                                                                                                                         |
-| One-line editor           | `crates/thar-tui/src/editor.rs`                | `components/ControlledTextInput.tsx`                                                                                                                                                             |
-| Tag sources + suggestions | `crates/thar-tui/src/suggest.rs`               | `logic/tag-sources.ts`, `logic/patterns.ts`, `hooks/useSuggestionInput.ts`                                                                                                                       |
-| Create/edit screens       | `crates/thar-tui/src/modal/create_edit.rs`     | `components/CreateTodoModal.tsx`, `components/EditTodoModal.tsx`, `components/ModalTodoInput.tsx`, `components/SuggestionInput.tsx`, `components/SuggestionOverlay.tsx`, `utils/search-utils.ts` |
-| Registry                  | `crates/thar-tui/src/modal/registry.rs`        | the modal host's one exhaustive dispatch table                                                                                                                                                   |
+| Layer                     | Module                                     | Oracle                                                                                                                                                                                           |
+| ------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Write-side validation     | `crates/thar-core/src/input.rs`            | `logic/todo-input.ts`, `logic/limits.ts`                                                                                                                                                         |
+| One-line editor           | `crates/thar-tui/src/editor.rs`            | `components/ControlledTextInput.tsx`                                                                                                                                                             |
+| Tag sources + suggestions | `crates/thar-tui/src/suggest.rs`           | `logic/tag-sources.ts`, `logic/patterns.ts`, `hooks/useSuggestionInput.ts`                                                                                                                       |
+| Create/edit screens       | `crates/thar-tui/src/modal/create_edit.rs` | `components/CreateTodoModal.tsx`, `components/EditTodoModal.tsx`, `components/ModalTodoInput.tsx`, `components/SuggestionInput.tsx`, `components/SuggestionOverlay.tsx`, `utils/search-utils.ts` |
+| Registry                  | `crates/thar-tui/src/modal/registry.rs`    | the modal host's one exhaustive dispatch table                                                                                                                                                   |
 
 ### Validation (`thar-core`)
 
