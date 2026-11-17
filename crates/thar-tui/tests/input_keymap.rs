@@ -257,7 +257,7 @@ fn a_rejection_shows_one_bounded_toast() {
 
     // Rejections never move the cursor or change the query.
     assert_eq!(app.cursor(), Some(TodoId::new(0)));
-    assert_eq!(app.query(), "");
+    assert_eq!(app.search().query(), "");
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn search_typing_edits_while_mutating_list_keys_stay_search_input() {
     for ch in "one".chars() {
         input::apply(&mut app, Command::SearchInsert(ch), current_time());
     }
-    assert_eq!(app.query(), "one");
+    assert_eq!(app.search().query(), "one");
     assert_eq!(app.rows().iter().filter(|row| row.is_todo()).count(), 1);
     // None of those characters produced a read-only toast.
     assert_eq!(app.toast_message(current_time()), None);
@@ -281,8 +281,8 @@ fn a_multi_character_paste_keeps_its_order_at_the_cursor() {
 
     // At the end: "docs" must stay "docs", not reverse to "scod".
     input::insert_query_text(&mut app, "docs");
-    assert_eq!(app.query(), "docs");
-    assert_eq!(app.query_cursor(), 4);
+    assert_eq!(app.search().query(), "docs");
+    assert_eq!(app.search().cursor(), 4);
     assert_eq!(
         app.rows().iter().filter(|row| row.is_todo()).count(),
         2,
@@ -294,10 +294,10 @@ fn a_multi_character_paste_keeps_its_order_at_the_cursor() {
     app.set_query("abef");
     input::apply(&mut app, Command::SearchLeft, current_time());
     input::apply(&mut app, Command::SearchLeft, current_time());
-    assert_eq!(app.query_cursor(), 2);
+    assert_eq!(app.search().cursor(), 2);
     input::insert_query_text(&mut app, "cd");
-    assert_eq!(app.query(), "abcdef");
-    assert_eq!(app.query_cursor(), 4);
+    assert_eq!(app.search().query(), "abcdef");
+    assert_eq!(app.search().cursor(), 4);
 }
 
 #[test]
@@ -306,9 +306,9 @@ fn search_focus_and_blur_never_reverse_or_drop_the_query() {
     input::apply(&mut app, Command::SearchFocus, current_time());
     input::insert_query_text(&mut app, "abc");
     input::apply(&mut app, Command::SearchBlur, current_time());
-    assert_eq!(app.query(), "abc");
-    assert_eq!(app.query_cursor(), 3);
+    assert_eq!(app.search().query(), "abc");
+    assert_eq!(app.search().cursor(), 3);
     input::apply(&mut app, Command::SearchFocus, current_time());
     input::insert_query_text(&mut app, "de");
-    assert_eq!(app.query(), "abcde");
+    assert_eq!(app.search().query(), "abcde");
 }

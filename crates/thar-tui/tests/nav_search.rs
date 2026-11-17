@@ -55,7 +55,7 @@ fn typing_filters_rows_and_keeps_a_visible_cursor() {
     assert_eq!(todo_rows(&app), 3);
 
     type_query(&mut app, "mm");
-    assert_eq!(app.query(), "amm");
+    assert_eq!(app.search().query(), "amm");
     assert_eq!(app.cursor(), Some(TodoId::new(2)));
     assert_eq!(cursor_text(&app).as_deref(), Some("gamma"));
     assert_eq!(todo_rows(&app), 1);
@@ -134,15 +134,15 @@ fn enter_blurs_and_keeps_the_filter_escape_clears_it() {
     assert_eq!(todo_rows(&app), 1);
 
     input::apply(&mut app, Command::SearchBlur, current_time());
-    assert!(!app.search_focused());
-    assert_eq!(app.query(), "beta");
+    assert!(!app.search().focused());
+    assert_eq!(app.search().query(), "beta");
     assert_eq!(todo_rows(&app), 1);
 
     input::apply(&mut app, Command::SearchFocus, current_time());
     input::apply(&mut app, Command::SearchClear, current_time());
-    assert!(!app.search_focused());
-    assert_eq!(app.query(), "");
-    assert_eq!(app.query_cursor(), 0);
+    assert!(!app.search().focused());
+    assert_eq!(app.search().query(), "");
+    assert_eq!(app.search().cursor(), 0);
     assert_eq!(todo_rows(&app), 3);
 }
 
@@ -152,18 +152,18 @@ fn home_and_end_navigate_the_list_while_search_is_focused() {
 
     input::apply(&mut app, Command::SearchFocus, current_time());
     type_query(&mut app, "a");
-    assert_eq!(app.query_cursor(), 1);
+    assert_eq!(app.search().cursor(), 1);
 
     input::apply(&mut app, Command::End, current_time());
     assert_eq!(cursor_text(&app).as_deref(), Some("gamma"));
     // Home/End never move the query cursor: the search handler intercepts
     // them before the text editor.
-    assert_eq!(app.query_cursor(), 1);
-    assert_eq!(app.query(), "a");
+    assert_eq!(app.search().cursor(), 1);
+    assert_eq!(app.search().query(), "a");
 
     input::apply(&mut app, Command::Home, current_time());
     assert_eq!(cursor_text(&app).as_deref(), Some("alpha"));
-    assert_eq!(app.query_cursor(), 1);
+    assert_eq!(app.search().cursor(), 1);
 }
 
 #[test]
@@ -174,24 +174,24 @@ fn query_cursor_editing_inserts_and_deletes_at_the_cursor() {
     type_query(&mut app, "ga");
     input::apply(&mut app, Command::SearchLeft, current_time());
     input::apply(&mut app, Command::SearchInsert('m'), current_time());
-    assert_eq!(app.query(), "gma");
-    assert_eq!(app.query_cursor(), 2);
+    assert_eq!(app.search().query(), "gma");
+    assert_eq!(app.search().cursor(), 2);
 
     input::apply(&mut app, Command::SearchLeft, current_time());
     input::apply(&mut app, Command::SearchBackspace, current_time());
-    assert_eq!(app.query(), "ma");
-    assert_eq!(app.query_cursor(), 0);
+    assert_eq!(app.search().query(), "ma");
+    assert_eq!(app.search().cursor(), 0);
 
     input::apply(&mut app, Command::SearchDelete, current_time());
-    assert_eq!(app.query(), "a");
-    assert_eq!(app.query_cursor(), 0);
+    assert_eq!(app.search().query(), "a");
+    assert_eq!(app.search().cursor(), 0);
 
     // Left/Right clamp instead of wrapping.
     input::apply(&mut app, Command::SearchLeft, current_time());
-    assert_eq!(app.query_cursor(), 0);
+    assert_eq!(app.search().cursor(), 0);
     input::apply(&mut app, Command::SearchRight, current_time());
     input::apply(&mut app, Command::SearchRight, current_time());
-    assert_eq!(app.query_cursor(), 1);
+    assert_eq!(app.search().cursor(), 1);
 }
 
 #[test]
