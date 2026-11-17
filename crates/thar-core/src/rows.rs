@@ -17,15 +17,15 @@
 //! # Row building
 //!
 //! [`build_rows`] composes the pieces the host runs on every search keystroke:
-//! [`sort_by_importance`] → [`filter_hidden`] (unless hidden todos are shown) →
+//! [`sort_by_importance`] → [`Todo::is_visible_in_overview`] (unless hidden
+//! todos are shown) →
 //! [`filter_by_search`] → [`create_rows`]. It returns a [`Rows`] that owns the
 //! row list plus the ordered input indexes behind the todo rows, so the host
 //! maps rows back to its own objects without a second lookup pass.
 //!
-//! Search input is host-normalized: [`RowInput::views`] holds one
-//! [`SearchView`] per todo, already lowercased by the host, and
-//! [`RowInput::terms`] holds already-extracted terms. Empty `terms` match
-//! everything. Contexts collate with the en-US ICU order of
+//! Search input is host-normalized: [`build_rows`] takes one [`SearchView`] per
+//! todo, already lowercased by the host, plus the already-extracted terms.
+//! Empty `terms` match everything. Contexts collate with the en-US ICU order of
 //! [`sort_by_importance`] (see `docs/rust-port/PLAN.md` §13).
 //!
 //! Names the programme supplies (project/context/tag names that never come out
@@ -44,11 +44,12 @@
 //!     Todo::parse_line("one @home", TodoId::new(0)),
 //!     Todo::parse_line("two", TodoId::new(1)),
 //! ];
+//! let home = ["home".to_owned()];
 //! let views = [
-//!     SearchView { text: "one @home", contexts: &["home"], projects: &[] },
+//!     SearchView { text: "one @home", contexts: &home, projects: &[] },
 //!     SearchView { text: "two", contexts: &[], projects: &[] },
 //! ];
-//! let today = TodoDate::parse("2026-11-15").expect("a valid date");
+//! let today = "2026-11-15".parse::<TodoDate>().expect("a valid date");
 //! let rows = build_rows(&todos, &views, &[], false, today)
 //!     .expect("views and todos are aligned");
 //! // No first context sorts first, so `two` leads with the `None` header.
@@ -188,28 +189,6 @@ impl<'a> Group<'a> {
     }
 }
 
-/// A complete row-building request.
-///
-/// `views` must be aligned with `todos`: `views[i]` is the host-normalized
-/// search input for `todos[i]`. Only the query changes per keystroke, so the
-/// host builds the views once per load or mutation and reuses them.
-///
-/// The views borrow their own strings, so they do not have to live as long as
-/// the todos: the built rows only reference the todos.
-#[derive(Clone, Copy, Debug)]
-pub struct RowInput<'todos, 'views> {
-    /// Todos in load order, with their ids assigned by the host.
-    pub todos: &'todos [Todo],
-    /// One host-normalized search view per todo, in the same order.
-    pub views: &'views [SearchView<'views>],
-    /// Host-normalized search terms; empty matches everything.
-    pub terms: &'views [&'views str],
-    /// True to keep hidden todos (the oracle's `showHidden` toggle).
-    pub show_hidden: bool,
-    /// Local calendar day used by the overdue and threshold rules.
-    pub today: TodoDate,
-}
-
 /// A built row model.
 ///
 /// The row list is exactly what [`create_rows`] produces for the visible,
@@ -281,24 +260,6 @@ impl core::fmt::Display for RowError {
 
 impl std::error::Error for RowError {}
 
-impl<'todos, 'views> RowInput<'todos, 'views> {
-    /// Build the rows for this request.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RowError::ViewCountMismatch`] when `views` is not aligned with
-    /// `todos`; nothing else can fail.
-    pub fn build(&self) -> Result<Rows<'todos>, RowError> {
-        build_rows(
-            self.todos,
-            self.views,
-            self.terms,
-            self.show_hidden,
-            self.today,
-        )
-    }
-}
-
 /// Sort, filter, search, and group a todo list into rows.
 ///
 /// This is the host's per-keystroke composition (`sortByImportance` →
@@ -330,7 +291,7 @@ pub fn build_rows<'todos, 'views>(
     let mut order = sort_by_importance(todos, today);
 
     if !show_hidden {
-        // Same predicate as `filter_hidden`; applying it to the sorted indexes
+        // Same predicate as `Todo::is_visible_in_overview`; applying it to the sorted indexes
         // keeps the sort's order instead of scanning the list twice.
         order.retain(|&index| {
             // `sort_by_importance` returns a permutation of the input indexes.
@@ -383,7 +344,7 @@ mod tests {
 
     /// The host lowercases; ASCII inputs make `str::to_lowercase` equivalent.
     /// These tests pass the views explicitly so the boundary stays visible.
-    fn view<'a>(text: &'a str, contexts: &'a [&'a str]) -> SearchView<'a> {
+    fn view<'a>(text: &'a str, contexts: &'a [String]) -> SearchView<'a> {
         SearchView {
             text,
             contexts,
@@ -485,7 +446,7 @@ mod tests {
     }
 
     fn today() -> TodoDate {
-        TodoDate::parse("2026-11-15").expect("valid today")
+        "2026-11-15".parse::<TodoDate>().expect("valid today")
     }
 
     #[test]
@@ -498,12 +459,14 @@ mod tests {
             "alpha @home",
             "beta",
         ]);
+        let work = ["work".to_owned()];
+        let home = ["home".to_owned()];
         let views = [
-            view("x done @work", &["work"]),
-            view("zebra @work", &["work"]),
-            view("hidden @work", &["work"]),
-            view("future @work", &["work"]),
-            view("alpha @home", &["home"]),
+            view("x done @work", &work),
+            view("zebra @work", &work),
+            view("hidden @work", &work),
+            view("future @work", &work),
+            view("alpha @home", &home),
             view("beta", &[]),
         ];
 
@@ -564,8 +527,9 @@ mod tests {
     #[test]
     fn build_rows_matches_every_term_and_empty_terms_match_all() {
         let list = todos(&["buy milk @home", "walk dog", "buy bread"]);
+        let home = ["home".to_owned()];
         let views = [
-            view("buy milk @home", &["home"]),
+            view("buy milk @home", &home),
             view("walk dog", &[]),
             view("buy bread", &[]),
         ];
@@ -606,9 +570,10 @@ mod tests {
     #[test]
     fn build_rows_keeps_the_none_header_and_numbers_across_groups() {
         let list = todos(&["one", "two @home", "three"]);
+        let home = ["home".to_owned()];
         let views = [
             view("one", &[]),
-            view("two @home", &["home"]),
+            view("two @home", &home),
             view("three", &[]),
         ];
 

@@ -9,9 +9,15 @@ resolver = "3"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.99"
+# The minimum the code actually needs (edition 2024 + let chains); the CI
+# toolchain is pinned separately in rust-toolchain.toml.
+rust-version = "1.88"
 license = "MIT"
 repository = "https://github.com/ArnoNuyts/thar"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
 
 [workspace.dependencies]
 thar-core = { path = "crates/thar-core", version = "0.1.0" }
@@ -23,9 +29,18 @@ wasm-bindgen = "0.2.130"
 ratatui = "0.30.2"
 jiff = "0.2.45"
 
-# Keep the shipped WASM small: the size gate is 250 KB raw / 100 KB gzip.
 [profile.release]
-opt-level = "s"
 lto = true
 codegen-units = 1
+
+# Keep the shipped WASM small: the size gate is 250 KB raw / 100 KB gzip.
+#
+# This is deliberately a separate profile so the native `thar-rs` release build
+# keeps `panic = "unwind"` (and the default speed optimization). wasm-pack 0.13
+# has no flag for a custom Cargo profile, so scripts/build-wasm.mjs passes the
+# same two settings to its internal release build with `--config`; the profile
+# below covers direct `cargo build --profile wasm` runs.
+[profile.wasm]
+inherits = "release"
+opt-level = "s"
 panic = "abort"

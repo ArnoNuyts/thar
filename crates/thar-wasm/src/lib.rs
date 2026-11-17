@@ -53,7 +53,7 @@
 //!
 //! [`serialize_file`] is the whole-file write shape CP1 defines:
 //! `todos.map(toString).join("\n") + "\n"`, i.e. per-record
-//! [`thar_core::Todo::serialize`], joined with `"\n"`, plus one trailing `"\n"`
+//! [`thar_core::Todo::to_string`], joined with `"\n"`, plus one trailing `"\n"`
 //! (so zero todos produce `"\n"`). It also runs the write-time guard from
 //! `serializeTodosForWrite` (`logic/todo-file-helpers.ts`) before returning any
 //! text; see the `write` module for the rejection envelope.
@@ -75,9 +75,6 @@
 //! path instead of surfacing it in the TUI. [`TodayError`] implements
 //! `std::error::Error`, so wasm-bindgen's blanket `From<E> for JsError` builds
 //! the thrown error from its fixed, content-free `Display` message.
-
-#![forbid(unsafe_code)]
-#![deny(missing_docs)]
 
 mod json;
 mod record;
@@ -272,7 +269,9 @@ fn js_usize(value: f64) -> usize {
 /// Split out from the wasm exports so the whole document — including the error
 /// mapping — is testable on the native target without a JavaScript runtime.
 fn parse_envelope(text: &str, today: &str, limits: &ReadLimits) -> Result<String, TodayError> {
-    let today = TodoDate::parse(today).ok_or(TodayError::InvalidToday)?;
+    let today = today
+        .parse::<TodoDate>()
+        .map_err(|_| TodayError::InvalidToday)?;
 
     // The reader checks the byte size first (stat, then the decoded bytes) and
     // only then validates lines and control characters; keep that order so the
@@ -368,7 +367,7 @@ fn push_record(out: &mut String, todo: &Todo, today: TodoDate) {
     push_json_bool(out, todo.is_overdue(today));
 
     // `getHash()` is `toString()`; serialize once and reuse the same bytes.
-    let line = todo.serialize();
+    let line = todo.to_string();
     out.push_str(",\"toString\":");
     push_json_string(out, &line);
     out.push_str(",\"hash\":");

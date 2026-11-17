@@ -28,7 +28,9 @@ fn corpus_dir() -> PathBuf {
 }
 
 fn today() -> TodoDate {
-    TodoDate::parse("2026-11-15").expect("the corpus clock day is valid")
+    "2026-11-15"
+        .parse::<TodoDate>()
+        .expect("the corpus clock day is valid")
 }
 
 /// A line after normalization.
@@ -43,11 +45,11 @@ struct Canonical {
 
 /// Parse and serialize until the output stops changing.
 fn canonicalize(raw: &str) -> Canonical {
-    let mut line = Todo::parse_line(raw, TodoId::new(0)).serialize();
+    let mut line = Todo::parse_line(raw, TodoId::new(0)).to_string();
 
     for passes in 1..=MAX_PASSES {
         let next = Todo::parse_line(&line, TodoId::new(0));
-        let next_line = next.serialize();
+        let next_line = next.to_string();
         if next_line == line {
             return Canonical {
                 todo: next,
@@ -73,7 +75,7 @@ fn assert_stable(raw: &str) -> Canonical {
         "canonical form of {raw:?} parses differently"
     );
     assert_eq!(
-        reparsed.serialize(),
+        reparsed.to_string(),
         canonical.line,
         "canonical form of {raw:?} is not byte-idempotent"
     );

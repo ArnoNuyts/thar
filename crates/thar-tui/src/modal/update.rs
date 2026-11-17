@@ -16,7 +16,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 
-use crate::input::{MouseInput, MouseKind};
+use crate::event::{MouseInput, MouseKind};
 use crate::modal::geometry::{self, ModalRect, ModalWidth};
 use crate::modal::text;
 use crate::modal::{Action, Modal, ModalId, Outcome};
@@ -421,7 +421,7 @@ impl Modal for UpdateModal {
 #[cfg(test)]
 mod tests {
     use super::{InstallKind, SELF_UPDATE_MESSAGE, UpdateModal, UpdateModel};
-    use crate::input::{MouseInput, MouseKind};
+    use crate::event::{MouseInput, MouseKind};
     use crate::modal::{Action, Modal, ModalId, Outcome};
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 

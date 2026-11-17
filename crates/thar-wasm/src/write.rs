@@ -28,7 +28,7 @@
 //! { "ok": false, "error": { "name": …, "code": …, "message": …, … } }
 //! ```
 //!
-//! The shape is the CP1 write shape exactly: one `Todo::serialize()` per record,
+//! The shape is the CP1 write shape exactly: one `Todo::to_string()` per record,
 //! joined with `"\n"`, plus one trailing `"\n"`. Serializing **zero** todos
 //! therefore yields `"\n"`, because the TypeScript oracle is
 //! `todos.map(toString).join("\n") + "\n"` and `[].join("\n")` is `""`; the
@@ -56,7 +56,7 @@
 //! it as "the Rust path is unavailable" and falls back to the TypeScript
 //! serializer.
 
-use thar_core::{CoreError, Todo};
+use thar_core::{CoreError, Todo, is_rejected_control};
 
 use crate::json::{self, push_json_number, push_json_string};
 use crate::record::{RecordError, todo_records};
@@ -69,9 +69,6 @@ const CONTROL_ERROR_NAME: &str = "TodoControlCharacterError";
 
 /// Machine code for a rejected write-time control code point.
 const CONTROL_ERROR_CODE: &str = "UNSAFE_CONTROL_CHARACTER";
-
-/// Tab is a delimiter the reader and renderer preserve, so it stays allowed.
-const TAB_CODE_POINT: u32 = 0x09;
 
 /// Why a `serialize_file` request was not answered with text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -151,24 +148,17 @@ impl From<RecordError> for WriteError {
     }
 }
 
-/// True for the code points `findUnsafeTodoTextCodePoint` rejects.
-///
-/// The TypeScript rule scans UTF-16 code units (`charCodeAt`). Every rejected
-/// range is inside the BMP, so scanning Unicode scalar values decides exactly
-/// the same set and reports the same number for the first match: a surrogate
-/// half is never in a rejected range, and no rejected code point is astral.
-const fn is_rejected_control(code_point: u32) -> bool {
-    matches!(
-        code_point,
-        0x00..=0x1F | 0x7F..=0x9F | 0x2028 | 0x2029
-    )
-}
-
 /// The first code point a serialized todo line may not contain.
+///
+/// The shared [`is_rejected_control`] predicate decides the set. The TypeScript
+/// rule scans UTF-16 code units (`charCodeAt`); every rejected range is inside
+/// the BMP, so scanning Unicode scalar values decides exactly the same set and
+/// reports the same number for the first match: a surrogate half is never in a
+/// rejected range, and no rejected code point is astral.
 fn unsafe_code_point(line: &str) -> Option<u32> {
     line.chars()
+        .find(|character| *character != '\t' && is_rejected_control(*character))
         .map(|character| character as u32)
-        .find(|code_point| is_rejected_control(*code_point) && *code_point != TAB_CODE_POINT)
 }
 
 /// Serialize the decoded todos and apply the write-time guard.
@@ -192,7 +182,7 @@ fn serialize_todos(todos: &[Todo]) -> Result<String, WriteError> {
     );
 
     for (index, todo) in todos.iter().enumerate() {
-        let line = todo.serialize();
+        let line = todo.to_string();
         if let Some(code_point) = unsafe_code_point(&line) {
             return Err(WriteError::UnsafeControl {
                 line_number: index + 1,

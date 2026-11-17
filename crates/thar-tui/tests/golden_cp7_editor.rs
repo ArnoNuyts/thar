@@ -32,10 +32,10 @@ fn app(lines: &[&str], query: &str) -> App {
     let mut app = App::new(
         "todo.txt",
         todos,
-        TodoDate::parse("2026-11-15").expect("valid date"),
+        "2026-11-15".parse::<TodoDate>().expect("valid date"),
     );
     // The write badge keeps the frame identical to a `--write` session.
-    app.read_only = false;
+    app.set_read_only(false);
     app.set_query(query);
     app
 }
@@ -65,8 +65,15 @@ fn screen_lines(backend: &TestBackend) -> Vec<String> {
 
 fn type_text(app: &mut App, text: &str) {
     for character in text.chars() {
-        app.handle_modal_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        app.handle_modal_key(
+            KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE),
+            current_time(),
+        );
     }
+}
+
+fn current_time() -> std::time::Instant {
+    std::time::Instant::now()
 }
 
 #[test]
@@ -233,7 +240,7 @@ fn eighty_by_twenty_four_create_modal_prefills_tags_from_the_search() {
 fn a_hundred_by_thirty_edit_modal_starts_at_the_text_end() {
     let mut app = app(FIXTURE, "");
     app.resize(100, 30);
-    app.cursor = Some(app.todos[1].id);
+    app.set_cursor(Some(app.todos()[1].id));
     app.open_modal(ModalId::EditTodo);
     let backend = draw(&app, 100, 30);
 
@@ -285,7 +292,7 @@ fn a_hundred_by_thirty_edit_modal_starts_at_the_text_end() {
 fn eighty_by_twenty_four_search_popup_is_content_sized_and_anchored() {
     let mut app = app(FIXTURE, "");
     app.resize(80, 24);
-    app.search_focused = true;
+    app.set_search_focused(true);
     app.set_query("+th");
     let backend = draw(&app, 80, 24);
     let screen = screen_lines(&backend);

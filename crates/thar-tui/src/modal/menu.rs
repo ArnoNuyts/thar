@@ -23,7 +23,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use thar_core::TodoId;
 
-use crate::input::MouseInput;
+use crate::event::MouseInput;
 use crate::modal::confirm::ConfirmRequest;
 use crate::modal::geometry::{self, ModalRect, ModalWidth};
 use crate::modal::{Action, Modal, ModalId, Outcome};
@@ -432,11 +432,11 @@ impl Modal for Menu {
         }
 
         match mouse.kind {
-            crate::input::MouseKind::Move => {
+            crate::event::MouseKind::Move => {
                 self.selected = index;
                 Outcome::Continue
             }
-            crate::input::MouseKind::LeftClick => {
+            crate::event::MouseKind::LeftClick => {
                 self.selected = index;
                 self.activate(index)
             }
@@ -495,7 +495,7 @@ impl Modal for Menu {
 #[cfg(test)]
 mod tests {
     use super::{MENU_ITEMS, MULTI_SELECT_MENU_ITEMS, Menu, MenuAction, MenuKind, shortcut_index};
-    use crate::input::{MouseInput, MouseKind};
+    use crate::event::{MouseInput, MouseKind};
     use crate::modal::{Action, Modal, ModalId, Outcome};
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use thar_core::TodoId;

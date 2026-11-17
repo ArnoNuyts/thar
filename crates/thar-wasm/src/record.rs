@@ -176,9 +176,10 @@ fn optional_date(
 ) -> Result<Option<TodoDate>, RecordError> {
     match value.get(key) {
         None | Some(Value::Null) => Ok(None),
-        Some(Value::String(text)) => TodoDate::parse(text)
+        Some(Value::String(text)) => text
+            .parse::<TodoDate>()
             .map(Some)
-            .ok_or(RecordError::new(label, "must be a YYYY-MM-DD calendar day")),
+            .map_err(|_| RecordError::new(label, "must be a YYYY-MM-DD calendar day")),
         Some(_) => Err(RecordError::new(
             label,
             "must be a YYYY-MM-DD string or null",
@@ -288,7 +289,7 @@ mod tests {
         .expect("a valid record");
 
         assert_eq!(todos.len(), 1);
-        assert_eq!(todos[0].serialize(), "x (A) ship it beta:one,two");
+        assert_eq!(todos[0].to_string(), "x (A) ship it beta:one,two");
         assert!(todos[0].dates_in_text);
         assert!(todos[0].completion_date_in_text);
     }

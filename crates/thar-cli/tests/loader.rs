@@ -13,7 +13,7 @@ use thar_cli::{LoadError, get_read_limits, load_with_limits, read_limits_from};
 use thar_core::{CoreError, ReadLimits};
 
 fn load_default(path: &std::path::Path) -> Result<thar_cli::LoadedFile, LoadError> {
-    load_with_limits(path.to_str().expect("utf-8 path"), &ReadLimits::DEFAULT)
+    load_with_limits(path, &ReadLimits::DEFAULT)
 }
 
 fn limits(pairs: &[(&str, &str)]) -> Result<ReadLimits, LoadError> {
@@ -92,7 +92,7 @@ fn byte_limit_is_enforced_before_parsing() {
         ..ReadLimits::DEFAULT
     };
 
-    match load_with_limits(path.to_str().expect("utf-8 path"), &limited) {
+    match load_with_limits(&path, &limited) {
         Err(LoadError::Validation(error)) => {
             assert_eq!(error.code(), "FILE_TOO_LARGE");
             assert!(error.to_string().contains("limit is 4 bytes"));
@@ -111,7 +111,7 @@ fn byte_limit_is_rechecked_against_the_lossy_decoded_text() {
         ..ReadLimits::DEFAULT
     };
 
-    match load_with_limits(path.to_str().expect("utf-8 path"), &limited) {
+    match load_with_limits(&path, &limited) {
         Err(LoadError::Validation(CoreError::FileTooLarge {
             actual_bytes,
             max_bytes,
@@ -132,7 +132,7 @@ fn exactly_the_byte_limit_is_accepted() {
         ..ReadLimits::DEFAULT
     };
 
-    let loaded = load_with_limits(path.to_str().expect("utf-8 path"), &limited).expect("load");
+    let loaded = load_with_limits(&path, &limited).expect("load");
     assert_eq!(loaded.todos.len(), 1);
     assert_eq!(loaded.todos[0].text, "12345");
 }
@@ -146,7 +146,7 @@ fn line_count_limit_is_enforced() {
         ..ReadLimits::DEFAULT
     };
 
-    match load_with_limits(path.to_str().expect("utf-8 path"), &limited) {
+    match load_with_limits(&path, &limited) {
         Err(LoadError::Validation(error)) => {
             assert_eq!(error.code(), "TOO_MANY_LINES");
             assert!(error.to_string().contains("has 3 lines"));
@@ -164,7 +164,7 @@ fn line_length_limit_counts_utf16_code_units() {
         ..ReadLimits::DEFAULT
     };
 
-    match load_with_limits(path.to_str().expect("utf-8 path"), &limited) {
+    match load_with_limits(&path, &limited) {
         Err(LoadError::Validation(error)) => {
             assert_eq!(error.code(), "LINE_TOO_LONG");
             assert!(error.to_string().contains("line 1 is 4 characters"));

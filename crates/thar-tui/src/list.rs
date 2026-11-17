@@ -86,23 +86,12 @@ impl ListModel {
     ) -> Self {
         let terms = crate::search::extract_search_terms(query);
         let term_refs: Vec<&str> = terms.iter().map(String::as_str).collect();
-        // `SearchView` borrows `&[&str]`, so the per-view name slices are
-        // materialised once here and reused for the whole build.
-        let context_refs: Vec<Vec<&str>> = views
-            .iter()
-            .map(|view| view.contexts.iter().map(String::as_str).collect())
-            .collect();
-        let project_refs: Vec<Vec<&str>> = views
-            .iter()
-            .map(|view| view.projects.iter().map(String::as_str).collect())
-            .collect();
         let search_views: Vec<thar_core::SearchView<'_>> = views
             .iter()
-            .enumerate()
-            .map(|(index, view)| thar_core::SearchView {
+            .map(|view| thar_core::SearchView {
                 text: &view.text,
-                contexts: &context_refs[index],
-                projects: &project_refs[index],
+                contexts: &view.contexts,
+                projects: &view.projects,
             })
             .collect();
 
@@ -189,7 +178,7 @@ mod tests {
             &views,
             query,
             false,
-            TodoDate::parse("2026-11-15").expect("valid date"),
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         )
     }
 
@@ -293,7 +282,7 @@ mod tests {
             &views,
             "",
             false,
-            TodoDate::parse("2026-11-15").expect("valid date"),
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
     }
 }

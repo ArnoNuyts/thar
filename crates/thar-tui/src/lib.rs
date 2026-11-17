@@ -9,7 +9,10 @@
 //! - [`list`] builds the owned row model from the `thar-core` domain;
 //! - [`nav`] moves the cursor, selection, and viewport;
 //! - [`input`] maps crossterm keys/mouse events to commands and applies them;
-//! - [`editor`] is the one-line text editor behind the create/edit screen;
+//! - [`event`] is the leaf terminal-event module shared by input and modals;
+//! - [`editor`] is the one-line text editor behind the create/edit screen and
+//!   the search bar;
+//! - [`search_bar`] owns the query, its cursor and the suggestion popup;
 //! - [`suggest`] collects project/context tag sources and drives the
 //!   suggestion list;
 //! - [`modal`] owns the one active screen, its geometry, and the action
@@ -30,13 +33,11 @@
 //! unless `--write` is passed, and the CP6 source scan still proves that the
 //! read-only path links no writer.
 
-#![forbid(unsafe_code)]
-#![deny(missing_docs)]
-
 pub mod app;
 pub mod calendar;
 pub mod display;
 pub mod editor;
+pub mod event;
 pub mod history;
 pub mod input;
 pub mod layout;
@@ -44,14 +45,16 @@ pub mod list;
 pub mod modal;
 pub mod nav;
 pub mod search;
+pub mod search_bar;
 pub mod suggest;
 pub mod theme;
 pub mod view;
 
-pub use app::{App, Effect};
+pub use app::{App, Effect, SaveState, Selection};
 pub use history::History;
 pub use layout::Layout;
 pub use list::{ListModel, ListRow};
 pub use modal::{
-    Action, ConfirmRequest, InstallKind, Modal, ModalId, Outcome, TagKind, UpdateModel,
+    Action, ConfirmRequest, InstallKind, Modal, ModalId, OpenError, Outcome, TagKind, UpdateModel,
 };
+pub use search_bar::SearchBar;

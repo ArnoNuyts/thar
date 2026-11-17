@@ -25,7 +25,7 @@ use thar_core::{TodoDate, TodoId, add_days, add_months, add_weeks};
 
 use crate::app::App;
 use crate::calendar::{self, Calendar};
-use crate::input::{MouseInput, MouseKind};
+use crate::event::{MouseInput, MouseKind};
 use crate::modal::{Action, Modal, ModalId, ModalRect, ModalWidth, Outcome, geometry};
 use crate::theme;
 
@@ -103,7 +103,7 @@ impl SetDateModal {
         let has_tag = reference.is_some_and(|todo| todo.tag(kind.key()).is_some());
         let initial = reference
             .and_then(|todo| todo.date_tag(kind.key()))
-            .unwrap_or(app.today);
+            .unwrap_or(app.today());
 
         let mut options = vec![
             Choice::Today,
@@ -119,12 +119,12 @@ impl SetDateModal {
         Self {
             kind,
             ids,
-            today: app.today,
+            today: app.today(),
             options,
             selected: 0,
             custom: false,
             calendar: Calendar::new(initial),
-            terminal: Rect::new(0, 0, app.width, app.height),
+            terminal: Rect::new(0, 0, app.width(), app.height()),
         }
     }
 
@@ -348,7 +348,7 @@ mod tests {
     use super::{DateKind, SetDateModal};
     use crate::app::App;
     use crate::calendar::{Calendar, CalendarKey};
-    use crate::input::{MouseInput, MouseKind};
+    use crate::event::{MouseInput, MouseKind};
     use crate::modal::{Action, Modal, Outcome};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -365,10 +365,10 @@ mod tests {
         let mut app = App::new(
             "todo.txt",
             todos,
-            TodoDate::parse("2026-11-15").expect("valid date"),
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
         app.resize(80, 24);
-        app.read_only = false;
+        app.set_read_only(false);
         app
     }
 
@@ -407,7 +407,7 @@ mod tests {
         let mut modal = SetDateModal::new(&app, DateKind::Due);
         assert_eq!(modal.selected_label(), "Today");
 
-        let today = TodoDate::parse("2026-11-15").expect("valid");
+        let today = "2026-11-15".parse::<TodoDate>().expect("valid");
         assert_eq!(
             action_date(&actions(modal.handle_key(key(KeyCode::Enter)))),
             Some(today)
@@ -416,26 +416,26 @@ mod tests {
         modal.handle_key(key(KeyCode::Down));
         assert_eq!(
             action_date(&actions(modal.handle_key(key(KeyCode::Enter)))),
-            TodoDate::parse("2026-11-16")
+            "2026-11-16".parse::<TodoDate>().ok()
         );
 
         modal.handle_key(key(KeyCode::Down));
         assert_eq!(
             action_date(&actions(modal.handle_key(key(KeyCode::Enter)))),
-            TodoDate::parse("2026-11-22")
+            "2026-11-22".parse::<TodoDate>().ok()
         );
 
         modal.handle_key(key(KeyCode::Down));
         assert_eq!(
             action_date(&actions(modal.handle_key(key(KeyCode::Enter)))),
-            TodoDate::parse("2026-12-15")
+            "2026-12-15".parse::<TodoDate>().ok()
         );
     }
 
     #[test]
     fn next_month_clamps_a_month_end() {
         let mut app = app(&["task"]);
-        app.today = TodoDate::parse("2024-01-31").expect("valid");
+        app.set_today("2024-01-31".parse::<TodoDate>().expect("valid"));
         let mut modal = SetDateModal::new(&app, DateKind::Due);
         for _ in 0..3 {
             modal.handle_key(key(KeyCode::Down));
@@ -443,7 +443,7 @@ mod tests {
         assert_eq!(modal.selected_label(), "Next Month");
         assert_eq!(
             action_date(&actions(modal.handle_key(key(KeyCode::Enter)))),
-            TodoDate::parse("2024-02-29")
+            "2024-02-29".parse::<TodoDate>().ok()
         );
     }
 
@@ -461,7 +461,7 @@ mod tests {
         assert_eq!(modal.body_rows(), 6);
         modal.handle_key(key(KeyCode::Up));
         assert_eq!(modal.selected_label(), "Reset");
-        let ids = vec![tagged.todos[0].id];
+        let ids = vec![tagged.todos()[0].id];
         assert_eq!(
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::SetDue { ids, date: None }]
@@ -485,7 +485,10 @@ mod tests {
             Outcome::Continue
         ));
         assert!(modal.custom);
-        assert_eq!(modal.body_rows(), Calendar::new(app.today).body_rows() + 1);
+        assert_eq!(
+            modal.body_rows(),
+            Calendar::new(app.today()).body_rows() + 1
+        );
         assert!(matches!(
             modal.handle_key(key(KeyCode::Esc)),
             Outcome::Continue
@@ -505,14 +508,14 @@ mod tests {
         modal.handle_key(key(KeyCode::Enter));
         assert_eq!(
             modal.calendar.value(),
-            TodoDate::parse("2024-02-29").unwrap()
+            "2024-02-29".parse::<TodoDate>().unwrap()
         );
 
         let mut threshold = SetDateModal::new(&app, DateKind::Threshold);
         threshold.selected = 4;
         threshold.handle_key(key(KeyCode::Enter));
         // A malformed tag falls back to today, like `parseDateTag(...) ?? new Date()`.
-        assert_eq!(threshold.calendar.value(), app.today);
+        assert_eq!(threshold.calendar.value(), app.today());
     }
 
     #[test]
@@ -527,7 +530,7 @@ mod tests {
         );
         assert_eq!(
             action_date(&actions(modal.handle_key(key(KeyCode::Enter)))),
-            TodoDate::parse("2026-11-16")
+            "2026-11-16".parse::<TodoDate>().ok()
         );
     }
 
@@ -546,7 +549,7 @@ mod tests {
         let outcome = modal.handle_mouse(mouse(MouseKind::LeftClick, x, y));
         assert_eq!(
             action_date(&actions(outcome)),
-            TodoDate::parse("2026-11-22")
+            "2026-11-22".parse::<TodoDate>().ok()
         );
 
         // A row past the options is ignored.
@@ -579,9 +582,9 @@ mod tests {
 
         // Open the custom step and draw again.
         for _ in 0..4 {
-            app.handle_modal_key(key(KeyCode::Down));
+            app.handle_modal_key(key(KeyCode::Down), Instant::now());
         }
-        app.handle_modal_key(key(KeyCode::Enter));
+        app.handle_modal_key(key(KeyCode::Enter), Instant::now());
         let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
         terminal
             .draw(|frame| crate::view::render(frame, &app))

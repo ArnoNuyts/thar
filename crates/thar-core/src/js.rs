@@ -34,6 +34,20 @@ pub const fn is_js_whitespace(character: char) -> bool {
     )
 }
 
+/// True for the rejected C0/C1 controls, DEL, and `U+2028`/`U+2029`.
+///
+/// This is the shared character predicate for the read path, the write path,
+/// and the host renderers. Tab is in the C0 range but is allowed inside a line,
+/// so each caller excludes it explicitly (`character != '\t'` or an equivalent
+/// rule).
+#[must_use]
+pub const fn is_rejected_control(character: char) -> bool {
+    matches!(
+        character,
+        '\u{0000}'..='\u{001F}' | '\u{007F}'..='\u{009F}' | '\u{2028}' | '\u{2029}'
+    )
+}
+
 /// Byte length of the leading run of JS whitespace.
 pub(crate) fn whitespace_prefix_len(text: &str) -> usize {
     text.char_indices()
@@ -48,7 +62,24 @@ pub fn js_trim(text: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{js_trim, whitespace_prefix_len};
+    use super::{is_rejected_control, js_trim, whitespace_prefix_len};
+
+    #[test]
+    fn rejected_controls_cover_c0_c1_del_and_line_separators() {
+        for character in [
+            '\u{0000}', '\u{0007}', '\u{001B}', '\u{007F}', '\u{0085}', '\u{009F}',
+        ] {
+            assert!(is_rejected_control(character), "{character:?}");
+        }
+        for character in ['\u{2028}', '\u{2029}'] {
+            assert!(is_rejected_control(character), "{character:?}");
+        }
+        for character in ['a', ' ', '\u{00A0}', '\u{10FFFF}'] {
+            assert!(!is_rejected_control(character), "{character:?}");
+        }
+        // Tab is inside C0 but the predicate reports it; callers allow it.
+        assert!(is_rejected_control('\t'));
+    }
 
     #[test]
     fn trims_js_whitespace_only() {

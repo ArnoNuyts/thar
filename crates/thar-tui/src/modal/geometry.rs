@@ -10,7 +10,7 @@
 
 use ratatui::layout::Rect;
 
-use crate::input::MouseInput;
+use crate::event::MouseInput;
 
 /// Rows above the body: outer padding, the title row, and body padding.
 pub const TOP_CHROME: u16 = 3;
@@ -117,7 +117,7 @@ pub fn contains(rect: ModalRect, mouse: MouseInput) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{ModalWidth, TOP_CHROME, body_column, body_row, resolve};
-    use crate::input::{MouseInput, MouseKind};
+    use crate::event::{MouseInput, MouseKind};
     use ratatui::layout::Rect;
 
     fn mouse(x: u16, y: u16) -> MouseInput {

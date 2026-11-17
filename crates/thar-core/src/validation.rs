@@ -13,19 +13,8 @@
 //! line numbers in errors match the file, exactly like the TS implementation.
 
 use crate::error::CoreError;
-use crate::js::js_trim;
+use crate::js::{is_rejected_control, js_trim};
 use crate::limits::ReadLimits;
-
-/// Rejected C0/C1 controls, DEL, and the two Unicode line separators.
-///
-/// Tab is in the C0 range but is allowed inside a line, so callers exclude it
-/// explicitly.
-const fn is_rejected_control(code_point: char) -> bool {
-    matches!(
-        code_point,
-        '\u{0000}'..='\u{001F}' | '\u{007F}'..='\u{009F}' | '\u{2028}' | '\u{2029}'
-    )
-}
 
 /// True when a line contains nothing but JavaScript whitespace.
 ///

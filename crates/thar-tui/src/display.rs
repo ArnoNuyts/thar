@@ -11,13 +11,7 @@
 //! formatting (at least four uppercase hexadecimal digits), so a future golden
 //! comparison against the Ink app matches byte-for-byte.
 
-/// Rejected control code points: C0, DEL, C1 and the two line separators.
-///
-/// Tab is a rejected code point too; [`sanitize_for_display`] keeps it, which
-/// is why the check lives here instead of making tab "not a control".
-fn is_rejected_control(ch: char) -> bool {
-    matches!(ch as u32, 0x00..=0x1F | 0x7F..=0x9F | 0x2028 | 0x2029)
-}
+use thar_core::is_rejected_control;
 
 /// Escape control characters so terminal output can only show text.
 ///

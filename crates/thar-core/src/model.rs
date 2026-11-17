@@ -82,9 +82,10 @@ impl TodoId {
 }
 
 /// Completion state of a todo.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum State {
     /// Open todo (no `x` marker).
+    #[default]
     Todo,
     /// Completed todo (leading `x`).
     Done,
@@ -227,9 +228,9 @@ pub struct Todo {
 ///     },
 /// );
 /// assert_eq!(todo.id, TodoId::new(7));
-/// assert_eq!(todo.serialize(), "ship it @work");
+/// assert_eq!(todo.to_string(), "ship it @work");
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TodoParts {
     /// Body text, already trimmed and with tags removed.
     pub text: String,
@@ -253,24 +254,6 @@ pub struct TodoParts {
     /// True when the completion date is already the leading literal token in
     /// `text`.
     pub completion_date_in_text: bool,
-}
-
-impl Default for TodoParts {
-    /// An open, empty todo: no text, no dates, no tags, no flags.
-    fn default() -> Self {
-        Self {
-            text: String::new(),
-            state: State::Todo,
-            priority: None,
-            completion_date: None,
-            creation_date: None,
-            projects: Vec::new(),
-            contexts: Vec::new(),
-            tags: Vec::new(),
-            dates_in_text: false,
-            completion_date_in_text: false,
-        }
-    }
 }
 
 impl Todo {
@@ -362,7 +345,7 @@ impl Todo {
             prefix
                 .date_tokens
                 .get(index)
-                .and_then(|token| TodoDate::parse(token))
+                .and_then(|token| token.parse::<TodoDate>().ok())
         };
 
         let text = if can_consume_dates {
@@ -425,21 +408,6 @@ impl Todo {
 
         trim_in_place(&mut stripped);
         self.text = stripped;
-    }
-
-    /// Serialize back to a `todo.txt` line.
-    ///
-    /// Order: `x `, `(P) `, completion date (unless it is in the text),
-    /// creation date (unless the dates are in the text), text, and one leading
-    /// space plus the space-joined tags when any tag exists.
-    ///
-    /// This is exactly [`Display`](fmt::Display) for [`Todo`]; the method stays
-    /// because it reads better at call sites and names the domain operation.
-    #[must_use]
-    pub fn serialize(&self) -> String {
-        let mut line = String::with_capacity(self.text.len() + 32);
-        write!(&mut line, "{self}").expect("writing to a String cannot fail");
-        line
     }
 
     /// True for completed todos.
@@ -507,13 +475,7 @@ impl Todo {
     pub fn date_tag(&self, key: &str) -> Option<TodoDate> {
         self.tag(key)
             .and_then(TagValue::as_single)
-            .and_then(TodoDate::parse)
-    }
-
-    /// Identity of the todo, identical to its serialized line.
-    #[must_use]
-    pub fn hash(&self) -> String {
-        self.serialize()
+            .and_then(|value| value.parse::<TodoDate>().ok())
     }
 
     // ---- Immutable setters -------------------------------------------------
@@ -687,9 +649,12 @@ impl Todo {
     /// `due:` tag. The new instance is open, has no completion date, and takes
     /// `recurring_id` because the host owns id allocation.
     ///
-    /// An invalid or out-of-range `rec:` value completes the todo and reports
-    /// [`ToggleResult::recurrence_error`]; nothing is stored and nothing panics.
-    #[must_use]
+    /// An invalid or out-of-range `rec:` value completes the todo and returns
+    /// [`ToggleError`] carrying that completed todo; nothing is stored and
+    /// nothing panics.
+    // The `Err` variant carries the completed todo so the state change is not
+    // lost; boxing it would only add an allocation to a per-keypress path.
+    #[allow(clippy::result_large_err)]
     pub fn toggle_state(&self, today: TodoDate, recurring_id: TodoId) -> ToggleResult {
         let mut updated = self.clone();
         updated.state = if self.state.is_done() {
@@ -719,33 +684,27 @@ impl Todo {
         let plan = match (updated.state.is_done(), plan) {
             (true, Some(plan)) => plan,
             _ => {
-                return ToggleResult {
+                return Ok(ToggleOutcome {
                     updated,
                     recurring: None,
-                    recurrence_error: None,
-                };
+                });
             }
         };
 
         match plan {
-            Err(error) => ToggleResult {
-                updated,
-                recurring: None,
-                recurrence_error: Some(error),
-            },
+            Err(error) => Err(ToggleError { updated, error }),
             Ok(next_due) => {
                 // The oracle serializes the completed todo, re-parses it, and
                 // then opens the copy with the next due date. Re-parsing keeps
                 // the literal-date flags consistent.
-                let recurring = Todo::parse_line(&updated.serialize(), recurring_id)
+                let recurring = Todo::parse_line(&updated.to_string(), recurring_id)
                     .set_state(State::Todo)
                     .set_completion_date(None)
                     .set_due(next_due);
-                ToggleResult {
+                Ok(ToggleOutcome {
                     updated,
                     recurring: Some(recurring),
-                    recurrence_error: None,
-                }
+                })
             }
         }
     }
@@ -764,17 +723,40 @@ impl Todo {
     }
 }
 
-/// Result of [`Todo::toggle_state`].
+/// A successful [`Todo::toggle_state`]: the flipped todo and its next instance.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ToggleResult {
+pub struct ToggleOutcome {
     /// The todo flipped between open and done.
     pub updated: Todo,
     /// The next instance of a recurring todo, when `rec:` planned.
     pub recurring: Option<Todo>,
-    /// Why an existing `rec:` value could not be planned; the host shows
-    /// [`RecurrenceError::message`] and leaves nothing stored.
-    pub recurrence_error: Option<RecurrenceError>,
 }
+
+/// A [`Todo::toggle_state`] whose `rec:` value could not be planned.
+///
+/// The completed todo is still returned so the caller can store it; the host
+/// shows [`ToggleError::error`]'s message and leaves nothing else stored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToggleError {
+    /// The todo flipped between open and done.
+    pub updated: Todo,
+    /// Why the `rec:` value could not be planned.
+    pub error: RecurrenceError,
+}
+
+impl fmt::Display for ToggleError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.error, f)
+    }
+}
+
+impl std::error::Error for ToggleError {}
+
+/// Result of [`Todo::toggle_state`].
+///
+/// Recurrence planning failures keep the completed todo, so the caller applies
+/// the state change and reports [`ToggleError::error`] either way.
+pub type ToggleResult = Result<ToggleOutcome, ToggleError>;
 
 impl fmt::Display for Todo {
     /// The canonical `todo.txt` line, written without intermediate `String`s.
@@ -943,9 +925,8 @@ pub fn serialize_file(todos: &[Todo]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Priority, State, TagValue, Todo, TodoId, serialize_file};
+    use super::{Priority, State, TagValue, Todo, TodoId, TodoParts, serialize_file};
     use crate::date::TodoDate;
-    use crate::recurrence::RecurrenceError;
 
     fn parse(line: &str) -> Todo {
         Todo::parse_line(line, TodoId::new(0))
@@ -970,10 +951,9 @@ mod tests {
         );
         assert_eq!(todo.text, "done with priority");
         assert_eq!(
-            todo.serialize(),
+            todo.to_string(),
             "x (A) 2024-03-02 2024-03-01 done with priority"
         );
-        assert_eq!(todo.hash(), todo.serialize());
     }
 
     #[test]
@@ -988,7 +968,7 @@ mod tests {
         );
         assert_eq!(todo.creation_date, None);
         assert_eq!(
-            todo.serialize(),
+            todo.to_string(),
             "x 2023-05-04 2023-02-29 second date is invalid"
         );
     }
@@ -1007,7 +987,7 @@ mod tests {
             let todo = parse(line);
             let rebuilt = Todo::from_parts(TodoId::new(7), todo.clone().into_parts());
 
-            assert_eq!(rebuilt.serialize(), todo.serialize(), "line {line:?}");
+            assert_eq!(rebuilt.to_string(), todo.to_string(), "line {line:?}");
             assert_eq!(rebuilt.text, todo.text, "line {line:?}");
             assert_eq!(rebuilt.state, todo.state, "line {line:?}");
             assert_eq!(rebuilt.priority, todo.priority, "line {line:?}");
@@ -1051,7 +1031,7 @@ mod tests {
         assert_eq!(todo.text, "2023-05-04 2023-05-05 two leading dates");
         assert!(todo.dates_in_text);
         assert_eq!(todo.creation_date, None);
-        assert_eq!(todo.serialize(), "2023-05-04 2023-05-05 two leading dates");
+        assert_eq!(todo.to_string(), "2023-05-04 2023-05-05 two leading dates");
     }
 
     #[test]
@@ -1063,7 +1043,7 @@ mod tests {
             todo.creation_date,
             Some(TodoDate::new(2023, 5, 4).expect("valid"))
         );
-        assert_eq!(todo.serialize(), "2023-05-04");
+        assert_eq!(todo.to_string(), "2023-05-04");
     }
 
     #[test]
@@ -1071,7 +1051,7 @@ mod tests {
         let todo = parse("x");
         assert_eq!(todo.state, State::Todo);
         assert_eq!(todo.text, "x");
-        assert_eq!(todo.serialize(), "x");
+        assert_eq!(todo.to_string(), "x");
     }
 
     #[test]
@@ -1079,7 +1059,7 @@ mod tests {
         let todo = parse("(A) ");
         assert_eq!(todo.text, "");
         assert_eq!(todo.priority.map(Priority::as_char), Some('A'));
-        assert_eq!(todo.serialize(), "(A) ");
+        assert_eq!(todo.to_string(), "(A) ");
     }
 
     #[test]
@@ -1090,7 +1070,7 @@ mod tests {
             todo.tags,
             vec![("alpha".to_owned(), TagValue::One("one".to_owned()))]
         );
-        assert_eq!(todo.serialize(), "single tag alpha:one");
+        assert_eq!(todo.to_string(), "single tag alpha:one");
     }
 
     #[test]
@@ -1103,7 +1083,7 @@ mod tests {
                 TagValue::Many(vec!["one".to_owned(), "two".to_owned()])
             )]
         );
-        assert_eq!(todo.serialize(), "text beta:one,two");
+        assert_eq!(todo.to_string(), "text beta:one,two");
     }
 
     #[test]
@@ -1121,7 +1101,7 @@ mod tests {
         let todo = parse("+a +b +a @x @y @x text");
         assert_eq!(todo.projects, vec!["a".to_owned(), "b".to_owned()]);
         assert_eq!(todo.contexts, vec!["x".to_owned(), "y".to_owned()]);
-        assert_eq!(todo.serialize(), "+a +b +a @x @y @x text");
+        assert_eq!(todo.to_string(), "+a +b +a @x @y @x text");
     }
 
     #[test]
@@ -1155,7 +1135,7 @@ mod tests {
     fn tag_only_line_serializes_with_one_leading_space() {
         let todo = parse("alpha:one");
         assert_eq!(todo.text, "");
-        assert_eq!(todo.serialize(), " alpha:one");
+        assert_eq!(todo.to_string(), " alpha:one");
     }
 
     #[test]
@@ -1163,7 +1143,7 @@ mod tests {
         let todo = parse("   \t ");
         assert_eq!(todo.state, State::Todo);
         assert_eq!(todo.text, "");
-        assert_eq!(todo.serialize(), "");
+        assert_eq!(todo.to_string(), "");
     }
 
     #[test]
@@ -1171,7 +1151,7 @@ mod tests {
         // `bom.txt`: the BOM is not stripped by the reader, only by trim.
         let bom = parse("\u{FEFF}first todo after a BOM");
         assert_eq!(bom.text, "first todo after a BOM");
-        assert_eq!(bom.serialize(), "first todo after a BOM");
+        assert_eq!(bom.to_string(), "first todo after a BOM");
 
         // The rest of the JS `\s` set behaves like `String.prototype.trim()`.
         for whitespace in ["\u{00A0}", "\u{2003}", "\u{3000}", "\u{2029}"] {
@@ -1183,20 +1163,20 @@ mod tests {
                 todo.tags,
                 vec![("tag".to_owned(), TagValue::One("x".to_owned()))]
             );
-            assert_eq!(todo.serialize(), "text with tag:x");
+            assert_eq!(todo.to_string(), "text with tag:x");
         }
 
         // U+0085 (NEL) is not ECMAScript whitespace, so it stays in the text.
         let nel = parse("\u{0085}kept\u{0085}");
         assert_eq!(nel.text, "\u{0085}kept\u{0085}");
-        assert_eq!(nel.serialize(), "\u{0085}kept\u{0085}");
+        assert_eq!(nel.to_string(), "\u{0085}kept\u{0085}");
     }
 
     #[test]
     fn tabs_survive_inside_text() {
         let todo = parse("tab\tinside\tline");
         assert_eq!(todo.text, "tab\tinside\tline");
-        assert_eq!(todo.serialize(), "tab\tinside\tline");
+        assert_eq!(todo.to_string(), "tab\tinside\tline");
     }
 
     #[test]
@@ -1222,7 +1202,7 @@ mod tests {
     }
 
     fn date(value: &str) -> TodoDate {
-        TodoDate::parse(value).expect("valid test date")
+        value.parse::<TodoDate>().expect("valid test date")
     }
 
     /// Every field a setter can touch, so a mutation of the receiver fails.
@@ -1237,7 +1217,7 @@ mod tests {
             todo.projects,
             todo.contexts,
             todo.tags,
-            todo.serialize()
+            todo
         )
     }
 
@@ -1312,14 +1292,14 @@ mod tests {
 
         let replaced = todo.clone().set_text("new alpha:one", false);
         assert_eq!(replaced.text, "new");
-        assert_eq!(replaced.serialize(), "new alpha:one");
+        assert_eq!(replaced.to_string(), "new alpha:one");
 
         let preserved = todo.clone().set_text("new alpha:one", true);
-        assert_eq!(preserved.serialize(), "new gamma:three alpha:one");
+        assert_eq!(preserved.to_string(), "new gamma:three alpha:one");
 
         // An existing key keeps its insertion position but takes the new value.
         let overridden = todo.clone().set_text("new gamma:changed alpha:one", true);
-        assert_eq!(overridden.serialize(), "new gamma:changed alpha:one");
+        assert_eq!(overridden.to_string(), "new gamma:changed alpha:one");
     }
 
     #[test]
@@ -1334,38 +1314,38 @@ mod tests {
     fn priority_and_dates_serialize_after_each_change() {
         let todo = parse("plain");
         assert_eq!(
-            todo.clone().set_priority(Priority::new('A')).serialize(),
+            todo.clone().set_priority(Priority::new('A')).to_string(),
             "(A) plain"
         );
         assert_eq!(
             todo.clone()
                 .set_priority(Priority::new('A'))
                 .set_priority(None)
-                .serialize(),
+                .to_string(),
             "plain"
         );
         assert_eq!(
             todo.clone()
                 .set_creation_date(date("2024-06-15"))
-                .serialize(),
+                .to_string(),
             "2024-06-15 plain"
         );
         assert_eq!(
             parse("x 2024-01-01 done")
                 .set_completion_date(None)
-                .serialize(),
+                .to_string(),
             "x done"
         );
         assert_eq!(
             parse("x 2024-01-01 done")
                 .set_completion_date(Some(date("2024-02-02")))
-                .serialize(),
+                .to_string(),
             "x 2024-02-02 done"
         );
         assert_eq!(
             parse("x 2024-03-02 2024-03-01 done")
                 .set_state(State::Todo)
-                .serialize(),
+                .to_string(),
             "2024-03-02 2024-03-01 done"
         );
     }
@@ -1374,50 +1354,50 @@ mod tests {
     fn due_and_threshold_are_replaced_in_place_and_removed() {
         let todo = parse("task due:2024-01-01 t:2024-01-02 other:keep");
         assert_eq!(
-            todo.clone().set_due(date("2024-06-15")).serialize(),
+            todo.clone().set_due(date("2024-06-15")).to_string(),
             "task due:2024-06-15 t:2024-01-02 other:keep"
         );
         assert_eq!(
-            todo.clone().set_threshold(date("2024-06-16")).serialize(),
+            todo.clone().set_threshold(date("2024-06-16")).to_string(),
             "task due:2024-01-01 t:2024-06-16 other:keep"
         );
         assert_eq!(
-            todo.clone().remove_due().serialize(),
+            todo.clone().remove_due().to_string(),
             "task t:2024-01-02 other:keep"
         );
         assert_eq!(
-            todo.clone().remove_threshold().serialize(),
+            todo.clone().remove_threshold().to_string(),
             "task due:2024-01-01 other:keep"
         );
         // Removing an absent tag is a no-op.
         assert_eq!(
-            parse("plain").remove_due().remove_threshold().serialize(),
+            parse("plain").remove_due().remove_threshold().to_string(),
             "plain"
         );
     }
 
     #[test]
     fn toggle_hidden_follows_the_ts_rules() {
-        assert_eq!(parse("task h:1").toggle_hidden().serialize(), "task");
-        assert_eq!(parse("task h:x").toggle_hidden().serialize(), "task");
-        assert_eq!(parse("task h:0").toggle_hidden().serialize(), "task h:1");
-        assert_eq!(parse("task").toggle_hidden().serialize(), "task h:1");
+        assert_eq!(parse("task h:1").toggle_hidden().to_string(), "task");
+        assert_eq!(parse("task h:x").toggle_hidden().to_string(), "task");
+        assert_eq!(parse("task h:0").toggle_hidden().to_string(), "task h:1");
+        assert_eq!(parse("task").toggle_hidden().to_string(), "task h:1");
     }
 
     #[test]
     fn recurrence_is_validated_before_storing() {
         let todo = parse("task");
-        assert_eq!(todo.clone().set_recurrence("2w").serialize(), "task rec:2w");
+        assert_eq!(todo.clone().set_recurrence("2w").to_string(), "task rec:2w");
         for invalid in ["", "0d", "10000d", "1D", "abc", "-1d"] {
             let updated = todo.clone().set_recurrence(invalid);
-            assert_eq!(updated.serialize(), "task", "value {invalid:?}");
+            assert_eq!(updated.to_string(), "task", "value {invalid:?}");
             assert_eq!(updated.tag("rec"), None, "value {invalid:?}");
         }
         assert_eq!(
             todo.clone()
                 .set_recurrence("2w")
                 .remove_recurrence()
-                .serialize(),
+                .to_string(),
             "task"
         );
     }
@@ -1426,44 +1406,44 @@ mod tests {
     fn context_and_project_edits_go_through_the_text() {
         let todo = parse("task +project @context other:keep");
         assert_eq!(
-            todo.clone().add_context("errand").serialize(),
+            todo.clone().add_context("errand").to_string(),
             "task +project @context @errand other:keep"
         );
         assert_eq!(
             todo.clone()
                 .add_context("errand")
                 .remove_context("context")
-                .serialize(),
+                .to_string(),
             "task +project @errand other:keep"
         );
         assert_eq!(
-            todo.clone().add_project("side").serialize(),
+            todo.clone().add_project("side").to_string(),
             "task +project @context +side other:keep"
         );
         assert_eq!(
             todo.clone()
                 .add_project("side")
                 .remove_project("project")
-                .serialize(),
+                .to_string(),
             "task @context +side other:keep"
         );
 
         // Already present: the receiver is returned unchanged.
         assert_eq!(
-            todo.clone().add_context("context").serialize(),
-            todo.serialize()
+            todo.clone().add_context("context").to_string(),
+            todo.to_string()
         );
         assert_eq!(
-            todo.clone().add_project("project").serialize(),
-            todo.serialize()
+            todo.clone().add_project("project").to_string(),
+            todo.to_string()
         );
         assert_eq!(
-            todo.clone().remove_context("missing").serialize(),
-            todo.serialize()
+            todo.clone().remove_context("missing").to_string(),
+            todo.to_string()
         );
         assert_eq!(
-            todo.clone().remove_project("missing").serialize(),
-            todo.serialize()
+            todo.clone().remove_project("missing").to_string(),
+            todo.to_string()
         );
     }
 
@@ -1473,7 +1453,7 @@ mod tests {
         // removed even though the todo also carries the literal `@a.b`.
         let todo = parse("one @aXb two @a.b");
         assert_eq!(todo.contexts, vec!["aXb".to_owned(), "a.b".to_owned()]);
-        assert_eq!(todo.remove_context("a.b").serialize(), "one two");
+        assert_eq!(todo.remove_context("a.b").to_string(), "one two");
     }
 
     #[test]
@@ -1481,18 +1461,18 @@ mod tests {
         // BMP characters are one UTF-16 code unit however many UTF-8 bytes they
         // take, so `.` consumes the 3-byte € and removes `@a€b` too.
         assert_eq!(
-            parse("task @a€b @a.b").remove_context("a.b").serialize(),
+            parse("task @a€b @a.b").remove_context("a.b").to_string(),
             "task"
         );
 
         // An astral character is a surrogate pair in UTF-16, so `.` cannot
         // consume it and `@a😀b` survives.
         assert_eq!(
-            parse("task @a.b @a😀b").remove_context("a.b").serialize(),
+            parse("task @a.b @a😀b").remove_context("a.b").to_string(),
             "task @a😀b"
         );
         assert_eq!(
-            parse("task @a😀b @a.b").remove_context("a.b").serialize(),
+            parse("task @a😀b @a.b").remove_context("a.b").to_string(),
             "task @a😀b"
         );
     }
@@ -1500,27 +1480,40 @@ mod tests {
     #[test]
     fn remove_project_dot_matches_one_utf16_code_unit() {
         assert_eq!(
-            parse("task +a😀b +a.b").remove_project("a.b").serialize(),
+            parse("task +a😀b +a.b").remove_project("a.b").to_string(),
             "task +a😀b"
         );
         assert_eq!(
-            parse("task +aéb +a.b").remove_project("a.b").serialize(),
+            parse("task +aéb +a.b").remove_project("a.b").to_string(),
             "task"
         );
+    }
+
+    #[test]
+    fn parts_and_state_default_to_an_empty_open_todo() {
+        assert_eq!(State::default(), State::Todo);
+        let parts = TodoParts::default();
+        assert_eq!(parts.state, State::Todo);
+        assert_eq!(parts.text, "");
+        assert!(parts.priority.is_none());
+        assert!(parts.tags.is_empty());
+        assert!(!parts.dates_in_text);
     }
 
     #[test]
     fn toggle_state_completes_and_plans_from_today() {
         let today = date("2026-11-15");
         let todo = parse("due:2026-11-01 rec:2d");
-        let result = todo.clone().toggle_state(today, TodoId::new(7));
+        let outcome = todo
+            .clone()
+            .toggle_state(today, TodoId::new(7))
+            .expect("planned");
 
         assert_eq!(
-            result.updated.serialize(),
+            outcome.updated.to_string(),
             "x 2026-11-15  due:2026-11-01 rec:2d"
         );
-        assert_eq!(result.recurrence_error, None);
-        let recurring = result.recurring.expect("planned");
+        let recurring = outcome.recurring.expect("planned");
         assert_eq!(recurring.id, TodoId::new(7));
         assert!(!recurring.is_done());
         assert_eq!(recurring.completion_date, None);
@@ -1528,13 +1521,14 @@ mod tests {
             recurring.tag("due").and_then(TagValue::as_single),
             Some("2026-11-17")
         );
-        assert_eq!(recurring.serialize(), " due:2026-11-17 rec:2d");
+        assert_eq!(recurring.to_string(), " due:2026-11-17 rec:2d");
     }
 
     #[test]
     fn toggle_state_uses_the_completion_day_not_the_due_date() {
-        let result =
-            parse("due:2026-12-31 rec:1m").toggle_state(date("2026-11-15"), TodoId::new(0));
+        let result = parse("due:2026-12-31 rec:1m")
+            .toggle_state(date("2026-11-15"), TodoId::new(0))
+            .expect("planned");
         assert_eq!(
             result
                 .recurring
@@ -1562,45 +1556,46 @@ mod tests {
                 "Invalid recurrence value; no new todo was created",
             ),
         ] {
-            let result = parse(line).toggle_state(today, TodoId::new(0));
-            assert!(result.updated.is_done(), "line {line:?}");
-            assert_eq!(result.recurring, None, "line {line:?}");
-            assert_eq!(
-                result.recurrence_error.map(RecurrenceError::message),
-                Some(message),
-                "line {line:?}"
-            );
+            let error = parse(line)
+                .toggle_state(today, TodoId::new(0))
+                .expect_err("recurrence error");
+            assert!(error.updated.is_done(), "line {line:?}");
+            assert_eq!(error.error.message(), message, "line {line:?}");
+            assert_eq!(error.to_string(), message, "line {line:?}");
         }
     }
 
     #[test]
     fn toggle_state_reopens_a_done_todo_without_planning() {
         let today = date("2026-11-15");
-        let result =
-            parse("x 2024-03-02 2024-03-01 done rec:1w").toggle_state(today, TodoId::new(0));
-        assert!(!result.updated.is_done());
-        assert_eq!(result.updated.serialize(), "2024-03-01 done rec:1w");
-        assert_eq!(result.recurring, None);
-        assert_eq!(result.recurrence_error, None);
+        let outcome = parse("x 2024-03-02 2024-03-01 done rec:1w")
+            .toggle_state(today, TodoId::new(0))
+            .expect("reopened");
+        assert!(!outcome.updated.is_done());
+        assert_eq!(outcome.updated.to_string(), "2024-03-01 done rec:1w");
+        assert_eq!(outcome.recurring, None);
 
         // A plain todo has nothing to plan.
-        let plain = parse("plain").toggle_state(today, TodoId::new(0));
-        assert_eq!(plain.updated.serialize(), "x 2026-11-15 plain");
+        let plain = parse("plain")
+            .toggle_state(today, TodoId::new(0))
+            .expect("completed");
+        assert_eq!(plain.updated.to_string(), "x 2026-11-15 plain");
         assert_eq!(plain.recurring, None);
     }
 
     #[test]
     fn toggle_state_preserves_literal_dates_in_text() {
-        let result =
-            parse("2023-02-29 literal rec:1d").toggle_state(date("2026-11-15"), TodoId::new(0));
-        assert!(result.updated.is_done());
+        let outcome = parse("2023-02-29 literal rec:1d")
+            .toggle_state(date("2026-11-15"), TodoId::new(0))
+            .expect("planned");
+        assert!(outcome.updated.is_done());
         assert_eq!(
-            result.updated.serialize(),
+            outcome.updated.to_string(),
             "x 2026-11-15 2023-02-29 literal rec:1d"
         );
-        let recurring = result.recurring.expect("planned");
+        let recurring = outcome.recurring.expect("planned");
         assert_eq!(
-            recurring.serialize(),
+            recurring.to_string(),
             "2026-11-15 2023-02-29 literal rec:1d due:2026-11-16"
         );
     }

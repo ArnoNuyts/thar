@@ -7,7 +7,7 @@
 use std::io;
 use std::path::PathBuf;
 
-/// Why a save, backup, archive or clipboard operation failed.
+/// Why a save, backup or archive operation failed.
 #[derive(Debug)]
 pub enum StoreError {
     /// A filesystem operation failed.
@@ -32,13 +32,6 @@ pub enum StoreError {
         count: usize,
         /// The limit.
         limit: usize,
-    },
-    /// No clipboard command is available on this host.
-    ClipboardUnavailable,
-    /// The clipboard command ran but failed.
-    ClipboardFailed {
-        /// A bounded description of the failure.
-        message: String,
     },
 }
 
@@ -68,9 +61,6 @@ impl core::fmt::Display for StoreError {
                 formatter,
                 "Too many todos to write ({count}); the limit is {limit}"
             ),
-            Self::ClipboardUnavailable => formatter
-                .write_str("No clipboard command found. On Linux, install wl-clipboard or xclip."),
-            Self::ClipboardFailed { message } => write!(formatter, "Clipboard failed: {message}"),
         }
     }
 }

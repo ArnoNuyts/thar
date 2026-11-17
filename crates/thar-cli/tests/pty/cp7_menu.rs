@@ -157,10 +157,19 @@ fn a_read_only_run_rejects_the_menu_and_write_keys() {
     let mut session = Session::open(&path);
 
     session.wait_text("READ-ONLY");
-    for key in [b"x".as_slice(), b"a", b"c", b"v", b"u"] {
+    for key in [b"x".as_slice(), b"a", b"v"] {
         session.send(key);
+        session.wait_text("Read-only: thar-rs cannot modify todo.txt");
     }
-    session.wait_text("Read-only: thar-rs cannot modify todo.txt");
+
+    // Copy is non-mutating, so the one gate lets it through even read-only.
+    // The host may not have a clipboard tool, so accept either toast.
+    session.send(b"c");
+    session.wait_text("Copy");
+    // Without host update information `u` is a bounded information toast, not
+    // a rejection.
+    session.send(b"u");
+    session.wait_text("No update available");
 
     session.send(b"q");
     let status = session.wait_exit(TIMEOUT);

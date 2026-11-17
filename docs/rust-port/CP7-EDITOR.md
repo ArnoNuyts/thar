@@ -26,27 +26,21 @@ third-party dependency.
 1. `empty` — empty or whitespace only (JavaScript `trim`, so `U+FEFF` counts);
 2. `multiline` — `\n`, `\r`, `U+2028`, `U+2029`;
 3. `control-character` — C0/C1, DEL and the Unicode separators; tab is allowed;
-4. `unpaired-surrogate` — see the note below;
-5. `too-long` — measured in UTF-16 code units, matching
+4. `too-long` — measured in UTF-16 code units, matching
    `String.prototype.length`;
-6. `invalid-date`, `ambiguous-date`, `leading-date` — the leading
+5. `invalid-date`, `ambiguous-date`, `leading-date` — the leading
    `YYYY-MM-DD` rules from `scanTodoPrefix`.
 
 `validate_todo_batch(texts, existing_count, max_batch)` adds `batch-too-large`
 and `too-many-todos` and validates every line before any is accepted, so a
 batch is atomic. `validate_default_batch` is the `MAX_PASTE_TODOS` wrapper.
 
-`TodoInputError` exposes the stable `code` (the TypeScript
-`TodoInputErrorCode` string), `code_str`, and a bounded `message`/`Display` that
-never echoes the rejected payload — every message is asserted in a table test.
-
-**Unpaired surrogates.** A Rust `&str` is always well-formed UTF-16, so
-`validate_todo_text` can never produce that code. The variant stays in the
-vocabulary and `validate_utf16(&[u16], max_chars)` makes it reachable: it takes
-the raw code units a JavaScript host already holds, reports
-`unpaired-surrogate` for a lone surrogate, and keeps the oracle's ordering (a
-blank buffer is `empty`, a line feed is `multiline`, a C0 byte is
-`control-character` even when it sits next to the stray surrogate).
+`TodoInputError` is an enum whose `code()` returns the stable TypeScript
+`TodoInputErrorCode` string, with a bounded `message`/`Display` that never
+echoes the rejected payload — every message is asserted in a table test. A
+Rust `&str` is always well-formed UTF-16, so the TypeScript
+`unpaired-surrogate` branch has no Rust counterpart and is not part of the
+enum.
 
 ### Editor (`thar-tui/src/editor.rs`)
 

@@ -70,12 +70,6 @@ impl SaveGuard {
         &self.last_bytes
     }
 
-    /// True when the safety copy has already been attempted this session.
-    #[must_use]
-    pub fn backed_up(&self) -> bool {
-        self.backed_up
-    }
-
     /// Serialize and atomically replace the file.
     ///
     /// # Errors

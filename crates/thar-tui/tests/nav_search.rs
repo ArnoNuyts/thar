@@ -19,7 +19,7 @@ fn app_with(lines: &[&str]) -> App {
     let mut app = App::new(
         "todo.txt",
         todos,
-        TodoDate::parse("2026-11-15").expect("valid date"),
+        "2026-11-15".parse::<TodoDate>().expect("valid date"),
     );
     app.resize(80, 10);
     app
@@ -27,7 +27,7 @@ fn app_with(lines: &[&str]) -> App {
 
 fn type_query(app: &mut App, query: &str) {
     for ch in query.chars() {
-        input::apply(app, Command::SearchInsert(ch));
+        input::apply(app, Command::SearchInsert(ch), current_time());
     }
 }
 
@@ -39,20 +39,24 @@ fn todo_rows(app: &App) -> usize {
     app.rows().iter().filter(|row| row.is_todo()).count()
 }
 
+fn current_time() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
 #[test]
 fn typing_filters_rows_and_keeps_a_visible_cursor() {
     let mut app = app_with(&["alpha", "beta", "gamma"]);
-    assert_eq!(app.cursor, Some(TodoId::new(0)));
+    assert_eq!(app.cursor(), Some(TodoId::new(0)));
 
-    input::apply(&mut app, Command::SearchFocus);
+    input::apply(&mut app, Command::SearchFocus, current_time());
     type_query(&mut app, "a");
     // Every todo contains an `a`, so the cursor is untouched.
-    assert_eq!(app.cursor, Some(TodoId::new(0)));
+    assert_eq!(app.cursor(), Some(TodoId::new(0)));
     assert_eq!(todo_rows(&app), 3);
 
     type_query(&mut app, "mm");
-    assert_eq!(app.query, "amm");
-    assert_eq!(app.cursor, Some(TodoId::new(2)));
+    assert_eq!(app.query(), "amm");
+    assert_eq!(app.cursor(), Some(TodoId::new(2)));
     assert_eq!(cursor_text(&app).as_deref(), Some("gamma"));
     assert_eq!(todo_rows(&app), 1);
 }
@@ -65,13 +69,13 @@ fn a_filtered_out_cursor_falls_forward_from_its_old_row() {
     nav::select_row(&mut app, 3, false);
     assert_eq!(cursor_text(&app).as_deref(), Some("kiwi @b"));
 
-    input::apply(&mut app, Command::SearchFocus);
+    input::apply(&mut app, Command::SearchFocus, current_time());
     type_query(&mut app, "ap");
 
     // The old row (3) clamps to the new last row, so `apricot` wins over the
     // earlier `apple` match: the cursor falls forward, not back to row 0.
     assert_eq!(cursor_text(&app).as_deref(), Some("apricot @c"));
-    assert_eq!(app.cursor, Some(TodoId::new(2)));
+    assert_eq!(app.cursor(), Some(TodoId::new(2)));
 }
 
 #[test]
@@ -79,12 +83,12 @@ fn a_filter_that_removes_every_todo_clears_the_cursor() {
     let mut app = app_with(&["alpha", "beta"]);
     nav::select_last(&mut app);
 
-    input::apply(&mut app, Command::SearchFocus);
+    input::apply(&mut app, Command::SearchFocus, current_time());
     type_query(&mut app, "zzz");
 
     assert!(app.rows().is_empty());
-    assert_eq!(app.cursor, None);
-    assert_eq!(app.offset, 0);
+    assert_eq!(app.cursor(), None);
+    assert_eq!(app.offset(), 0);
     assert!(app.selected_todos().is_empty());
 }
 
@@ -93,14 +97,14 @@ fn a_range_is_cleared_whole_when_one_id_is_filtered_out() {
     let mut app = app_with(&["alpha", "beta", "gamma", "delta"]);
 
     nav::move_cursor(&mut app, 2, true);
-    assert_eq!(app.range.len(), 3);
+    assert_eq!(app.range().len(), 3);
 
-    input::apply(&mut app, Command::SearchFocus);
+    input::apply(&mut app, Command::SearchFocus, current_time());
     type_query(&mut app, "alp");
 
     assert_eq!(todo_rows(&app), 1);
-    assert!(app.range.is_empty());
-    assert_eq!(app.anchor, None);
+    assert!(app.range().is_empty());
+    assert_eq!(app.anchor(), None);
     assert_eq!(cursor_text(&app).as_deref(), Some("alpha"));
     assert_eq!(app.selected_todos().len(), 1);
 }
@@ -110,35 +114,35 @@ fn a_range_survives_a_filter_that_keeps_every_member() {
     let mut app = app_with(&["alpha", "beta", "gamma", "delta"]);
 
     nav::move_cursor(&mut app, 2, true);
-    let range = app.range.clone();
-    let anchor = app.anchor;
+    let range = app.range().to_vec();
+    let anchor = app.anchor();
 
-    input::apply(&mut app, Command::SearchFocus);
+    input::apply(&mut app, Command::SearchFocus, current_time());
     type_query(&mut app, "a");
 
     assert_eq!(todo_rows(&app), 4);
-    assert_eq!(app.range, range);
-    assert_eq!(app.anchor, anchor);
+    assert_eq!(app.range(), range);
+    assert_eq!(app.anchor(), anchor);
 }
 
 #[test]
 fn enter_blurs_and_keeps_the_filter_escape_clears_it() {
     let mut app = app_with(&["alpha", "beta", "gamma"]);
 
-    input::apply(&mut app, Command::SearchFocus);
+    input::apply(&mut app, Command::SearchFocus, current_time());
     type_query(&mut app, "beta");
     assert_eq!(todo_rows(&app), 1);
 
-    input::apply(&mut app, Command::SearchBlur);
-    assert!(!app.search_focused);
-    assert_eq!(app.query, "beta");
+    input::apply(&mut app, Command::SearchBlur, current_time());
+    assert!(!app.search_focused());
+    assert_eq!(app.query(), "beta");
     assert_eq!(todo_rows(&app), 1);
 
-    input::apply(&mut app, Command::SearchFocus);
-    input::apply(&mut app, Command::SearchClear);
-    assert!(!app.search_focused);
-    assert_eq!(app.query, "");
-    assert_eq!(app.query_cursor, 0);
+    input::apply(&mut app, Command::SearchFocus, current_time());
+    input::apply(&mut app, Command::SearchClear, current_time());
+    assert!(!app.search_focused());
+    assert_eq!(app.query(), "");
+    assert_eq!(app.query_cursor(), 0);
     assert_eq!(todo_rows(&app), 3);
 }
 
@@ -146,48 +150,48 @@ fn enter_blurs_and_keeps_the_filter_escape_clears_it() {
 fn home_and_end_navigate_the_list_while_search_is_focused() {
     let mut app = app_with(&["alpha", "beta", "gamma"]);
 
-    input::apply(&mut app, Command::SearchFocus);
+    input::apply(&mut app, Command::SearchFocus, current_time());
     type_query(&mut app, "a");
-    assert_eq!(app.query_cursor, 1);
+    assert_eq!(app.query_cursor(), 1);
 
-    input::apply(&mut app, Command::End);
+    input::apply(&mut app, Command::End, current_time());
     assert_eq!(cursor_text(&app).as_deref(), Some("gamma"));
     // Home/End never move the query cursor: the search handler intercepts
     // them before the text editor.
-    assert_eq!(app.query_cursor, 1);
-    assert_eq!(app.query, "a");
+    assert_eq!(app.query_cursor(), 1);
+    assert_eq!(app.query(), "a");
 
-    input::apply(&mut app, Command::Home);
+    input::apply(&mut app, Command::Home, current_time());
     assert_eq!(cursor_text(&app).as_deref(), Some("alpha"));
-    assert_eq!(app.query_cursor, 1);
+    assert_eq!(app.query_cursor(), 1);
 }
 
 #[test]
 fn query_cursor_editing_inserts_and_deletes_at_the_cursor() {
     let mut app = app_with(&["alpha"]);
 
-    input::apply(&mut app, Command::SearchFocus);
+    input::apply(&mut app, Command::SearchFocus, current_time());
     type_query(&mut app, "ga");
-    input::apply(&mut app, Command::SearchLeft);
-    input::apply(&mut app, Command::SearchInsert('m'));
-    assert_eq!(app.query, "gma");
-    assert_eq!(app.query_cursor, 2);
+    input::apply(&mut app, Command::SearchLeft, current_time());
+    input::apply(&mut app, Command::SearchInsert('m'), current_time());
+    assert_eq!(app.query(), "gma");
+    assert_eq!(app.query_cursor(), 2);
 
-    input::apply(&mut app, Command::SearchLeft);
-    input::apply(&mut app, Command::SearchBackspace);
-    assert_eq!(app.query, "ma");
-    assert_eq!(app.query_cursor, 0);
+    input::apply(&mut app, Command::SearchLeft, current_time());
+    input::apply(&mut app, Command::SearchBackspace, current_time());
+    assert_eq!(app.query(), "ma");
+    assert_eq!(app.query_cursor(), 0);
 
-    input::apply(&mut app, Command::SearchDelete);
-    assert_eq!(app.query, "a");
-    assert_eq!(app.query_cursor, 0);
+    input::apply(&mut app, Command::SearchDelete, current_time());
+    assert_eq!(app.query(), "a");
+    assert_eq!(app.query_cursor(), 0);
 
     // Left/Right clamp instead of wrapping.
-    input::apply(&mut app, Command::SearchLeft);
-    assert_eq!(app.query_cursor, 0);
-    input::apply(&mut app, Command::SearchRight);
-    input::apply(&mut app, Command::SearchRight);
-    assert_eq!(app.query_cursor, 1);
+    input::apply(&mut app, Command::SearchLeft, current_time());
+    assert_eq!(app.query_cursor(), 0);
+    input::apply(&mut app, Command::SearchRight, current_time());
+    input::apply(&mut app, Command::SearchRight, current_time());
+    assert_eq!(app.query_cursor(), 1);
 }
 
 #[test]
@@ -216,13 +220,13 @@ fn search_focus_shrinks_the_list_and_keeps_the_offset_valid() {
     let mut app = app_with(&refs);
 
     nav::select_last(&mut app);
-    assert!(app.offset > 0);
+    assert!(app.offset() > 0);
 
-    input::apply(&mut app, Command::SearchFocus);
+    input::apply(&mut app, Command::SearchFocus, current_time());
     assert_eq!(app.visible_height(), 6);
-    assert!(app.offset <= app.max_offset());
+    assert!(app.offset() <= app.max_offset());
 
-    input::apply(&mut app, Command::SearchBlur);
+    input::apply(&mut app, Command::SearchBlur, current_time());
     assert_eq!(app.visible_height(), 8);
-    assert!(app.offset <= app.max_offset());
+    assert!(app.offset() <= app.max_offset());
 }

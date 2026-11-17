@@ -23,7 +23,7 @@ fn app_with(lines: &[&str], width: u16, height: u16) -> App {
     let mut app = App::new(
         "todo.txt",
         todos,
-        TodoDate::parse("2026-11-15").expect("valid date"),
+        "2026-11-15".parse::<TodoDate>().expect("valid date"),
     );
     app.resize(width, height);
     app
@@ -61,6 +61,10 @@ fn cursor_text(app: &App) -> Option<String> {
     app.selected_todo().map(|todo| todo.text.clone())
 }
 
+fn current_time() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
 #[test]
 fn a_left_click_selects_the_todo_under_the_cursor() {
     let mut app = two_todos();
@@ -78,23 +82,23 @@ fn a_left_click_selects_the_todo_under_the_cursor() {
 fn a_click_on_a_header_or_outside_the_list_is_ignored() {
     let mut app = two_todos();
     let now = Instant::now();
-    let before = app.cursor;
+    let before = app.cursor();
 
     // y=1 is the "None" header.
     let (last, command) = handle_mouse(&mut app, click(1, 1, false), None, now);
     assert_eq!(command, None);
-    assert_eq!(app.cursor, before);
+    assert_eq!(app.cursor(), before);
     assert_eq!(last.expect("recorded").todo_id, None);
 
     // The action-bar border is not the action content row.
     let (_, command) = handle_mouse(&mut app, click(1, 11, false), None, now);
     assert_eq!(command, None);
-    assert_eq!(app.cursor, before);
+    assert_eq!(app.cursor(), before);
 
     // A click beyond the last row of the list.
     let (_, command) = handle_mouse(&mut app, click(1, 10, false), None, now);
     assert_eq!(command, None);
-    assert_eq!(app.cursor, before);
+    assert_eq!(app.cursor(), before);
 }
 
 #[test]
@@ -107,15 +111,15 @@ fn shift_click_extends_the_range_from_the_previous_cursor() {
 
     let (_, command) = handle_mouse(&mut app, click(1, 2, true), None, now);
     assert_eq!(command, None);
-    assert_eq!(app.anchor, Some(TodoId::new(1)));
-    assert_eq!(app.range, [TodoId::new(0), TodoId::new(1)]);
+    assert_eq!(app.anchor(), Some(TodoId::new(1)));
+    assert_eq!(app.range(), [TodoId::new(0), TodoId::new(1)]);
     assert_eq!(app.selected_todos().len(), 2);
     assert_eq!(cursor_text(&app).as_deref(), Some("one"));
 
     // A plain click collapses the range again.
     handle_mouse(&mut app, click(1, 3, false), None, now);
-    assert!(app.range.is_empty());
-    assert_eq!(app.anchor, None);
+    assert!(app.range().is_empty());
+    assert_eq!(app.anchor(), None);
 }
 
 #[test]
@@ -124,11 +128,11 @@ fn a_click_on_a_header_never_extends_a_range() {
     let now = Instant::now();
 
     nav::move_cursor(&mut app, 1, true);
-    assert_eq!(app.range.len(), 2);
+    assert_eq!(app.range().len(), 2);
 
     let (_, command) = handle_mouse(&mut app, click(1, 1, true), None, now);
     assert_eq!(command, None);
-    assert_eq!(app.range.len(), 2);
+    assert_eq!(app.range().len(), 2);
 }
 
 #[test]
@@ -153,7 +157,11 @@ fn a_double_click_selects_and_is_rejected_read_only() {
         None,
         "handle_mouse returns the command; applying it is the event loop's job"
     );
-    input::apply(&mut app, Command::Rejected(READ_ONLY_MESSAGE));
+    input::apply(
+        &mut app,
+        Command::Rejected(READ_ONLY_MESSAGE),
+        current_time(),
+    );
     assert_eq!(app.toast_message(Instant::now()), Some(READ_ONLY_MESSAGE));
 }
 
@@ -218,8 +226,8 @@ fn a_shift_click_never_counts_as_a_double_click() {
     assert_eq!(command, None);
     // The shift click stays a range update, never a double click: the anchor
     // is the previous cursor, so this click selects exactly that row.
-    assert_eq!(app.range, [TodoId::new(0)]);
-    assert_eq!(app.anchor, Some(TodoId::new(0)));
+    assert_eq!(app.range(), [TodoId::new(0)]);
+    assert_eq!(app.anchor(), Some(TodoId::new(0)));
 }
 
 #[test]
@@ -237,10 +245,10 @@ fn action_bar_clicks_map_to_their_command() {
 
     for (x, expected) in cases {
         let mut app = two_todos();
-        let before = app.cursor;
+        let before = app.cursor();
         let (last, command) = handle_mouse(&mut app, click(x, y, false), None, Instant::now());
         assert_eq!(command, expected, "column {x}");
-        assert_eq!(app.cursor, before);
+        assert_eq!(app.cursor(), before);
         assert!(last.is_none(), "action clicks are not row clicks");
     }
 }
@@ -267,27 +275,27 @@ fn wheel_scrolls_only_while_the_list_owns_focus() {
     // 10 list rows, 21 row-model rows, so the maximum offset is 11.
     let now = Instant::now();
 
-    app.offset = 5;
+    app.set_offset(5);
     handle_mouse(&mut app, wheel(MouseKind::WheelUp), None, now);
-    assert_eq!(app.offset, 4);
+    assert_eq!(app.offset(), 4);
     handle_mouse(&mut app, wheel(MouseKind::WheelDown), None, now);
-    assert_eq!(app.offset, 5);
+    assert_eq!(app.offset(), 5);
 
-    app.offset = 0;
+    app.set_offset(0);
     handle_mouse(&mut app, wheel(MouseKind::WheelUp), None, now);
-    assert_eq!(app.offset, 0);
+    assert_eq!(app.offset(), 0);
 
-    app.offset = app.max_offset();
-    assert_eq!(app.offset, 11);
+    app.set_offset(app.max_offset());
+    assert_eq!(app.offset(), 11);
     handle_mouse(&mut app, wheel(MouseKind::WheelDown), None, now);
-    assert_eq!(app.offset, 11);
+    assert_eq!(app.offset(), 11);
 
-    app.search_focused = true;
-    app.offset = 5;
+    app.set_search_focused(true);
+    app.set_offset(5);
     handle_mouse(&mut app, wheel(MouseKind::WheelUp), None, now);
-    assert_eq!(app.offset, 5);
+    assert_eq!(app.offset(), 5);
     handle_mouse(&mut app, wheel(MouseKind::WheelDown), None, now);
-    assert_eq!(app.offset, 5);
+    assert_eq!(app.offset(), 5);
 }
 
 #[test]
@@ -342,24 +350,24 @@ fn clicked_checkbox_follows_the_widest_todo_number() {
 #[test]
 fn clicking_a_row_while_search_is_focused_focuses_the_list() {
     let mut app = app_with(&["one"], 40, 12);
-    app.search_focused = true;
+    app.set_search_focused(true);
     // With the search bar visible the list starts on 0-based row 2.
     assert_eq!(app.layout().list_top, 2);
 
     let (_, command) = handle_mouse(&mut app, click(1, 4, false), None, Instant::now());
     assert_eq!(command, None);
-    assert!(!app.search_focused);
+    assert!(!app.search_focused());
     assert_eq!(cursor_text(&app).as_deref(), Some("one"));
 }
 
 #[test]
 fn a_search_bar_click_is_not_a_row_click() {
     let mut app = app_with(&["one", "two"], 40, 12);
-    app.search_focused = true;
-    let before = app.cursor;
+    app.set_search_focused(true);
+    let before = app.cursor();
 
     let (_, command) = handle_mouse(&mut app, click(1, 1, false), None, Instant::now());
     assert_eq!(command, None);
-    assert_eq!(app.cursor, before);
-    assert!(app.search_focused);
+    assert_eq!(app.cursor(), before);
+    assert!(app.search_focused());
 }

@@ -24,12 +24,13 @@
 //! ```
 //! use thar_core::{TodoDate, plan_recurrence};
 //!
-//! let base = TodoDate::parse("2024-01-31").expect("valid");
+//! let base = "2024-01-31".parse::<TodoDate>().expect("valid");
 //! let next = plan_recurrence("1m", base).expect("valid recurrence");
 //! assert_eq!(next.to_string(), "2024-02-29");
 //! ```
 
 use core::fmt;
+use core::str::FromStr;
 
 use crate::date::{TodoDate, add_days, add_months, add_weeks, add_years};
 
@@ -61,7 +62,9 @@ pub struct Recurrence {
     unit: RecurrenceUnit,
 }
 
-impl Recurrence {
+impl FromStr for Recurrence {
+    type Err = RecurrenceError;
+
     /// Parse a `rec:` value, mirroring `parseRecurrence` in
     /// `logic/recurrence.ts`.
     ///
@@ -70,8 +73,7 @@ impl Recurrence {
     /// Returns [`RecurrenceError::Invalid`] when the value does not match
     /// `^\+?(\d+)([dwmy])$`, and [`RecurrenceError::OutOfRange`] when the
     /// amount is zero or above [`MAX_RECURRENCE_AMOUNT`].
-    #[must_use = "a rejected recurrence value is a deliberate Err"]
-    pub fn parse(value: &str) -> Result<Self, RecurrenceError> {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         let rest = value.strip_prefix('+').unwrap_or(value);
         let mut characters = rest.chars();
         let unit = match characters.next_back() {
@@ -103,7 +105,9 @@ impl Recurrence {
 
         Ok(Self { amount, unit })
     }
+}
 
+impl Recurrence {
     /// The amount, always `1..=`[`MAX_RECURRENCE_AMOUNT`].
     #[must_use]
     pub const fn amount(self) -> u32 {
@@ -181,7 +185,7 @@ impl std::error::Error for RecurrenceError {}
 /// ```
 #[must_use]
 pub fn is_valid_recurrence(value: &str) -> bool {
-    Recurrence::parse(value).is_ok()
+    value.parse::<Recurrence>().is_ok()
 }
 
 /// Resolve the next due day for a `rec:` value relative to `base`.
@@ -194,7 +198,7 @@ pub fn is_valid_recurrence(value: &str) -> bool {
 /// a plan that would leave years 1..=9999.
 #[must_use = "the planned day must be used"]
 pub fn plan_recurrence(value: &str, base: TodoDate) -> Result<TodoDate, RecurrenceError> {
-    Recurrence::parse(value)?.plan(base)
+    value.parse::<Recurrence>()?.plan(base)
 }
 
 #[cfg(test)]
@@ -206,7 +210,7 @@ mod tests {
     use crate::date::TodoDate;
 
     fn date(value: &str) -> TodoDate {
-        TodoDate::parse(value).expect("valid test date")
+        value.parse::<TodoDate>().expect("valid test date")
     }
 
     fn next(value: &str, base: &str) -> String {
@@ -226,7 +230,7 @@ mod tests {
             ("+9999y", RecurrenceUnit::Years, MAX_RECURRENCE_AMOUNT),
             ("0001d", RecurrenceUnit::Days, 1),
         ] {
-            let recurrence = Recurrence::parse(value).expect("valid recurrence");
+            let recurrence = value.parse::<Recurrence>().expect("valid recurrence");
             assert_eq!(recurrence.amount(), amount, "amount for {value:?}");
             assert_eq!(recurrence.unit(), unit, "unit for {value:?}");
         }
@@ -239,7 +243,7 @@ mod tests {
             "+d", "1d ", " 1d", "1M",
         ] {
             assert_eq!(
-                Recurrence::parse(value),
+                value.parse::<Recurrence>(),
                 Err(RecurrenceError::Invalid),
                 "value {value:?}"
             );
@@ -258,14 +262,14 @@ mod tests {
             "999999999999999999999d",
         ] {
             assert_eq!(
-                Recurrence::parse(value),
+                value.parse::<Recurrence>(),
                 Err(RecurrenceError::OutOfRange),
                 "value {value:?}"
             );
         }
 
-        assert!(Recurrence::parse("9999d").is_ok());
-        assert!(Recurrence::parse("9999y").is_ok());
+        assert!("9999d".parse::<Recurrence>().is_ok());
+        assert!("9999y".parse::<Recurrence>().is_ok());
     }
 
     #[test]

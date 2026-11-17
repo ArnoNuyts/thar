@@ -426,7 +426,7 @@ recorded. Do not start the next checkpoint while one is red.
 #### CP3b1 — row builder + live rows contract (no wiring)
 
 - `thar-core::build_rows` composes the existing pieces without duplicating
-  them: `sort_by_importance` → `filter_hidden` (unless hidden todos are shown)
+  them: `sort_by_importance` → the visibility filter (unless hidden todos are shown)
   → the `filter_by_search` predicate → `create_rows`. It returns `Rows`: the
   `Row` list plus the ordered input indexes behind the todo rows, so the host
   maps rows back without a second pass. Empty terms match everything; a view
@@ -570,7 +570,7 @@ one extra best-effort `fsync` per save before the rename (measured ~0.4 ms →
   takes (moved to `crates/thar-wasm/src/record.rs`), so tags stay array-valued
   and both round-trip flags cross the boundary. Each record is rebuilt with
   `Todo::from_parts`, so nothing is re-parsed and no unwrap can see wire data.
-- **Exact write shape.** Per-record `serialize()`, joined with `"\n"`, plus
+- **Exact write shape.** Per-record `Display`/`to_string()`, joined with `"\n"`, plus
   **one trailing `"\n"`**. Zero todos is not a special case: the TypeScript
   oracle is `[].join("\n") + "\n"`, which is `"\n"`, so an empty todo list
   writes a one-byte file, not an empty one. `empty.txt` pins that in the write

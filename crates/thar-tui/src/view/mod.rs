@@ -61,7 +61,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_list(frame, app, layout);
     render_action_bar(frame, app, layout);
 
-    if app.show_hidden {
+    if app.show_hidden() {
         render_hidden_indicator(frame, layout);
     }
 
@@ -74,32 +74,37 @@ pub fn render(frame: &mut Frame, app: &App) {
 
 fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
     let row = Rect::new(0, layout.search_row(), layout.width, 1);
-    let prompt = Style::default().fg(if app.search_focused {
+    let prompt = Style::default().fg(if app.search_focused() {
         theme::SECONDARY
     } else {
         theme::MUTED
     });
     let query = Style::default().fg(theme::FOREGROUND);
 
-    let safe = sanitize_for_display(&app.query);
-    let chars: Vec<char> = safe.chars().collect();
-    let cursor = app.query_cursor.min(chars.len());
+    // Cursor position is a character index into the **raw** query. Sanitizing
+    // the whole query first would make it longer (a C1 control becomes six
+    // cells), so the index would land on the wrong cell. Slice first, then
+    // sanitize each piece.
+    let raw: Vec<char> = app.query().chars().collect();
+    let cursor = app.query_cursor().min(raw.len());
+    let before = sanitize_for_display(&raw[..cursor].iter().collect::<String>());
+    let at = raw.get(cursor).map_or_else(
+        || " ".to_owned(),
+        |character| sanitize_for_display(&character.to_string()),
+    );
+    let after = sanitize_for_display(
+        &raw[cursor.saturating_add(1).min(raw.len())..]
+            .iter()
+            .collect::<String>(),
+    );
 
     let mut spans = vec![Span::styled(" / ", prompt)];
-    if app.search_focused {
-        let before: String = chars[..cursor].iter().collect();
-        let after: String = chars[cursor.saturating_add(1).min(chars.len())..]
-            .iter()
-            .collect();
-        let at = chars.get(cursor).copied().unwrap_or(' ');
+    if app.search_focused() {
         spans.push(Span::styled(before, query));
-        spans.push(Span::styled(
-            at.to_string(),
-            query.add_modifier(Modifier::REVERSED),
-        ));
+        spans.push(Span::styled(at, query.add_modifier(Modifier::REVERSED)));
         spans.push(Span::styled(after, query));
     } else {
-        spans.push(Span::styled(safe, query));
+        spans.push(Span::styled(sanitize_for_display(&app.query()), query));
     }
     spans.push(Span::styled(" / ", prompt));
 
@@ -170,10 +175,10 @@ fn render_list(frame: &mut Frame, app: &App, layout: Layout) {
 }
 
 fn todo_line(app: &App, todo: &Todo, number: usize, max_digits: usize) -> (Line<'static>, Style) {
-    let focused = app.cursor == Some(todo.id);
+    let focused = app.cursor() == Some(todo.id);
     let in_range = app.is_selected_in_range(todo.id);
     let highlighted = focused || in_range;
-    let overdue = todo.is_overdue(app.today);
+    let overdue = todo.is_overdue(app.today());
 
     let background = if focused {
         if overdue {
@@ -281,10 +286,10 @@ fn text_spans(text: &str, base: Style, highlighted: bool) -> Vec<Span<'static>> 
 
 fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
     let area = Rect::new(0, layout.list_top, layout.width, layout.list_height);
-    let query = app.query.trim();
+    let query = app.query().trim().to_owned();
 
     let lines = if query.is_empty() {
-        if let Some(error) = app.load_error.as_deref() {
+        if let Some(error) = app.load_error() {
             // There is no list to explain the failure next to, so the empty
             // state owns the bounded read error instead of the welcome quote.
             vec![
@@ -294,7 +299,7 @@ fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
                 )),
                 Line::from(""),
                 Line::from(Span::styled(
-                    if app.read_only {
+                    if app.is_read_only() {
                         "The read-only build does not create todo files."
                     } else {
                         "Fix the todo file to resume saving."
@@ -325,7 +330,7 @@ fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
             Line::from(vec![
                 Span::raw("No results found for '"),
                 Span::styled(
-                    sanitize_for_display(query),
+                    sanitize_for_display(&query),
                     Style::default().fg(theme::WARNING),
                 ),
                 Span::raw("'"),
@@ -388,10 +393,10 @@ fn render_action_bar(frame: &mut Frame, app: &App, layout: Layout) {
     let toast = app.toast_message(std::time::Instant::now());
     // With no rows the empty state carries the load error in full; the action
     // bar only repeats it when there is a list that lost its refresh.
-    let load_error = app.load_error.as_deref().filter(|_| !app.rows().is_empty());
+    let load_error = app.load_error().filter(|_| !app.rows().is_empty());
     let message = toast
         .or(load_error)
-        .or(app.save_error.as_deref())
+        .or(app.save_error())
         .map(|text| bound(sanitize_for_display(text), status_limit));
 
     let mut right = Vec::new();
@@ -471,7 +476,7 @@ mod tests {
         App::new(
             "todo.txt",
             todos,
-            TodoDate::parse("2026-11-15").expect("valid date"),
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         )
     }
 
@@ -508,7 +513,7 @@ mod tests {
     fn search_empty_state_quotes_the_query() {
         let mut app = app(&["one"]);
         app.resize(40, 10);
-        app.search_focused = true;
+        app.set_search_focused(true);
         app.set_query("nope");
         let screen = screen(&app, 40, 10);
         assert!(screen.contains("No results found for 'nope'"));
@@ -607,9 +612,69 @@ mod tests {
     fn a_load_error_is_shown_in_the_empty_state() {
         let mut app = app(&[]);
         app.resize(80, 10);
-        app.load_error = Some("todo.txt not found".to_owned());
+        app.set_load_error(Some("todo.txt not found".to_owned()));
         let screen = screen(&app, 80, 10);
         assert!(screen.contains("todo.txt not found"));
         assert!(screen.contains("does not create todo files"));
+    }
+
+    fn focused_query(query: &str) -> App {
+        let mut app = app(&["one"]);
+        app.resize(40, 10);
+        app.set_search_focused(true);
+        app.set_query(query);
+        app
+    }
+
+    #[test]
+    fn the_search_cursor_lands_on_the_c1_control_cell() {
+        let mut app = focused_query("a\u{0085}b");
+        // set_query puts the cursor at the end; move it onto the C1 scalar.
+        crate::input::apply(
+            &mut app,
+            crate::input::Command::SearchLeft,
+            std::time::Instant::now(),
+        );
+        crate::input::apply(
+            &mut app,
+            crate::input::Command::SearchLeft,
+            std::time::Instant::now(),
+        );
+        assert_eq!(app.query_cursor(), 1);
+
+        let mut terminal = Terminal::new(TestBackend::new(40, 10)).expect("test terminal");
+        terminal
+            .draw(|frame| render(frame, &app))
+            .expect("draw succeeds");
+        let buffer = terminal.backend().buffer();
+
+        // Prompt " / " takes cells 0..=2, `a` is cell 3, the escaped control
+        // is the six cells 4..=9 and `b` is cell 10.
+        assert_eq!(buffer[(3, 0)].symbol(), "a");
+        assert!(!buffer[(3, 0)].modifier.contains(Modifier::REVERSED));
+        let escaped: String = (4..=9).map(|x| buffer[(x, 0)].symbol()).collect();
+        assert_eq!(escaped, "\\u0085");
+        for x in 4..=9 {
+            assert!(
+                buffer[(x, 0)].modifier.contains(Modifier::REVERSED),
+                "cell {x} must be the inverted cursor"
+            );
+        }
+        assert_eq!(buffer[(10, 0)].symbol(), "b");
+        assert!(!buffer[(10, 0)].modifier.contains(Modifier::REVERSED));
+    }
+
+    #[test]
+    fn the_end_of_a_query_paints_a_trailing_space_cursor() {
+        let app = focused_query("ab");
+        let mut terminal = Terminal::new(TestBackend::new(40, 10)).expect("test terminal");
+        terminal
+            .draw(|frame| render(frame, &app))
+            .expect("draw succeeds");
+        let buffer = terminal.backend().buffer();
+        // Prompt at 0..=2, `a` at 3, `b` at 4, trailing cursor space at 5.
+        assert_eq!(buffer[(5, 0)].symbol(), " ");
+        assert!(buffer[(5, 0)].modifier.contains(Modifier::REVERSED));
+        assert!(!buffer[(4, 0)].modifier.contains(Modifier::REVERSED));
     }
 }

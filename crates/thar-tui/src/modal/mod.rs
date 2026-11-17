@@ -17,10 +17,6 @@ pub mod confirm;
 pub mod geometry;
 pub mod menu;
 pub mod registry;
-pub mod registry_date;
-pub mod registry_editor;
-pub mod registry_menu;
-pub mod registry_meta;
 pub mod text;
 pub mod update;
 
@@ -32,12 +28,13 @@ mod tag;
 
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
-use thar_core::{TodoDate, TodoId};
+use thar_core::{Priority, TodoDate, TodoId};
 
-use crate::input::MouseInput;
+use crate::event::MouseInput;
 
 pub use confirm::ConfirmRequest;
 pub use geometry::{ModalRect, ModalWidth};
+pub use registry::OpenError;
 pub use update::{InstallKind, UpdateModel};
 
 /// Every screen CP7 can show.
@@ -67,6 +64,24 @@ pub enum ModalId {
     Update,
     /// A yes/no confirmation.
     Confirm,
+}
+
+impl ModalId {
+    /// Every screen id, for exhaustive registry tests.
+    pub const ALL: [Self; 12] = [
+        Self::CreateTodo,
+        Self::EditTodo,
+        Self::TodoMenu,
+        Self::MultiSelectMenu,
+        Self::SetDueDate,
+        Self::SetThresholdDate,
+        Self::SetRecurrence,
+        Self::SetPriority,
+        Self::AddProject,
+        Self::AddContext,
+        Self::Update,
+        Self::Confirm,
+    ];
 }
 
 /// Which kind of `+`/`@` token a tag editor changes.
@@ -133,8 +148,8 @@ pub enum Action {
     SetPriority {
         /// Todos to update.
         ids: Vec<TodoId>,
-        /// The new priority letter.
-        priority: Option<char>,
+        /// The new priority.
+        priority: Option<Priority>,
     },
     /// Set `rec:`, or remove it when `value` is `None`.
     SetRecurrence {

@@ -95,7 +95,7 @@ version for this session.
 | `v`         | `Paste`                                              | `Effect::Paste`, then `App::receive_clipboard` |
 | `u`         | `Open(Update)` when the model exists, else one toast | update screen                                  |
 
-The clipboard read stays in `thar-cli` (`thar_store::clipboard::paste`), so
+The clipboard read stays in `thar-cli` (`thar_cli::clipboard::paste`), so
 `thar-tui` still has no filesystem or process I/O. `App::receive_clipboard`
 owns the splitting, the `MAX_PASTE_TODOS` (100) rejection and the >10
 confirmation; it then applies `Action::PasteLines`, which adds the todos and

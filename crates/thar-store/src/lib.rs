@@ -10,19 +10,14 @@
 //! - [`backup`] keeps one `<file>.bak` before the first save of a session;
 //! - [`save`] serializes a todo list, refuses an external edit, and writes;
 //! - [`done`] appends completed todos to `done.txt`;
-//! - [`clipboard`] shells out to the platform clipboard commands;
 //! - [`error`] is the bounded error type shown in the action bar.
 //!
 //! There is no watcher here. Reloads, debouncing and self-write suppression are
 //! host behaviour and live in `thar-cli::sync`; this crate only reads bytes and
 //! writes them back.
 
-#![forbid(unsafe_code)]
-#![deny(missing_docs)]
-
 pub mod atomic;
 pub mod backup;
-pub mod clipboard;
 pub mod done;
 pub mod error;
 pub mod save;

@@ -2,26 +2,43 @@
 //!
 //! The TypeScript provider snapshots the whole todo array on every successful
 //! mutation and keeps the snapshots on an unbounded stack. This is the same
-//! model: a mutation records the state *before* it runs, undo swaps the current
-//! state with the last snapshot, and redo is the mirror image. Loading a file
-//! (initial load or reload) clears both stacks.
+//! model with a bounded stack: a mutation records the state *before* it runs,
+//! undo swaps the current state with the last snapshot, and redo is the mirror
+//! image. Loading a file (initial load or reload) clears both stacks.
 //!
 //! Snapshots are `Vec<Todo>` clones. `Todo` is an immutable value type, so a
-//! snapshot never aliases a live todo's strings or tag map.
+//! snapshot never aliases a live todo's strings or tag map. The stacks are
+//! capped at [`MAX_HISTORY`] snapshots: a long editing session drops the oldest
+//! step instead of growing without bound.
+//!
+//! [`History::undo`] and [`History::redo`] take the live vector and swap it in
+//! place with [`std::mem::take`], so a successful swap does not clone the whole
+//! list.
+
+use std::collections::VecDeque;
 
 use thar_core::Todo;
+
+/// Maximum number of snapshots kept on each stack.
+///
+/// The cap is policy, not a performance tuning knob: 100 steps is far more than
+/// a user reaches for and keeps a 10 000-todo list from pinning gigabytes of
+/// history.
+pub const MAX_HISTORY: usize = 100;
 
 /// The undo and redo stacks.
 #[derive(Debug, Default)]
 pub struct History {
-    undo: Vec<Vec<Todo>>,
-    redo: Vec<Vec<Todo>>,
+    undo: VecDeque<Vec<Todo>>,
+    redo: VecDeque<Vec<Todo>>,
 }
 
 impl History {
     /// Record the state before a mutation and invalidate redo.
+    ///
+    /// The oldest snapshot is dropped once the stack is at [`MAX_HISTORY`].
     pub fn record(&mut self, todos: &[Todo]) {
-        self.undo.push(todos.to_vec());
+        push_capped(&mut self.undo, todos.to_vec());
         self.redo.clear();
     }
 
@@ -49,18 +66,30 @@ impl History {
         self.redo.len()
     }
 
-    /// Move to the previous state, pushing `current` onto redo.
-    pub fn undo(&mut self, current: &[Todo]) -> Option<Vec<Todo>> {
-        let previous = self.undo.pop()?;
-        self.redo.push(current.to_vec());
-        Some(previous)
+    /// Move to the previous state, pushing the replaced state onto redo.
+    ///
+    /// Returns false when there is nothing to undo; `current` is untouched in
+    /// that case.
+    pub fn undo(&mut self, current: &mut Vec<Todo>) -> bool {
+        let Some(previous) = self.undo.pop_back() else {
+            return false;
+        };
+        let replaced = std::mem::replace(current, previous);
+        push_capped(&mut self.redo, replaced);
+        true
     }
 
-    /// Move to the next state, pushing `current` onto undo.
-    pub fn redo(&mut self, current: &[Todo]) -> Option<Vec<Todo>> {
-        let next = self.redo.pop()?;
-        self.undo.push(current.to_vec());
-        Some(next)
+    /// Move to the next state, pushing the replaced state onto undo.
+    ///
+    /// Returns false when there is nothing to redo; `current` is untouched in
+    /// that case.
+    pub fn redo(&mut self, current: &mut Vec<Todo>) -> bool {
+        let Some(next) = self.redo.pop_back() else {
+            return false;
+        };
+        let replaced = std::mem::replace(current, next);
+        push_capped(&mut self.undo, replaced);
+        true
     }
 
     /// Drop both stacks, as a file load does.
@@ -70,9 +99,17 @@ impl History {
     }
 }
 
+/// Push a snapshot, dropping the oldest once the cap is reached.
+fn push_capped(stack: &mut VecDeque<Vec<Todo>>, snapshot: Vec<Todo>) {
+    if stack.len() >= MAX_HISTORY {
+        stack.pop_front();
+    }
+    stack.push_back(snapshot);
+}
+
 #[cfg(test)]
 mod tests {
-    use super::History;
+    use super::{History, MAX_HISTORY};
     use thar_core::{Todo, TodoId};
 
     fn todo(line: &str) -> Todo {
@@ -87,13 +124,13 @@ mod tests {
         assert!(history.can_undo());
         assert!(!history.can_redo());
 
-        let changed = vec![todo("two")];
-        let restored = history.undo(&changed).expect("undo");
-        assert_eq!(restored, original);
+        let mut current = vec![todo("two")];
+        assert!(history.undo(&mut current));
+        assert_eq!(current, original);
         assert!(history.can_redo());
 
-        let forward = history.redo(&restored).expect("redo");
-        assert_eq!(forward, changed);
+        assert!(history.redo(&mut current));
+        assert_eq!(current, vec![todo("two")]);
         assert!(history.can_undo());
     }
 
@@ -104,7 +141,8 @@ mod tests {
         history.record(&first);
         let second = vec![todo("two")];
         history.record(&second);
-        let _ = history.undo(&second).expect("undo");
+        let mut current = second.clone();
+        assert!(history.undo(&mut current));
         assert!(history.can_redo());
 
         history.record(&first);
@@ -113,10 +151,31 @@ mod tests {
     }
 
     #[test]
-    fn empty_stacks_are_no_ops() {
+    fn the_stack_is_capped_and_drops_the_oldest_step() {
         let mut history = History::default();
-        assert_eq!(history.undo(&[]), None);
-        assert_eq!(history.redo(&[]), None);
+        for index in 0..MAX_HISTORY + 5 {
+            history.record(&[todo(&format!("todo {index}"))]);
+        }
+        assert_eq!(history.undo_len(), MAX_HISTORY);
+
+        // Walking all the way back must stop at the oldest kept snapshot, not
+        // the first one ever recorded.
+        let mut current = vec![todo("now")];
+        for _ in 0..MAX_HISTORY {
+            assert!(history.undo(&mut current));
+        }
+        assert!(!history.can_undo());
+        assert_eq!(current, vec![todo("todo 5")]);
+        assert_eq!(history.redo_len(), MAX_HISTORY);
+    }
+
+    #[test]
+    fn empty_stacks_are_no_ops_and_leave_the_list_alone() {
+        let mut history = History::default();
+        let mut current = vec![todo("one")];
+        assert!(!history.undo(&mut current));
+        assert!(!history.redo(&mut current));
+        assert_eq!(current, vec![todo("one")]);
         history.clear();
         assert!(!history.can_undo() && !history.can_redo());
     }

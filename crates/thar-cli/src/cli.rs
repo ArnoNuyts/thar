@@ -4,31 +4,43 @@
 //! flags that keep `thar-rs` script-compatible (`--help`, `--version`,
 //! `--no-update-check`). Anything that would need the writer, the updater, or
 //! an interactive modal is rejected here rather than halfway through startup.
+//!
+//! Arguments are [`OsString`]s, not `String`s: a todo file name is a filesystem
+//! path and may be non-UTF-8. Flags are recognized only when the argument is
+//! valid UTF-8; any other argument is a positional file path and reaches the
+//! loader unchanged.
+
+use std::ffi::{OsStr, OsString};
+use std::path::PathBuf;
 
 /// Default todo file, relative to the process working directory.
 pub const DEFAULT_FILENAME: &str = "todo.txt";
 
-/// Parsed command-line options.
+/// The parsed command line.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CliOptions {
-    /// Todo file to open.
-    pub file: String,
-    /// Print usage and exit.
-    pub help: bool,
-    /// Print the version and exit.
-    pub version: bool,
-    /// Accepted for CLI parity; CP6 has no update check to disable.
-    pub no_update_check: bool,
-    /// `--write` was passed: allow saving and the editing commands.
-    pub write: bool,
-    /// `--no-backup` was passed: skip the one `<file>.bak` safety copy.
-    pub no_backup: bool,
+pub enum CliCommand {
+    /// Print the usage text and exit successfully.
+    Help,
+    /// Print the crate version and exit successfully.
+    Version,
     /// The `update` subcommand was requested.
-    pub update: bool,
-    /// `update --check` was requested.
-    pub update_check_only: bool,
-    /// `update --yes` was requested.
-    pub update_yes: bool,
+    Update {
+        /// `--check` was passed: report without applying anything.
+        check_only: bool,
+        /// `--yes`/`-y` was passed: skip the confirmation.
+        yes: bool,
+    },
+    /// Open the TUI for one todo file.
+    Run {
+        /// Todo file to open.
+        file: PathBuf,
+        /// `--write` was passed: allow saving and the editing commands.
+        write: bool,
+        /// `--no-backup` was passed: skip the one `<file>.bak` safety copy.
+        no_backup: bool,
+        /// Accepted for CLI parity; CP6 has no update check to disable.
+        no_update_check: bool,
+    },
 }
 
 /// A bounded usage error.
@@ -85,26 +97,38 @@ pub fn format_usage(version: &str) -> String {
 
 /// Parse the arguments after the program name.
 ///
+/// Flags are matched through [`OsStr::to_str`], so a non-UTF-8 argument is
+/// always a positional file path; `--file` consumes the next argument as an
+/// [`OsString`] without decoding it. Help wins over version, matching the
+/// startup order in [`crate::run`].
+///
 /// # Errors
 ///
 /// Returns a [`CliError`] for an unknown option, a missing `--file` value, an
-/// empty path, or more than one file argument.
-pub fn parse_cli_args(argv: &[String]) -> Result<CliOptions, CliError> {
-    if argv.first().map(String::as_str) == Some("update") {
-        return Ok(CliOptions {
-            file: DEFAULT_FILENAME.to_owned(),
-            help: false,
-            version: argv.iter().any(|arg| arg == "--version" || arg == "-v"),
-            no_update_check: false,
-            write: false,
-            no_backup: false,
-            update: true,
-            update_check_only: argv.iter().any(|arg| arg == "--check"),
-            update_yes: argv.iter().any(|arg| arg == "--yes" || arg == "-y"),
+/// empty path, more than one file argument, or `--write` together with
+/// `--read-only`.
+pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
+    if argv.first().and_then(|argument| argument.to_str()) == Some("update") {
+        let rest = &argv[1..];
+        // `update --version` prints the version today, so it is still a
+        // version request rather than an update run.
+        if rest
+            .iter()
+            .any(|argument| matches!(argument.to_str(), Some("--version" | "-v")))
+        {
+            return Ok(CliCommand::Version);
+        }
+        return Ok(CliCommand::Update {
+            check_only: rest
+                .iter()
+                .any(|argument| argument.to_str() == Some("--check")),
+            yes: rest
+                .iter()
+                .any(|argument| matches!(argument.to_str(), Some("--yes" | "-y"))),
         });
     }
 
-    let mut file: Option<String> = None;
+    let mut file: Option<PathBuf> = None;
     let mut help = false;
     let mut version = false;
     let mut no_update_check = false;
@@ -113,84 +137,50 @@ pub fn parse_cli_args(argv: &[String]) -> Result<CliOptions, CliError> {
     let mut no_backup = false;
     let mut end_of_options = false;
 
-    let mut set_file = |value: &str| -> Result<(), CliError> {
+    let mut set_file = |value: &OsStr| -> Result<(), CliError> {
         if value.is_empty() {
             return Err(CliError::new("Todo file path cannot be empty."));
         }
         if file.is_some() {
             return Err(CliError::new("Only one todo file may be specified."));
         }
-        file = Some(value.to_owned());
+        file = Some(PathBuf::from(value));
         Ok(())
     };
 
-    let mut index = 0;
-    while index < argv.len() {
-        let argument = &argv[index];
+    let mut iterator = argv.iter();
+    while let Some(argument) = iterator.next() {
+        // Only valid UTF-8 can be a flag. A non-UTF-8 argument falls through
+        // to the positional branch below and is preserved byte for byte.
+        let flag = if end_of_options {
+            None
+        } else {
+            argument.to_str()
+        };
 
-        if !end_of_options && argument == "--" {
-            end_of_options = true;
-            index += 1;
-            continue;
+        match flag {
+            Some("--") => end_of_options = true,
+            Some("-h" | "--help") => help = true,
+            Some("-v" | "--version") => version = true,
+            Some("--no-update-check") => no_update_check = true,
+            Some("--write") => write = true,
+            Some("--read-only") => read_only_flag = true,
+            Some("--no-backup") => no_backup = true,
+            Some("-f" | "--file") => {
+                let name = flag.unwrap_or("--file");
+                let value = iterator
+                    .next()
+                    .ok_or_else(|| CliError::new(format!("{name} requires a path.")))?;
+                set_file(value)?;
+            }
+            Some(value) if value.starts_with("--file=") => {
+                set_file(OsStr::new(&value["--file=".len()..]))?;
+            }
+            Some(value) if value.starts_with('-') && value != "-" => {
+                return Err(CliError::new(format!("Unknown option: {value}")));
+            }
+            _ => set_file(argument.as_os_str())?,
         }
-
-        if !end_of_options && (argument == "-h" || argument == "--help") {
-            help = true;
-            index += 1;
-            continue;
-        }
-
-        if !end_of_options && (argument == "-v" || argument == "--version") {
-            version = true;
-            index += 1;
-            continue;
-        }
-
-        if !end_of_options && argument == "--no-update-check" {
-            no_update_check = true;
-            index += 1;
-            continue;
-        }
-
-        if !end_of_options && argument == "--write" {
-            write = true;
-            index += 1;
-            continue;
-        }
-
-        if !end_of_options && argument == "--read-only" {
-            read_only_flag = true;
-            index += 1;
-            continue;
-        }
-
-        if !end_of_options && argument == "--no-backup" {
-            no_backup = true;
-            index += 1;
-            continue;
-        }
-
-        if !end_of_options && (argument == "-f" || argument == "--file") {
-            let value = argv
-                .get(index + 1)
-                .ok_or_else(|| CliError::new(format!("{argument} requires a path.")))?;
-            set_file(value)?;
-            index += 2;
-            continue;
-        }
-
-        if !end_of_options && let Some(value) = argument.strip_prefix("--file=") {
-            set_file(value)?;
-            index += 1;
-            continue;
-        }
-
-        if !end_of_options && argument.starts_with('-') && argument != "-" {
-            return Err(CliError::new(format!("Unknown option: {argument}")));
-        }
-
-        set_file(argument)?;
-        index += 1;
     }
 
     if write && read_only_flag {
@@ -199,64 +189,77 @@ pub fn parse_cli_args(argv: &[String]) -> Result<CliOptions, CliError> {
         ));
     }
 
-    Ok(CliOptions {
-        file: file.unwrap_or_else(|| DEFAULT_FILENAME.to_owned()),
-        help,
-        version,
-        no_update_check,
+    if help {
+        return Ok(CliCommand::Help);
+    }
+    if version {
+        return Ok(CliCommand::Version);
+    }
+
+    Ok(CliCommand::Run {
+        file: file.unwrap_or_else(|| PathBuf::from(DEFAULT_FILENAME)),
         write,
         no_backup,
-        update: false,
-        update_check_only: false,
-        update_yes: false,
+        no_update_check,
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CliOptions, DEFAULT_FILENAME, format_usage, parse_cli_args};
+    use super::{CliCommand, DEFAULT_FILENAME, format_usage, parse_cli_args};
+    use std::ffi::OsString;
+    use std::path::{Path, PathBuf};
 
-    fn args(values: &[&str]) -> Vec<String> {
-        values.iter().map(|value| (*value).to_owned()).collect()
+    fn args(values: &[&str]) -> Vec<OsString> {
+        values.iter().map(OsString::from).collect()
+    }
+
+    fn parse(values: &[&str]) -> CliCommand {
+        parse_cli_args(&args(values)).expect("valid arguments")
+    }
+
+    fn run(values: &[&str]) -> (PathBuf, bool, bool, bool) {
+        match parse(values) {
+            CliCommand::Run {
+                file,
+                write,
+                no_backup,
+                no_update_check,
+            } => (file, write, no_backup, no_update_check),
+            other => panic!("expected a run command, got {other:?}"),
+        }
     }
 
     #[test]
     fn defaults_to_todo_txt() {
-        let options = parse_cli_args(&args(&[])).expect("valid");
-        assert_eq!(options.file, DEFAULT_FILENAME);
-        assert!(!options.help && !options.version && !options.update);
+        let (file, write, no_backup, no_update_check) = run(&[]);
+        assert_eq!(file, Path::new(DEFAULT_FILENAME));
+        assert!(!write && !no_backup && !no_update_check);
+        assert!(!matches!(
+            parse(&[]),
+            CliCommand::Help | CliCommand::Version
+        ));
     }
 
     #[test]
     fn accepts_a_positional_file_and_the_file_flags() {
-        assert_eq!(
-            parse_cli_args(&args(&["work.txt"])).expect("valid").file,
-            "work.txt"
-        );
-        assert_eq!(
-            parse_cli_args(&args(&["-f", "work.txt"]))
-                .expect("valid")
-                .file,
-            "work.txt"
-        );
-        assert_eq!(
-            parse_cli_args(&args(&["--file=work.txt"]))
-                .expect("valid")
-                .file,
-            "work.txt"
-        );
+        assert_eq!(run(&["work.txt"]).0, Path::new("work.txt"));
+        assert_eq!(run(&["-f", "work.txt"]).0, Path::new("work.txt"));
+        assert_eq!(run(&["--file=work.txt"]).0, Path::new("work.txt"));
     }
 
     #[test]
     fn keeps_scripts_compatible_flags() {
-        let options = parse_cli_args(&args(&["--help"])).expect("valid");
-        assert!(options.help);
-        assert!(parse_cli_args(&args(&["-v"])).expect("valid").version);
-        assert!(
-            parse_cli_args(&args(&["--no-update-check"]))
-                .expect("valid")
-                .no_update_check
-        );
+        assert_eq!(parse(&["--help"]), CliCommand::Help);
+        assert_eq!(parse(&["-h"]), CliCommand::Help);
+        assert_eq!(parse(&["-v"]), CliCommand::Version);
+        assert_eq!(parse(&["--version"]), CliCommand::Version);
+        assert!(run(&["--no-update-check"]).3);
+    }
+
+    #[test]
+    fn help_wins_over_version_like_startup_does() {
+        assert_eq!(parse(&["--version", "--help"]), CliCommand::Help);
     }
 
     #[test]
@@ -269,36 +272,63 @@ mod tests {
 
     #[test]
     fn double_dash_ends_option_parsing() {
-        let options = parse_cli_args(&args(&["--", "--help"])).expect("valid");
-        assert!(!options.help);
-        assert_eq!(options.file, "--help");
+        let (file, ..) = run(&["--", "--help"]);
+        assert_eq!(file, Path::new("--help"));
+        assert_ne!(parse(&["--", "--help"]), CliCommand::Help);
     }
 
     #[test]
     fn update_subcommand_is_recognized_but_not_a_file() {
-        let options = parse_cli_args(&args(&["update", "--check"])).expect("valid");
-        assert!(options.update);
-        assert!(options.update_check_only);
-        assert_eq!(options.file, DEFAULT_FILENAME);
+        assert_eq!(
+            parse(&["update", "--check"]),
+            CliCommand::Update {
+                check_only: true,
+                yes: false,
+            }
+        );
+        assert_eq!(
+            parse(&["update"]),
+            CliCommand::Update {
+                check_only: false,
+                yes: false,
+            }
+        );
+        assert_eq!(
+            parse(&["update", "--yes"]),
+            CliCommand::Update {
+                check_only: false,
+                yes: true,
+            }
+        );
+        assert_eq!(
+            parse(&["update", "-y", "--check"]),
+            CliCommand::Update {
+                check_only: true,
+                yes: true,
+            }
+        );
+        assert_eq!(parse(&["update", "--version"]), CliCommand::Version);
     }
 
     #[test]
     fn accepts_write_mode_and_backup_flags() {
-        let options = parse_cli_args(&args(&["--write", "work.txt"])).expect("valid");
-        assert!(options.write);
-        assert!(!options.no_backup);
-        assert_eq!(options.file, "work.txt");
+        let (file, write, no_backup, _) = run(&["--write", "work.txt"]);
+        assert!(write);
+        assert!(!no_backup);
+        assert_eq!(file, Path::new("work.txt"));
 
-        let options = parse_cli_args(&args(&["--write", "--no-backup"])).expect("valid");
-        assert!(options.write && options.no_backup);
+        let (_, write, no_backup, _) = run(&["--write", "--no-backup"]);
+        assert!(write && no_backup);
 
-        let options = parse_cli_args(&args(&["--read-only"])).expect("valid");
-        assert!(!options.write);
+        let (_, write, _, _) = run(&["--read-only"]);
+        assert!(!write);
     }
 
     #[test]
     fn write_and_read_only_together_are_a_usage_error() {
         assert!(parse_cli_args(&args(&["--write", "--read-only"])).is_err());
+        // The conflict is a parse error even when help was also requested.
+        assert!(parse_cli_args(&args(&["--help", "--write", "--read-only"])).is_err());
     }
 
     #[test]
@@ -311,9 +341,40 @@ mod tests {
     }
 
     #[test]
-    fn options_derive_debug_and_eq() {
-        let options = parse_cli_args(&args(&[])).expect("valid");
-        let clone: CliOptions = options.clone();
-        assert_eq!(options, clone);
+    fn command_derives_debug_and_eq() {
+        let command = parse(&[]);
+        let clone: CliCommand = command.clone();
+        assert_eq!(command, clone);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_non_utf8_positional_path_is_preserved() {
+        use std::os::unix::ffi::{OsStrExt, OsStringExt};
+
+        let raw = b"todo-\xFF.txt".to_vec();
+        let command = parse_cli_args(&[OsString::from_vec(raw.clone())]).expect("valid");
+        match command {
+            CliCommand::Run { file, .. } => {
+                assert_eq!(file.as_os_str().as_bytes(), raw);
+            }
+            other => panic!("expected a run command, got {other:?}"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_file_flag_consumes_a_non_utf8_value_unchanged() {
+        use std::os::unix::ffi::{OsStrExt, OsStringExt};
+
+        let raw = b"work-\xFE.txt".to_vec();
+        let command = parse_cli_args(&[OsString::from("--file"), OsString::from_vec(raw.clone())])
+            .expect("valid");
+        match command {
+            CliCommand::Run { file, .. } => {
+                assert_eq!(file.as_os_str().as_bytes(), raw);
+            }
+            other => panic!("expected a run command, got {other:?}"),
+        }
     }
 }

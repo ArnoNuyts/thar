@@ -76,7 +76,7 @@ pub(crate) fn scan_prefix(line: &str) -> Prefix<'_> {
     let invalid_date_tokens = date_tokens
         .iter()
         .copied()
-        .filter(|token| TodoDate::parse(token).is_none())
+        .filter(|token| token.parse::<TodoDate>().is_err())
         .collect();
 
     Prefix {

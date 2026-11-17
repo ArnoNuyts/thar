@@ -23,7 +23,7 @@ use ratatui::widgets::Paragraph;
 use thar_core::{TodoId, is_valid_recurrence};
 
 use crate::app::App;
-use crate::input::{MouseInput, MouseKind};
+use crate::event::{MouseInput, MouseKind};
 use crate::modal::{Action, Modal, ModalId, ModalRect, ModalWidth, Outcome, geometry};
 use crate::theme;
 
@@ -113,7 +113,7 @@ impl SetRecurrenceModal {
             amount: "1".to_owned(),
             edited: false,
             title: "Set Recurrence Base".to_owned(),
-            terminal: Rect::new(0, 0, app.width, app.height),
+            terminal: Rect::new(0, 0, app.width(), app.height()),
         }
     }
 
@@ -349,7 +349,7 @@ impl Modal for SetRecurrenceModal {
 mod tests {
     use super::{INVALID_AMOUNT_MESSAGE, SetRecurrenceModal, Step};
     use crate::app::App;
-    use crate::input::{MouseInput, MouseKind};
+    use crate::event::{MouseInput, MouseKind};
     use crate::modal::{Action, Modal, Outcome};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -366,10 +366,10 @@ mod tests {
         let mut app = App::new(
             "todo.txt",
             todos,
-            TodoDate::parse("2026-11-15").expect("valid date"),
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
         app.resize(80, 24);
-        app.read_only = false;
+        app.set_read_only(false);
         app
     }
 
@@ -408,7 +408,7 @@ mod tests {
     #[test]
     fn daily_with_the_default_amount_is_one_day() {
         let app = app(&["task"]);
-        let ids = vec![app.todos[0].id];
+        let ids = vec![app.todos()[0].id];
         let mut modal = SetRecurrenceModal::new(&app);
         assert!(matches!(
             modal.handle_key(key(KeyCode::Enter)),
@@ -428,7 +428,7 @@ mod tests {
     #[test]
     fn the_first_digit_replaces_the_default_and_non_digits_are_ignored() {
         let app = app(&["task"]);
-        let ids = vec![app.todos[0].id];
+        let ids = vec![app.todos()[0].id];
         let mut modal = SetRecurrenceModal::new(&app);
         modal.handle_key(key(KeyCode::Enter));
         for input in ['a', '1', 'b', '2'] {
@@ -461,7 +461,7 @@ mod tests {
         assert_eq!(
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::SetRecurrence {
-                ids: vec![app.todos[0].id],
+                ids: vec![app.todos()[0].id],
                 value: Some("45w".to_owned())
             }]
         );
@@ -484,7 +484,7 @@ mod tests {
         assert_eq!(
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::SetRecurrence {
-                ids: vec![app.todos[0].id],
+                ids: vec![app.todos()[0].id],
                 value: Some("2d".to_owned())
             }]
         );
@@ -518,7 +518,7 @@ mod tests {
     #[test]
     fn reset_removes_the_value() {
         let app = app(&["task rec:1w"]);
-        let ids = vec![app.todos[0].id];
+        let ids = vec![app.todos()[0].id];
         let mut modal = SetRecurrenceModal::new(&app);
         modal.handle_key(key(KeyCode::Up));
         assert_eq!(
