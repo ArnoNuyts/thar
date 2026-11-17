@@ -199,7 +199,7 @@ fn toggling_hidden_todos_reconciles_the_cursor() {
     let mut app = app_with(&["visible", "hidden h:1"]);
 
     assert_eq!(todo_rows(&app), 1);
-    nav::toggle_hidden_view(&mut app);
+    app.toggle_hidden_view();
     assert_eq!(todo_rows(&app), 2);
     assert_eq!(cursor_text(&app).as_deref(), Some("visible"));
 
@@ -208,7 +208,7 @@ fn toggling_hidden_todos_reconciles_the_cursor() {
     // todo and toggling back.
     nav::select_last(&mut app);
     assert_eq!(cursor_text(&app).as_deref(), Some("hidden"));
-    nav::toggle_hidden_view(&mut app);
+    app.toggle_hidden_view();
     assert_eq!(todo_rows(&app), 1);
     assert_eq!(cursor_text(&app).as_deref(), Some("visible"));
 }

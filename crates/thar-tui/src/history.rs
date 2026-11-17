@@ -42,8 +42,8 @@ impl History {
     /// Only the `Rc` handles are copied; the todos themselves stay shared with
     /// the live list. The oldest snapshot is dropped once the stack is at
     /// [`MAX_HISTORY`].
-    pub fn record(&mut self, todos: &[Rc<Todo>]) {
-        push_capped(&mut self.undo, todos.to_vec());
+    pub fn record<'a>(&mut self, todos: impl IntoIterator<Item = &'a Rc<Todo>>) {
+        push_capped(&mut self.undo, todos.into_iter().map(Rc::clone).collect());
         self.redo.clear();
     }
 
@@ -53,7 +53,8 @@ impl History {
         self.undo.len()
     }
 
-    /// Number of redo steps, for tests and diagnostics.
+    /// Number of redo steps, for tests.
+    #[cfg(test)]
     #[must_use]
     pub fn redo_len(&self) -> usize {
         self.redo.len()
@@ -122,12 +123,12 @@ mod tests {
         let original = vec![shared("one")];
         history.record(&original);
         assert_eq!(history.undo_len(), 1);
-        assert_eq!(history.redo_len(), 0);
+        assert_eq!(history.redo.len(), 0);
 
         let mut current = vec![shared("two")];
         assert!(history.undo(&mut current));
         assert_eq!(current, original);
-        assert_eq!(history.redo_len(), 1);
+        assert_eq!(history.redo.len(), 1);
 
         assert!(history.redo(&mut current));
         assert_eq!(current, vec![shared("two")]);
@@ -143,10 +144,10 @@ mod tests {
         history.record(&second);
         let mut current = second.clone();
         assert!(history.undo(&mut current));
-        assert_eq!(history.redo_len(), 1);
+        assert_eq!(history.redo.len(), 1);
 
         history.record(&first);
-        assert_eq!(history.redo_len(), 0);
+        assert_eq!(history.redo.len(), 0);
         assert_eq!(history.undo_len(), 2);
     }
 
@@ -166,7 +167,7 @@ mod tests {
         }
         assert_eq!(history.undo_len(), 0);
         assert_eq!(current, vec![shared("todo 5")]);
-        assert_eq!(history.redo_len(), MAX_HISTORY);
+        assert_eq!(history.redo.len(), MAX_HISTORY);
     }
 
     #[test]
@@ -178,7 +179,7 @@ mod tests {
         assert_eq!(current, vec![shared("one")]);
         history.clear();
         assert_eq!(history.undo_len(), 0);
-        assert_eq!(history.redo_len(), 0);
+        assert_eq!(history.redo.len(), 0);
     }
 
     #[test]

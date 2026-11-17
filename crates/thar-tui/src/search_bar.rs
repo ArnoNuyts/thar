@@ -27,6 +27,12 @@ impl SearchBar {
         self.editor.value()
     }
 
+    /// The query characters, for a renderer that windows them.
+    #[must_use]
+    pub fn chars(&self) -> &[char] {
+        self.editor.chars()
+    }
+
     /// The cursor as a character index into [`SearchBar::query`].
     #[must_use]
     pub fn cursor(&self) -> usize {
@@ -91,22 +97,22 @@ impl SearchBar {
 
     /// Delete the character before the cursor.
     pub fn backspace(&mut self) {
-        self.editor.backspace();
+        self.editor.backspace(false);
     }
 
     /// Delete the character at the cursor.
     pub fn delete(&mut self) {
-        self.editor.delete_forward();
+        self.editor.delete_forward(false);
     }
 
     /// Move the cursor one character left, clamped at the start.
     pub fn move_left(&mut self) {
-        self.editor.move_left();
+        self.editor.move_left(false);
     }
 
     /// Move the cursor one character right, clamped at the end.
     pub fn move_right(&mut self) {
-        self.editor.move_right();
+        self.editor.move_right(false);
     }
 
     /// Recompute the suggestion list from the current query and cursor.

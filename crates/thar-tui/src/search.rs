@@ -19,19 +19,7 @@
 
 use thar_core::Todo;
 
-/// One todo's cached, lowercased search input.
-///
-/// Owned because the views outlive each row build: `thar_core::build_rows`
-/// borrows them, so they cannot be built as temporaries inside the call.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct OwnedView {
-    /// Lowercased `Todo::text`, including its `@context`/`+project` tokens.
-    pub text: String,
-    /// Lowercased contexts, in stored order.
-    pub contexts: Vec<String>,
-    /// Lowercased projects, in stored order.
-    pub projects: Vec<String>,
-}
+pub use thar_core::OwnedSearchView as OwnedView;
 
 /// Lowercase one string the way the search views and terms need it.
 ///
@@ -169,18 +157,21 @@ mod tests {
 
     #[test]
     fn sigma_is_final_only_at_the_end_of_a_word() {
+        // Focused corpus for the Final_Sigma rule: `str::to_lowercase` owns the
+        // `Cased`/`Case_Ignorable` tables, so these cases pin the mapping
+        // without duplicating them here.
         assert_eq!(normalize("ΑΣ"), "ας");
         assert_eq!(normalize("ΑΣ."), "ας.");
         assert_eq!(normalize("ΑΣ Α"), "ας α");
         assert_eq!(normalize("ΑΣΑ"), "ασα");
+        assert_eq!(normalize("aΣ.Α"), "aσ.α");
+        assert_eq!(normalize("aβ\u{0301}Σ."), "aβ\u{0301}ς.");
         assert_eq!(normalize("Σ"), "σ");
         assert_eq!(normalize("\u{0301}Σ"), "\u{0301}σ");
-    }
 
-    #[test]
-    fn sigma_skips_case_ignorable_characters_on_both_sides() {
-        // A combining mark after the sigma is ignored, so the sigma still ends
-        // the word; a cased letter after the mark makes it non-final.
+        // A combining mark or other Case_Ignorable character after the sigma is
+        // skipped, so the sigma still ends the word; a cased letter after the
+        // mark makes it non-final.
         assert_eq!(normalize("ΑΣ\u{0301}"), "ας\u{0301}");
         assert_eq!(normalize("ΑΣ\u{0301}Α"), "ασ\u{0301}α");
         assert_eq!(normalize("Α\u{0301}Σ"), "α\u{0301}ς");
@@ -190,18 +181,5 @@ mod tests {
         assert_eq!(normalize("ΑΣ'"), "ας'");
         assert_eq!(normalize("ΑΣ'\u{0301}Α"), "ασ'\u{0301}α");
         assert_eq!(normalize("ΑΣ\u{02B0}Α"), "ασ\u{02B0}α");
-    }
-
-    #[test]
-    fn sigma_cases_still_lowercase_like_javascript() {
-        // Focused corpus for the Final_Sigma rule: `str::to_lowercase` owns the
-        // `Cased`/`Case_Ignorable` tables now, so these cases pin the mapping
-        // without duplicating them here.
-        assert_eq!(normalize("ΑΣ"), "ας");
-        assert_eq!(normalize("ΑΣ Α"), "ας α");
-        assert_eq!(normalize("ΑΣΑ"), "ασα");
-        assert_eq!(normalize("aΣ.Α"), "aσ.α");
-        assert_eq!(normalize("aβ\u{0301}Σ."), "aβ\u{0301}ς.");
-        assert_eq!(normalize("ΑΣ\u{0301}Α"), "ασ\u{0301}α");
     }
 }

@@ -36,10 +36,10 @@ codegen-units = 1
 # Keep the shipped WASM small: the size gate is 250 KB raw / 100 KB gzip.
 #
 # This is deliberately a separate profile so the native `thar-rs` release build
-# keeps `panic = "unwind"` (and the default speed optimization). wasm-pack 0.13
-# has no flag for a custom Cargo profile, so scripts/build-wasm.mjs supplies the
-# same two settings through Cargo's profile environment variables; the profile
-# below covers direct `cargo build --profile wasm` runs.
+# keeps `panic = "unwind"` (and the default speed optimization).
+# `scripts/build-wasm.mjs` selects it with `wasm-pack build --profile wasm`
+# (wasm-pack 0.14+; CI pins 0.15.1). The same profile is available to a direct
+# `cargo build --profile wasm --target wasm32-unknown-unknown`.
 [profile.wasm]
 inherits = "release"
 opt-level = "s"

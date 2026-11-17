@@ -88,7 +88,7 @@ impl TextModal {
     fn submit(&self) -> Outcome {
         let value = self.editor.value();
         if let Err(error) = validate_todo_text(&value, self.max_chars) {
-            return Outcome::Actions(vec![Action::Toast(error.message().to_owned())]);
+            return Outcome::Actions(vec![Action::Toast(error.to_string())]);
         }
 
         match self.mode {
@@ -96,7 +96,7 @@ impl TextModal {
                 if let Err(error) =
                     validate_todo_batch(std::slice::from_ref(&value), self.existing_count, 1)
                 {
-                    return Outcome::Actions(vec![Action::Toast(error.message().to_owned())]);
+                    return Outcome::Actions(vec![Action::Toast(error.to_string())]);
                 }
                 Outcome::Actions(vec![Action::AddTodos(vec![value])])
             }
@@ -533,7 +533,7 @@ pub fn create(app: &App) -> Box<dyn Modal> {
     Box::new(TextModal {
         mode: Mode::Create,
         editor: Editor::with_cursor(&prefill, 0),
-        sources: TagSources::collect(todos.iter().copied()),
+        sources: TagSources::collect(todos.iter()),
         suggestions: Suggestions::new(),
         selected_button: 0,
         max_chars: MAX_TODO_CHARS,
@@ -558,7 +558,7 @@ pub fn edit(app: &App) -> Box<dyn Modal> {
     Box::new(TextModal {
         mode: Mode::Edit,
         editor: Editor::new(&text),
-        sources: TagSources::collect(todos.iter().copied()),
+        sources: TagSources::collect(todos.iter()),
         suggestions: Suggestions::new(),
         selected_button: 0,
         max_chars,

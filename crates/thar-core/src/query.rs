@@ -186,6 +186,56 @@ pub struct SearchView<'a> {
     pub projects: &'a [String],
 }
 
+/// An owned [`SearchView`], for a host that caches one view per todo.
+///
+/// This is the type the TUI and the WASM boundary keep between keystrokes: the
+/// view must outlive every row build, so it cannot borrow a temporary. Built
+/// values are passed to [`build_rows`](crate::build_rows) directly because
+/// `OwnedSearchView` implements [`SearchViewLike`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OwnedSearchView {
+    /// Lowercased todo text, including its `@context` and `+project` tokens.
+    pub text: String,
+    /// Lowercased contexts, in their stored order.
+    pub contexts: Vec<String>,
+    /// Lowercased projects, in their stored order.
+    pub projects: Vec<String>,
+}
+
+impl OwnedSearchView {
+    /// Borrow the owned fields as a [`SearchView`].
+    #[must_use]
+    pub fn as_view(&self) -> SearchView<'_> {
+        SearchView {
+            text: &self.text,
+            contexts: &self.contexts,
+            projects: &self.projects,
+        }
+    }
+}
+
+/// A search-view source that can be borrowed as a [`SearchView`].
+///
+/// Implemented for the borrowed [`SearchView`] and the owned
+/// [`OwnedSearchView`], so a caller can hand either slice layout to
+/// [`build_rows`](crate::build_rows).
+pub trait SearchViewLike {
+    /// Borrow this value as a [`SearchView`].
+    fn as_view(&self) -> SearchView<'_>;
+}
+
+impl SearchViewLike for SearchView<'_> {
+    fn as_view(&self) -> SearchView<'_> {
+        *self
+    }
+}
+
+impl SearchViewLike for OwnedSearchView {
+    fn as_view(&self) -> SearchView<'_> {
+        OwnedSearchView::as_view(self)
+    }
+}
+
 /// Keep the indexes of views matching every term in `terms`.
 ///
 /// `views` and `terms` are already normalized by the host (see
@@ -208,10 +258,10 @@ pub struct SearchView<'a> {
 /// // matches the project `work`.
 /// assert_eq!(filter_by_search(&views, &["@work"]), vec![0]);
 /// // No usable term (an empty or punctuation-only query) matches everything.
-/// assert_eq!(filter_by_search(&views, &[]), vec![0, 1]);
+/// assert_eq!(filter_by_search(&views, &[] as &[&str]), vec![0, 1]);
 /// ```
 #[must_use]
-pub fn filter_by_search(views: &[SearchView<'_>], terms: &[&str]) -> Vec<usize> {
+pub fn filter_by_search<S: AsRef<str>>(views: &[SearchView<'_>], terms: &[S]) -> Vec<usize> {
     if terms.is_empty() {
         return (0..views.len()).collect();
     }
@@ -248,8 +298,9 @@ pub fn filter_by_search(views: &[SearchView<'_>], terms: &[&str]) -> Vec<usize> 
 /// assert!(!view_matches(&view, &["eggs"]));
 /// ```
 #[must_use]
-pub fn view_matches(view: &SearchView<'_>, terms: &[&str]) -> bool {
+pub fn view_matches<S: AsRef<str>>(view: &SearchView<'_>, terms: &[S]) -> bool {
     terms.iter().all(|term| {
+        let term = term.as_ref();
         let normalized = term.strip_prefix(['@', '+']).unwrap_or(term);
         view.text.contains(term)
             || view
@@ -417,7 +468,7 @@ mod tests {
         ];
         // The host turns an empty, whitespace-only, or punctuation-only query
         // into no terms; both paths match everything.
-        assert_eq!(filter_by_search(&views, &[]), vec![0, 1]);
+        assert_eq!(filter_by_search(&views, &[] as &[&str]), vec![0, 1]);
         // A term keeps internal dots, so `a.b` matches `a.b` in the text.
         assert_eq!(filter_by_search(&views, &["milk"]), vec![0]);
         assert_eq!(filter_by_search(&views, &["@home"]), vec![1]);

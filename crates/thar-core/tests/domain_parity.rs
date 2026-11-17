@@ -41,8 +41,8 @@ use std::sync::OnceLock;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use thar_core::{
-    CoreError, Priority, ReadLimits, RecurrenceError, Row, SearchView, State, Todo, TodoDate,
-    TodoId, ToggleResult, create_rows, filter_by_search, is_valid_recurrence, plan_recurrence,
+    CoreError, Priority, ReadLimits, Recurrence, RecurrenceError, Row, SearchView, State, Todo,
+    TodoDate, TodoId, create_rows, filter_by_search, is_valid_recurrence, plan_recurrence,
     serialize_file, sort_by_importance,
 };
 
@@ -590,7 +590,12 @@ fn apply_setter(todo: Todo, case: &SetterCase) -> Todo {
         "set_threshold" => todo.set_threshold(day(arg)),
         "remove_threshold" => todo.remove_threshold(),
         "toggle_hidden" => todo.toggle_hidden(),
-        "set_recurrence" => todo.set_recurrence(arg.unwrap_or_default()),
+        "set_recurrence" => match arg.unwrap_or_default().parse::<Recurrence>() {
+            Ok(value) => todo.set_recurrence(value),
+            // The generator only emits storable values, plus invalid ones the
+            // oracle ignores; an invalid value leaves the todo unchanged.
+            Err(_) => todo,
+        },
         "remove_recurrence" => todo.remove_recurrence(),
         "add_context" => todo.add_context(arg.unwrap_or_default()),
         "remove_context" => todo.remove_context(arg.unwrap_or_default()),
@@ -635,8 +640,7 @@ fn setters_match_the_oracle() {
     }
 }
 
-#[allow(clippy::result_large_err)] // ToggleError carries the completed todo
-fn toggle_result(line: &str) -> ToggleResult {
+fn toggle_result(line: &str) -> thar_core::ToggleOutcome {
     Todo::parse_line(line, TodoId::new(0)).toggle_state(clock_day(), TodoId::new(1))
 }
 
@@ -645,9 +649,11 @@ fn toggles_match_the_oracle() {
     let expectations = load_expectations();
 
     for case in &expectations.toggles {
-        let (updated, recurring, error) = match toggle_result(&case.line) {
-            Ok(outcome) => (outcome.updated, outcome.recurring, None),
-            Err(error) => (error.updated, None, Some(error.error)),
+        let outcome = toggle_result(&case.line);
+        let updated = outcome.updated;
+        let (recurring, error) = match outcome.recurring {
+            Ok(recurring) => (recurring, None),
+            Err(error) => (None, Some(error)),
         };
         assert_eq!(
             updated.to_string(),

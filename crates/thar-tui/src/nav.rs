@@ -11,8 +11,8 @@
 //! ported `calculateScrollOffset`: the offset keeps the cursor and as much of
 //! the shift range as possible visible, with one row of padding.
 //!
-//! [`rebuild`] and [`toggle_hidden_view`] are the `reconcileNavState` half of
-//! `hooks/useNavigationState.ts`. They are needed because the [`App`] rebuild
+//! [`rebuild`] is the `reconcileNavState` half of
+//! `hooks/useNavigationState.ts`. It is needed because the [`App`] rebuild
 //! only knows how to drop a cursor, while the hook keeps the old row as an
 //! anchor: the replacement cursor is the nearest visible todo forward from the
 //! old row, then backward.
@@ -161,11 +161,6 @@ pub fn rebuild(app: &mut App) {
     let previous = Previous::capture(app);
     app.recompute_rows();
     previous.reconcile(app);
-}
-
-/// Toggle the hidden view and reconcile the selection like [`rebuild`].
-pub fn toggle_hidden_view(app: &mut App) {
-    app.toggle_hidden_view();
 }
 
 /// Re-derive the scroll offset for the current viewport.

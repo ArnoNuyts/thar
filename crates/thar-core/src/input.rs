@@ -11,8 +11,8 @@
 //! 5. it does not start with a leading date token, valid or not.
 //!
 //! Messages never echo the rejected payload, so they are safe to show in a
-//! toast; [`TodoInputError::code`] returns the stable TypeScript
-//! `TodoInputErrorCode` string.
+//! toast; the [`Display`](core::fmt::Display) string is the user-facing text the
+//! TypeScript `TodoInputError` carries.
 //!
 //! # Character counts
 //!
@@ -23,7 +23,7 @@
 
 use core::fmt;
 
-use crate::js::{is_rejected_control, js_trim};
+use crate::js::{find_unsafe_control, js_trim};
 use crate::limits::{MAX_PASTE_TODOS, MAX_TODO_CHARS, MAX_TODOS};
 use crate::scan::scan_prefix;
 
@@ -63,62 +63,39 @@ pub enum TodoInputError {
     },
 }
 
-impl TodoInputError {
-    /// Stable machine-readable reason, identical to the TypeScript
-    /// `TodoInputErrorCode` union.
-    #[must_use]
-    pub const fn code(&self) -> &'static str {
-        match self {
-            Self::Empty => "empty",
-            Self::Multiline => "multiline",
-            Self::ControlCharacter => "control-character",
-            Self::TooLong { .. } => "too-long",
-            Self::InvalidDate => "invalid-date",
-            Self::AmbiguousDate => "ambiguous-date",
-            Self::LeadingDate => "leading-date",
-            Self::BatchTooLarge { .. } => "batch-too-large",
-            Self::TooManyTodos { .. } => "too-many-todos",
-        }
-    }
-
-    /// The bounded, user-facing message.
-    #[must_use]
-    pub fn message(&self) -> String {
-        match self {
-            Self::Empty => "Todo text cannot be empty or whitespace only".to_owned(),
-            Self::Multiline => "Todo must be a single line".to_owned(),
-            Self::ControlCharacter => "Todo contains a disallowed control character".to_owned(),
-            Self::TooLong { max_chars } => {
-                format!("Todo is too long; the limit is {max_chars} characters")
-            }
-            Self::InvalidDate => "Todo starts with an impossible date".to_owned(),
-            Self::AmbiguousDate => "Todo starts with more than one date".to_owned(),
-            Self::LeadingDate => {
-                "Todo text cannot start with a date; use the date picker".to_owned()
-            }
-            Self::BatchTooLarge { max_batch } => {
-                format!("Too many todos in one paste; the limit is {max_batch}")
-            }
-            Self::TooManyTodos { limit } => {
-                format!("Too many todos; the limit is {limit}")
-            }
-        }
-    }
-}
-
 impl fmt::Display for TodoInputError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.message())
+        match self {
+            Self::Empty => formatter.write_str("Todo text cannot be empty or whitespace only"),
+            Self::Multiline => formatter.write_str("Todo must be a single line"),
+            Self::ControlCharacter => {
+                formatter.write_str("Todo contains a disallowed control character")
+            }
+            Self::TooLong { max_chars } => {
+                write!(
+                    formatter,
+                    "Todo is too long; the limit is {max_chars} characters"
+                )
+            }
+            Self::InvalidDate => formatter.write_str("Todo starts with an impossible date"),
+            Self::AmbiguousDate => formatter.write_str("Todo starts with more than one date"),
+            Self::LeadingDate => {
+                formatter.write_str("Todo text cannot start with a date; use the date picker")
+            }
+            Self::BatchTooLarge { max_batch } => {
+                write!(
+                    formatter,
+                    "Too many todos in one paste; the limit is {max_batch}"
+                )
+            }
+            Self::TooManyTodos { limit } => {
+                write!(formatter, "Too many todos; the limit is {limit}")
+            }
+        }
     }
 }
 
 impl core::error::Error for TodoInputError {}
-
-/// The first rejected control code point that is not tab.
-fn find_unsafe_control(text: &str) -> Option<char> {
-    text.chars()
-        .find(|character| *character != '\t' && is_rejected_control(*character))
-}
 
 /// True when the text contains one of the four line separators.
 fn is_multiline(text: &str) -> bool {
@@ -140,12 +117,12 @@ fn is_multiline(text: &str) -> bool {
 /// # Example
 ///
 /// ```
-/// use thar_core::{MAX_TODO_CHARS, validate_todo_text};
+/// use thar_core::{MAX_TODO_CHARS, TodoInputError, validate_todo_text};
 ///
 /// assert!(validate_todo_text("buy milk @home", MAX_TODO_CHARS).is_ok());
 /// let error = validate_todo_text("2026-11-15 buy milk", MAX_TODO_CHARS)
 ///     .expect_err("a leading date is rejected");
-/// assert_eq!(error.code(), "leading-date");
+/// assert_eq!(error, TodoInputError::LeadingDate);
 /// ```
 pub fn validate_todo_text(text: &str, max_chars: usize) -> Result<(), TodoInputError> {
     if js_trim(text).is_empty() {
@@ -225,61 +202,39 @@ mod tests {
     };
     use crate::js::is_js_whitespace;
 
-    /// (input, expected code) for the shared validation table; `None` means
+    /// (input, expected error) for the shared validation table; `None` means
     /// the text is accepted.
-    const TABLE: &[(&str, Option<&str>)] = &[
+    const TABLE: &[(&str, Option<TodoInputError>)] = &[
         ("buy milk @home", None),
         ("x completed", None),
         ("keep\tthe tab", None),
-        ("", Some("empty")),
-        ("   ", Some("empty")),
-        ("\t \u{00A0}", Some("empty")),
-        ("one\ntwo", Some("multiline")),
-        ("one\r\ntwo", Some("multiline")),
-        ("one\u{2028}two", Some("multiline")),
-        ("one\u{2029}two", Some("multiline")),
-        ("one\u{0000}", Some("control-character")),
-        ("one\u{001B}two", Some("control-character")),
-        ("one\u{007F}", Some("control-character")),
-        ("one\u{0085}", Some("control-character")),
-        ("2026-02-30 impossible", Some("invalid-date")),
-        ("0000-01-01 impossible", Some("invalid-date")),
-        ("2026-11-15 2026-11-16 two dates", Some("ambiguous-date")),
-        ("2026-11-15 leading date", Some("leading-date")),
-        ("2026-11-15", Some("leading-date")),
+        ("", Some(TodoInputError::Empty)),
+        ("   ", Some(TodoInputError::Empty)),
+        ("\t \u{00A0}", Some(TodoInputError::Empty)),
+        ("one\ntwo", Some(TodoInputError::Multiline)),
+        ("one\r\ntwo", Some(TodoInputError::Multiline)),
+        ("one\u{2028}two", Some(TodoInputError::Multiline)),
+        ("one\u{2029}two", Some(TodoInputError::Multiline)),
+        ("one\u{0000}", Some(TodoInputError::ControlCharacter)),
+        ("one\u{001B}two", Some(TodoInputError::ControlCharacter)),
+        ("one\u{007F}", Some(TodoInputError::ControlCharacter)),
+        ("one\u{0085}", Some(TodoInputError::ControlCharacter)),
+        ("2026-02-30 impossible", Some(TodoInputError::InvalidDate)),
+        ("0000-01-01 impossible", Some(TodoInputError::InvalidDate)),
+        (
+            "2026-11-15 2026-11-16 two dates",
+            Some(TodoInputError::AmbiguousDate),
+        ),
+        ("2026-11-15 leading date", Some(TodoInputError::LeadingDate)),
+        ("2026-11-15", Some(TodoInputError::LeadingDate)),
     ];
 
     #[test]
     fn the_validation_table_matches_the_oracle() {
         for (text, expected) in TABLE {
             let result = validate_todo_text(text, MAX_TODO_CHARS);
-            match expected {
-                None => assert!(result.is_ok(), "{text:?} must be accepted: {result:?}"),
-                Some(expected) => {
-                    let error = result.expect_err("the table row is rejected");
-                    assert_eq!(error.code(), *expected, "{text:?}");
-                }
-            }
+            assert_eq!(result.err().as_ref(), expected.as_ref(), "{text:?}");
         }
-    }
-
-    #[test]
-    fn codes_are_the_typescript_strings() {
-        assert_eq!(TodoInputError::Empty.code(), "empty");
-        assert_eq!(TodoInputError::Multiline.code(), "multiline");
-        assert_eq!(TodoInputError::ControlCharacter.code(), "control-character");
-        assert_eq!(TodoInputError::TooLong { max_chars: 1 }.code(), "too-long");
-        assert_eq!(TodoInputError::InvalidDate.code(), "invalid-date");
-        assert_eq!(TodoInputError::AmbiguousDate.code(), "ambiguous-date");
-        assert_eq!(TodoInputError::LeadingDate.code(), "leading-date");
-        assert_eq!(
-            TodoInputError::BatchTooLarge { max_batch: 1 }.code(),
-            "batch-too-large"
-        );
-        assert_eq!(
-            TodoInputError::TooManyTodos { limit: 1 }.code(),
-            "too-many-todos"
-        );
     }
 
     #[test]
@@ -300,11 +255,10 @@ mod tests {
         ];
         for (text, message) in cases {
             let error = validate_todo_text(text, MAX_TODO_CHARS).expect_err("rejected");
-            assert_eq!(error.message(), message, "{text:?}");
-            assert_eq!(error.to_string(), message);
+            assert_eq!(error.to_string(), message, "{text:?}");
             if !text.is_empty() {
                 assert!(
-                    !error.message().contains(text),
+                    !error.to_string().contains(text),
                     "the message echoed the payload: {error}"
                 );
             }
@@ -318,17 +272,22 @@ mod tests {
         assert!(validate_todo_text(&"a".repeat(MAX_TODO_CHARS), MAX_TODO_CHARS).is_ok());
         let error = validate_todo_text(&"a".repeat(MAX_TODO_CHARS + 1), MAX_TODO_CHARS)
             .expect_err("over the cap");
-        assert_eq!(error.code(), "too-long");
         assert_eq!(
-            error.message(),
+            error,
+            TodoInputError::TooLong {
+                max_chars: MAX_TODO_CHARS
+            }
+        );
+        assert_eq!(
+            error.to_string(),
             format!("Todo is too long; the limit is {MAX_TODO_CHARS} characters")
         );
         assert!(validate_todo_text(&"🎉".repeat(1000), MAX_TODO_CHARS).is_ok());
         assert_eq!(
-            validate_todo_text(&"🎉".repeat(1001), MAX_TODO_CHARS)
-                .expect_err("over the cap")
-                .code(),
-            "too-long"
+            validate_todo_text(&"🎉".repeat(1001), MAX_TODO_CHARS),
+            Err(TodoInputError::TooLong {
+                max_chars: MAX_TODO_CHARS
+            })
         );
         // The edit modal's grandfather clause: a longer cap accepts the value.
         assert!(validate_todo_text(&"a".repeat(2_500), 2_500).is_ok());
@@ -341,26 +300,29 @@ mod tests {
 
         let too_many: Vec<String> = (0..=MAX_PASTE_TODOS).map(|n| format!("todo {n}")).collect();
         let error = validate_default_batch(&too_many, 0).expect_err("batch too large");
-        assert_eq!(error.code(), "batch-too-large");
         assert_eq!(
-            error.message(),
+            error,
+            TodoInputError::BatchTooLarge {
+                max_batch: MAX_PASTE_TODOS
+            }
+        );
+        assert_eq!(
+            error.to_string(),
             format!("Too many todos in one paste; the limit is {MAX_PASTE_TODOS}")
         );
 
         let error = validate_todo_batch(&one, MAX_TODOS, MAX_PASTE_TODOS).expect_err("capacity");
-        assert_eq!(error.code(), "too-many-todos");
+        assert_eq!(error, TodoInputError::TooManyTodos { limit: MAX_TODOS });
         assert_eq!(
-            error.message(),
+            error.to_string(),
             format!("Too many todos; the limit is {MAX_TODOS}")
         );
 
         // The first bad line rejects the whole batch.
         let mixed = vec!["good".to_owned(), "".to_owned()];
         assert_eq!(
-            validate_default_batch(&mixed, 0)
-                .expect_err("empty line")
-                .code(),
-            "empty"
+            validate_default_batch(&mixed, 0),
+            Err(TodoInputError::Empty)
         );
     }
 
@@ -372,10 +334,8 @@ mod tests {
                 "{text:?} must be JavaScript whitespace"
             );
             assert_eq!(
-                validate_todo_text(text, MAX_TODO_CHARS)
-                    .expect_err("blank")
-                    .code(),
-                "empty"
+                validate_todo_text(text, MAX_TODO_CHARS),
+                Err(TodoInputError::Empty)
             );
         }
     }

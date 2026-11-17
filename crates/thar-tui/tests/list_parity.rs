@@ -310,7 +310,8 @@ fn owned_row_model_matches_the_oracle() {
             let show_hidden = bool_field(case, "showHidden");
             let label = format!("{name}: showHidden={show_hidden} query={query:?}");
 
-            let model = ListModel::build(&todos, &views, query, show_hidden, today);
+            let model =
+                ListModel::build(&todos, &views, query, show_hidden, today).expect("aligned");
 
             expected_order(
                 case.get("order")
@@ -342,7 +343,7 @@ fn empty_lists_produce_an_empty_model() {
     let todos: Vec<Todo> = Vec::new();
     let views: Vec<_> = todos.iter().map(view_for).collect();
 
-    let model = ListModel::build(&todos, &views, "anything", false, today);
+    let model = ListModel::build(&todos, &views, "anything", false, today).expect("aligned");
     assert!(model.is_empty());
     assert_eq!(model.len(), 0);
     assert!(model.order.is_empty());

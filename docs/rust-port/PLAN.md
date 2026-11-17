@@ -696,8 +696,8 @@ revert.
   `dist/main.js`, so `bin/thar.js` resolves the package through the existing
   module-relative loader (`resolve(MODULE_DIR, "..")`) with no new candidate and
   no cwd lookup. `prepack` runs `npm run build:wasm && npm run build`;
-  `build:wasm` runs `wasm-pack build crates/thar-wasm --release --target nodejs
-  --out-dir pkg --locked`, and a small `scripts/clean-wasm-pkg.mjs` deletes the
+  `build:wasm` runs `wasm-pack build crates/thar-wasm --profile wasm --target
+  nodejs --out-dir pkg --locked`, and a small `scripts/clean-wasm-pkg.mjs` deletes the
   `*` `.gitignore` wasm-pack writes into `pkg/` (npm honours nested ignore files
   even when `files` names the directory, which silently shipped a tarball with
   no WASM). `npm run build` still works without Rust; a source checkout without
@@ -1193,10 +1193,10 @@ Jobs:
 - **wasm** (ubuntu):
   - installs Rust 1.99.1 + `wasm32-unknown-unknown` (`dtolnay/rust-toolchain`);
   - caches with `Swatinem/rust-cache@v2` (key `wasm`);
-  - installs `wasm-pack` via `taiki-e/install-action@wasm-pack`;
+  - installs `wasm-pack` 0.15.1 via `taiki-e/install-action@v2`;
   - installs `binaryen` (`wasm-opt`) from apt, which wasm-pack prefers over its
     bundled optimizer;
-  - runs `wasm-pack build crates/thar-wasm --release --target nodejs
+  - runs `wasm-pack build crates/thar-wasm --profile wasm --target nodejs
     --out-dir pkg --locked`;
   - enforces the size budget: **≤ 250 KB raw, ≤ 100 KB gzip**;
   - runs a Node smoke test (`parseFile` ok/rejected envelopes, `coreVersion`)

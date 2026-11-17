@@ -56,7 +56,7 @@
 //! it as "the Rust path is unavailable" and falls back to the TypeScript
 //! serializer.
 
-use thar_core::{CoreError, Todo, is_rejected_control};
+use thar_core::{CoreError, Todo, find_unsafe_control};
 
 use crate::json::{self, push_json_number, push_json_string};
 use crate::record::{RecordError, todo_records};
@@ -148,25 +148,18 @@ impl From<RecordError> for WriteError {
     }
 }
 
-/// The first code point a serialized todo line may not contain.
-///
-/// The shared [`is_rejected_control`] predicate decides the set. The TypeScript
-/// rule scans UTF-16 code units (`charCodeAt`); every rejected range is inside
-/// the BMP, so scanning Unicode scalar values decides exactly the same set and
-/// reports the same number for the first match: a surrogate half is never in a
-/// rejected range, and no rejected code point is astral.
-fn unsafe_code_point(line: &str) -> Option<u32> {
-    line.chars()
-        .find(|character| *character != '\t' && is_rejected_control(*character))
-        .map(|character| character as u32)
-}
-
 /// Serialize the decoded todos and apply the write-time guard.
 ///
 /// The guard runs per line, before the line is joined, so an embedded newline in
 /// a `text` field is reported against the line that holds it instead of being
 /// mistaken for the `"\n"` separator (the TypeScript oracle scans
 /// `todos.map(toString)` the same way).
+///
+/// [`find_unsafe_control`] decides the set. The TypeScript rule scans UTF-16
+/// code units (`charCodeAt`); every rejected range is inside the BMP, so
+/// scanning Unicode scalar values decides exactly the same set and reports the
+/// same number for the first match: a surrogate half is never in a rejected
+/// range, and no rejected code point is astral.
 ///
 /// This is deliberately not a thin wrapper over `thar_core::serialize_file`:
 /// that helper joins first, so the line number and code point of a rejected
@@ -183,10 +176,10 @@ fn serialize_todos(todos: &[Todo]) -> Result<String, WriteError> {
 
     for (index, todo) in todos.iter().enumerate() {
         let line = todo.to_string();
-        if let Some(code_point) = unsafe_code_point(&line) {
+        if let Some(code_point) = find_unsafe_control(&line) {
             return Err(WriteError::UnsafeControl {
                 line_number: index + 1,
-                code_point,
+                code_point: code_point as u32,
             });
         }
         if index > 0 {

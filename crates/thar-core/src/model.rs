@@ -44,7 +44,7 @@ use core::fmt::Write as _;
 
 use crate::date::TodoDate;
 use crate::js::{is_js_whitespace, js_trim, whitespace_prefix_len};
-use crate::recurrence::{RecurrenceError, is_valid_recurrence, plan_recurrence};
+use crate::recurrence::{Recurrence, RecurrenceError, plan_recurrence};
 use crate::scan::{ScannedTag, scan_contexts, scan_prefix, scan_projects, scan_tags};
 use TagValue::{Many, One};
 
@@ -578,13 +578,11 @@ impl Todo {
 
     /// Set the `rec:` recurrence value.
     ///
-    /// An invalid or out-of-range value is ignored: the todo is returned
-    /// unchanged, matching `Todo#setRecurrence`.
+    /// A [`Recurrence`] is parsed and range-checked when it is built, so it is
+    /// always storable.
     #[must_use]
-    pub fn set_recurrence(mut self, value: &str) -> Self {
-        if is_valid_recurrence(value) {
-            self.set_tag("rec", value.to_owned());
-        }
+    pub fn set_recurrence(mut self, value: Recurrence) -> Self {
+        self.set_tag("rec", value.to_string());
         self
     }
 
@@ -649,13 +647,11 @@ impl Todo {
     /// `due:` tag. The new instance is open, has no completion date, and takes
     /// `recurring_id` because the host owns id allocation.
     ///
-    /// An invalid or out-of-range `rec:` value completes the todo and returns
-    /// [`ToggleError`] carrying that completed todo; nothing is stored and
-    /// nothing panics.
-    // The `Err` variant carries the completed todo so the state change is not
-    // lost; boxing it would only add an allocation to a per-keypress path.
-    #[allow(clippy::result_large_err)]
-    pub fn toggle_state(&self, today: TodoDate, recurring_id: TodoId) -> ToggleResult {
+    /// An invalid or out-of-range `rec:` value still completes the todo and
+    /// returns the completed value in [`ToggleOutcome::updated`]; the reason is
+    /// in [`ToggleOutcome::recurring`]. Nothing is stored here and nothing
+    /// panics.
+    pub fn toggle_state(&self, today: TodoDate, recurring_id: TodoId) -> ToggleOutcome {
         let mut updated = self.clone();
         updated.state = if self.state.is_done() {
             State::Todo
@@ -673,27 +669,22 @@ impl Todo {
             updated.completion_date_in_text = false;
         }
 
-        let plan = match updated.tag("rec") {
-            Some(TagValue::One(value)) => Some(plan_recurrence(value, today)),
-            // A repeated `rec` key is an array-valued tag, which the oracle
-            // passes to `planRecurrence` as a non-string and rejects.
-            Some(TagValue::Many(_)) => Some(Err(RecurrenceError::Invalid)),
-            None => None,
-        };
-
-        let plan = match (updated.state.is_done(), plan) {
-            (true, Some(plan)) => plan,
-            _ => {
-                return Ok(ToggleOutcome {
-                    updated,
-                    recurring: None,
-                });
+        let plan = if updated.state.is_done() {
+            match updated.tag("rec") {
+                Some(TagValue::One(value)) => Some(plan_recurrence(value, today)),
+                // A repeated `rec` key is an array-valued tag, which the oracle
+                // passes to `planRecurrence` as a non-string and rejects.
+                Some(TagValue::Many(_)) => Some(Err(RecurrenceError::Invalid)),
+                None => None,
             }
+        } else {
+            None
         };
 
-        match plan {
-            Err(error) => Err(ToggleError { updated, error }),
-            Ok(next_due) => {
+        let recurring = match plan {
+            None => Ok(None),
+            Some(Err(error)) => Err(error),
+            Some(Ok(next_due)) => {
                 // The oracle serializes the completed todo, re-parses it, and
                 // then opens the copy with the next due date. Re-parsing keeps
                 // the literal-date flags consistent.
@@ -701,12 +692,11 @@ impl Todo {
                     .set_state(State::Todo)
                     .set_completion_date(None)
                     .set_due(next_due);
-                Ok(ToggleOutcome {
-                    updated,
-                    recurring: Some(recurring),
-                })
+                Ok(Some(recurring))
             }
-        }
+        };
+
+        ToggleOutcome { updated, recurring }
     }
 
     /// Set `key` to a single value, replacing an existing key in place.
@@ -723,44 +713,18 @@ impl Todo {
     }
 }
 
-/// A successful [`Todo::toggle_state`]: the flipped todo and its next instance.
+/// The result of [`Todo::toggle_state`]: the flipped todo and its recurrence.
+///
+/// A failed recurrence plan is a partial success: the state change still
+/// happened, so [`ToggleOutcome::updated`] is always stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ToggleOutcome {
     /// The todo flipped between open and done.
     pub updated: Todo,
-    /// The next instance of a recurring todo, when `rec:` planned.
-    pub recurring: Option<Todo>,
+    /// `Ok(Some(next))` for a planned recurrence, `Ok(None)` for a normal
+    /// toggle, `Err(reason)` when `rec:` could not be planned.
+    pub recurring: Result<Option<Todo>, RecurrenceError>,
 }
-
-/// A [`Todo::toggle_state`] whose `rec:` value could not be planned.
-///
-/// The completed todo is still returned so the caller can store it; the host
-/// shows [`ToggleError::error`]'s message and leaves nothing else stored.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ToggleError {
-    /// The todo flipped between open and done.
-    pub updated: Todo,
-    /// Why the `rec:` value could not be planned.
-    pub error: RecurrenceError,
-}
-
-impl fmt::Display for ToggleError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.error, f)
-    }
-}
-
-impl std::error::Error for ToggleError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.error)
-    }
-}
-
-/// Result of [`Todo::toggle_state`].
-///
-/// Recurrence planning failures keep the completed todo, so the caller applies
-/// the state change and reports [`ToggleError::error`] either way.
-pub type ToggleResult = Result<ToggleOutcome, ToggleError>;
 
 impl fmt::Display for Todo {
     /// The canonical `todo.txt` line, written without intermediate `String`s.
@@ -934,6 +898,7 @@ pub fn serialize_file<'a>(todos: impl IntoIterator<Item = &'a Todo>) -> String {
 mod tests {
     use super::{Priority, State, TagValue, Todo, TodoId, TodoParts, serialize_file};
     use crate::date::TodoDate;
+    use crate::recurrence::Recurrence;
 
     fn parse(line: &str) -> Todo {
         Todo::parse_line(line, TodoId::new(0))
@@ -1212,6 +1177,10 @@ mod tests {
         value.parse::<TodoDate>().expect("valid test date")
     }
 
+    fn recurrence(value: &str) -> Recurrence {
+        value.parse::<Recurrence>().expect("valid test recurrence")
+    }
+
     /// Every field a setter can touch, so a mutation of the receiver fails.
     fn snapshot(todo: &Todo) -> String {
         format!(
@@ -1244,7 +1213,7 @@ mod tests {
             Box::new(|todo| todo.set_threshold(date("2024-06-15"))),
             Box::new(|todo| todo.remove_threshold()),
             Box::new(|todo| todo.toggle_hidden()),
-            Box::new(|todo| todo.set_recurrence("2w")),
+            Box::new(|todo| todo.set_recurrence(recurrence("2w"))),
             Box::new(|todo| todo.remove_recurrence()),
             Box::new(|todo| todo.add_context("errand")),
             Box::new(|todo| todo.remove_context("context")),
@@ -1392,17 +1361,29 @@ mod tests {
     }
 
     #[test]
-    fn recurrence_is_validated_before_storing() {
+    fn recurrence_is_stored_canonically() {
+        let plus = "+1d".parse::<Recurrence>().expect("valid");
+        let zeros = "0001d".parse::<Recurrence>().expect("valid");
+        assert_eq!(
+            parse("task").set_recurrence(plus).to_string(),
+            "task rec:1d"
+        );
+        assert_eq!(
+            parse("task").set_recurrence(zeros).to_string(),
+            "task rec:1d"
+        );
+    }
+
+    #[test]
+    fn recurrence_is_validated_when_it_is_parsed() {
         let todo = parse("task");
-        assert_eq!(todo.clone().set_recurrence("2w").to_string(), "task rec:2w");
-        for invalid in ["", "0d", "10000d", "1D", "abc", "-1d"] {
-            let updated = todo.clone().set_recurrence(invalid);
-            assert_eq!(updated.to_string(), "task", "value {invalid:?}");
-            assert_eq!(updated.tag("rec"), None, "value {invalid:?}");
-        }
+        assert_eq!(
+            todo.clone().set_recurrence(recurrence("2w")).to_string(),
+            "task rec:2w"
+        );
         assert_eq!(
             todo.clone()
-                .set_recurrence("2w")
+                .set_recurrence(recurrence("2w"))
                 .remove_recurrence()
                 .to_string(),
             "task"
@@ -1511,16 +1492,16 @@ mod tests {
     fn toggle_state_completes_and_plans_from_today() {
         let today = date("2026-11-15");
         let todo = parse("due:2026-11-01 rec:2d");
-        let outcome = todo
-            .clone()
-            .toggle_state(today, TodoId::new(7))
-            .expect("planned");
+        let outcome = todo.clone().toggle_state(today, TodoId::new(7));
 
         assert_eq!(
             outcome.updated.to_string(),
             "x 2026-11-15  due:2026-11-01 rec:2d"
         );
-        let recurring = outcome.recurring.expect("planned");
+        let recurring = outcome
+            .recurring
+            .expect("planned")
+            .expect("a next instance");
         assert_eq!(recurring.id, TodoId::new(7));
         assert!(!recurring.is_done());
         assert_eq!(recurring.completion_date, None);
@@ -1533,13 +1514,13 @@ mod tests {
 
     #[test]
     fn toggle_state_uses_the_completion_day_not_the_due_date() {
-        let result = parse("due:2026-12-31 rec:1m")
-            .toggle_state(date("2026-11-15"), TodoId::new(0))
-            .expect("planned");
+        let outcome =
+            parse("due:2026-12-31 rec:1m").toggle_state(date("2026-11-15"), TodoId::new(0));
         assert_eq!(
-            result
+            outcome
                 .recurring
                 .expect("planned")
+                .expect("a next instance")
                 .tag("due")
                 .and_then(TagValue::as_single),
             Some("2026-12-15")
@@ -1563,11 +1544,10 @@ mod tests {
                 "Invalid recurrence value; no new todo was created",
             ),
         ] {
-            let error = parse(line)
-                .toggle_state(today, TodoId::new(0))
-                .expect_err("recurrence error");
-            assert!(error.updated.is_done(), "line {line:?}");
-            assert_eq!(error.error.message(), message, "line {line:?}");
+            let outcome = parse(line).toggle_state(today, TodoId::new(0));
+            assert!(outcome.updated.is_done(), "line {line:?}");
+            let error = outcome.recurring.expect_err("recurrence error");
+            assert_eq!(error.message(), message, "line {line:?}");
             assert_eq!(error.to_string(), message, "line {line:?}");
         }
     }
@@ -1575,32 +1555,31 @@ mod tests {
     #[test]
     fn toggle_state_reopens_a_done_todo_without_planning() {
         let today = date("2026-11-15");
-        let outcome = parse("x 2024-03-02 2024-03-01 done rec:1w")
-            .toggle_state(today, TodoId::new(0))
-            .expect("reopened");
+        let outcome =
+            parse("x 2024-03-02 2024-03-01 done rec:1w").toggle_state(today, TodoId::new(0));
         assert!(!outcome.updated.is_done());
         assert_eq!(outcome.updated.to_string(), "2024-03-01 done rec:1w");
-        assert_eq!(outcome.recurring, None);
+        assert_eq!(outcome.recurring, Ok(None));
 
         // A plain todo has nothing to plan.
-        let plain = parse("plain")
-            .toggle_state(today, TodoId::new(0))
-            .expect("completed");
+        let plain = parse("plain").toggle_state(today, TodoId::new(0));
         assert_eq!(plain.updated.to_string(), "x 2026-11-15 plain");
-        assert_eq!(plain.recurring, None);
+        assert_eq!(plain.recurring, Ok(None));
     }
 
     #[test]
     fn toggle_state_preserves_literal_dates_in_text() {
-        let outcome = parse("2023-02-29 literal rec:1d")
-            .toggle_state(date("2026-11-15"), TodoId::new(0))
-            .expect("planned");
+        let outcome =
+            parse("2023-02-29 literal rec:1d").toggle_state(date("2026-11-15"), TodoId::new(0));
         assert!(outcome.updated.is_done());
         assert_eq!(
             outcome.updated.to_string(),
             "x 2026-11-15 2023-02-29 literal rec:1d"
         );
-        let recurring = outcome.recurring.expect("planned");
+        let recurring = outcome
+            .recurring
+            .expect("planned")
+            .expect("a next instance");
         assert_eq!(
             recurring.to_string(),
             "2026-11-15 2023-02-29 literal rec:1d due:2026-11-16"

@@ -34,18 +34,31 @@ pub const fn is_js_whitespace(character: char) -> bool {
     )
 }
 
-/// True for the rejected C0/C1 controls, DEL, and `U+2028`/`U+2029`.
+/// True for a control code point that is unsafe inside a todo line.
 ///
 /// This is the shared character predicate for the read path, the write path,
-/// and the host renderers. Tab is in the C0 range but is allowed inside a line,
-/// so each caller excludes it explicitly (`character != '\t'` or an equivalent
-/// rule).
+/// and the host renderers: the rejected C0/C1 controls, DEL, and
+/// `U+2028`/`U+2029`. Tab is in the C0 range but is useful inside a todo line,
+/// so it is **not** rejected here. The one-line search bar adds its own tab
+/// rule when it filters a paste.
 #[must_use]
 pub const fn is_rejected_control(character: char) -> bool {
-    matches!(
-        character,
-        '\u{0000}'..='\u{001F}' | '\u{007F}'..='\u{009F}' | '\u{2028}' | '\u{2029}'
-    )
+    !matches!(character, '\t')
+        && matches!(
+            character,
+            '\u{0000}'..='\u{001F}' | '\u{007F}'..='\u{009F}' | '\u{2028}' | '\u{2029}'
+        )
+}
+
+/// The first unsafe control code point in `text`.
+///
+/// Tab is safe inside a todo line, so a text that only holds a tab reports
+/// `None`. This is the one scanner the read validator, the write validator, the
+/// input validator, and the renderer share.
+#[must_use]
+pub fn find_unsafe_control(text: &str) -> Option<char> {
+    text.chars()
+        .find(|character| is_rejected_control(*character))
 }
 
 /// Byte length of the leading run of JS whitespace.
@@ -62,7 +75,7 @@ pub fn js_trim(text: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_rejected_control, js_trim, whitespace_prefix_len};
+    use super::{find_unsafe_control, is_rejected_control, js_trim, whitespace_prefix_len};
 
     #[test]
     fn rejected_controls_cover_c0_c1_del_and_line_separators() {
@@ -77,8 +90,19 @@ mod tests {
         for character in ['a', ' ', '\u{00A0}', '\u{10FFFF}'] {
             assert!(!is_rejected_control(character), "{character:?}");
         }
-        // Tab is inside C0 but the predicate reports it; callers allow it.
-        assert!(is_rejected_control('\t'));
+        // Tab is inside C0 but is safe inside a todo line.
+        assert!(!is_rejected_control('\t'));
+    }
+
+    #[test]
+    fn finds_the_first_unsafe_control_and_ignores_tab() {
+        assert_eq!(find_unsafe_control("plain text"), None);
+        assert_eq!(find_unsafe_control("tab\there"), None);
+        assert_eq!(
+            find_unsafe_control("safe\u{001B}then\u{0007}"),
+            Some('\u{001B}')
+        );
+        assert_eq!(find_unsafe_control("sep\u{2028}"), Some('\u{2028}'));
     }
 
     #[test]

@@ -77,7 +77,7 @@
 //! Names the programme supplies stay opaque: this module never normalizes or
 //! validates a name it did not parse itself.
 
-use thar_core::{Row, RowError, Todo, TodoDate};
+use thar_core::{OwnedSearchView, Row, RowError, Todo, TodoDate};
 
 use crate::json::{self, Value, push_json_number, push_json_string};
 use crate::record::{RecordError, required_string, string_array, todo_records};
@@ -175,23 +175,13 @@ impl From<RowError> for RowsError {
     }
 }
 
-/// One host-normalized search view in a `build_rows` request.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct SearchViewRecord {
-    text: String,
-    contexts: Vec<String>,
-    projects: Vec<String>,
-}
-
-impl SearchViewRecord {
-    /// Decode one view from a request array element.
-    fn from_json(value: &Value) -> Result<Self, RowsError> {
-        Ok(Self {
-            text: required_string(value, "text", "searchViews.text")?,
-            contexts: string_array(value, "contexts", "searchViews.contexts")?,
-            projects: string_array(value, "projects", "searchViews.projects")?,
-        })
-    }
+/// Decode one host-normalized search view from a request array element.
+fn decode_view(value: &Value) -> Result<OwnedSearchView, RowsError> {
+    Ok(OwnedSearchView {
+        text: required_string(value, "text", "searchViews.text")?,
+        contexts: string_array(value, "contexts", "searchViews.contexts")?,
+        projects: string_array(value, "projects", "searchViews.projects")?,
+    })
 }
 
 /// A decoded request, borrowing nothing from the input document.
@@ -201,7 +191,7 @@ struct BuildRequest {
     show_hidden: bool,
     terms: Vec<String>,
     todos: Vec<Todo>,
-    views: Vec<SearchViewRecord>,
+    views: Vec<OwnedSearchView>,
 }
 
 /// Decode one request document.
@@ -234,7 +224,7 @@ fn decode(input: &str) -> Result<BuildRequest, RowsError> {
         .and_then(Value::as_array)
         .ok_or_else(|| RowsError::invalid("searchViews", "must be an array of search views"))?
         .iter()
-        .map(SearchViewRecord::from_json)
+        .map(decode_view)
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(BuildRequest {
@@ -248,24 +238,15 @@ fn decode(input: &str) -> Result<BuildRequest, RowsError> {
 
 /// Build the rows for a decoded request.
 ///
-/// The decoded records already own their name lists, so the views borrow them
-/// directly; the borrows live for the call.
+/// The decoded views are owned [`OwnedSearchView`] values, which
+/// [`thar_core::build_rows`] accepts directly through
+/// [`thar_core::SearchViewLike`]; the terms are passed as the decoded
+/// `Vec<String>`.
 fn rows_for(request: &BuildRequest) -> Result<thar_core::Rows<'_>, RowsError> {
-    let terms: Vec<&str> = request.terms.iter().map(String::as_str).collect();
-    let views: Vec<thar_core::SearchView<'_>> = request
-        .views
-        .iter()
-        .map(|view| thar_core::SearchView {
-            text: &view.text,
-            contexts: &view.contexts,
-            projects: &view.projects,
-        })
-        .collect();
-
     thar_core::build_rows(
         &request.todos,
-        &views,
-        &terms,
+        &request.views,
+        &request.terms,
         request.show_hidden,
         request.today,
     )

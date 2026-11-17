@@ -1,20 +1,31 @@
 //! Command-line parsing, mirroring `logic/cli.ts`.
 //!
-//! The supported surface is the one CP6 needs: the file argument and the three
-//! flags that keep `thar-rs` script-compatible (`--help`, `--version`,
-//! `--no-update-check`). Anything that would need the writer, the updater, or
-//! an interactive modal is rejected here rather than halfway through startup.
+//! The surface is the TUI's: one todo file plus `--write`, `--read-only`,
+//! `--no-backup` and `--no-update-check`, the script-compatible `--help` and
+//! `--version`, and the `update` subcommand (which reports that self-update is
+//! unsupported). Parsing produces a [`CliCommand`] so the startup path cannot
+//! read a flag that was never set.
 //!
 //! Arguments are [`OsString`]s, not `String`s: a todo file name is a filesystem
 //! path and may be non-UTF-8. Flags are recognized only when the argument is
 //! valid UTF-8; any other argument is a positional file path and reaches the
-//! loader unchanged.
+//! loader unchanged. A non-UTF-8 argument that starts with `-` is still an
+//! option-shaped token, so it is rejected instead of becoming a file name
+//! (use `--` to pass such a path deliberately).
 
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 /// Default todo file, relative to the process working directory.
 pub const DEFAULT_FILENAME: &str = "todo.txt";
+
+/// True when the raw platform bytes start with the ASCII option marker.
+///
+/// This is deliberately byte-based: [`OsStr::to_str`] fails for a non-UTF-8
+/// argument, but the leading `-` is still readable on every supported host.
+fn starts_with_dash(value: &OsStr) -> bool {
+    value.as_encoded_bytes().first() == Some(&b'-')
+}
 
 /// The parsed command line.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,7 +92,8 @@ pub fn format_usage(version: &str) -> String {
         "  -v, --version         Show version".to_owned(),
         "  --write               Allow edits; default is read-only".to_owned(),
         "  --read-only           Force the read-only default".to_owned(),
-        "  --no-backup           Do not keep todo.txt.bak before the first save".to_owned(),
+        "  --no-backup           Skip todo.txt.bak before the first save (needs --write)"
+            .to_owned(),
         "  --no-update-check     Accepted for CLI parity".to_owned(),
         String::new(),
         "Without --write this binary never creates, saves, or archives todos.".to_owned(),
@@ -93,16 +105,17 @@ pub fn format_usage(version: &str) -> String {
 
 /// Parse the arguments after the program name.
 ///
-/// Flags are matched through [`OsStr::to_str`], so a non-UTF-8 argument is
-/// always a positional file path; `--file` consumes the next argument as an
-/// [`OsString`] without decoding it. Help wins over version, matching the
-/// startup order in [`crate::run`].
+/// Flags are matched through [`OsStr::to_str`]. A non-UTF-8 argument is a
+/// positional file path unless it starts with `-`, which is rejected as an
+/// unknown option; `--` still allows such a path. `--file` consumes the next
+/// argument as an [`OsString`] without decoding it. Help wins over version,
+/// matching the startup order in [`crate::run`].
 ///
 /// # Errors
 ///
 /// Returns a [`CliError`] for an unknown option, a missing `--file` value, an
-/// empty path, more than one file argument, or `--write` together with
-/// `--read-only`.
+/// empty path, more than one file argument, `--write` together with
+/// `--read-only`, or `--no-backup` without `--write`.
 pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
     if argv.first().and_then(|argument| argument.to_str()) == Some("update") {
         let rest = &argv[1..];
@@ -167,6 +180,16 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
             Some(value) if value.starts_with('-') && value != "-" => {
                 return Err(CliError::new(format!("Unknown option: {value}")));
             }
+            // A non-UTF-8 token cannot be checked as a flag, but an argument
+            // that starts with `-` is still option-shaped. Treating it as a
+            // path would let `--file=<bad bytes>` silently create a file whose
+            // name is the whole option.
+            _ if !end_of_options && starts_with_dash(argument) && argument != "-" => {
+                return Err(CliError::new(format!(
+                    "Unknown option: {}",
+                    argument.to_string_lossy()
+                )));
+            }
             _ => set_file(argument.as_os_str())?,
         }
     }
@@ -175,6 +198,9 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
         return Err(CliError::new(
             "--write and --read-only cannot be used together.",
         ));
+    }
+    if no_backup && !write {
+        return Err(CliError::new("--no-backup requires --write."));
     }
 
     if help {
@@ -341,5 +367,40 @@ mod tests {
             }
             other => panic!("expected a run command, got {other:?}"),
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_non_utf8_option_shaped_argument_is_not_a_file() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let mut raw = b"--file=".to_vec();
+        raw.push(0xFF);
+        let error = parse_cli_args(&[OsString::from_vec(raw)]).expect_err("rejected");
+        assert!(error.to_string().contains("Unknown option"), "{error}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_non_utf8_path_after_double_dash_is_still_a_file() {
+        use std::os::unix::ffi::{OsStrExt, OsStringExt};
+
+        let mut raw = b"-work-".to_vec();
+        raw.push(0xFF);
+        let command = parse_cli_args(&[OsString::from("--"), OsString::from_vec(raw.clone())])
+            .expect("valid");
+        match command {
+            CliCommand::Run { file, .. } => {
+                assert_eq!(file.as_os_str().as_bytes(), raw);
+            }
+            other => panic!("expected a run command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn no_backup_requires_write_mode() {
+        let error = parse_cli_args(&args(&["--no-backup"])).expect_err("rejected");
+        assert_eq!(error.to_string(), "--no-backup requires --write.");
+        assert!(run(&["--write", "--no-backup"]).2);
     }
 }
