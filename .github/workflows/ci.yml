@@ -20,7 +20,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # `macos-latest` currently resolves to the brand-new macos-26 arm64
+        # image, whose hosted pool is capacity-constrained: jobs can stay
+        # queued until the job timeout and fail without running a step. Pin the
+        # mature macOS 15 arm64 image instead; this leg only needs a real
+        # Darwin host, not the newest OS. See actions/runner-images#13882.
+        os: [ubuntu-latest, windows-latest, macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
