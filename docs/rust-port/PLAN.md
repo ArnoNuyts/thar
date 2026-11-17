@@ -804,10 +804,13 @@ workspace; the Ink app, `bin/thar.js` and the npm entry point are untouched.
   - a missing file in an empty directory renders an empty list and creates
     nothing.
 - CI: `.github/workflows/rust.yml` gains a `pty` job matrixed over
-  `ubuntu-latest` and `macos-latest` (`cargo test -p thar-cli --test pty`) and a
-  `windows` job that runs `cargo check -p thar-cli --all-targets`. The PTY
-  target is `#![cfg(unix)]`, so the Windows job compiles the dependency tree
-  and the other targets without pretending portable-pty can run there.
+  `ubuntu-latest` and `macos-15` (`cargo test -p thar-cli --test pty`) and a
+  `windows` job that runs `cargo check -p thar-cli --all-targets`. The macOS
+  leg is pinned to the mature macOS 15 image: `macos-latest` currently resolves
+  to macos-26 arm64, whose hosted pool is capacity-constrained and drops queued
+  jobs at the job timeout. The PTY target is `#![cfg(unix)]`, so the Windows
+  job compiles the dependency tree and the other targets without pretending
+  portable-pty can run there.
 - `docs/rust-port/assets/cp6-tui.png` is a real frame captured from the PTY at
   100×30 and rendered from the parsed `vt100` cells (background, colours, text
   runs). The generator is the `#[ignore]`d `cp6_screenshot` test in
@@ -1179,13 +1182,16 @@ Jobs:
   --locked --workspace --all-features`. The row-perf measurement in
   `crates/thar-core/tests/rows_perf.rs` is `#[ignore]`d: it is a manual
   release-mode report, not a CI gate.
-- **pty** (ubuntu + macos matrix, `fail-fast: false`): `cargo test --locked
-  -p thar-cli --test pty`. This is CP6's real-terminal gate: it spawns
+- **pty** (ubuntu + `macos-15` matrix, `fail-fast: false`): `cargo test
+  --locked -p thar-cli --test pty`. This is CP6's real-terminal gate: it spawns
   `thar-rs` on a portable-pty pair and asserts keyboard, search, hidden view
   and SGR mouse behaviour, Ctrl+C/panic restore and the missing-file contract
   against a `vt100`-parsed screen. The `test` job runs the same target on
   Ubuntu; macOS is added because the kernel PTY, termios and mouse decoding
-  differ. `portable-pty` and `vt100` are dev-dependencies only.
+  differ. The macOS leg pins macOS 15 instead of `macos-latest` (currently
+  macos-26 arm64), whose hosted pool is capacity-constrained and drops queued
+  jobs at the timeout; macOS 15 still exercises Darwin's PTY layer.
+  `portable-pty` and `vt100` are dev-dependencies only.
 - **windows** (windows-latest): `cargo check --locked -p thar-cli
   --all-targets`. portable-pty is Unix-focused, so Windows compiles the crate,
   the binary and every test target but runs no PTY test; the PTY test target is
