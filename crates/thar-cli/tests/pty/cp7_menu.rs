@@ -163,9 +163,11 @@ fn a_read_only_run_rejects_the_menu_and_write_keys() {
     }
 
     // Copy is non-mutating, so the one gate lets it through even read-only.
-    // The host may not have a clipboard tool, so accept either toast.
+    // The host may or may not have a clipboard tool, so accept either toast.
     session.send(b"c");
-    session.wait_text("Copy");
+    session.wait_until("a copy result toast", |snapshot| {
+        snapshot.text.contains("Todo copied") || snapshot.text.contains("Copy failed:")
+    });
     // Without host update information `u` is a bounded information toast, not
     // a rejection.
     session.send(b"u");
