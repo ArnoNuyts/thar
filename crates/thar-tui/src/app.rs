@@ -1,8 +1,8 @@
 //! Application state for the read-only TUI.
 //!
 //! The state is deliberately split from the event loop and from rendering:
-//! `thar-cli` owns the terminal, `input` maps events to [`crate::input::Command`]s,
-//! and `view` reads this struct through its accessors. Everything here is a
+//! `thar-cli` owns the terminal, `input` maps events to commands, and `view`
+//! reads this struct through its accessors. Everything here is a
 //! plain state transition, so the whole app can be driven by `TestBackend` +
 //! synthetic events without a real terminal.
 //!
@@ -23,7 +23,7 @@
 //! # Read-only and write modes
 //!
 //! The binary is read-only unless `--write` is passed. In read-only mode the
-//! mutating keys are rejected in [`crate::input`] with one bounded toast. In
+//! mutating keys are rejected by the input layer with one bounded toast. In
 //! write mode they call the mutation API here, which records one undo step per
 //! command and schedules a debounced save. The actual filesystem write lives
 //! in `thar-cli`/`thar-store`; this crate only queues [`Effect`]s.
@@ -475,8 +475,8 @@ impl App {
 
     /// Focus or blur the search bar without reflowing the list.
     ///
-    /// This is a test/integration hook. The UI uses [`App::focus_search`] and
-    /// [`App::blur_search`], which keep the row model, suggestions, and scroll
+    /// This is a test/integration hook. The UI uses `App::focus_search` and
+    /// `App::blur_search`, which keep the row model, suggestions, and scroll
     /// offset in step.
     pub fn set_search_focused(&mut self, focused: bool) {
         if focused {
@@ -523,7 +523,7 @@ impl App {
     /// Apply a successful file reload: replace the list and leave the read-only
     /// recovery state.
     ///
-    /// [`App::set_todos`] already clears both undo stacks, the pending save and
+    /// `App::set_todos` already clears both undo stacks, the pending save and
     /// the save error; the external file wins over unsaved in-memory edits.
     /// Clearing `load_error` re-enables writes through [`App::writable`], which
     /// is the Ink app's recovery path after a fixed file.
