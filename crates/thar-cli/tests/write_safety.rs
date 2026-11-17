@@ -49,9 +49,9 @@ fn app(lines: &[&str]) -> App {
     let mut app = App::new(
         "todo.txt",
         todos(lines),
-        TodoDate::parse("2026-11-15").expect("valid date"),
+        "2026-11-15".parse::<TodoDate>().expect("valid date"),
     );
-    app.read_only = false;
+    app.set_read_only(false);
     app
 }
 
@@ -116,6 +116,10 @@ fn mode_bits_are_enforced(directory: &Path) -> bool {
         }
         Err(_) => true,
     }
+}
+
+fn current_time() -> std::time::Instant {
+    std::time::Instant::now()
 }
 
 #[cfg(unix)]
@@ -295,8 +299,8 @@ fn a_failed_reload_keeps_the_list_cancels_the_save_and_is_not_retried() {
     let start = Instant::now();
     let mut sync = FileSync::new(&path, limits);
     let mut app = app(&["Original"]);
-    app.add_todos(&["Queued".to_owned()]);
-    assert!(app.dirty, "the in-memory edit is pending");
+    app.add_todos(&["Queued".to_owned()], current_time());
+    assert!(app.is_dirty(), "the in-memory edit is pending");
 
     // An external writer poisons the file with a rejected control character.
     std::fs::write(&path, b"RELOAD_POISON\x00\n").expect("poison the file");
@@ -310,19 +314,19 @@ fn a_failed_reload_keeps_the_list_cancels_the_save_and_is_not_retried() {
 
     // The list survives; the pending save does not; the session stops writing.
     assert_eq!(
-        app.todos
+        app.todos()
             .iter()
             .map(|todo| todo.text.as_str())
             .collect::<Vec<_>>(),
         ["Original", "Queued"]
     );
-    assert!(!app.dirty);
+    assert!(!app.is_dirty());
     assert!(app.save_timeout(Instant::now()).is_none());
     assert!(!app.writable());
-    assert!(app.load_error.is_some());
+    assert!(app.load_error().is_some());
 
     // The message is bounded and never carries the poisoned content.
-    let message = app.load_error.clone().expect("load error");
+    let message = app.load_error().expect("load error").to_owned();
     assert!(!message.contains('\u{0}'), "{message:?}");
     assert!(!message.contains("RELOAD_POISON"), "{message:?}");
     assert!(message.chars().count() <= MAX_MESSAGE_CHARS + 3);
@@ -372,8 +376,8 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
 
     // Enter read-only recovery with one undo step outstanding, as a failed
     // reload would after an unsaved edit.
-    let _ = app.add_todos(&["Unsaved".to_owned()]);
-    assert_eq!(app.history.undo_len(), 1);
+    let _ = app.add_todos(&["Unsaved".to_owned()], current_time());
+    assert_eq!(app.undo_len(), 1);
     app.reload_failed("Cannot read the todo file: rejected");
     assert!(!app.writable());
 
@@ -387,22 +391,21 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
     app.reloaded(reloaded);
     sync.adopt(&bytes);
 
-    assert!(app.load_error.is_none());
+    assert!(app.load_error().is_none());
     assert!(app.writable(), "recovery must re-enable writes");
-    assert_eq!(app.todos.len(), 2);
-    assert_eq!(
-        app.history.undo_len(),
-        0,
-        "a reload clears the undo history"
+    assert_eq!(app.todos().len(), 2);
+    assert_eq!(app.undo_len(), 0, "a reload clears the undo history");
+    assert!(
+        !app.undo(current_time()),
+        "nothing is left to undo after a reload"
     );
-    assert!(!app.undo(), "nothing is left to undo after a reload");
 
     // Saving works again and the guard accepts the reloaded baseline.
     let mut guard = SaveGuard::open(&path, BackupPolicy::None).expect("guard");
     guard.set_baseline(bytes);
-    app.add_todos(&["Persisted".to_owned()]);
-    assert!(app.dirty);
-    guard.save(&app.todos).expect("save after recovery");
+    app.add_todos(&["Persisted".to_owned()], current_time());
+    assert!(app.is_dirty());
+    guard.save(app.todos()).expect("save after recovery");
     let saved = std::fs::read_to_string(&path).expect("read saved");
     // New todos are stamped with the session's creation date, matching the Ink
     // app, so assert the rows rather than a hand-written byte string.

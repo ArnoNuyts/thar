@@ -528,15 +528,16 @@ pub fn extract_tags_and_contexts(query: &str) -> String {
 /// Build the create screen from the current app snapshot.
 #[must_use]
 pub fn create(app: &App) -> Box<dyn Modal> {
-    let prefill = extract_tags_and_contexts(&app.query);
+    let prefill = extract_tags_and_contexts(&app.query());
+    let todos = app.todos();
     Box::new(TextModal {
         mode: Mode::Create,
         editor: Editor::with_cursor(&prefill, 0),
-        sources: TagSources::collect(&app.todos),
+        sources: TagSources::collect(todos.iter().copied()),
         suggestions: Suggestions::new(),
         selected_button: 0,
         max_chars: MAX_TODO_CHARS,
-        existing_count: app.todos.len(),
+        existing_count: todos.len(),
         ids: Vec::new(),
     })
 }
@@ -552,15 +553,16 @@ pub fn edit(app: &App) -> Box<dyn Modal> {
     let text = todo.map(|todo| todo.text.clone()).unwrap_or_default();
     let ids = todo.map(|todo| vec![todo.id]).unwrap_or_default();
     let max_chars = MAX_TODO_CHARS.max(text.encode_utf16().count());
+    let todos = app.todos();
 
     Box::new(TextModal {
         mode: Mode::Edit,
         editor: Editor::new(&text),
-        sources: TagSources::collect(&app.todos),
+        sources: TagSources::collect(todos.iter().copied()),
         suggestions: Suggestions::new(),
         selected_button: 0,
         max_chars,
-        existing_count: app.todos.len(),
+        existing_count: todos.len(),
         ids,
     })
 }
@@ -597,9 +599,9 @@ mod tests {
         let mut app = App::new(
             "todo.txt",
             todos,
-            TodoDate::parse("2026-11-15").expect("valid date"),
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
-        app.read_only = false;
+        app.set_read_only(false);
         app
     }
 
@@ -621,7 +623,6 @@ mod tests {
             Outcome::Continue => "continue",
             Outcome::Close => "close",
             Outcome::Actions(_) => "actions",
-            Outcome::Replace(_) => "replace",
         }
     }
 
@@ -652,7 +653,7 @@ mod tests {
     #[test]
     fn create_prefills_from_the_search_and_starts_at_offset_zero() {
         let mut app = app(&["one +thar @home"]);
-        app.query = "+thar @home".to_owned();
+        app.set_query("+thar @home");
         let modal = super::create(&app);
         assert_eq!(modal.id(), ModalId::CreateTodo);
         assert_eq!(modal.title(), "Create new todo");
@@ -744,14 +745,14 @@ mod tests {
     #[test]
     fn edit_starts_at_the_text_end_and_updates_the_cursor_todo() {
         let mut app = app(&["buy milk +thar @home", "second"]);
-        app.cursor = Some(app.todos[0].id);
+        app.set_cursor(Some(app.todos()[0].id));
         let mut modal = super::edit(&app);
         assert_eq!(modal.id(), ModalId::EditTodo);
         assert_eq!(modal.title(), "Edit todo");
 
         // `Todo::text` keeps the `+project`/`@context` tokens (only
         // `key:value` tags are stripped), so the editor shows the full body.
-        let id = app.todos[0].id;
+        let id = app.todos()[0].id;
         assert_eq!(
             actions(modal.handle_key(key(KeyCode::Enter))),
             [Action::UpdateText {
@@ -770,7 +771,7 @@ mod tests {
         assert_eq!(
             actions(modal.handle_key(key(KeyCode::Enter))),
             [Action::UpdateText {
-                ids: vec![app.todos[0].id],
+                ids: vec![app.todos()[0].id],
                 text: long.clone()
             }]
         );
@@ -789,7 +790,7 @@ mod tests {
     #[test]
     fn edit_without_a_cursor_todo_opens_empty() {
         let mut app = app(&[]);
-        app.cursor = None;
+        app.set_cursor(None);
         let mut modal = super::edit(&app);
         assert_eq!(
             actions(modal.handle_key(key(KeyCode::Enter)))[..],
@@ -947,13 +948,11 @@ mod tests {
 
     #[test]
     fn the_body_stays_fixed_while_the_popup_windows() {
-        let mut app = app(&["one"]);
-        for index in 0..20 {
-            app.todos.push(Todo::parse_line(
-                &format!("todo {index} +project{index:02}"),
-                TodoId::new(100 + index),
-            ));
-        }
+        let lines: Vec<String> = std::iter::once("one".to_owned())
+            .chain((0..20).map(|index| format!("todo {index} +project{index:02}")))
+            .collect();
+        let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let app = app(&refs);
         let mut modal = super::create(&app);
         type_text(&mut *modal, "+project");
         assert_eq!(modal.body_rows(), super::BASE_ROWS);

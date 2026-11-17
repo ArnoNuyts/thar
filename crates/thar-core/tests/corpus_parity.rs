@@ -30,7 +30,9 @@ fn corpus_dir() -> PathBuf {
 
 /// The corpus clock day: local `2026-11-15T12:00:00` in `expected.json`.
 fn today() -> TodoDate {
-    TodoDate::parse("2026-11-15").expect("the corpus clock day is valid")
+    "2026-11-15"
+        .parse::<TodoDate>()
+        .expect("the corpus clock day is valid")
 }
 
 #[derive(Debug, Deserialize)]
@@ -310,11 +312,15 @@ fn assert_todo(actual: &Todo, expected: &TodoRecord, today: TodoDate, context: &
         "{context}: isVisibleInOverview"
     );
     assert_eq!(
-        actual.serialize(),
+        actual.to_string(),
         expected.to_string,
         "{context}: toString"
     );
-    assert_eq!(actual.hash(), expected.hash, "{context}: hash");
+    assert_eq!(
+        actual.to_string(),
+        expected.hash,
+        "{context}: serialized line / hash"
+    );
 }
 
 fn assert_error(actual: &CoreError, expected: &ErrorRecord, file: &str) {
@@ -582,6 +588,9 @@ fn threshold_visibility_is_pinned_for_every_threshold_todo() {
 fn clock_and_limits_match_the_typescript_corpus() {
     let corpus = load_expected();
     assert_eq!(corpus.clock_local, "2026-11-15T12:00:00");
-    assert_eq!(TodoDate::parse(&corpus.clock_local[..10]), Some(today()));
+    assert_eq!(
+        corpus.clock_local[..10].parse::<TodoDate>().ok(),
+        Some(today())
+    );
     assert_eq!(corpus.limits(), ReadLimits::DEFAULT);
 }

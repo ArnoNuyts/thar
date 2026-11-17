@@ -1,6 +1,6 @@
 [package]
 name = "thar-cli"
-description = "thar-rs: the read-only Rust TUI binary for Thar"
+description = "thar-rs: the Rust TUI binary for Thar"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -24,3 +24,6 @@ jiff.workspace = true
 [dev-dependencies]
 portable-pty = "0.9.0"
 vt100 = "0.18.1"
+
+[lints]
+workspace = true

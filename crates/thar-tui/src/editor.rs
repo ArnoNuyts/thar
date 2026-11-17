@@ -28,7 +28,7 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// One line of editable text and its cursor.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Editor {
     chars: Vec<char>,
     cursor: usize,
@@ -87,9 +87,33 @@ impl Editor {
         self.cursor
     }
 
-    /// Move the cursor, clamped to the text.
-    pub fn set_cursor(&mut self, cursor: usize) {
-        self.cursor = cursor.min(self.chars.len());
+    /// Move the cursor one character left, clamped at the start.
+    pub fn move_left(&mut self) {
+        self.cursor = self.cursor.saturating_sub(1);
+    }
+
+    /// Move the cursor one character right, clamped at the end.
+    pub fn move_right(&mut self) {
+        self.cursor = (self.cursor + 1).min(self.chars.len());
+    }
+
+    /// Delete the character before the cursor.
+    ///
+    /// A backspace at the start is a no-op, so callers can drive it from a key
+    /// event without a bounds check.
+    pub fn backspace(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+        self.delete_range(self.cursor - 1, self.cursor);
+    }
+
+    /// Delete the character at the cursor.
+    pub fn delete_forward(&mut self) {
+        if self.cursor >= self.chars.len() {
+            return;
+        }
+        self.delete_range(self.cursor, self.cursor + 1);
     }
 
     /// Number of characters.

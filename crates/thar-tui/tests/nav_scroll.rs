@@ -17,7 +17,7 @@ fn app_with(lines: &[&str], width: u16, height: u16) -> App {
     let mut app = App::new(
         "todo.txt",
         todos,
-        TodoDate::parse("2026-11-15").expect("valid date"),
+        "2026-11-15".parse::<TodoDate>().expect("valid date"),
     );
     app.resize(width, height);
     app
@@ -34,7 +34,11 @@ fn with_tasks(count: usize, width: u16, height: u16) -> App {
 }
 
 fn cursor_row(app: &App) -> usize {
-    app.cursor.and_then(|id| app.row_for(id)).expect("cursor")
+    app.cursor().and_then(|id| app.row_for(id)).expect("cursor")
+}
+
+fn current_time() -> std::time::Instant {
+    std::time::Instant::now()
 }
 
 #[test]
@@ -42,7 +46,7 @@ fn one_row_padding_is_kept_at_the_bottom_of_a_120x40_list() {
     let mut app = with_tasks(60, 120, 40);
     assert_eq!(app.visible_height(), 38);
     assert_eq!(app.rows().len(), 61);
-    assert_eq!(app.offset, 0);
+    assert_eq!(app.offset(), 0);
 
     // Row 37 is the last row that fits below the cursor plus padding: the
     // offset moves to 1, leaving exactly one row under the cursor.
@@ -50,31 +54,34 @@ fn one_row_padding_is_kept_at_the_bottom_of_a_120x40_list() {
         nav::move_cursor(&mut app, 1, false);
     }
     assert_eq!(cursor_row(&app), 37);
-    assert_eq!(app.offset, 1);
-    assert_eq!(app.offset + app.visible_height() - 1 - cursor_row(&app), 1);
+    assert_eq!(app.offset(), 1);
+    assert_eq!(
+        app.offset() + app.visible_height() - 1 - cursor_row(&app),
+        1
+    );
 
     nav::select_last(&mut app);
     assert_eq!(cursor_row(&app), 60);
-    assert_eq!(app.offset, app.max_offset());
-    assert_eq!(app.offset, 23);
+    assert_eq!(app.offset(), app.max_offset());
+    assert_eq!(app.offset(), 23);
 
     nav::select_first(&mut app);
     assert_eq!(cursor_row(&app), 1);
-    assert_eq!(app.offset, 0);
+    assert_eq!(app.offset(), 0);
 }
 
 #[test]
 fn padding_above_the_cursor_scrolls_the_offset_back() {
     let mut app = with_tasks(60, 120, 40);
 
-    app.offset = 10;
+    app.set_offset(10);
     nav::select_row(&mut app, 10, false);
-    assert_eq!(app.offset, 9);
+    assert_eq!(app.offset(), 9);
 
-    app.offset = 10;
+    app.set_offset(10);
     nav::select_row(&mut app, 48, false);
-    assert_eq!(app.offset, 12);
-    assert_eq!(app.offset + app.visible_height() - 1 - 48, 1);
+    assert_eq!(app.offset(), 12);
+    assert_eq!(app.offset() + app.visible_height() - 1 - 48, 1);
 }
 
 #[test]
@@ -86,20 +93,20 @@ fn a_range_that_fits_stays_fully_visible() {
         nav::move_cursor(&mut app, 1, false);
     }
     assert_eq!(cursor_row(&app), 41);
-    assert_eq!(app.offset, 5);
+    assert_eq!(app.offset(), 5);
 
     for _ in 0..5 {
         nav::move_cursor(&mut app, 1, true);
     }
     assert_eq!(cursor_row(&app), 46);
-    assert_eq!(app.range.len(), 6);
-    assert_eq!(app.offset, 10);
+    assert_eq!(app.range().len(), 6);
+    assert_eq!(app.offset(), 10);
     for row in 41..=46 {
         assert!(
-            (app.offset..app.offset + app.visible_height()).contains(&row),
+            (app.offset()..app.offset() + app.visible_height()).contains(&row),
             "row {row} outside {}..{}",
-            app.offset,
-            app.offset + app.visible_height()
+            app.offset(),
+            app.offset() + app.visible_height()
         );
     }
 }
@@ -113,11 +120,14 @@ fn a_range_larger_than_the_viewport_keeps_the_cursor_visible() {
         nav::move_cursor(&mut app, 1, true);
     }
     assert_eq!(cursor_row(&app), 41);
-    assert_eq!(app.range.len(), 41);
-    assert!(app.range.len() > app.visible_height());
+    assert_eq!(app.range().len(), 41);
+    assert!(app.range().len() > app.visible_height());
     // The range cannot fit, so the cursor wins, still with one row below it.
-    assert_eq!(app.offset, 5);
-    assert_eq!(app.offset + app.visible_height() - 1 - cursor_row(&app), 1);
+    assert_eq!(app.offset(), 5);
+    assert_eq!(
+        app.offset() + app.visible_height() - 1 - cursor_row(&app),
+        1
+    );
 }
 
 #[test]
@@ -128,8 +138,8 @@ fn the_visible_height_follows_the_search_bar() {
     assert_eq!(app.visible_height(), 36);
 
     nav::select_last(&mut app);
-    assert_eq!(app.offset, 61 - 36);
-    assert_eq!(app.offset, app.max_offset());
+    assert_eq!(app.offset(), 61 - 36);
+    assert_eq!(app.offset(), app.max_offset());
 }
 
 #[test]
@@ -138,12 +148,12 @@ fn tiny_terminals_clamp_without_panicking() {
         let mut app = with_tasks(5, 120, height);
 
         nav::select_last(&mut app);
-        assert_eq!(app.cursor, Some(TodoId::new(4)), "height {height}");
-        assert!(app.offset <= app.max_offset(), "height {height}");
+        assert_eq!(app.cursor(), Some(TodoId::new(4)), "height {height}");
+        assert!(app.offset() <= app.max_offset(), "height {height}");
 
         nav::select_first(&mut app);
-        assert_eq!(app.cursor, Some(TodoId::new(0)), "height {height}");
-        assert!(app.offset <= app.max_offset(), "height {height}");
+        assert_eq!(app.cursor(), Some(TodoId::new(0)), "height {height}");
+        assert!(app.offset() <= app.max_offset(), "height {height}");
     }
 }
 
@@ -156,8 +166,8 @@ fn a_one_row_list_scrolls_to_the_last_row() {
 
     nav::select_last(&mut app);
     assert_eq!(cursor_row(&app), 5);
-    assert_eq!(app.offset, 5);
-    assert_eq!(app.offset, app.max_offset());
+    assert_eq!(app.offset(), 5);
+    assert_eq!(app.offset(), app.max_offset());
 }
 
 #[test]
@@ -167,22 +177,22 @@ fn focusing_or_blurring_search_reflows_the_cursor_into_the_list() {
     let mut app = with_tasks(40, 80, 10);
     nav::select_last(&mut app);
     let row = cursor_row(&app);
-    assert!(row < app.offset + app.visible_height());
+    assert!(row < app.offset() + app.visible_height());
 
-    input::apply(&mut app, input::Command::SearchFocus);
+    input::apply(&mut app, input::Command::SearchFocus, current_time());
     assert_eq!(app.visible_height(), 6);
     let row = cursor_row(&app);
     assert!(
-        row >= app.offset && row < app.offset + app.visible_height(),
+        row >= app.offset() && row < app.offset() + app.visible_height(),
         "row {row} is outside {}..{}",
-        app.offset,
-        app.offset + app.visible_height()
+        app.offset(),
+        app.offset() + app.visible_height()
     );
 
-    input::apply(&mut app, input::Command::SearchBlur);
+    input::apply(&mut app, input::Command::SearchBlur, current_time());
     assert_eq!(app.visible_height(), 8);
     let row = cursor_row(&app);
-    assert!(row >= app.offset && row < app.offset + app.visible_height());
+    assert!(row >= app.offset() && row < app.offset() + app.visible_height());
 }
 
 #[test]
@@ -194,7 +204,7 @@ fn a_zero_row_list_leaves_the_offset_alone() {
 
     nav::select_last(&mut app);
     assert_eq!(cursor_row(&app), 5);
-    assert_eq!(app.offset, 0);
+    assert_eq!(app.offset(), 0);
     assert!(app.visible_rows().is_empty());
 }
 
@@ -206,11 +216,11 @@ fn focusing_or_blurring_an_already_visible_search_bar_keeps_the_viewport() {
     let mut app = with_tasks(40, 80, 10);
     app.set_query("task");
     nav::scroll(&mut app, 5);
-    let offset = app.offset;
+    let offset = app.offset();
     assert!(offset > 0);
 
-    input::apply(&mut app, input::Command::SearchFocus);
-    assert_eq!(app.offset, offset);
-    input::apply(&mut app, input::Command::SearchBlur);
-    assert_eq!(app.offset, offset);
+    input::apply(&mut app, input::Command::SearchFocus, current_time());
+    assert_eq!(app.offset(), offset);
+    input::apply(&mut app, input::Command::SearchBlur, current_time());
+    assert_eq!(app.offset(), offset);
 }

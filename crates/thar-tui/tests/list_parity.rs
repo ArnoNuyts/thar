@@ -291,7 +291,9 @@ fn fixture_covers_every_parseable_corpus_fixture() {
 #[test]
 fn owned_row_model_matches_the_oracle() {
     let document = load_fixture();
-    let today = TodoDate::parse(CLOCK).expect("the pinned clock day is valid");
+    let today = CLOCK
+        .parse::<TodoDate>()
+        .expect("the pinned clock day is valid");
 
     for (name, fixture) in fixtures(&document) {
         let todos = parse_fixture(name);
@@ -334,7 +336,9 @@ fn owned_row_model_matches_the_oracle() {
 
 #[test]
 fn empty_lists_produce_an_empty_model() {
-    let today = TodoDate::parse(CLOCK).expect("the pinned clock day is valid");
+    let today = CLOCK
+        .parse::<TodoDate>()
+        .expect("the pinned clock day is valid");
     let todos: Vec<Todo> = Vec::new();
     let views: Vec<_> = todos.iter().map(view_for).collect();
 

@@ -26,9 +26,9 @@ fn app(lines: &[&str]) -> App {
     let mut app = App::new(
         "todo.txt",
         todos,
-        TodoDate::parse("2026-11-15").expect("valid date"),
+        "2026-11-15".parse::<TodoDate>().expect("valid date"),
     );
-    app.read_only = false;
+    app.set_read_only(false);
     app
 }
 
@@ -55,9 +55,9 @@ fn screen_lines(backend: &TestBackend) -> Vec<String> {
 
 /// The active modal's resolved rectangle.
 fn modal_area(app: &App) -> geometry::ModalRect {
-    let modal = app.modals.top().expect("an active modal");
+    let modal = app.modals().top().expect("an active modal");
     geometry::resolve(
-        ratatui::layout::Rect::new(0, 0, app.width, app.height),
+        ratatui::layout::Rect::new(0, 0, app.width(), app.height()),
         modal.width(),
         modal.body_rows(),
     )
@@ -106,6 +106,10 @@ fn cell(backend: &TestBackend, x: u16, y: u16) -> (String, Option<Color>) {
     (cell.symbol().to_owned(), cell.style().fg)
 }
 
+fn current_time() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
 #[test]
 fn eighty_by_twenty_four_pins_the_single_todo_menu() {
     let mut app = app(&["one", "two"]);
@@ -143,10 +147,13 @@ fn eighty_by_twenty_four_pins_the_single_todo_menu() {
 
     // Down moves the marker to Delete without changing the labels.
     let mut app = app;
-    app.handle_modal_key(ratatui::crossterm::event::KeyEvent::new(
-        ratatui::crossterm::event::KeyCode::Down,
-        ratatui::crossterm::event::KeyModifiers::NONE,
-    ));
+    app.handle_modal_key(
+        ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Down,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        ),
+        current_time(),
+    );
     let backend = draw(&app, 80, 24);
     assert!(body_row(&app, &backend, 0).starts_with("  Edit"));
     assert!(body_row(&app, &backend, 1).starts_with("» Delete"));
@@ -156,7 +163,7 @@ fn eighty_by_twenty_four_pins_the_single_todo_menu() {
 fn one_hundred_by_thirty_pins_the_multi_select_menu() {
     let mut app = app(&["one", "two", "three"]);
     app.resize(100, 30);
-    app.range = vec![app.todos[0].id, app.todos[1].id];
+    app.set_range(vec![app.todos()[0].id, app.todos()[1].id]);
     app.open_modal(thar_tui::ModalId::MultiSelectMenu);
     let backend = draw(&app, 100, 30);
     let rect = modal_area(&app);
@@ -197,7 +204,10 @@ fn one_hundred_by_thirty_pins_the_multi_select_menu() {
 fn one_hundred_by_thirty_pins_the_archive_confirmation() {
     let mut app = app(&["x 2026-11-01 done", "open"]);
     app.resize(100, 30);
-    app.apply_action(thar_tui::Action::Confirm(ConfirmRequest::archive()));
+    app.apply_action(
+        thar_tui::Action::Confirm(ConfirmRequest::archive()),
+        current_time(),
+    );
     let backend = draw(&app, 100, 30);
     let rect = modal_area(&app);
     assert_eq!((rect.area.x, rect.area.y), (25, 11));
@@ -223,8 +233,11 @@ fn one_hundred_by_thirty_pins_the_archive_confirmation() {
 fn eighty_by_twenty_four_pins_the_delete_confirmation() {
     let mut app = app(&["one", "two"]);
     app.resize(80, 24);
-    let ids = vec![app.todos[0].id, app.todos[1].id];
-    app.apply_action(thar_tui::Action::Confirm(ConfirmRequest::delete(ids)));
+    let ids = vec![app.todos()[0].id, app.todos()[1].id];
+    app.apply_action(
+        thar_tui::Action::Confirm(ConfirmRequest::delete(ids)),
+        current_time(),
+    );
     let backend = draw(&app, 80, 24);
     let screen = screen_lines(&backend);
 
@@ -248,8 +261,11 @@ fn eighty_by_twenty_four_pins_the_delete_confirmation() {
 fn eighty_by_twenty_four_wraps_the_single_delete_message_without_truncation() {
     let mut app = app(&["one"]);
     app.resize(80, 24);
-    let ids = vec![app.todos[0].id];
-    app.apply_action(thar_tui::Action::Confirm(ConfirmRequest::delete(ids)));
+    let ids = vec![app.todos()[0].id];
+    app.apply_action(
+        thar_tui::Action::Confirm(ConfirmRequest::delete(ids)),
+        current_time(),
+    );
     let backend = draw(&app, 80, 24);
     let screen = screen_lines(&backend);
     let rect = modal_area(&app);
@@ -282,14 +298,14 @@ fn eighty_by_twenty_four_wraps_the_single_delete_message_without_truncation() {
 fn one_hundred_by_thirty_pins_the_update_screen() {
     let mut app = app(&["one"]);
     app.resize(100, 30);
-    app.update_model = Some(UpdateModel {
+    app.set_update_model(Some(UpdateModel {
         current_version: "0.4.0".to_owned(),
         latest_version: Some("0.5.0".to_owned()),
         install_kind: InstallKind::NpmGlobal,
         command: "npm install -g @arnoarnoarno/thar@latest".to_owned(),
         release_url: "https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0".to_owned(),
         can_self_update: true,
-    });
+    }));
     app.open_modal(thar_tui::ModalId::Update);
     let backend = draw(&app, 100, 30);
     let rect = modal_area(&app);
@@ -332,14 +348,14 @@ fn one_hundred_by_thirty_pins_the_update_screen() {
 fn eighty_by_twenty_four_update_keeps_the_buttons_inside_the_frame() {
     let mut app = app(&["one"]);
     app.resize(80, 24);
-    app.update_model = Some(UpdateModel {
+    app.set_update_model(Some(UpdateModel {
         current_version: "0.4.0".to_owned(),
         latest_version: Some("0.5.0".to_owned()),
         install_kind: InstallKind::NpmGlobal,
         command: "npm install -g @arnoarnoarno/thar@latest".to_owned(),
         release_url: "https://github.com/ArnoNuyts/thar/releases/tag/v0.5.0".to_owned(),
         can_self_update: true,
-    });
+    }));
     app.open_modal(thar_tui::ModalId::Update);
     let backend = draw(&app, 80, 24);
     let rect = modal_area(&app);
@@ -361,12 +377,12 @@ fn eighty_by_twenty_four_update_keeps_the_buttons_inside_the_frame() {
 fn the_update_screen_hides_update_now_for_ephemeral_installs() {
     let mut app = app(&["one"]);
     app.resize(100, 30);
-    app.update_model = Some(UpdateModel {
+    app.set_update_model(Some(UpdateModel {
         install_kind: InstallKind::Npx,
         command: "npx @arnoarnoarno/thar@latest".to_owned(),
         can_self_update: false,
         ..UpdateModel::default()
-    });
+    }));
     app.open_modal(thar_tui::ModalId::Update);
     let backend = draw(&app, 100, 30);
     let screen = screen_lines(&backend).join("\n");

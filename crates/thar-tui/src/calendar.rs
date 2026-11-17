@@ -260,7 +260,7 @@ mod tests {
     use thar_core::TodoDate;
 
     fn date(value: &str) -> TodoDate {
-        TodoDate::parse(value).expect("valid test date")
+        value.parse::<TodoDate>().expect("valid test date")
     }
 
     fn key(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {

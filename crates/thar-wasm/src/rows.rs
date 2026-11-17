@@ -77,7 +77,7 @@
 //! Names the programme supplies stay opaque: this module never normalizes or
 //! validates a name it did not parse itself.
 
-use thar_core::{Row, RowError, RowInput, Todo, TodoDate};
+use thar_core::{Row, RowError, Todo, TodoDate};
 
 use crate::json::{self, Value, push_json_number, push_json_string};
 use crate::record::{RecordError, required_string, string_array, todo_records};
@@ -215,7 +215,10 @@ fn decode(input: &str) -> Result<BuildRequest, RowsError> {
         .get("today")
         .and_then(Value::as_str)
         .ok_or_else(|| RowsError::invalid("today", "must be a YYYY-MM-DD string"))
-        .and_then(|text| TodoDate::parse(text).ok_or(RowsError::InvalidToday))?;
+        .and_then(|text| {
+            text.parse::<TodoDate>()
+                .map_err(|_| RowsError::InvalidToday)
+        })?;
 
     let show_hidden = document
         .get("showHidden")
@@ -245,40 +248,27 @@ fn decode(input: &str) -> Result<BuildRequest, RowsError> {
 
 /// Build the rows for a decoded request.
 ///
-/// Goes through [`RowInput`] so this boundary and any other caller of the core
-/// share one entry point (`RowInput::build`); the borrows live for the call.
+/// The decoded records already own their name lists, so the views borrow them
+/// directly; the borrows live for the call.
 fn rows_for(request: &BuildRequest) -> Result<thar_core::Rows<'_>, RowsError> {
     let terms: Vec<&str> = request.terms.iter().map(String::as_str).collect();
-    let context_refs: Vec<Vec<&str>> = request
-        .views
-        .iter()
-        .map(|view| view.contexts.iter().map(String::as_str).collect())
-        .collect();
-    let project_refs: Vec<Vec<&str>> = request
-        .views
-        .iter()
-        .map(|view| view.projects.iter().map(String::as_str).collect())
-        .collect();
-
     let views: Vec<thar_core::SearchView<'_>> = request
         .views
         .iter()
-        .enumerate()
-        .map(|(index, view)| thar_core::SearchView {
+        .map(|view| thar_core::SearchView {
             text: &view.text,
-            contexts: &context_refs[index],
-            projects: &project_refs[index],
+            contexts: &view.contexts,
+            projects: &view.projects,
         })
         .collect();
 
-    RowInput {
-        todos: &request.todos,
-        views: &views,
-        terms: &terms,
-        show_hidden: request.show_hidden,
-        today: request.today,
-    }
-    .build()
+    thar_core::build_rows(
+        &request.todos,
+        &views,
+        &terms,
+        request.show_hidden,
+        request.today,
+    )
     .map_err(RowsError::from)
 }
 

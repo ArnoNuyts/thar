@@ -27,8 +27,3 @@ PATH="$HOME/.local/share/mise/installs/node/26.12.0/bin:$PATH" \
 Lists above 500 expected entries are stored as `{ "count": n, "sha256": "…" }`
 of the newline-joined values, so `testdata/port/large-10000.txt` is pinned
 exactly without a multi-megabyte fixture.
-
-The `Cased` and `Case_Ignorable` range tables in `src/search.rs` were generated
-from the same Node 26.12 / Unicode 17.0 property data with
-`../generate-unicode-tables.mjs`; if the fixture is regenerated on a different
-Unicode version, regenerate those tables too.

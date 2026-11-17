@@ -39,11 +39,13 @@ use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use thar_core::{MAX_PASTE_TODOS, ReadLimits, TodoDate};
+use thar_core::{ReadLimits, TodoDate};
 use thar_store::SaveGuard;
-use thar_tui::input::{self, LastClick, MouseInput, MouseKind};
+use thar_tui::event::{LastClick, MouseInput, MouseKind};
+use thar_tui::input;
 use thar_tui::{App, Effect, view};
 
+use crate::clipboard::{copy, paste};
 use crate::file::{get_read_limits, parse_bytes};
 use crate::sync::{FileSync, RELOADED_MESSAGE, ReloadOutcome, bounded_message};
 
@@ -223,7 +225,7 @@ impl TerminalSession {
         // override into exit code 2; the default is only a library-caller
         // fallback.
         let limits = get_read_limits().unwrap_or_default();
-        let mut sync = FileSync::new(app.filename.as_str(), limits);
+        let mut sync = FileSync::new(app.filename(), limits);
         let mut last_click: Option<LastClick> = None;
 
         loop {
@@ -233,19 +235,19 @@ impl TerminalSession {
             let now = Instant::now();
             app.expire_toast(now);
             if app.save_due(now) {
-                flush_save(app, store.as_deref_mut(), &mut sync);
+                flush_save(app, store.as_deref_mut(), &mut sync, now);
             }
             self.terminal.draw(|frame| view::render(frame, app))?;
 
-            if app.should_quit {
+            if app.should_quit() {
                 // The Ink app can lose a save queued <50 ms before `q`; CP7
                 // flushes it, because losing the last keystroke of an edit is
                 // exactly the data-safety failure this checkpoint exists to
                 // prevent.
-                if app.dirty {
-                    flush_save(app, store.as_deref_mut(), &mut sync);
+                if app.is_dirty() {
+                    flush_save(app, store.as_deref_mut(), &mut sync, now);
                 }
-                if app.dirty {
+                if app.is_dirty() {
                     return Err(io::Error::other(
                         "unsaved changes: the last save failed; the file was left untouched",
                     ));
@@ -262,10 +264,10 @@ impl TerminalSession {
                 match event::read()? {
                     Event::Key(key) => {
                         if key.kind != KeyEventKind::Release
-                            && !app.handle_modal_key(key)
+                            && !app.handle_modal_key(key, now)
                             && let Some(command) = input::command_for_key_in(app, key)
                         {
-                            input::apply(app, command);
+                            input::apply(app, command, now);
                         }
                     }
                     Event::Mouse(mouse) => {
@@ -278,22 +280,22 @@ impl TerminalSession {
                                     .modifiers
                                     .contains(ratatui::crossterm::event::KeyModifiers::SHIFT),
                             };
-                            if app.handle_modal_mouse(input) {
+                            if app.handle_modal_mouse(input, now) {
                                 // The modal consumed the click.
                             } else {
                                 let (next, command) =
-                                    input::handle_mouse(app, input, last_click, Instant::now());
+                                    input::handle_mouse(app, input, last_click, now);
                                 last_click = next;
                                 if let Some(command) = command {
-                                    input::apply(app, command);
+                                    input::apply(app, command, now);
                                 }
                             }
                         }
                     }
                     Event::Resize(width, height) => app.resize(width, height),
                     Event::Paste(text) => {
-                        if !app.handle_modal_paste(&text) {
-                            paste_into_focused(app, &text);
+                        if !app.handle_modal_paste(&text, now) {
+                            paste_into_focused(app, &text, now);
                         }
                     }
                     // Focus does not change any read-only state. The next
@@ -314,7 +316,7 @@ impl TerminalSession {
                 Instant::now(),
             );
 
-            process_effects(app, store.as_deref_mut());
+            process_effects(app, store.as_deref_mut(), now);
 
             // A timeout at (or past) midnight lands here and re-derives the
             // local day, rebuilding overdue/threshold verdicts exactly once.
@@ -368,19 +370,19 @@ pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()
 /// backoff. The watcher normally reloads the external file first, which clears
 /// the dirty state and rebaselines both the guard and the watcher; a quit
 /// before that happens exits non-zero rather than reporting a false save.
-fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync) {
+fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync, now: Instant) {
     let Some(store) = store else {
-        if app.read_only {
+        if app.is_read_only() {
             app.mark_saved();
         } else {
             // A write-enabled app must never report a successful save without
             // a store. This is a programming error, not a user error, but it
             // still must not drop the edit silently.
-            app.mark_save_failed("no write store is attached");
+            app.mark_save_failed(now, "no write store is attached");
         }
         return;
     };
-    match store.save(&app.todos) {
+    match store.save(app.todos()) {
         Ok(_) => {
             // The window starts after the rename, not before the serialization,
             // so a slow filesystem cannot shorten it.
@@ -388,7 +390,7 @@ fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync)
             sync.adopt(store.last_bytes());
             app.mark_saved();
         }
-        Err(error) => app.mark_save_failed(error.to_string()),
+        Err(error) => app.mark_save_failed(now, error.to_string()),
     }
 }
 
@@ -422,7 +424,7 @@ fn apply_reload(
             Err(error) => app.reload_failed(bounded_message(&error.to_string())),
         },
         ReloadOutcome::Unchanged => {
-            if app.load_error.is_some() {
+            if app.load_error().is_some() {
                 app.recovered();
                 app.push_toast(RELOADED_MESSAGE);
             }
@@ -432,17 +434,17 @@ fn apply_reload(
 }
 
 /// Drain the host effects queued by commands.
-fn process_effects(app: &mut App, mut store: Option<&mut SaveGuard>) {
+fn process_effects(app: &mut App, mut store: Option<&mut SaveGuard>, now: Instant) {
     for effect in app.take_effects() {
         match effect {
-            Effect::ArchiveCompleted => archive(app, store.as_deref_mut()),
-            Effect::Copy(text) => copy(app, &text),
-            Effect::Paste => paste(app),
+            Effect::ArchiveCompleted => archive(app, store.as_deref_mut(), now),
+            Effect::Copy(text) => copy_to_clipboard(app, &text),
+            Effect::Paste => paste_from_clipboard(app, now),
         }
     }
 }
 
-fn archive(app: &mut App, store: Option<&mut SaveGuard>) {
+fn archive(app: &mut App, store: Option<&mut SaveGuard>, now: Instant) {
     let ids = app.completed_ids();
     if ids.is_empty() {
         return;
@@ -459,17 +461,17 @@ fn archive(app: &mut App, store: Option<&mut SaveGuard>) {
     }
 
     let todos = app.todos_by_ids(&ids);
-    let done = done_path(&app.filename);
+    let done = done_path(app.filename());
 
     match thar_store::append_done(&done, &todos) {
-        Ok(()) => app.remove_ids(&ids),
+        Ok(()) => app.remove_ids(&ids, now),
         Err(error) => app.push_toast(format!("Archive failed: {error}")),
     }
 }
 
-fn copy(app: &mut App, text: &str) {
+fn copy_to_clipboard(app: &mut App, text: &str) {
     let count = text.lines().count();
-    match thar_store::clipboard::copy(text) {
+    match copy(text) {
         Ok(()) => app.push_toast(match count {
             1 => "Todo copied".to_owned(),
             count => format!("{count} todos copied"),
@@ -478,23 +480,14 @@ fn copy(app: &mut App, text: &str) {
     }
 }
 
-fn paste(app: &mut App) {
-    match thar_store::clipboard::paste() {
-        Ok(text) => {
-            if text
-                .lines()
-                .any(|line| line.chars().any(|character| !is_safe_todo_char(character)))
-            {
-                app.push_toast("Paste failed: a line contains a control character");
-                return;
-            }
-            app.receive_clipboard(&text);
-        }
+fn paste_from_clipboard(app: &mut App, now: Instant) {
+    match paste() {
+        Ok(text) => app.receive_clipboard(&text, now),
         Err(error) => app.push_toast(format!("Paste failed: {error}")),
     }
 }
 
-fn done_path(filename: &str) -> std::path::PathBuf {
+fn done_path(filename: &std::path::Path) -> std::path::PathBuf {
     std::path::Path::new(filename)
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
@@ -517,27 +510,22 @@ fn mouse_kind(kind: MouseEventKind) -> Option<MouseKind> {
 /// separators) are dropped: the search input is one line, and pasted terminal
 /// control data must never reach the query.
 fn is_pastable(character: char) -> bool {
-    !matches!(
-        character,
-        '\u{0000}'..='\u{001F}' | '\u{007F}'..='\u{009F}' | '\u{2028}' | '\u{2029}'
-    )
-}
-
-/// True for a character the file writer accepts in todo text.
-///
-/// The writer rejects every C0/C1 control and the two Unicode line separators,
-/// but allows a tab (it is ordinary text inside a todo line).
-fn is_safe_todo_char(character: char) -> bool {
-    character == '\t' || is_pastable(character)
+    !thar_core::is_rejected_control(character)
 }
 
 /// Bracketed paste into the focused surface.
 ///
-/// The search bar keeps its one-line filter; the list adds one todo per
-/// non-empty line when `--write` is active. Modals receive their paste through
-/// [`App::handle_modal_paste`] before this function runs.
-fn paste_into_focused(app: &mut App, text: &str) {
-    if app.search_focused {
+/// The search bar keeps its one-line filter. The list hands the raw text to
+/// [`App::receive_clipboard`], which owns splitting, trimming, the core
+/// validation (including control characters), the paste limit, the large paste
+/// confirmation and the shared read-only gate. Modals receive their paste
+/// through [`App::handle_modal_paste`] before this function runs.
+///
+/// There is deliberately no read-only early return here: the list paste must go
+/// through [`App::receive_clipboard`] so the one mutation gate produces the
+/// bounded toast instead of silently dropping the paste.
+fn paste_into_focused(app: &mut App, text: &str, now: Instant) {
+    if app.search_focused() {
         let text: String = text
             .chars()
             .filter(|character| is_pastable(*character))
@@ -546,42 +534,19 @@ fn paste_into_focused(app: &mut App, text: &str) {
         return;
     }
 
-    if app.read_only {
-        return;
-    }
-
-    let lines: Vec<String> = text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_owned)
-        .collect();
-    if lines.is_empty() {
-        return;
-    }
-    if lines.len() > MAX_PASTE_TODOS {
-        app.push_toast(format!(
-            "Too many todos in one paste; the limit is {MAX_PASTE_TODOS}"
-        ));
-        return;
-    }
-    if lines
-        .iter()
-        .any(|line| line.chars().any(|character| !is_safe_todo_char(character)))
-    {
-        app.push_toast("Paste failed: a line contains a control character");
-        return;
-    }
-    let _ = app.add_todos(&lines);
+    app.receive_clipboard(text, now);
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        is_pastable, is_safe_todo_char, panic_value_is_trigger, today_local,
+        is_pastable, panic_value_is_trigger, paste_into_focused, today_local,
         until_next_local_midnight,
     };
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
+
+    use thar_core::TodoDate;
+    use thar_tui::App;
 
     #[test]
     fn today_is_a_valid_calendar_date() {
@@ -635,11 +600,47 @@ mod tests {
     }
 
     #[test]
-    fn todo_paste_allows_tab_but_not_other_controls() {
-        assert!(is_safe_todo_char('a'));
-        assert!(is_safe_todo_char('\t'));
-        assert!(!is_safe_todo_char('\n'));
-        assert!(!is_safe_todo_char('\u{001B}'));
-        assert!(!is_safe_todo_char('\u{2029}'));
+    fn a_read_only_list_paste_hits_the_shared_gate() {
+        let mut app = App::new(
+            "todo.txt",
+            Vec::new(),
+            TodoDate::new(2026, 11, 17).expect("valid date"),
+        );
+        let now = Instant::now();
+        let text = (1..=11)
+            .map(|index| format!("pasted {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        paste_into_focused(&mut app, &text, now);
+        assert!(app.todos().is_empty(), "a read-only paste adds nothing");
+        assert!(!app.modals().is_open(), "no confirmation may open");
+        assert_eq!(
+            app.toast_message(now),
+            Some(thar_tui::input::READ_ONLY_MESSAGE)
+        );
+        assert!(!app.is_dirty());
+    }
+
+    #[test]
+    fn list_paste_delegates_splitting_and_validation_to_the_app() {
+        let mut app = App::new(
+            "todo.txt",
+            Vec::new(),
+            TodoDate::new(2026, 11, 17).expect("valid date"),
+        );
+        app.set_read_only(false);
+        let now = Instant::now();
+
+        paste_into_focused(&mut app, "  one  \n\n\ttwo\t\n", now);
+        let texts: Vec<&str> = app.todos().iter().map(|todo| todo.text.as_str()).collect();
+        assert_eq!(texts, ["one", "two"]);
+        assert!(app.is_dirty());
+
+        // Control-character validation belongs to the app's core batch check.
+        // The list branch must not keep a second, divergent pre-check, and a
+        // rejected batch must add nothing.
+        paste_into_focused(&mut app, "safe\na\u{001B}b", now);
+        assert_eq!(app.todos().len(), 2);
     }
 }

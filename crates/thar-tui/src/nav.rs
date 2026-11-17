@@ -7,7 +7,7 @@
 //! is contiguous over todo rows only. The uncategorised `"None"` header is a
 //! row like any other, so every row index here already accounts for it.
 //!
-//! [`scroll_to`] is a direct use of [`thar_core::calculate_scroll_offset`], the
+//! `scroll_to` is a direct use of [`thar_core::calculate_scroll_offset`], the
 //! ported `calculateScrollOffset`: the offset keeps the cursor and as much of
 //! the shift range as possible visible, with one row of padding.
 //!
@@ -41,15 +41,18 @@ pub fn select_row(app: &mut App, row: usize, shift: bool) {
     };
 
     if shift {
-        let anchor = app.anchor.unwrap_or_else(|| app.cursor.unwrap_or(id));
-        app.anchor = Some(anchor);
-        app.range = range_between(app, anchor, id);
+        let anchor = app
+            .selection
+            .anchor
+            .unwrap_or_else(|| app.selection.cursor.unwrap_or(id));
+        app.selection.anchor = Some(anchor);
+        app.selection.range = range_between(app, anchor, id);
     } else {
-        app.anchor = None;
-        app.range.clear();
+        app.selection.anchor = None;
+        app.selection.range.clear();
     }
 
-    app.cursor = Some(id);
+    app.selection.cursor = Some(id);
     scroll_to(app, row);
 }
 
@@ -58,7 +61,11 @@ pub fn select_row(app: &mut App, row: usize, shift: bool) {
 /// Crossing a list boundary lands on the first (backward) or last (forward)
 /// todo row, never on a header.
 pub fn move_cursor(app: &mut App, step: isize, shift: bool) {
-    let current = app.cursor.and_then(|id| app.row_for(id)).unwrap_or(0);
+    let current = app
+        .selection
+        .cursor
+        .and_then(|id| app.row_for(id))
+        .unwrap_or(0);
     let Some(row) = navigable_row(app, current, step) else {
         return;
     };
@@ -89,7 +96,7 @@ pub fn select_last(app: &mut App) {
 /// The group must directly follow its header; an empty group is not entered,
 /// matching the oracle's loop that stops at the next header.
 pub fn move_context(app: &mut App, direction: isize, shift: bool) {
-    let Some(current) = app.cursor.and_then(|id| app.row_for(id)) else {
+    let Some(current) = app.selection.cursor.and_then(|id| app.row_for(id)) else {
         return;
     };
 
@@ -140,8 +147,8 @@ pub fn scroll(app: &mut App, direction: isize) {
 
 /// Clear a shift-selection, keeping the cursor.
 pub fn clear_range(app: &mut App) {
-    app.anchor = None;
-    app.range.clear();
+    app.selection.anchor = None;
+    app.selection.range.clear();
 }
 
 /// Rebuild the row model after a query change and reconcile the selection.
@@ -169,7 +176,7 @@ pub fn toggle_hidden_view(app: &mut App) {
 /// range-aware [`calculate_scroll_offset`]; with no cursor the offset is simply
 /// clamped.
 pub fn reflow(app: &mut App) {
-    match app.cursor.and_then(|id| app.row_for(id)) {
+    match app.selection.cursor.and_then(|id| app.row_for(id)) {
         Some(row) => scroll_to(app, row),
         None => app.clamp_offset(),
     }
@@ -186,29 +193,33 @@ struct Previous {
 impl Previous {
     fn capture(app: &App) -> Self {
         Self {
-            cursor: app.cursor,
-            anchor: app.anchor,
-            range: app.range.clone(),
-            row: app.cursor.and_then(|id| app.row_for(id)).unwrap_or(0),
+            cursor: app.selection.cursor,
+            anchor: app.selection.anchor,
+            range: app.selection.range.clone(),
+            row: app
+                .selection
+                .cursor
+                .and_then(|id| app.row_for(id))
+                .unwrap_or(0),
         }
     }
 
     /// Restore the cursor and range over the rebuilt row model.
     fn reconcile(self, app: &mut App) {
-        app.cursor = match self.cursor {
+        app.selection.cursor = match self.cursor {
             Some(id) if app.row_for(id).is_some() => Some(id),
             _ => validate_cursor(app, self.row),
         };
 
         if self.range.iter().all(|id| app.row_for(*id).is_some()) {
-            app.range = self.range;
-            app.anchor = self.anchor;
+            app.selection.range = self.range;
+            app.selection.anchor = self.anchor;
         } else {
-            app.range.clear();
-            app.anchor = None;
+            app.selection.range.clear();
+            app.selection.anchor = None;
         }
 
-        match app.cursor.and_then(|id| app.row_for(id)) {
+        match app.selection.cursor.and_then(|id| app.row_for(id)) {
             Some(row) => scroll_to(app, row),
             None => app.clamp_offset(),
         }
@@ -282,7 +293,7 @@ fn scroll_to(app: &mut App, row: usize) {
         return;
     }
 
-    let range = app.range.clone();
+    let range = app.selection.range.clone();
     let selection = selection_range_rows(app, &range, row);
     app.offset = calculate_scroll_offset(row, selection, app.offset, height, app.rows().len());
     app.clamp_offset();
@@ -362,7 +373,7 @@ mod tests {
         let mut app = App::new(
             "todo.txt",
             todos,
-            TodoDate::parse("2026-11-15").expect("valid date"),
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
         app.resize(80, 10);
         app
@@ -401,7 +412,7 @@ mod tests {
         select_first(&mut app);
         move_cursor(&mut app, 1, true);
         assert_eq!(app.selected_todos().len(), 2);
-        assert_eq!(app.anchor, Some(TodoId::new(1)));
+        assert_eq!(app.selection.anchor, Some(TodoId::new(1)));
         clear_range(&mut app);
         assert_eq!(app.selected_todos().len(), 1);
     }

@@ -80,7 +80,7 @@ pub struct LoadedFile {
 /// Returns [`LoadError`] for a real read failure, an invalid limit override,
 /// or a file that violates the read limits. A missing file is not an error: it
 /// returns an empty list and a note.
-pub fn load(path: &str) -> Result<LoadedFile, LoadError> {
+pub fn load(path: &Path) -> Result<LoadedFile, LoadError> {
     let limits = get_read_limits()?;
     load_with_limits(path, &limits)
 }
@@ -90,8 +90,8 @@ pub fn load(path: &str) -> Result<LoadedFile, LoadError> {
 /// # Errors
 ///
 /// See [`load`].
-pub fn load_with_limits(path: &str, limits: &ReadLimits) -> Result<LoadedFile, LoadError> {
-    match read_bytes(Path::new(path), limits) {
+pub fn load_with_limits(path: &Path, limits: &ReadLimits) -> Result<LoadedFile, LoadError> {
+    match read_bytes(path, limits) {
         Ok(bytes) => Ok(LoadedFile {
             todos: parse_bytes(&bytes, limits)?,
             error: None,

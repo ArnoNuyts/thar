@@ -12,10 +12,10 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use thar_core::TodoId;
+use thar_core::{Priority, TodoId};
 
 use crate::app::App;
-use crate::input::{MouseInput, MouseKind};
+use crate::event::{MouseInput, MouseKind};
 use crate::modal::{Action, Modal, ModalId, ModalRect, ModalWidth, Outcome, geometry};
 use crate::theme;
 
@@ -25,7 +25,7 @@ pub(crate) const PRIORITIES: [char; 6] = ['A', 'B', 'C', 'D', 'E', 'F'];
 /// The `Set Priority` screen.
 pub(crate) struct SetPriorityModal {
     ids: Vec<TodoId>,
-    options: Vec<Option<char>>,
+    options: Vec<Option<Priority>>,
     selected: usize,
     terminal: Rect,
 }
@@ -37,7 +37,10 @@ impl SetPriorityModal {
         let ids: Vec<TodoId> = selected.iter().map(|todo| todo.id).collect();
         let has_priority = selected.first().is_some_and(|todo| todo.priority.is_some());
 
-        let mut options: Vec<Option<char>> = PRIORITIES.iter().copied().map(Some).collect();
+        let mut options: Vec<Option<Priority>> = PRIORITIES
+            .iter()
+            .map(|letter| Priority::new(*letter))
+            .collect();
         if has_priority {
             options.push(None);
         }
@@ -46,26 +49,21 @@ impl SetPriorityModal {
             ids,
             options,
             selected: 0,
-            terminal: Rect::new(0, 0, app.width, app.height),
-        }
-    }
-
-    /// The label of the highlighted row.
-    fn label(&self, index: usize) -> &'static str {
-        match self.options.get(index) {
-            Some(Some('A')) => "A",
-            Some(Some('B')) => "B",
-            Some(Some('C')) => "C",
-            Some(Some('D')) => "D",
-            Some(Some('E')) => "E",
-            Some(Some('F')) => "F",
-            Some(Some(_)) | Some(None) | None => "Unset",
+            terminal: Rect::new(0, 0, app.width(), app.height()),
         }
     }
 
     /// The priority value of a row (`Unset` is `None`).
-    fn value(&self, index: usize) -> Option<char> {
+    fn value(&self, index: usize) -> Option<Priority> {
         self.options.get(index).copied().flatten()
+    }
+
+    /// The label of the highlighted row.
+    fn label(&self, index: usize) -> String {
+        self.value(index).map_or_else(
+            || "Unset".to_owned(),
+            |priority| priority.as_char().to_string(),
+        )
     }
 
     fn move_selection(&mut self, delta: i32) {
@@ -175,8 +173,8 @@ impl Modal for SetPriorityModal {
                 ),
                 Span::styled(self.label(index), base),
             ];
-            if let Some(letter) = self.value(index)
-                && let Some(color) = theme::priority_color(letter)
+            if let Some(priority) = self.value(index)
+                && let Some(color) = theme::priority_color(priority.as_char())
             {
                 spans[1].style = base.fg(color);
             }
@@ -192,7 +190,7 @@ impl Modal for SetPriorityModal {
 mod tests {
     use super::{PRIORITIES, SetPriorityModal};
     use crate::app::App;
-    use crate::input::{MouseInput, MouseKind};
+    use crate::event::{MouseInput, MouseKind};
     use crate::modal::{Action, Modal, Outcome};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -208,10 +206,10 @@ mod tests {
         let mut app = App::new(
             "todo.txt",
             todos,
-            TodoDate::parse("2026-11-15").expect("valid date"),
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
         app.resize(80, 24);
-        app.read_only = false;
+        app.set_read_only(false);
         app
     }
 
@@ -222,7 +220,7 @@ mod tests {
     fn actions(outcome: Outcome) -> Vec<Action> {
         match outcome {
             Outcome::Actions(actions) => actions,
-            Outcome::Continue | Outcome::Close | Outcome::Replace(_) => {
+            Outcome::Continue | Outcome::Close => {
                 panic!("unexpected outcome")
             }
         }
@@ -256,13 +254,13 @@ mod tests {
     #[test]
     fn enter_applies_the_highlighted_priority() {
         let app = app(&["task"]);
-        let ids = vec![app.todos[0].id];
+        let ids = vec![app.todos()[0].id];
         let mut modal = SetPriorityModal::new(&app);
         assert_eq!(
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::SetPriority {
                 ids: ids.clone(),
-                priority: Some('A')
+                priority: Some(Priority::new('A').unwrap())
             }]
         );
         modal.handle_key(key(KeyCode::Down));
@@ -271,7 +269,7 @@ mod tests {
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::SetPriority {
                 ids,
-                priority: Some('C')
+                priority: Some(Priority::new('C').unwrap())
             }]
         );
     }
@@ -279,7 +277,7 @@ mod tests {
     #[test]
     fn unset_clears_the_priority() {
         let app = app(&["(B) task"]);
-        let ids = vec![app.todos[0].id];
+        let ids = vec![app.todos()[0].id];
         let mut modal = SetPriorityModal::new(&app);
         modal.handle_key(key(KeyCode::Up));
         assert_eq!(
@@ -309,7 +307,7 @@ mod tests {
     #[test]
     fn mouse_rows_hover_and_click() {
         let app = app(&["task"]);
-        let ids = vec![app.todos[0].id];
+        let ids = vec![app.todos()[0].id];
         let mut modal = SetPriorityModal::new(&app);
         let rect = modal.rect();
         let x = rect.body.x + 1;
@@ -333,7 +331,7 @@ mod tests {
             })),
             vec![Action::SetPriority {
                 ids,
-                priority: Some('C')
+                priority: Some(Priority::new('C').unwrap())
             }]
         );
     }

@@ -44,6 +44,25 @@ fn no_update_check_is_accepted_with_help() {
     assert!(stdout(&output).contains("Usage:"));
 }
 
+#[cfg(unix)]
+#[test]
+fn a_non_utf8_file_argument_is_accepted() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    // The old `std::env::args()` path panicked on this. `args_os` must pass
+    // the bytes through parsing; `--help` keeps the run from opening a file.
+    let name = OsString::from_vec(b"todo-\xFF.txt".to_vec());
+    let output = thar()
+        .arg("--help")
+        .arg(&name)
+        .output()
+        .expect("run thar-rs");
+    assert_eq!(output.status.code(), Some(0));
+    assert!(stdout(&output).contains("Usage:"));
+    assert!(stderr(&output).is_empty());
+}
+
 #[test]
 fn unknown_option_is_a_usage_error() {
     let output = thar().arg("--nope").output().expect("run thar-rs");

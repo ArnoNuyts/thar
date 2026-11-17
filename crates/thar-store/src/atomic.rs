@@ -132,8 +132,6 @@ mod tests {
 
     #[test]
     fn replaces_a_file_and_preserves_mode() {
-        #[cfg(unix)]
-        use std::os::unix::fs::PermissionsExt;
         let directory = temp_dir("atomic-replace");
         let path = directory.join("todo.txt");
         std::fs::write(&path, b"old\n").expect("seed");
@@ -145,13 +143,16 @@ mod tests {
 
         write_atomic(&path, b"new\n").expect("save");
         assert_eq!(std::fs::read(&path).expect("read"), b"new\n");
-        let mode = std::fs::metadata(&path)
-            .expect("metadata")
-            .permissions()
-            .mode()
-            & 0o777;
         #[cfg(unix)]
-        assert_eq!(mode, 0o640);
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path)
+                .expect("metadata")
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o640);
+        }
         assert!(
             std::fs::read_dir(&directory)
                 .expect("entries")

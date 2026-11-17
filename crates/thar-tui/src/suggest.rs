@@ -36,8 +36,10 @@ impl TagSources {
     ///
     /// Matching `collectTagSources` in the oracle, the whole list contributes,
     /// not just the visible rows, and the result is de-duplicated and sorted.
+    /// The argument is any iterator of `&Todo`, so a caller that shares todos
+    /// through `Rc<Todo>` can collect references without cloning the values.
     #[must_use]
-    pub fn collect(todos: &[Todo]) -> Self {
+    pub fn collect<'a>(todos: impl IntoIterator<Item = &'a Todo>) -> Self {
         let mut projects: Vec<String> = Vec::new();
         let mut contexts: Vec<String> = Vec::new();
 
@@ -80,15 +82,6 @@ fn is_name_char(character: char) -> bool {
     character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '-')
 }
 
-/// True for JavaScript `\s`.
-///
-/// Rust's [`char::is_whitespace`] is the Unicode `White_Space` property; the
-/// only extra member of JavaScript's `\s` is the byte-order mark, which a
-/// hand-written list here keeps explicit.
-fn is_js_whitespace(character: char) -> bool {
-    thar_core::is_js_whitespace(character)
-}
-
 /// A `+project`/`@context` word being typed at the cursor.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TagWordStart {
@@ -129,7 +122,7 @@ pub fn match_tag_word_start(left: &str) -> Option<TagWordStart> {
     let start = start - 1;
 
     // Either the prefix starts the text, or a whitespace character precedes it.
-    if start > 0 && !is_js_whitespace(chars[start - 1]) {
+    if start > 0 && !thar_core::is_js_whitespace(chars[start - 1]) {
         return None;
     }
 
@@ -354,7 +347,10 @@ mod tests {
         assert_eq!(sources.contexts, ["home", "work"]);
         assert!(sources.contains(TagKind::Project, "thar"));
         assert!(!sources.contains(TagKind::Context, "thar"));
-        assert_eq!(TagSources::collect(&[]), TagSources::default());
+        assert_eq!(
+            TagSources::collect(std::iter::empty::<&Todo>()),
+            TagSources::default()
+        );
     }
 
     #[test]

@@ -228,7 +228,7 @@ jobs:
           wasm-opt --version
 
       - name: Build WASM package (Node target)
-        run: wasm-pack build crates/thar-wasm --release --target nodejs --out-dir pkg --locked
+        run: node scripts/build-wasm.mjs
 
       - name: Check WASM size budget
         run: |

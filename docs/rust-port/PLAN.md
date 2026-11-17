@@ -426,7 +426,7 @@ recorded. Do not start the next checkpoint while one is red.
 #### CP3b1 — row builder + live rows contract (no wiring)
 
 - `thar-core::build_rows` composes the existing pieces without duplicating
-  them: `sort_by_importance` → `filter_hidden` (unless hidden todos are shown)
+  them: `sort_by_importance` → the visibility filter (unless hidden todos are shown)
   → the `filter_by_search` predicate → `create_rows`. It returns `Rows`: the
   `Row` list plus the ordered input indexes behind the todo rows, so the host
   maps rows back without a second pass. Empty terms match everything; a view
@@ -570,7 +570,7 @@ one extra best-effort `fsync` per save before the rename (measured ~0.4 ms →
   takes (moved to `crates/thar-wasm/src/record.rs`), so tags stay array-valued
   and both round-trip flags cross the boundary. Each record is rebuilt with
   `Todo::from_parts`, so nothing is re-parsed and no unwrap can see wire data.
-- **Exact write shape.** Per-record `serialize()`, joined with `"\n"`, plus
+- **Exact write shape.** Per-record `Display`/`to_string()`, joined with `"\n"`, plus
   **one trailing `"\n"`**. Zero todos is not a special case: the TypeScript
   oracle is `[].join("\n") + "\n"`, which is `"\n"`, so an empty todo list
   writes a one-byte file, not an empty one. `empty.txt` pins that in the write
@@ -862,7 +862,9 @@ undo/redo commands, while the modal screens arrive in parallel workstreams.
   CP6 invariant that could not survive CP7.
 - **Undo/redo.** `thar-tui::history` snapshots the whole list per mutation, one
   step per command (matching `todo-context.tsx`), clears both stacks on a load,
-  and is exposed through `z`/`Z`. Recurring toggles append their next instance.
+  and is exposed through `z`/`Z`. Snapshots store `Rc<Todo>` handles, so a
+  mutation replaces only the touched todo and shares the rest with history.
+  Recurring toggles append their next instance.
 - **Command seam.** The list keymap reports the new intents, `App` owns the
   mutation and the debounce (`SAVE_DEBOUNCE = 50 ms`), and `Effect` carries the
   host-only work (archive, clipboard) back to the event loop. `input::apply`
@@ -870,11 +872,10 @@ undo/redo commands, while the modal screens arrive in parallel workstreams.
 - **Modal host.** `thar-tui::modal` owns one active screen, the centred
   geometry (`3 + body + 2` chrome), the `Action` vocabulary (create, text,
   delete, toggle, dates, priority, recurrence, tags, undo/redo, view, copy,
-  paste, archive) and a registry split into `registry_editor`, `registry_date`,
-  `registry_meta` and `registry_menu`. Each parallel CP7 workstream fills only
-  its own registry file and screen modules; `view/overlay.rs` draws whatever
-  the stack holds. The four registry files are empty in this slice, so a key
-  for a not-yet-landed screen shows one bounded message.
+  paste, archive) and one exhaustive registry (`modal/registry.rs`) for every
+  screen id. `view/overlay.rs` draws whatever the stack holds. A screen the
+  host cannot build (the update screen without a model) shows one bounded
+  message; `Confirm` is opened with its request instead of by id.
 - **Tests and evidence.** `thar-store` 11 unit tests (atomic replace + mode,
   backup-once, external-edit refusal, deleted-target refusal, append, ensure);
   `thar-tui` app/history tests (stable ids, one-step group, undo/redo,

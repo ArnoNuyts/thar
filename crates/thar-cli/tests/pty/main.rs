@@ -175,6 +175,37 @@ fn a_real_pty_session_leaves_the_file_and_directory_untouched() {
 }
 
 #[test]
+fn a_read_only_bracketed_paste_is_refused_by_the_shared_gate() {
+    let directory = TempDir::new("pty-read-only-paste");
+    let path = directory.write("todo.txt", b"one\n");
+    let mut session = Session::open(&path);
+
+    session.wait_text("READ-ONLY");
+    session.wait_todo_text("one");
+
+    // Eleven lines would normally open the paste confirmation. In a read-only
+    // session the shared gate must reject the batch before splitting or opening
+    // anything, with exactly the bounded read-only toast.
+    let pasted = (1..=11)
+        .map(|index| format!("pasted {index}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    session.send(format!("\x1b[200~{pasted}\x1b[201~").as_bytes());
+    session.wait_text(READ_ONLY_TOAST);
+    session.wait_no_text("Paste Multiple Todos");
+    session.wait_no_todo_text("pasted");
+
+    session.send(b"q");
+    let status = session.wait_exit(TIMEOUT);
+    assert_eq!(status.exit_code(), 0);
+    assert_eq!(
+        std::fs::read(&path).expect("read after"),
+        b"one\n",
+        "a read-only paste must not change the file"
+    );
+}
+
+#[test]
 fn keyboard_navigation_moves_the_cursor_through_rows_and_contexts() {
     let (_directory, mut session) = open_fixture("keyboard", FIXTURE);
     session.wait_text("water the plants");

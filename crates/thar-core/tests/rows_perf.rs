@@ -169,7 +169,7 @@ fn millis(duration: Duration) -> f64 {
 #[test]
 #[ignore = "manual perf measurement; run with --release --ignored --nocapture"]
 fn measure_build_rows_at_50_3k_10k() {
-    let today = TodoDate::parse(TODAY).expect("valid today");
+    let today = TODAY.parse::<TodoDate>().expect("valid today");
 
     println!("rows_perf: core-only build_rows, clock {TODAY}, release build");
     println!("| todos | work | p50 ms | p95 ms |");
@@ -206,21 +206,13 @@ fn measure_build_rows_at_50_3k_10k() {
                     .collect()
             })
             .collect();
-        let context_refs: Vec<Vec<&str>> = contexts
-            .iter()
-            .map(|values| values.iter().map(String::as_str).collect())
-            .collect();
-        let project_refs: Vec<Vec<&str>> = projects
-            .iter()
-            .map(|values| values.iter().map(String::as_str).collect())
-            .collect();
         let views: Vec<SearchView<'_>> = text
             .iter()
             .enumerate()
             .map(|(index, text)| SearchView {
                 text,
-                contexts: &context_refs[index],
-                projects: &project_refs[index],
+                contexts: &contexts[index],
+                projects: &projects[index],
             })
             .collect();
         let views_time = views_started.elapsed();

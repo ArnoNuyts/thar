@@ -14,9 +14,10 @@
 //! - `terms`: `extractSearchTerms`, i.e. JavaScript's `\s` set, `trim()`, and
 //!   the two ASCII-only `\w` wrapper-stripping regexes.
 //!
-//! The oracle uses Node 26.12 / Unicode 17.0, the Unicode version the native
-//! `Cased` and `Case_Ignorable` tables in `thar_tui::search` were generated
-//! from.
+//! The oracle uses Node 26.12 / Unicode 17.0. `normalize` delegates the
+//! `Final_Sigma` context and its `Cased`/`Case_Ignorable` tables to Rust's
+//! `str::to_lowercase`, and these fixtures are the equality check against the
+//! oracle's Unicode data.
 
 use std::fs;
 use std::path::PathBuf;

@@ -26,7 +26,7 @@ use ratatui::widgets::Paragraph;
 use thar_core::TodoId;
 
 use crate::app::App;
-use crate::input::{MouseInput, MouseKind};
+use crate::event::{MouseInput, MouseKind};
 use crate::modal::{Action, Modal, ModalId, ModalRect, ModalWidth, Outcome, TagKind, geometry};
 use crate::theme;
 
@@ -86,7 +86,7 @@ impl TagModal {
         let ids: Vec<TodoId> = selected.iter().map(|todo| todo.id).collect();
 
         let mut names: Vec<String> = Vec::new();
-        for todo in &app.todos {
+        for todo in app.todos() {
             let tags = match kind {
                 TagKind::Project => &todo.projects,
                 TagKind::Context => &todo.contexts,
@@ -127,7 +127,7 @@ impl TagModal {
             pending: Vec::new(),
             selected: 0,
             custom: String::new(),
-            terminal: Rect::new(0, 0, app.width, app.height),
+            terminal: Rect::new(0, 0, app.width(), app.height()),
         }
     }
 
@@ -453,11 +453,12 @@ impl TagModal {
 mod tests {
     use super::{Change, ItemState, TagModal};
     use crate::app::App;
-    use crate::input::{MouseInput, MouseKind};
+    use crate::event::{MouseInput, MouseKind};
     use crate::modal::{Action, Modal, ModalId, Outcome, TagKind};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use std::time::Instant;
     use thar_core::{Todo, TodoDate, TodoId};
 
     fn app(lines: &[&str]) -> App {
@@ -469,25 +470,29 @@ mod tests {
         let mut app = App::new(
             "todo.txt",
             todos,
-            TodoDate::parse("2026-11-15").expect("valid date"),
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
         app.resize(80, 24);
-        app.read_only = false;
+        app.set_read_only(false);
         app
     }
 
     fn select_all(app: &mut App) {
-        app.range = app.todos.iter().map(|todo| todo.id).collect();
+        app.set_range(app.todos().iter().map(|todo| todo.id).collect());
     }
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
     }
 
+    fn now() -> Instant {
+        Instant::now()
+    }
+
     fn actions(outcome: Outcome) -> Vec<Action> {
         match outcome {
             Outcome::Actions(actions) => actions,
-            Outcome::Continue | Outcome::Close | Outcome::Replace(_) => {
+            Outcome::Continue | Outcome::Close => {
                 panic!("unexpected outcome")
             }
         }
@@ -560,7 +565,7 @@ mod tests {
 
         // A tag nobody selected has is None: add, then clear back to None.
         let mut second = app(&["one", "two +other"]);
-        second.range = vec![second.todos[0].id];
+        second.set_range(vec![second.todos()[0].id]);
         let mut modal = TagModal::new(&second, TagKind::Project);
         modal.toggle(0);
         assert_eq!(modal.pending("other"), Some(Change::Add));
@@ -574,7 +579,7 @@ mod tests {
     fn enter_applies_custom_first_and_each_change_as_its_own_action() {
         let mut app = app(&["one +work", "two +work +personal"]);
         select_all(&mut app);
-        let ids: Vec<TodoId> = app.todos.iter().map(|todo| todo.id).collect();
+        let ids: Vec<TodoId> = app.todos().iter().map(|todo| todo.id).collect();
         let mut modal = TagModal::new(&app, TagKind::Project);
 
         // New project at the custom row.
@@ -718,35 +723,35 @@ mod tests {
     fn history_groups_one_step_per_applied_action() {
         let mut app = app(&["one +work", "two +work +personal"]);
         select_all(&mut app);
-        let before: Vec<String> = app.todos.iter().map(Todo::serialize).collect();
+        let before: Vec<String> = app.todos().iter().map(|todo| todo.to_string()).collect();
         app.open_modal(ModalId::AddProject);
 
         // Custom "newproj" is typed at the custom row.
         for character in "newproj".chars() {
-            app.handle_modal_key(key(KeyCode::Char(character)));
+            app.handle_modal_key(key(KeyCode::Char(character)), now());
         }
         // personal: Some -> add (body row 2, selection starts at custom).
-        app.handle_modal_key(key(KeyCode::Down)); // personal
-        app.handle_modal_key(key(KeyCode::Char(' ')));
-        app.handle_modal_key(key(KeyCode::Down)); // work
-        app.handle_modal_key(key(KeyCode::Char(' '))); // All -> remove
-        assert_eq!(app.history.undo_len(), 0);
+        app.handle_modal_key(key(KeyCode::Down), now()); // personal
+        app.handle_modal_key(key(KeyCode::Char(' ')), now());
+        app.handle_modal_key(key(KeyCode::Down), now()); // work
+        app.handle_modal_key(key(KeyCode::Char(' ')), now()); // All -> remove
+        assert_eq!(app.undo_len(), 0);
 
-        assert!(app.handle_modal_key(key(KeyCode::Enter)));
-        assert!(!app.modals.is_open());
+        assert!(app.handle_modal_key(key(KeyCode::Enter), now()));
+        assert!(!app.modals().is_open());
         // One undo step for the custom value plus one per pending change.
-        assert_eq!(app.history.undo_len(), 3);
+        assert_eq!(app.undo_len(), 3);
 
-        assert!(app.todos[0].projects.contains(&"newproj".to_owned()));
-        assert!(app.todos[1].projects.contains(&"newproj".to_owned()));
-        assert!(!app.todos[0].projects.contains(&"work".to_owned()));
-        assert!(!app.todos[1].projects.contains(&"work".to_owned()));
-        assert!(app.todos[1].projects.contains(&"personal".to_owned()));
+        assert!(app.todos()[0].projects.contains(&"newproj".to_owned()));
+        assert!(app.todos()[1].projects.contains(&"newproj".to_owned()));
+        assert!(!app.todos()[0].projects.contains(&"work".to_owned()));
+        assert!(!app.todos()[1].projects.contains(&"work".to_owned()));
+        assert!(app.todos()[1].projects.contains(&"personal".to_owned()));
 
         for _ in 0..3 {
-            assert!(app.undo());
+            assert!(app.undo(now()));
         }
-        let after: Vec<String> = app.todos.iter().map(Todo::serialize).collect();
+        let after: Vec<String> = app.todos().iter().map(|todo| todo.to_string()).collect();
         assert_eq!(after, before);
     }
 
@@ -755,11 +760,11 @@ mod tests {
         let mut app = app(&["one @home +work"]);
         app.open_modal(ModalId::AddContext);
         for character in "office".chars() {
-            app.handle_modal_key(key(KeyCode::Char(character)));
+            app.handle_modal_key(key(KeyCode::Char(character)), now());
         }
-        app.handle_modal_key(key(KeyCode::Enter));
-        assert!(app.todos[0].contexts.contains(&"office".to_owned()));
-        assert!(app.todos[0].projects.contains(&"work".to_owned()));
+        app.handle_modal_key(key(KeyCode::Enter), now());
+        assert!(app.todos()[0].contexts.contains(&"office".to_owned()));
+        assert!(app.todos()[0].projects.contains(&"work".to_owned()));
     }
 
     #[test]

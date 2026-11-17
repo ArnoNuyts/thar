@@ -42,8 +42,8 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use thar_core::{
     CoreError, Priority, ReadLimits, RecurrenceError, Row, SearchView, State, Todo, TodoDate,
-    TodoId, ToggleResult, create_rows, filter_by_search, filter_hidden, is_valid_recurrence,
-    plan_recurrence, serialize_file, sort_by_importance,
+    TodoId, ToggleResult, create_rows, filter_by_search, is_valid_recurrence, plan_recurrence,
+    serialize_file, sort_by_importance,
 };
 
 fn expectations_dir() -> PathBuf {
@@ -55,7 +55,9 @@ fn corpus_dir() -> PathBuf {
 }
 
 fn clock_day() -> TodoDate {
-    TodoDate::parse("2026-11-15").expect("the pinned clock day is valid")
+    "2026-11-15"
+        .parse::<TodoDate>()
+        .expect("the pinned clock day is valid")
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,7 +272,9 @@ fn assert_domain(label: &str, todos: &[Todo], expected: &DomainExpectation) {
     let sorted = sort_by_importance(todos, clock_day());
     sorted_expectation.verify(&format!("{label}: sorted"), &sorted);
 
-    let visible = filter_hidden(todos, clock_day());
+    let visible: Vec<usize> = (0..todos.len())
+        .filter(|index| todos[*index].is_visible_in_overview(clock_day()))
+        .collect();
     visible_expectation.verify(&format!("{label}: visible"), &visible);
 
     // The row model is built from the visible, sorted list, like the app does.
@@ -294,21 +298,12 @@ fn assert_domain(label: &str, todos: &[Todo], expected: &DomainExpectation) {
         todos.len(),
         "{label}: one searchView per todo"
     );
-    let context_lists: Vec<Vec<&str>> = search_views
-        .iter()
-        .map(|view| view.1.iter().map(String::as_str).collect())
-        .collect();
-    let project_lists: Vec<Vec<&str>> = search_views
-        .iter()
-        .map(|view| view.2.iter().map(String::as_str).collect())
-        .collect();
     let all_views: Vec<SearchView<'_>> = search_views
         .iter()
-        .enumerate()
-        .map(|(index, view)| SearchView {
+        .map(|view| SearchView {
             text: &view.0,
-            contexts: &context_lists[index],
-            projects: &project_lists[index],
+            contexts: &view.1,
+            projects: &view.2,
         })
         .collect();
     let views: Vec<SearchView<'_>> = visible_order
@@ -493,18 +488,16 @@ fn search_cases_match_the_oracle() {
         // The raw line still parses and round-trips; only search normalization
         // comes from the host.
         assert_eq!(
-            Todo::parse_line(&case.line, TodoId::new(0)).serialize(),
+            Todo::parse_line(&case.line, TodoId::new(0)).to_string(),
             case.line,
             "case line {:?}",
             case.line
         );
 
-        let contexts: Vec<&str> = case.view.1.iter().map(String::as_str).collect();
-        let projects: Vec<&str> = case.view.2.iter().map(String::as_str).collect();
         let views = [SearchView {
             text: &case.view.0,
-            contexts: &contexts,
-            projects: &projects,
+            contexts: &case.view.1,
+            projects: &case.view.2,
         }];
         let terms: Vec<&str> = case.terms.iter().map(String::as_str).collect();
 
@@ -537,7 +530,10 @@ fn recurrence_matches_the_oracle() {
     let expectations = load_expectations();
 
     for case in &expectations.recurrence {
-        let base = TodoDate::parse(&case.base).expect("case base is a valid day");
+        let base = case
+            .base
+            .parse::<TodoDate>()
+            .expect("case base is a valid day");
         let planned = plan_recurrence(&case.value, base);
 
         match (&case.next_due, &case.error) {
@@ -572,7 +568,7 @@ fn apply_setter(todo: Todo, case: &SetterCase) -> Todo {
     let arg = case.arg.as_deref();
     let day = |value: Option<&str>| {
         value
-            .and_then(TodoDate::parse)
+            .and_then(|value| value.parse::<TodoDate>().ok())
             .expect("committed setter date is valid")
     };
 
@@ -611,7 +607,7 @@ fn setters_match_the_oracle() {
     for case in &expectations.setters {
         let original = Todo::parse_line(&case.line, TodoId::new(0));
         assert_eq!(
-            original.serialize(),
+            original.to_string(),
             case.original,
             "case {:?} {:?}: original must round-trip",
             case.op,
@@ -620,7 +616,7 @@ fn setters_match_the_oracle() {
 
         let updated = apply_setter(original.clone(), case);
         assert_eq!(
-            updated.serialize(),
+            updated.to_string(),
             case.expected,
             "case {:?} {:?} arg {:?}",
             case.op,
@@ -630,7 +626,7 @@ fn setters_match_the_oracle() {
 
         // The receiver must be untouched.
         assert_eq!(
-            original.serialize(),
+            original.to_string(),
             case.original,
             "case {:?} mutated the receiver",
             case.op
@@ -639,6 +635,7 @@ fn setters_match_the_oracle() {
     }
 }
 
+#[allow(clippy::result_large_err)] // ToggleError carries the completed todo
 fn toggle_result(line: &str) -> ToggleResult {
     Todo::parse_line(line, TodoId::new(0)).toggle_state(clock_day(), TodoId::new(1))
 }
@@ -648,27 +645,30 @@ fn toggles_match_the_oracle() {
     let expectations = load_expectations();
 
     for case in &expectations.toggles {
-        let result = toggle_result(&case.line);
+        let (updated, recurring, error) = match toggle_result(&case.line) {
+            Ok(outcome) => (outcome.updated, outcome.recurring, None),
+            Err(error) => (error.updated, None, Some(error.error)),
+        };
         assert_eq!(
-            result.updated.serialize(),
+            updated.to_string(),
             case.updated,
             "updated line for {:?}",
             case.line
         );
         assert_eq!(
-            result.recurring.as_ref().map(Todo::serialize),
+            recurring.as_ref().map(Todo::to_string),
             case.recurring,
             "recurring line for {:?}",
             case.line
         );
         assert_eq!(
-            result.recurrence_error.map(RecurrenceError::message),
+            error.map(RecurrenceError::message),
             case.error.as_deref(),
             "recurrence error for {:?}",
             case.line
         );
 
-        if let Some(recurring) = &result.recurring {
+        if let Some(recurring) = &recurring {
             assert_eq!(recurring.id, TodoId::new(1), "recurring id");
         }
     }
@@ -688,8 +688,8 @@ fn fixture_round_trip_is_stable_under_the_domain_pipeline() {
             .map(|index| todos[index].clone())
             .collect();
 
-        let mut before: Vec<String> = todos.iter().map(Todo::serialize).collect();
-        let mut after: Vec<String> = sorted.iter().map(Todo::serialize).collect();
+        let mut before: Vec<String> = todos.iter().map(Todo::to_string).collect();
+        let mut after: Vec<String> = sorted.iter().map(Todo::to_string).collect();
         before.sort();
         after.sort();
         assert_eq!(

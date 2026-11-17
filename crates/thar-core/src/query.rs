@@ -7,18 +7,20 @@
 //! - [`sort_by_importance`] is the stable four-key order: open before done,
 //!   first context (`None` first, then collated), overdue first, priority
 //!   (missing last, then `A`..`Z`), input order for ties;
-//! - [`filter_hidden`] keeps the todos visible in the overview at `today`;
 //! - [`filter_by_search`] applies the every-term AND filter to already
 //!   normalized [`SearchView`]s.
+//!
+//! Visibility (`is_visible_in_overview`) is applied by the row builder and by
+//! callers that need the visible indexes; the row builder inlines the
+//! predicate so the sorted order is preserved in one pass.
 //!
 //! # Search normalization is host-provided
 //!
 //! `String.prototype.toLowerCase` applies the Unicode `Final_Sigma` rule,
 //! skipping `Case_Ignorable` characters on both sides, and
 //! `extractSearchTerms` is a JavaScript regex pipeline. Rust's case mapping is
-//! not the contract: its Unicode version can trail the host's, and the
-//! per-character mapping has no `Final_Sigma` context. So this crate does not
-//! fold or split anything; the host passes the normalized values in.
+//! not the contract: its Unicode version can trail the host's. So this crate
+//! does not fold or split anything; the host passes the normalized values in.
 //!
 //! - The CP3b adapter lowercases each todo's `text`, `contexts`, and `projects`
 //!   once per load or mutation and passes one [`SearchView`] per visible todo.
@@ -49,6 +51,7 @@
 //! decision in `docs/rust-port/PLAN.md` §13.
 
 use core::cmp::Ordering;
+use std::borrow::Borrow;
 
 use crate::date::TodoDate;
 use crate::model::{Priority, Todo};
@@ -56,7 +59,9 @@ use crate::model::{Priority, Todo};
 /// Order todo indexes by importance at `today`.
 ///
 /// The order is stable: equal keys keep their input order. The input slice is
-/// never mutated.
+/// never mutated. `todos` may hold any value that borrows a [`Todo`] (for
+/// example `Rc<Todo>`), so a host that shares its list can sort it in place
+/// without cloning.
 ///
 /// # Example
 ///
@@ -67,20 +72,23 @@ use crate::model::{Priority, Todo};
 ///     Todo::parse_line("done task @work", TodoId::new(0)).set_state(thar_core::State::Done),
 ///     Todo::parse_line("open task @work", TodoId::new(1)),
 /// ];
-/// let today = TodoDate::parse("2026-11-15").expect("valid");
+/// let today = "2026-11-15".parse::<TodoDate>().expect("valid");
 /// assert_eq!(sort_by_importance(&todos, today), vec![1, 0]);
 /// ```
 #[must_use]
-pub fn sort_by_importance(todos: &[Todo], today: TodoDate) -> Vec<usize> {
+pub fn sort_by_importance<T: Borrow<Todo>>(todos: &[T], today: TodoDate) -> Vec<usize> {
     // Precompute the keys once: `is_overdue` and the first-context lookup are
     // cheap, but the comparator runs O(n log n) times per keystroke.
     let keys: Vec<SortKey<'_>> = todos
         .iter()
-        .map(|todo| SortKey {
-            done: todo.is_done(),
-            context: todo.contexts.first().map(String::as_str),
-            overdue: todo.is_overdue(today),
-            priority: todo.priority,
+        .map(|todo| {
+            let todo = todo.borrow();
+            SortKey {
+                done: todo.is_done(),
+                context: todo.contexts.first().map(String::as_str),
+                overdue: todo.is_overdue(today),
+                priority: todo.priority,
+            }
         })
         .collect();
 
@@ -159,26 +167,12 @@ fn case_weight(character: char) -> u8 {
     u8::from(character.is_uppercase())
 }
 
-/// Keep the indexes of todos visible in the overview at `today`.
-///
-/// A todo is hidden by a non-`0` `h:` tag and by a future `t:` threshold.
-#[must_use]
-pub fn filter_hidden(todos: &[Todo], today: TodoDate) -> Vec<usize> {
-    todos
-        .iter()
-        .enumerate()
-        .filter(|(_, todo)| todo.is_visible_in_overview(today))
-        .map(|(index, _)| index)
-        .collect()
-}
-
 /// One todo's already-normalized search fields.
 ///
 /// The host owns case folding. JavaScript's `String.prototype.toLowerCase`
-/// applies the Unicode `Final_Sigma` rule (with `Case_Ignorable` skipping);
-/// Rust's per-character mapping has no such context and its Unicode version can
-/// trail the host's, so this type carries values the host lowercased instead of
-/// folding them again here.
+/// applies the Unicode `Final_Sigma` rule (with `Case_Ignorable` skipping), and
+/// Rust's Unicode version can trail the host's, so this type carries values the
+/// host lowercased instead of folding them again here.
 ///
 /// The CP3b adapter builds one view per todo when the list loads or a todo is
 /// mutated, and reuses it for every keystroke.
@@ -187,9 +181,9 @@ pub struct SearchView<'a> {
     /// Lowercased todo text, including its `@context` and `+project` tokens.
     pub text: &'a str,
     /// Lowercased contexts, in their stored order.
-    pub contexts: &'a [&'a str],
+    pub contexts: &'a [String],
     /// Lowercased projects, in their stored order.
-    pub projects: &'a [&'a str],
+    pub projects: &'a [String],
 }
 
 /// Keep the indexes of views matching every term in `terms`.
@@ -205,8 +199,9 @@ pub struct SearchView<'a> {
 /// ```
 /// use thar_core::{SearchView, filter_by_search};
 ///
+/// let work = ["work".to_owned()];
 /// let views = [
-///     SearchView { text: "buy milk +work", contexts: &[], projects: &["work"] },
+///     SearchView { text: "buy milk +work", contexts: &[], projects: &work },
 ///     SearchView { text: "walk dog", contexts: &[], projects: &[] },
 /// ];
 /// // The host lowercases the query and extracts the terms; `@work` also
@@ -246,7 +241,8 @@ pub fn filter_by_search(views: &[SearchView<'_>], terms: &[&str]) -> Vec<usize> 
 /// ```
 /// use thar_core::{SearchView, view_matches};
 ///
-/// let view = SearchView { text: "buy milk +work", contexts: &[], projects: &["work"] };
+/// let work = ["work".to_owned()];
+/// let view = SearchView { text: "buy milk +work", contexts: &[], projects: &work };
 /// assert!(view_matches(&view, &["milk"]));
 /// assert!(view_matches(&view, &["@work"]));
 /// assert!(!view_matches(&view, &["eggs"]));
@@ -269,17 +265,17 @@ pub fn view_matches(view: &SearchView<'_>, terms: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{SearchView, filter_by_search, filter_hidden, sort_by_importance};
+    use super::{SearchView, filter_by_search, sort_by_importance};
     use crate::date::TodoDate;
     use crate::model::{Priority, State, Todo, TodoId};
 
     fn today() -> TodoDate {
-        TodoDate::parse("2026-11-15").expect("valid today")
+        "2026-11-15".parse::<TodoDate>().expect("valid today")
     }
 
     /// The host lowercases; ASCII inputs make `str::to_lowercase` equivalent,
     /// and the sigma cases below pass the host values explicitly.
-    fn view<'a>(text: &'a str, contexts: &'a [&'a str], projects: &'a [&'a str]) -> SearchView<'a> {
+    fn view<'a>(text: &'a str, contexts: &'a [String], projects: &'a [String]) -> SearchView<'a> {
         SearchView {
             text,
             contexts,
@@ -299,7 +295,7 @@ mod tests {
         let todos = todos(lines);
         sort_by_importance(&todos, today())
             .into_iter()
-            .map(|index| todos[index].serialize())
+            .map(|index| todos[index].to_string())
             .collect()
     }
 
@@ -340,9 +336,9 @@ mod tests {
     #[test]
     fn sort_does_not_mutate_the_input() {
         let list = todos(&["b @b", "a @a"]);
-        let before: Vec<String> = list.iter().map(Todo::serialize).collect();
+        let before: Vec<String> = list.iter().map(Todo::to_string).collect();
         let _ = sort_by_importance(&list, today());
-        let after: Vec<String> = list.iter().map(Todo::serialize).collect();
+        let after: Vec<String> = list.iter().map(Todo::to_string).collect();
         assert_eq!(before, after);
     }
 
@@ -373,19 +369,6 @@ mod tests {
     }
 
     #[test]
-    fn filter_hidden_drops_hidden_and_future_thresholds() {
-        let list = todos(&[
-            "visible",
-            "hidden h:1",
-            "not hidden h:0",
-            "future t:2026-11-16",
-            "today t:2026-11-15",
-            "invalid t:2026-02-30",
-        ]);
-        assert_eq!(filter_hidden(&list, today()), vec![0, 2, 4, 5]);
-    }
-
-    #[test]
     fn search_matches_the_host_normalized_text() {
         // The host lowercases `Buy Milk` to `buy milk` before filtering.
         let views = [
@@ -398,9 +381,11 @@ mod tests {
 
     #[test]
     fn search_matches_contexts_and_projects_across_prefixes() {
+        let work = ["work".to_owned()];
+        let home = ["home".to_owned()];
         let views = [
-            view("fix bug +work", &["work"], &["work"]),
-            view("buy milk @home", &["home"], &["home"]),
+            view("fix bug +work", &work, &work),
+            view("buy milk @home", &home, &home),
             view("walk dog", &[], &[]),
         ];
         assert_eq!(filter_by_search(&views, &["@work"]), vec![0]);
@@ -411,11 +396,12 @@ mod tests {
 
     #[test]
     fn search_requires_every_term() {
+        let home = ["home".to_owned()];
         let views = [
             view("buy milk", &[], &[]),
             view("buy bread", &[], &[]),
             view("milk tea", &[], &[]),
-            view("buy milk @home", &["home"], &[]),
+            view("buy milk @home", &home, &[]),
         ];
         assert_eq!(filter_by_search(&views, &["buy", "milk"]), vec![0, 3]);
         assert_eq!(filter_by_search(&views, &["buy", "milk", "@home"]), vec![3]);
@@ -424,9 +410,10 @@ mod tests {
 
     #[test]
     fn search_ignores_empty_terms_and_internal_punctuation() {
+        let home = ["home".to_owned()];
         let views = [
             view("buy milk", &[], &[]),
-            view("walk dog @home", &["home"], &[]),
+            view("walk dog @home", &home, &[]),
         ];
         // The host turns an empty, whitespace-only, or punctuation-only query
         // into no terms; both paths match everything.

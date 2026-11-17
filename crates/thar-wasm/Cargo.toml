@@ -38,3 +38,6 @@ wasm-opt = [
   "--enable-multivalue",
   "--enable-reference-types",
 ]
+
+[lints]
+workspace = true

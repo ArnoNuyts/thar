@@ -26,7 +26,7 @@ fn app(lines: &[&str]) -> App {
     App::new(
         "todo.txt",
         todos,
-        TodoDate::parse("2026-11-15").expect("valid date"),
+        "2026-11-15".parse::<TodoDate>().expect("valid date"),
     )
 }
 
@@ -213,7 +213,7 @@ fn the_hidden_indicator_and_hidden_rows_share_the_same_view() {
 fn the_search_bar_owns_the_first_two_rows() {
     let mut app = fixture();
     app.resize(80, 24);
-    app.search_focused = true;
+    app.set_search_focused(true);
     app.set_query("plan");
     let backend = draw(&app, 80, 24);
     let screen = screen_lines(&backend);

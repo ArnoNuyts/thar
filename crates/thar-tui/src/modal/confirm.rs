@@ -20,7 +20,7 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use thar_core::TodoId;
 
-use crate::input::{MouseInput, MouseKind};
+use crate::event::{MouseInput, MouseKind};
 use crate::modal::geometry::{self, ModalRect, ModalWidth};
 use crate::modal::text;
 use crate::modal::{Action, Modal, ModalId, Outcome};
@@ -359,7 +359,7 @@ impl Modal for ConfirmModal {
 #[cfg(test)]
 mod tests {
     use super::{BUTTON_LABELS, ConfirmModal, ConfirmRequest};
-    use crate::input::{MouseInput, MouseKind};
+    use crate::event::{MouseInput, MouseKind};
     use crate::modal::{Action, Modal, ModalId, Outcome};
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use thar_core::TodoId;

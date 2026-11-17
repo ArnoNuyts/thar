@@ -20,6 +20,7 @@
 //! keeping a second copy.
 
 use core::fmt;
+use core::str::FromStr;
 
 /// A validated `todo.txt` calendar day.
 ///
@@ -49,24 +50,6 @@ impl TodoDate {
         Some(Self { year, month, day })
     }
 
-    /// Parse exactly `YYYY-MM-DD`, mirroring `parseDateTag` in `logic/dates.ts`.
-    ///
-    /// Leading or trailing whitespace is not accepted, and neither is an
-    /// unpadded month or day (`2023-1-1`).
-    #[must_use = "a malformed date is a deliberate None"]
-    pub fn parse(value: &str) -> Option<Self> {
-        let bytes = value.as_bytes();
-        if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
-            return None;
-        }
-        let year = parse_digits(&bytes[0..4])?;
-        let month = parse_digits(&bytes[5..7])?;
-        let day = parse_digits(&bytes[8..10])?;
-        let month = u8::try_from(month).ok()?;
-        let day = u8::try_from(day).ok()?;
-        Self::new(year, month, day)
-    }
-
     /// Calendar year (1..=9999).
     #[must_use]
     pub const fn year(self) -> u16 {
@@ -83,6 +66,44 @@ impl TodoDate {
     #[must_use]
     pub const fn day(self) -> u8 {
         self.day
+    }
+}
+
+/// Why a string is not a valid `todo.txt` date.
+///
+/// Returned by [`TodoDate`]'s [`FromStr`] implementation. The message is
+/// bounded and names the accepted shape; the caller usually keeps the raw
+/// token in the todo text instead of showing the error.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct InvalidTodoDate;
+
+impl fmt::Display for InvalidTodoDate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("invalid todo date; expected a real YYYY-MM-DD day")
+    }
+}
+
+impl std::error::Error for InvalidTodoDate {}
+
+impl FromStr for TodoDate {
+    type Err = InvalidTodoDate;
+
+    /// Parse exactly `YYYY-MM-DD`, mirroring `parseDateTag` in `logic/dates.ts`.
+    ///
+    /// Leading or trailing whitespace is not accepted, and neither is an
+    /// unpadded month or day (`2023-1-1`), an impossible day (`2023-02-29`), or
+    /// a year outside 1..=9999.
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let bytes = value.as_bytes();
+        if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+            return Err(InvalidTodoDate);
+        }
+        let year = parse_digits(&bytes[0..4]).ok_or(InvalidTodoDate)?;
+        let month = parse_digits(&bytes[5..7]).ok_or(InvalidTodoDate)?;
+        let day = parse_digits(&bytes[8..10]).ok_or(InvalidTodoDate)?;
+        let month = u8::try_from(month).map_err(|_| InvalidTodoDate)?;
+        let day = u8::try_from(day).map_err(|_| InvalidTodoDate)?;
+        Self::new(year, month, day).ok_or(InvalidTodoDate)
     }
 }
 
@@ -133,6 +154,13 @@ pub fn add_days(base: TodoDate, days: i64) -> Option<TodoDate> {
         i64::from(base.day()),
     )
     .checked_add(days)?;
+
+    // Range-check before the inverse conversion: `civil_from_days` adds a
+    // constant and divides, so an out-of-range day number would otherwise
+    // overflow inside it.
+    if !(MIN_DAY_NUMBER..=MAX_DAY_NUMBER).contains(&shifted) {
+        return None;
+    }
 
     let (year, month, day) = civil_from_days(shifted);
     to_todo_date(year, month, day)
@@ -238,10 +266,16 @@ fn to_todo_date(year: i64, month: i64, day: i64) -> Option<TodoDate> {
     TodoDate::new(year, month, day)
 }
 
+/// Day number of the earliest supported day, `0001-01-01`.
+const MIN_DAY_NUMBER: i64 = days_from_civil(1, 1, 1);
+
+/// Day number of the latest supported day, `9999-12-31`.
+const MAX_DAY_NUMBER: i64 = days_from_civil(9999, 12, 31);
+
 /// Days since 1970-01-01 for a proleptic Gregorian date.
 ///
 /// Howard Hinnant's `days_from_civil`; exact for every year this crate accepts.
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+const fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let year = if month <= 2 { year - 1 } else { year };
     let era = if year >= 0 { year } else { year - 399 } / 400;
     let year_of_era = year - era * 400;
@@ -284,12 +318,12 @@ mod tests {
     };
 
     fn date(value: &str) -> TodoDate {
-        TodoDate::parse(value).expect("valid test date")
+        value.parse::<TodoDate>().expect("valid test date")
     }
 
     #[test]
     fn parses_padded_dates() {
-        let date = TodoDate::parse("2024-02-29").expect("leap day");
+        let date = "2024-02-29".parse::<TodoDate>().expect("leap day");
         assert_eq!((date.year(), date.month(), date.day()), (2024, 2, 29));
         assert_eq!(date.to_string(), "2024-02-29");
     }
@@ -308,8 +342,21 @@ mod tests {
             "2024-02-29T00:00:00",
             "abcd-ef-gh",
         ] {
-            assert!(TodoDate::parse(value).is_none(), "accepted {value:?}");
+            assert!(value.parse::<TodoDate>().is_err(), "accepted {value:?}");
         }
+    }
+
+    #[test]
+    fn from_str_reports_a_bounded_error() {
+        let error = "2024-02-30"
+            .parse::<TodoDate>()
+            .expect_err("impossible day");
+        assert_eq!(error, super::InvalidTodoDate);
+        assert_eq!(
+            error.to_string(),
+            "invalid todo date; expected a real YYYY-MM-DD day"
+        );
+        assert!("".parse::<TodoDate>().is_err());
     }
 
     #[test]
@@ -324,7 +371,7 @@ mod tests {
             "2023-06-00",
             "2023-11-32",
         ] {
-            assert!(TodoDate::parse(value).is_none(), "accepted {value:?}");
+            assert!(value.parse::<TodoDate>().is_err(), "accepted {value:?}");
         }
     }
 
@@ -338,12 +385,14 @@ mod tests {
 
     #[test]
     fn year_bounds_are_inclusive() {
-        let earliest = TodoDate::parse("0001-01-01").expect("year 1 is valid");
+        let earliest = "0001-01-01".parse::<TodoDate>().expect("year 1 is valid");
         assert_eq!(
             (earliest.year(), earliest.month(), earliest.day()),
             (1, 1, 1)
         );
-        let latest = TodoDate::parse("9999-12-31").expect("year 9999 is valid");
+        let latest = "9999-12-31"
+            .parse::<TodoDate>()
+            .expect("year 9999 is valid");
         assert_eq!(
             (latest.year(), latest.month(), latest.day()),
             (9999, 12, 31)
@@ -358,8 +407,8 @@ mod tests {
 
     #[test]
     fn orders_chronologically() {
-        let earlier = TodoDate::parse("2024-02-28").expect("valid");
-        let later = TodoDate::parse("2024-03-01").expect("valid");
+        let earlier = "2024-02-28".parse::<TodoDate>().expect("valid");
+        let later = "2024-03-01".parse::<TodoDate>().expect("valid");
         assert!(earlier < later);
     }
 
@@ -463,6 +512,17 @@ mod tests {
         assert_eq!(add_weeks(date("2024-01-01"), i64::MAX), None);
         assert_eq!(add_months(date("2024-01-01"), i64::MAX), None);
         assert_eq!(add_years(date("2024-01-01"), i64::MAX), None);
+    }
+
+    #[test]
+    fn extreme_day_offsets_return_none_instead_of_overflowing() {
+        // `civil_from_days` adds a constant to the day number, so the range
+        // check must happen before the inverse conversion.
+        for base in ["0001-01-01", "1970-01-01", "9999-12-31"] {
+            for days in [i64::MAX, i64::MIN, i64::MAX - 1, i64::MIN + 1] {
+                assert_eq!(add_days(date(base), days), None, "{base} + {days}d");
+            }
+        }
     }
 
     #[test]

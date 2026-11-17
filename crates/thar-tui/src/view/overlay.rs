@@ -30,7 +30,7 @@ const BAR: &str = "┃";
 
 /// Draw the active modal, if any.
 pub fn render(frame: &mut Frame, app: &App) {
-    let Some(active) = app.modals.top() else {
+    let Some(active) = app.modals().top() else {
         return;
     };
 
