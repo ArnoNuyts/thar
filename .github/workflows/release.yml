@@ -60,7 +60,9 @@ jobs:
           key: release
 
       - name: Install wasm-pack
-        uses: taiki-e/install-action@wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.15.1
 
       - name: Install binaryen
         run: |

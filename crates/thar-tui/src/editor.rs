@@ -88,32 +88,50 @@ impl Editor {
     }
 
     /// Move the cursor one character left, clamped at the start.
-    pub fn move_left(&mut self) {
-        self.cursor = self.cursor.saturating_sub(1);
+    pub fn move_left(&mut self, word: bool) {
+        self.cursor = if word {
+            self.word_left()
+        } else {
+            self.cursor.saturating_sub(1)
+        };
     }
 
     /// Move the cursor one character right, clamped at the end.
-    pub fn move_right(&mut self) {
-        self.cursor = (self.cursor + 1).min(self.chars.len());
+    pub fn move_right(&mut self, word: bool) {
+        self.cursor = if word {
+            self.word_right(false)
+        } else {
+            (self.cursor + 1).min(self.chars.len())
+        };
     }
 
-    /// Delete the character before the cursor.
+    /// Delete the character, or the word when `word` is set, before the cursor.
     ///
     /// A backspace at the start is a no-op, so callers can drive it from a key
     /// event without a bounds check.
-    pub fn backspace(&mut self) {
+    pub fn backspace(&mut self, word: bool) {
         if self.cursor == 0 {
             return;
         }
-        self.delete_range(self.cursor - 1, self.cursor);
+        let start = if word {
+            self.word_left()
+        } else {
+            self.cursor - 1
+        };
+        self.delete_range(start, self.cursor);
     }
 
-    /// Delete the character at the cursor.
-    pub fn delete_forward(&mut self) {
+    /// Delete the character, or the word when `word` is set, at the cursor.
+    pub fn delete_forward(&mut self, word: bool) {
         if self.cursor >= self.chars.len() {
             return;
         }
-        self.delete_range(self.cursor, self.cursor + 1);
+        let end = if word {
+            self.word_right(self.chars[self.cursor] == ' ')
+        } else {
+            self.cursor + 1
+        };
+        self.delete_range(self.cursor, end);
     }
 
     /// Number of characters.
@@ -183,19 +201,11 @@ impl Editor {
 
         match key.code {
             KeyCode::Left => {
-                self.cursor = if word {
-                    self.word_left()
-                } else {
-                    self.cursor.saturating_sub(1)
-                };
+                self.move_left(word);
                 true
             }
             KeyCode::Right => {
-                self.cursor = if word {
-                    self.word_right(false)
-                } else {
-                    (self.cursor + 1).min(self.chars.len())
-                };
+                self.move_right(word);
                 true
             }
             KeyCode::Home => {
@@ -207,27 +217,11 @@ impl Editor {
                 true
             }
             KeyCode::Backspace => {
-                if self.cursor == 0 {
-                    return true;
-                }
-                let start = if word {
-                    self.word_left()
-                } else {
-                    self.cursor - 1
-                };
-                self.delete_range(start, self.cursor);
+                self.backspace(word);
                 true
             }
             KeyCode::Delete => {
-                if self.cursor >= self.chars.len() {
-                    return true;
-                }
-                let end = if word {
-                    self.word_right(self.chars[self.cursor] == ' ')
-                } else {
-                    self.cursor + 1
-                };
-                self.delete_range(self.cursor, end);
+                self.delete_forward(word);
                 true
             }
             KeyCode::Char(character) if !is_command_modifier(key.modifiers) => {

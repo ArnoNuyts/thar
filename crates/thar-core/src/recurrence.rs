@@ -53,6 +53,19 @@ pub enum RecurrenceUnit {
     Years,
 }
 
+impl RecurrenceUnit {
+    /// The lowercase unit letter used by the `rec:` grammar.
+    #[must_use]
+    pub const fn as_char(self) -> char {
+        match self {
+            Self::Days => 'd',
+            Self::Weeks => 'w',
+            Self::Months => 'm',
+            Self::Years => 'y',
+        }
+    }
+}
+
 /// A parsed and validated `rec:` value.
 ///
 /// Construction always validates, so a `Recurrence` is always storable.
@@ -140,6 +153,14 @@ impl Recurrence {
     }
 }
 
+impl fmt::Display for Recurrence {
+    /// The canonical `rec:` value: the amount followed by the unit letter,
+    /// without the optional leading `+`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", self.amount, self.unit.as_char())
+    }
+}
+
 /// Why a `rec:` value or plan was rejected.
 ///
 /// The variants carry the exact TypeScript messages, because the toggle flow
@@ -221,18 +242,28 @@ mod tests {
 
     #[test]
     fn parses_every_unit_with_an_optional_plus() {
-        for (value, unit, amount) in [
-            ("1d", RecurrenceUnit::Days, 1),
-            ("2w", RecurrenceUnit::Weeks, 2),
-            ("3m", RecurrenceUnit::Months, 3),
-            ("1y", RecurrenceUnit::Years, 1),
-            ("+1d", RecurrenceUnit::Days, 1),
-            ("+9999y", RecurrenceUnit::Years, MAX_RECURRENCE_AMOUNT),
-            ("0001d", RecurrenceUnit::Days, 1),
+        for (value, unit, amount, canonical) in [
+            ("1d", RecurrenceUnit::Days, 1, "1d"),
+            ("2w", RecurrenceUnit::Weeks, 2, "2w"),
+            ("3m", RecurrenceUnit::Months, 3, "3m"),
+            ("1y", RecurrenceUnit::Years, 1, "1y"),
+            ("+1d", RecurrenceUnit::Days, 1, "1d"),
+            (
+                "+9999y",
+                RecurrenceUnit::Years,
+                MAX_RECURRENCE_AMOUNT,
+                "9999y",
+            ),
+            ("0001d", RecurrenceUnit::Days, 1, "1d"),
         ] {
             let recurrence = value.parse::<Recurrence>().expect("valid recurrence");
             assert_eq!(recurrence.amount(), amount, "amount for {value:?}");
             assert_eq!(recurrence.unit(), unit, "unit for {value:?}");
+            assert_eq!(
+                recurrence.unit().as_char(),
+                canonical.chars().last().unwrap()
+            );
+            assert_eq!(recurrence.to_string(), canonical, "canonical for {value:?}");
         }
     }
 

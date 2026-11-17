@@ -13,7 +13,7 @@
 //! line numbers in errors match the file, exactly like the TS implementation.
 
 use crate::error::CoreError;
-use crate::js::{is_rejected_control, js_trim};
+use crate::js::{find_unsafe_control, js_trim};
 use crate::limits::ReadLimits;
 
 /// True when a line contains nothing but JavaScript whitespace.
@@ -101,10 +101,7 @@ pub fn validate_file_content<'a>(
             });
         }
 
-        if let Some(code_point) = line
-            .chars()
-            .find(|character| is_rejected_control(*character) && *character != '\t')
-        {
+        if let Some(code_point) = find_unsafe_control(line) {
             return Err(CoreError::ControlCharacter {
                 line_number,
                 code_point: code_point as u32,

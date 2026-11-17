@@ -90,17 +90,8 @@ impl ListModel {
         today: TodoDate,
     ) -> Self {
         let terms = crate::search::extract_search_terms(query);
-        let term_refs: Vec<&str> = terms.iter().map(String::as_str).collect();
-        let search_views: Vec<thar_core::SearchView<'_>> = views
-            .iter()
-            .map(|view| thar_core::SearchView {
-                text: &view.text,
-                contexts: &view.contexts,
-                projects: &view.projects,
-            })
-            .collect();
 
-        let Ok(rows) = build_rows(todos, &search_views, &term_refs, show_hidden, today) else {
+        let Ok(rows) = build_rows(todos, views, &terms, show_hidden, today) else {
             debug_assert!(false, "search views must be aligned with todos");
             return Self::default();
         };

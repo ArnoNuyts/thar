@@ -70,7 +70,6 @@ pub fn run(args: &[OsString]) -> ExitCode {
             file,
             write,
             no_backup,
-            ..
         } => run_editor(file, write, no_backup),
     }
 }

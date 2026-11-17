@@ -9,10 +9,10 @@
 //!    `"1"`, and the first typed digit replaces that default. Choosing a base
 //!    resets the amount to `"1"`.
 //!
-//! Enter validates `amount + unit` with [`is_valid_recurrence`] and shows the
-//! bounded "whole number from 1 to 9999" toast when it fails. Escape goes back
-//! to the base step first, then closes. A base row accepts hover and click; the
-//! amount step is keyboard-only.
+//! Enter parses `amount + unit` with [`Recurrence`] and shows the bounded
+//! "whole number from 1 to 9999" toast when it fails. Escape goes back to the
+//! base step first, then closes. A base row accepts hover and click; the amount
+//! step is keyboard-only.
 
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -20,7 +20,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use thar_core::{TodoId, is_valid_recurrence};
+use thar_core::{Recurrence, TodoId};
 
 use crate::app::App;
 use crate::event::{MouseInput, MouseKind};
@@ -184,13 +184,13 @@ impl SetRecurrenceModal {
             return Outcome::Continue;
         };
         let value = format!("{}{base}", self.amount);
-        if !is_valid_recurrence(&value) {
+        let Ok(recurrence) = value.parse::<Recurrence>() else {
             return Outcome::Actions(vec![Action::Toast(INVALID_AMOUNT_MESSAGE.to_owned())]);
-        }
+        };
         let ids = self.ids.clone();
         Outcome::Actions(vec![Action::SetRecurrence {
             ids,
-            value: Some(value),
+            value: Some(recurrence),
         }])
     }
 
@@ -355,7 +355,11 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::time::Instant;
-    use thar_core::{Todo, TodoDate, TodoId};
+    use thar_core::{Recurrence, Todo, TodoDate, TodoId};
+
+    fn recurrence(value: &str) -> Recurrence {
+        value.parse::<Recurrence>().expect("valid test recurrence")
+    }
 
     fn app(lines: &[&str]) -> App {
         let todos = lines
@@ -420,7 +424,7 @@ mod tests {
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::SetRecurrence {
                 ids,
-                value: Some("1d".to_owned())
+                value: Some(recurrence("1d"))
             }]
         );
     }
@@ -439,7 +443,7 @@ mod tests {
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::SetRecurrence {
                 ids,
-                value: Some("12d".to_owned())
+                value: Some(recurrence("12d"))
             }]
         );
     }
@@ -462,7 +466,7 @@ mod tests {
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::SetRecurrence {
                 ids: vec![app.todos()[0].id],
-                value: Some("45w".to_owned())
+                value: Some(recurrence("45w"))
             }]
         );
     }
@@ -485,7 +489,7 @@ mod tests {
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::SetRecurrence {
                 ids: vec![app.todos()[0].id],
-                value: Some("2d".to_owned())
+                value: Some(recurrence("2d"))
             }]
         );
     }

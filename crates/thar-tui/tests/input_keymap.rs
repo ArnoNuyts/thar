@@ -1,6 +1,6 @@
 //! Table-driven keymap parity for the list and the search bar.
 //!
-//! There is one keymap ([`command_for_key_in`]) and one read-only gate. The
+//! There is one keymap ([`command_for_key`]) and one read-only gate. The
 //! table asserts the same physical keys against a read-only app and a
 //! write-enabled app: non-mutating commands map identically, mutating commands
 //! become one bounded rejection in read-only mode and their real command in
@@ -11,7 +11,7 @@ use std::time::Instant;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use thar_core::{Todo, TodoDate, TodoId};
 use thar_tui::App;
-use thar_tui::input::{self, Command, NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE, command_for_key_in};
+use thar_tui::input::{self, Command, NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE, command_for_key};
 use thar_tui::modal::{ModalId, UpdateModel};
 
 const NONE: KeyModifiers = KeyModifiers::NONE;
@@ -48,7 +48,7 @@ fn writable_app(lines: &[&str]) -> App {
 }
 
 fn rejected() -> Option<Command> {
-    Some(Command::Rejected(READ_ONLY_MESSAGE))
+    Some(Command::Toast(READ_ONLY_MESSAGE))
 }
 
 #[test]
@@ -78,12 +78,12 @@ fn non_mutating_list_keys_map_identically_in_both_modes() {
     let writable = writable_app(&["one"]);
     for (code, modifiers, expected) in cases {
         assert_eq!(
-            command_for_key_in(&read_only, key(code, modifiers)),
+            command_for_key(&read_only, key(code, modifiers)),
             Some(expected),
             "{code:?} with {modifiers:?} in read-only mode"
         );
         assert_eq!(
-            command_for_key_in(&writable, key(code, modifiers)),
+            command_for_key(&writable, key(code, modifiers)),
             Some(expected),
             "{code:?} with {modifiers:?} in write mode"
         );
@@ -119,12 +119,12 @@ fn mutating_list_keys_are_rejected_only_in_read_only_mode() {
     let writable = writable_app(&["one"]);
     for (code, expected) in cases {
         assert_eq!(
-            command_for_key_in(&read_only, key(code, NONE)),
+            command_for_key(&read_only, key(code, NONE)),
             rejected(),
             "{code:?} must be rejected by the one gate"
         );
         assert_eq!(
-            command_for_key_in(&writable, key(code, NONE)),
+            command_for_key(&writable, key(code, NONE)),
             Some(expected),
             "{code:?} must reach its command in write mode"
         );
@@ -135,17 +135,17 @@ fn mutating_list_keys_are_rejected_only_in_read_only_mode() {
 fn copy_and_update_are_available_read_only() {
     let mut read_only = app(&["one"]);
     assert_eq!(
-        command_for_key_in(&read_only, key(KeyCode::Char('c'), NONE)),
+        command_for_key(&read_only, key(KeyCode::Char('c'), NONE)),
         Some(Command::CopySelected)
     );
     assert_eq!(
-        command_for_key_in(&read_only, key(KeyCode::Char('u'), NONE)),
+        command_for_key(&read_only, key(KeyCode::Char('u'), NONE)),
         Some(Command::Toast(NO_UPDATE_MESSAGE))
     );
 
     read_only.set_update_model(Some(UpdateModel::default()));
     assert_eq!(
-        command_for_key_in(&read_only, key(KeyCode::Char('u'), NONE)),
+        command_for_key(&read_only, key(KeyCode::Char('u'), NONE)),
         Some(Command::Open(ModalId::Update))
     );
 }
@@ -164,12 +164,12 @@ fn unmapped_list_keys_are_silent_in_both_modes() {
         KeyCode::Char('R'),
     ] {
         assert_eq!(
-            command_for_key_in(&app(&["one"]), key(code, NONE)),
+            command_for_key(&app(&["one"]), key(code, NONE)),
             None,
             "{code:?} should not be a list command"
         );
         assert_eq!(
-            command_for_key_in(&writable_app(&["one"]), key(code, NONE)),
+            command_for_key(&writable_app(&["one"]), key(code, NONE)),
             None,
             "{code:?} should not be a list command"
         );
@@ -209,7 +209,7 @@ fn search_keymap_is_table_driven() {
     for (code, modifiers, expected) in cases {
         for app in [&read_only, &writable] {
             assert_eq!(
-                command_for_key_in(app, key(code, modifiers)),
+                command_for_key(app, key(code, modifiers)),
                 Some(expected),
                 "{code:?} with {modifiers:?} in search"
             );
@@ -223,7 +223,7 @@ fn ctrl_c_quits_in_every_mode() {
         let mut read_only = app(&["one"]);
         read_only.set_search_focused(search_focused);
         assert_eq!(
-            command_for_key_in(&read_only, key(KeyCode::Char('c'), CTRL)),
+            command_for_key(&read_only, key(KeyCode::Char('c'), CTRL)),
             Some(Command::Quit),
             "ctrl-c with search_focused = {search_focused}"
         );
@@ -231,13 +231,13 @@ fn ctrl_c_quits_in_every_mode() {
     // Lower-case c without Ctrl copies in the list (non-mutating, so allowed
     // read-only) and is a query character in search.
     assert_eq!(
-        command_for_key_in(&app(&["one"]), key(KeyCode::Char('c'), NONE)),
+        command_for_key(&app(&["one"]), key(KeyCode::Char('c'), NONE)),
         Some(Command::CopySelected)
     );
     let mut search = app(&["one"]);
     search.set_search_focused(true);
     assert_eq!(
-        command_for_key_in(&search, key(KeyCode::Char('c'), NONE)),
+        command_for_key(&search, key(KeyCode::Char('c'), NONE)),
         Some(Command::SearchInsert('c'))
     );
 }
@@ -246,7 +246,7 @@ fn ctrl_c_quits_in_every_mode() {
 fn a_rejection_shows_one_bounded_toast() {
     let mut app = app(&["write the docs"]);
     let command =
-        command_for_key_in(&app, key(KeyCode::Char('x'), NONE)).expect("the gate produces one");
+        command_for_key(&app, key(KeyCode::Char('x'), NONE)).expect("the gate produces one");
     input::apply(&mut app, command, current_time());
 
     let now = current_time();

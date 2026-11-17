@@ -54,7 +54,7 @@ fn wheel(kind: MouseKind) -> MouseInput {
 }
 
 fn rejected() -> Option<Command> {
-    Some(Command::Rejected(READ_ONLY_MESSAGE))
+    Some(Command::Toast(READ_ONLY_MESSAGE))
 }
 
 fn cursor_text(app: &App) -> Option<String> {
@@ -157,11 +157,7 @@ fn a_double_click_selects_and_is_rejected_read_only() {
         None,
         "handle_mouse returns the command; applying it is the event loop's job"
     );
-    input::apply(
-        &mut app,
-        Command::Rejected(READ_ONLY_MESSAGE),
-        current_time(),
-    );
+    input::apply(&mut app, Command::Toast(READ_ONLY_MESSAGE), current_time());
     assert_eq!(app.toast_message(Instant::now()), Some(READ_ONLY_MESSAGE));
 }
 

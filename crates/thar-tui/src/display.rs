@@ -15,8 +15,9 @@ use thar_core::is_rejected_control;
 
 /// Escape control characters so terminal output can only show text.
 ///
-/// Tab is preserved. Every rejected code point becomes `\uXXXX` with at least
-/// four uppercase hexadecimal digits; all other characters are copied.
+/// Tab is preserved because [`is_rejected_control`] now reports it as safe.
+/// Every rejected code point becomes `\uXXXX` with at least four uppercase
+/// hexadecimal digits; all other characters are copied.
 ///
 /// # Example
 ///
@@ -31,9 +32,7 @@ pub fn sanitize_for_display(text: &str) -> String {
     let mut safe = String::with_capacity(text.len());
 
     for ch in text.chars() {
-        if ch == '\t' {
-            safe.push(ch);
-        } else if is_rejected_control(ch) {
+        if is_rejected_control(ch) {
             safe.push_str(&format!("\\u{:04X}", ch as u32));
         } else {
             safe.push(ch);

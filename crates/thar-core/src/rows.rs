@@ -50,7 +50,7 @@
 //!     SearchView { text: "two", contexts: &[], projects: &[] },
 //! ];
 //! let today = "2026-11-15".parse::<TodoDate>().expect("a valid date");
-//! let rows = build_rows(&todos, &views, &[], false, today)
+//! let rows = build_rows(&todos, &views, &[] as &[&str], false, today)
 //!     .expect("views and todos are aligned");
 //! // No first context sorts first, so `two` leads with the `None` header.
 //! assert_eq!(
@@ -69,7 +69,7 @@ use std::borrow::Borrow;
 
 use crate::date::TodoDate;
 use crate::model::{Todo, TodoId};
-use crate::query::{SearchView, sort_by_importance, view_matches};
+use crate::query::{SearchViewLike, sort_by_importance, view_matches};
 
 /// Header name for the group of todos without a context.
 pub const NONE_CONTEXT: &str = "None";
@@ -272,16 +272,19 @@ impl std::error::Error for RowError {}
 /// The returned rows borrow `todos` only; the views and terms are read during
 /// the call, so a caller can free them afterwards. `todos` may hold any value
 /// that borrows a [`Todo`] (for example `Rc<Todo>`), which lets a host keep
-/// shared undo snapshots without cloning the list.
+/// shared undo snapshots without cloning the list. `views` may be borrowed
+/// [`SearchView`](crate::SearchView) values or owned
+/// [`OwnedSearchView`](crate::OwnedSearchView) values, and `terms` may be
+/// `String`s or `&str`s, so a host passes its cached vectors directly.
 ///
 /// # Errors
 ///
 /// Returns [`RowError::ViewCountMismatch`] when `views` is not aligned with
 /// `todos`.
-pub fn build_rows<'todos, 'views, T: Borrow<Todo>>(
+pub fn build_rows<'todos, T: Borrow<Todo>, V: SearchViewLike, S: AsRef<str>>(
     todos: &'todos [T],
-    views: &'views [SearchView<'views>],
-    terms: &[&str],
+    views: &[V],
+    terms: &[S],
     show_hidden: bool,
     today: TodoDate,
 ) -> Result<Rows<'todos>, RowError> {
@@ -313,7 +316,7 @@ pub fn build_rows<'todos, 'views, T: Borrow<Todo>>(
             debug_assert!(index < views.len(), "sort index {index} out of range");
             views
                 .get(index)
-                .is_some_and(|view| view_matches(view, terms))
+                .is_some_and(|view| view_matches(&view.as_view(), terms))
         });
     }
 
@@ -334,9 +337,10 @@ pub fn build_rows<'todos, 'views, T: Borrow<Todo>>(
 
 #[cfg(test)]
 mod tests {
-    use super::{NONE_CONTEXT, Row, RowError, SearchView, build_rows, create_rows};
+    use super::{NONE_CONTEXT, Row, RowError, build_rows, create_rows};
     use crate::date::TodoDate;
     use crate::model::{Todo, TodoId};
+    use crate::query::{OwnedSearchView, SearchView};
 
     fn todos(lines: &[&str]) -> Vec<Todo> {
         lines
@@ -538,7 +542,7 @@ mod tests {
             view("buy bread", &[]),
         ];
 
-        let all = build_rows(&list, &views, &[], false, today()).expect("aligned");
+        let all = build_rows(&list, &views, &[] as &[&str], false, today()).expect("aligned");
         // No first context sorts first, in input order, then `@home`.
         assert_eq!(all.todo_indexes(), [1, 2, 0]);
 
@@ -561,12 +565,35 @@ mod tests {
     }
 
     #[test]
+    fn build_rows_accepts_cached_owned_views_and_terms() {
+        // The TUI and the WASM boundary keep `OwnedSearchView`s and `String`
+        // terms between keystrokes; the builder must take them directly.
+        let list = todos(&["buy milk @home", "walk dog"]);
+        let views = vec![
+            OwnedSearchView {
+                text: "buy milk @home".to_owned(),
+                contexts: vec!["home".to_owned()],
+                projects: Vec::new(),
+            },
+            OwnedSearchView {
+                text: "walk dog".to_owned(),
+                contexts: Vec::new(),
+                projects: Vec::new(),
+            },
+        ];
+        let terms = vec!["milk".to_owned()];
+
+        let rows = build_rows(&list, &views, &terms, false, today()).expect("aligned");
+        assert_eq!(rows.todo_indexes(), [0]);
+    }
+
+    #[test]
     fn build_rows_reports_a_view_misalignment_instead_of_panicking() {
         let list = todos(&["one", "two"]);
         let views = [view("one", &[])];
 
         assert_eq!(
-            build_rows(&list, &views, &[], false, today()).expect_err("misaligned"),
+            build_rows(&list, &views, &[] as &[&str], false, today()).expect_err("misaligned"),
             RowError::ViewCountMismatch { todos: 2, views: 1 }
         );
     }
@@ -581,7 +608,7 @@ mod tests {
             view("three", &[]),
         ];
 
-        let rows = build_rows(&list, &views, &[], false, today()).expect("aligned");
+        let rows = build_rows(&list, &views, &[] as &[&str], false, today()).expect("aligned");
         assert_eq!(
             rows.rows(),
             [
@@ -616,7 +643,7 @@ mod tests {
     fn build_rows_of_an_empty_list_has_no_rows() {
         let list: Vec<Todo> = Vec::new();
         let views: Vec<SearchView<'_>> = Vec::new();
-        let rows = build_rows(&list, &views, &[], false, today()).expect("aligned");
+        let rows = build_rows(&list, &views, &[] as &[&str], false, today()).expect("aligned");
 
         assert!(rows.is_empty());
         assert_eq!(rows.len(), 0);

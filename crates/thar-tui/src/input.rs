@@ -24,7 +24,7 @@
 
 use std::time::Instant;
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use thar_core::Priority;
 
 use crate::app::App;
@@ -33,9 +33,7 @@ use crate::modal::{Action, ConfirmRequest, ModalId};
 use crate::nav;
 
 pub use crate::event::{DOUBLE_CLICK_WINDOW, LastClick, MouseInput, MouseKind};
-
-/// Message shown for every command that would modify `todo.txt`.
-pub const READ_ONLY_MESSAGE: &str = "Read-only: thar-rs cannot modify todo.txt";
+pub use crate::messages::{NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE};
 
 /// One intent produced by the input layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -118,10 +116,8 @@ pub enum Command {
     CopySelected,
     /// Read the clipboard and add its lines as todos.
     Paste,
-    /// Show a bounded static message.
+    /// Show a bounded static message: a keymap hint or the read-only rejection.
     Toast(&'static str),
-    /// A command that is not allowed in this session; the payload is the toast.
-    Rejected(&'static str),
 }
 
 impl Command {
@@ -164,8 +160,7 @@ impl Command {
             | Self::SuggestionApply
             | Self::SuggestionClose
             | Self::CopySelected
-            | Self::Toast(_)
-            | Self::Rejected(_) => false,
+            | Self::Toast(_) => false,
             // Only the read-only update screen may be opened by a read-only
             // session; every other screen edits the list.
             Self::Open(id) => !matches!(id, ModalId::Update),
@@ -188,7 +183,7 @@ impl Command {
 /// command is produced, [`Command::mutates`] applies the read-only gate in one
 /// place.
 #[must_use]
-pub fn command_for_key_in(app: &App, key: KeyEvent) -> Option<Command> {
+pub fn command_for_key(app: &App, key: KeyEvent) -> Option<Command> {
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
         return Some(Command::Quit);
     }
@@ -213,7 +208,7 @@ pub fn command_for_key_in(app: &App, key: KeyEvent) -> Option<Command> {
 fn gate(app: &App, command: Option<Command>) -> Option<Command> {
     match command {
         Some(command) if app.is_read_only() && command.mutates() => {
-            Some(Command::Rejected(READ_ONLY_MESSAGE))
+            Some(Command::Toast(READ_ONLY_MESSAGE))
         }
         other => other,
     }
@@ -274,9 +269,6 @@ fn list_key(app: &App, key: KeyEvent) -> Option<Command> {
         _ => None,
     }
 }
-
-/// Bounded message when `u` is pressed without update information.
-pub const NO_UPDATE_MESSAGE: &str = "No update available";
 
 fn menu_for(app: &App) -> ModalId {
     if app.range().is_empty() {
@@ -393,8 +385,7 @@ fn left_click(
 
     // The Ink list focuses the list on any row click, which blurs the search
     // input without clearing its filter.
-    app.set_search_focused(false);
-    app.clear_search_suggestions();
+    app.blur_search();
     nav::select_row(app, row, mouse.shift);
 
     let double = !mouse.shift
@@ -422,6 +413,74 @@ fn left_click(
     )
 }
 
+/// True for a character that a one-line bracketed paste may insert.
+///
+/// Line breaks, tabs and the other C0/C1 controls (plus the two Unicode line
+/// separators) are dropped: the search input is one line, and pasted terminal
+/// control data must never reach the query. The todo-line predicate now treats
+/// tab as safe, so the one-line rule adds its own tab check here.
+fn is_pastable(character: char) -> bool {
+    character != '\t' && !thar_core::is_rejected_control(character)
+}
+
+/// Route one key event to the active modal, then to the keymap.
+///
+/// Releases are ignored (a press already ran the command). The modal owns the
+/// key first; otherwise the keymap produces a [`Command`] and [`apply`] runs
+/// it.
+pub fn handle_key(app: &mut App, key: KeyEvent, now: Instant) {
+    if key.kind == KeyEventKind::Release {
+        return;
+    }
+    if app.handle_modal_key(key, now) {
+        return;
+    }
+    if let Some(command) = command_for_key(app, key) {
+        apply(app, command, now);
+    }
+}
+
+/// Route a bracketed paste to the active modal, the search bar, or the list.
+///
+/// The search bar keeps its one-line filter: rejected controls and tab are
+/// dropped before the text is spliced in once. The list hands the raw text to
+/// [`App::receive_clipboard`], which owns splitting, trimming, validation, the
+/// paste limit, the confirmation, and the read-only gate.
+pub fn handle_paste(app: &mut App, text: &str, now: Instant) {
+    if app.handle_modal_paste(text, now) {
+        return;
+    }
+    if app.search_focused() {
+        let text: String = text
+            .chars()
+            .filter(|character| is_pastable(*character))
+            .collect();
+        insert_query_text(app, &text);
+        return;
+    }
+    app.receive_clipboard(text, now);
+}
+
+/// Route one mouse event to the active modal, then to the list.
+///
+/// Returns the click to remember for double-click detection. A modal that
+/// consumes the event leaves the record unchanged.
+pub fn handle_mouse_event(
+    app: &mut App,
+    mouse: MouseInput,
+    last_click: Option<LastClick>,
+    now: Instant,
+) -> Option<LastClick> {
+    if app.handle_modal_mouse(mouse, now) {
+        return last_click;
+    }
+    let (next, command) = handle_mouse(app, mouse, last_click, now);
+    if let Some(command) = command {
+        apply(app, command, now);
+    }
+    next
+}
+
 /// Insert pasted text at the query cursor and rebuild once.
 ///
 /// The text is spliced verbatim: a multi-character paste keeps its order and
@@ -432,62 +491,21 @@ pub fn insert_query_text(app: &mut App, text: &str) {
     if text.is_empty() {
         return;
     }
-    app.search.insert_text(text);
-    nav::rebuild(app);
-    app.refresh_search_suggestions();
+    app.edit_query(|search| search.insert_text(text));
 }
 
 /// Apply one command to the app state at `now`.
 pub fn apply(app: &mut App, command: Command, now: Instant) {
     match command {
         Command::Quit => app.set_should_quit(),
-        Command::SearchFocus => {
-            let was_visible = app.search_visible();
-            app.search.focus();
-            app.refresh_search_suggestions();
-            if app.search_visible() != was_visible {
-                nav::reflow(app);
-            } else {
-                app.clamp_offset();
-            }
-        }
-        Command::SearchBlur => {
-            let was_visible = app.search_visible();
-            app.search.blur();
-            if app.search_visible() != was_visible {
-                nav::reflow(app);
-            } else {
-                app.clamp_offset();
-            }
-        }
-        Command::SearchClear => {
-            app.search.blur();
-            app.search.clear();
-            nav::rebuild(app);
-        }
-        Command::SearchInsert(ch) => {
-            app.search.insert_char(ch);
-            nav::rebuild(app);
-            app.refresh_search_suggestions();
-        }
-        Command::SearchBackspace => {
-            app.search.backspace();
-            nav::rebuild(app);
-            app.refresh_search_suggestions();
-        }
-        Command::SearchDelete => {
-            app.search.delete();
-            nav::rebuild(app);
-            app.refresh_search_suggestions();
-        }
-        Command::SearchLeft => {
-            app.search.move_left();
-            app.refresh_search_suggestions();
-        }
-        Command::SearchRight => {
-            app.search.move_right();
-            app.refresh_search_suggestions();
-        }
+        Command::SearchFocus => app.focus_search(),
+        Command::SearchBlur => app.blur_search(),
+        Command::SearchClear => app.clear_search(),
+        Command::SearchInsert(ch) => app.edit_query(|search| search.insert_char(ch)),
+        Command::SearchBackspace => app.edit_query(|search| search.backspace()),
+        Command::SearchDelete => app.edit_query(|search| search.delete()),
+        Command::SearchLeft => app.move_query_cursor(|search| search.move_left()),
+        Command::SearchRight => app.move_query_cursor(|search| search.move_right()),
         Command::Up => nav::move_cursor(app, -1, false),
         Command::Down => nav::move_cursor(app, 1, false),
         Command::ContextUp => nav::move_context(app, -1, false),
@@ -500,7 +518,7 @@ pub fn apply(app: &mut App, command: Command, now: Instant) {
         Command::ExtendPageDown => nav::move_cursor(app, 5, true),
         Command::Home => nav::select_first(app),
         Command::End => nav::select_last(app),
-        Command::ToggleHiddenView => nav::toggle_hidden_view(app),
+        Command::ToggleHiddenView => app.toggle_hidden_view(),
         Command::ClearRange => nav::clear_range(app),
         Command::ExtendUp => nav::move_cursor(app, -1, true),
         Command::ExtendDown => nav::move_cursor(app, 1, true),
@@ -523,14 +541,9 @@ pub fn apply(app: &mut App, command: Command, now: Instant) {
         Command::Redo => {
             app.redo(now);
         }
-        Command::SuggestionPrevious => app.search.suggestion_previous(),
-        Command::SuggestionNext => app.search.suggestion_next(),
-        Command::SuggestionApply => {
-            if app.search.suggestion_apply() {
-                nav::rebuild(app);
-                app.refresh_search_suggestions();
-            }
-        }
+        Command::SuggestionPrevious => app.select_suggestion(-1),
+        Command::SuggestionNext => app.select_suggestion(1),
+        Command::SuggestionApply => app.apply_suggestion(),
         Command::SuggestionClose => app.clear_search_suggestions(),
         Command::Archive => {
             app.apply_action(Action::Confirm(ConfirmRequest::archive()), now);
@@ -549,7 +562,6 @@ pub fn apply(app: &mut App, command: Command, now: Instant) {
         }
         Command::Paste => app.apply_action(Action::Paste, now),
         Command::Toast(message) => app.push_toast_at(message, now),
-        Command::Rejected(message) => app.push_toast_at(message, now),
     }
 }
 
@@ -573,11 +585,11 @@ pub fn clicked_checkbox(app: &App, x: u16) -> bool {
 mod tests {
     use super::{
         Command, MouseInput, MouseKind, NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE, apply,
-        command_for_key_in, handle_mouse,
+        command_for_key, handle_key, handle_mouse, handle_paste, is_pastable,
     };
     use crate::app::App;
     use crate::modal::{ModalId, UpdateModel};
-    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
     use std::time::{Duration, Instant};
     use thar_core::{Priority, Todo, TodoDate, TodoId};
 
@@ -616,7 +628,7 @@ mod tests {
         apply(&mut app, Command::SearchFocus, now());
         for ch in "docs".chars() {
             assert_eq!(
-                command_for_key_in(&app, key(KeyCode::Char(ch), KeyModifiers::NONE)),
+                command_for_key(&app, key(KeyCode::Char(ch), KeyModifiers::NONE)),
                 Some(Command::SearchInsert(ch))
             );
             apply(&mut app, Command::SearchInsert(ch), now());
@@ -652,12 +664,12 @@ mod tests {
             KeyCode::Delete,
         ] {
             assert_eq!(
-                command_for_key_in(&app, key(code, KeyModifiers::NONE)),
-                Some(Command::Rejected(READ_ONLY_MESSAGE))
+                command_for_key(&app, key(code, KeyModifiers::NONE)),
+                Some(Command::Toast(READ_ONLY_MESSAGE))
             );
         }
         let mut app = app;
-        apply(&mut app, Command::Rejected(READ_ONLY_MESSAGE), now());
+        apply(&mut app, Command::Toast(READ_ONLY_MESSAGE), now());
         assert_eq!(app.toast_message(now()), Some(READ_ONLY_MESSAGE));
     }
 
@@ -683,7 +695,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                command_for_key_in(&app, key(code, modifiers)),
+                command_for_key(&app, key(code, modifiers)),
                 Some(expected),
                 "{code:?} must stay available read-only"
             );
@@ -718,8 +730,8 @@ mod tests {
             KeyCode::Enter,
         ] {
             assert_eq!(
-                command_for_key_in(&app, key(code, KeyModifiers::NONE)),
-                Some(Command::Rejected(READ_ONLY_MESSAGE)),
+                command_for_key(&app, key(code, KeyModifiers::NONE)),
+                Some(Command::Toast(READ_ONLY_MESSAGE)),
                 "{code:?} must be rejected by the one gate"
             );
         }
@@ -729,14 +741,14 @@ mod tests {
     fn one_gate_produces_exactly_one_bounded_toast() {
         let mut app = app(&["write the docs"]);
         let command =
-            command_for_key_in(&app, key(KeyCode::Char('x'), KeyModifiers::NONE)).expect("command");
-        assert_eq!(command, Command::Rejected(READ_ONLY_MESSAGE));
+            command_for_key(&app, key(KeyCode::Char('x'), KeyModifiers::NONE)).expect("command");
+        assert_eq!(command, Command::Toast(READ_ONLY_MESSAGE));
         apply(&mut app, command, now());
 
         // A second gated command at the same instant replaces the toast; it
         // never stacks into a second message.
         let second =
-            command_for_key_in(&app, key(KeyCode::Char('n'), KeyModifiers::NONE)).expect("command");
+            command_for_key(&app, key(KeyCode::Char('n'), KeyModifiers::NONE)).expect("command");
         apply(&mut app, second, now());
         assert_eq!(app.toast_message(now()), Some(READ_ONLY_MESSAGE));
         assert!(READ_ONLY_MESSAGE.len() <= 80);
@@ -749,7 +761,7 @@ mod tests {
     #[test]
     fn hidden_view_key_is_supported() {
         assert_eq!(
-            command_for_key_in(
+            command_for_key(
                 &app(&["one h:1"]),
                 key(KeyCode::Char('H'), KeyModifiers::SHIFT)
             ),
@@ -770,15 +782,15 @@ mod tests {
         assert!(app.search_suggestions().is_open());
 
         assert_eq!(
-            command_for_key_in(&app, key(KeyCode::Up, KeyModifiers::NONE)),
+            command_for_key(&app, key(KeyCode::Up, KeyModifiers::NONE)),
             Some(Command::SuggestionPrevious)
         );
         assert_eq!(
-            command_for_key_in(&app, key(KeyCode::Enter, KeyModifiers::NONE)),
+            command_for_key(&app, key(KeyCode::Enter, KeyModifiers::NONE)),
             Some(Command::SuggestionApply)
         );
         assert_eq!(
-            command_for_key_in(&app, key(KeyCode::Esc, KeyModifiers::NONE)),
+            command_for_key(&app, key(KeyCode::Esc, KeyModifiers::NONE)),
             Some(Command::SuggestionClose)
         );
 
@@ -807,7 +819,7 @@ mod tests {
         );
 
         let (_, command) = handle_mouse(&mut app, mouse, last, now + Duration::from_millis(100));
-        assert_eq!(command, Some(Command::Rejected(READ_ONLY_MESSAGE)));
+        assert_eq!(command, Some(Command::Toast(READ_ONLY_MESSAGE)));
     }
 
     #[test]
@@ -834,27 +846,27 @@ mod tests {
         let plain = |code| key(code, KeyModifiers::NONE);
 
         assert_eq!(
-            command_for_key_in(&app, plain(KeyCode::Char('a'))),
+            command_for_key(&app, plain(KeyCode::Char('a'))),
             Some(Command::Archive)
         );
         assert_eq!(
-            command_for_key_in(&app, plain(KeyCode::Char('c'))),
+            command_for_key(&app, plain(KeyCode::Char('c'))),
             Some(Command::CopySelected)
         );
         assert_eq!(
-            command_for_key_in(&app, plain(KeyCode::Char('v'))),
+            command_for_key(&app, plain(KeyCode::Char('v'))),
             Some(Command::Paste)
         );
         assert_eq!(
-            command_for_key_in(&app, plain(KeyCode::Delete)),
+            command_for_key(&app, plain(KeyCode::Delete)),
             Some(Command::DeleteSelected)
         );
         assert_eq!(
-            command_for_key_in(&app, plain(KeyCode::Char('u'))),
+            command_for_key(&app, plain(KeyCode::Char('u'))),
             Some(Command::Toast(NO_UPDATE_MESSAGE))
         );
         assert_eq!(
-            command_for_key_in(&app, plain(KeyCode::Char('F'))),
+            command_for_key(&app, plain(KeyCode::Char('F'))),
             Some(Command::SetPriority(Some(
                 Priority::new('F').expect("valid priority")
             )))
@@ -866,7 +878,7 @@ mod tests {
         let mut app = app(&["one"]);
         app.set_update_model(Some(UpdateModel::default()));
         assert_eq!(
-            command_for_key_in(&app, key(KeyCode::Char('u'), KeyModifiers::NONE)),
+            command_for_key(&app, key(KeyCode::Char('u'), KeyModifiers::NONE)),
             Some(Command::Open(ModalId::Update))
         );
         assert!(!Command::Open(ModalId::Update).mutates());
@@ -924,7 +936,7 @@ mod tests {
             Command::Up,
             Command::CopySelected,
             Command::Toast(NO_UPDATE_MESSAGE),
-            Command::Rejected(READ_ONLY_MESSAGE),
+            Command::Toast(READ_ONLY_MESSAGE),
             Command::Open(ModalId::Update),
         ] {
             assert!(!command.mutates(), "{command:?} must not mutate");
@@ -943,5 +955,43 @@ mod tests {
         ] {
             assert!(command.mutates(), "{command:?} must mutate");
         }
+    }
+
+    #[test]
+    fn only_safe_one_line_characters_are_pastable() {
+        assert!(is_pastable('a'));
+        assert!(is_pastable('🚀'));
+        assert!(!is_pastable('\n'));
+        assert!(!is_pastable('\t'), "the search bar is one line");
+        assert!(!is_pastable('\u{001B}'));
+        assert!(!is_pastable('\u{007F}'));
+        assert!(!is_pastable('\u{2028}'));
+    }
+
+    #[test]
+    fn a_search_paste_drops_controls_and_tab_then_inserts_once() {
+        let mut app = writable(&["one"]);
+        app.focus_search();
+        handle_paste(&mut app, "do\tcs\u{001B}", now());
+        assert_eq!(app.query(), "docs");
+        assert_eq!(app.query_cursor(), 4);
+    }
+
+    #[test]
+    fn release_events_are_ignored() {
+        let mut app = writable(&["one"]);
+        let mut release = key(KeyCode::Char('q'), KeyModifiers::NONE);
+        release.kind = KeyEventKind::Release;
+        handle_key(&mut app, release, now());
+        assert!(!app.should_quit());
+    }
+
+    #[test]
+    fn an_open_modal_owns_the_key_before_the_list_keymap() {
+        let mut app = writable(&["one"]);
+        app.open_modal(ModalId::CreateTodo);
+        handle_key(&mut app, key(KeyCode::Char('q'), KeyModifiers::NONE), now());
+        assert!(!app.should_quit());
+        assert!(app.modals().is_open());
     }
 }

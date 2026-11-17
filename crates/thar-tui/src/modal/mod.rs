@@ -28,7 +28,7 @@ mod tag;
 
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
-use thar_core::{Priority, TodoDate, TodoId};
+use thar_core::{Priority, Recurrence, TodoDate, TodoId};
 
 use crate::event::MouseInput;
 
@@ -156,7 +156,7 @@ pub enum Action {
         /// Todos to update.
         ids: Vec<TodoId>,
         /// The new recurrence value.
-        value: Option<String>,
+        value: Option<Recurrence>,
     },
     /// Add a project or context token.
     AddTag {

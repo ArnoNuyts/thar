@@ -26,7 +26,10 @@ pub enum MouseKind {
     Move,
 }
 
-/// A mouse event in terminal coordinates (1-based, as crossterm reports them).
+/// A mouse event in 1-based terminal coordinates.
+///
+/// Crossterm reports 0-based cells (column/row), so the host adds one before it
+/// builds this value; everything below the host works in 1-based cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MouseInput {
     /// Event kind.

@@ -30,18 +30,23 @@
 //! debounce and retry state are deterministic in tests. Convenience toasts that
 //! are not part of the save state may still use the host clock.
 
+use std::ops::Index;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyEvent;
-use thar_core::{MAX_TODOS, Priority, Todo, TodoDate, TodoId, js_trim, validate_default_batch};
+use thar_core::{
+    MAX_PASTE_TODOS, Priority, Recurrence, Todo, TodoDate, TodoId, TodoInputError, js_trim,
+    validate_todo_batch,
+};
 
 use crate::display::sanitize_for_display;
 use crate::event::MouseInput;
 use crate::history::History;
 use crate::layout::Layout;
 use crate::list::{ListModel, ListRow};
+use crate::messages::READ_ONLY_MESSAGE;
 use crate::modal::{
     self, Action, ConfirmRequest, ModalId, OpenError, Outcome, Stack, TagKind, UpdateModel,
 };
@@ -94,10 +99,77 @@ pub(crate) struct Selection {
     pub(crate) range: Vec<TodoId>,
 }
 
+/// A borrowed, allocation-free view of the app's todos.
+///
+/// [`App::todos`] returns this instead of collecting a `Vec<&Todo>`, so a caller
+/// that indexes, iterates, or counts the list does not allocate. The view also
+/// implements [`Iterator`] and [`ExactSizeIterator`] over the todo references;
+/// [`Todos::iter`] returns a fresh view from the start.
+#[derive(Clone, Copy, Debug)]
+pub struct Todos<'a> {
+    todos: &'a [Rc<Todo>],
+    position: usize,
+}
+
+impl<'a> Todos<'a> {
+    /// Number of todos in the view.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.todos.len()
+    }
+
+    /// True when the list holds no todos.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.todos.is_empty()
+    }
+
+    /// The todo at a load-order index.
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&'a Todo> {
+        self.todos.get(index).map(Rc::as_ref)
+    }
+
+    /// A fresh iterator over every todo, in load order.
+    #[must_use]
+    pub fn iter(&self) -> Todos<'a> {
+        Todos {
+            todos: self.todos,
+            position: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for Todos<'a> {
+    type Item = &'a Todo;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let todo = self.todos.get(self.position)?;
+        self.position += 1;
+        Some(todo)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.todos.len().saturating_sub(self.position);
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for Todos<'_> {}
+
+impl Index<usize> for Todos<'_> {
+    type Output = Todo;
+
+    fn index(&self, index: usize) -> &Todo {
+        self.todos[index].as_ref()
+    }
+}
+
 /// The save lifecycle of the in-memory list.
 ///
 /// `Clean` means the list matches the last accepted bytes. `Pending` is the
-/// debounce window after the first unsaved mutation. `Retrying` keeps the list
+/// debounce window after the most recent unsaved mutation (a trailing
+/// debounce, matching [`SaveState::mark_dirty`]). `Retrying` keeps the list
 /// dirty after a failed save and delays the next attempt by [`SAVE_RETRY`]
 /// while holding the last error. A new mutation resets the debounce window but
 /// keeps the last error so the status bar does not forget a failure the user
@@ -107,9 +179,10 @@ pub(crate) enum SaveState {
     /// No unsaved mutation.
     #[default]
     Clean,
-    /// A mutation happened at `since`; the save is debounced from there.
+    /// The most recent mutation happened at `since`; the save is debounced
+    /// from there.
     Pending {
-        /// Time of the first unsaved mutation.
+        /// Time of the most recent unsaved mutation.
         since: Instant,
         /// The last save error, kept across the new debounce window.
         error: Option<String>,
@@ -203,7 +276,7 @@ pub struct App {
     row_of: Vec<Option<usize>>,
     today: TodoDate,
     /// Search bar: query, cursor, focus and suggestions.
-    pub(crate) search: SearchBar,
+    search: SearchBar,
     tag_sources: TagSources,
     show_hidden: bool,
     pub(crate) selection: Selection,
@@ -286,17 +359,26 @@ impl App {
 
     /// Todos in load order; row indexes point into the underlying list.
     ///
-    /// The return value is a cheap snapshot of borrowed handles, not a clone of
-    /// the todos, so sharing does not require callers to know about `Rc`.
+    /// The return value borrows the list without allocating: index it
+    /// (`app.todos()[0]`), iterate it, or ask for [`Todos::len`].
     #[must_use]
-    pub fn todos(&self) -> Vec<&Todo> {
-        self.todos.iter().map(Rc::as_ref).collect()
+    pub fn todos(&self) -> Todos<'_> {
+        Todos {
+            todos: &self.todos,
+            position: 0,
+        }
     }
 
     /// Current search query, before normalization.
     #[must_use]
     pub fn query(&self) -> String {
         self.search.query()
+    }
+
+    /// The current query as characters, without a second allocation.
+    #[must_use]
+    pub fn query_chars(&self) -> &[char] {
+        self.search.chars()
     }
 
     /// Cursor position in the query, in characters (not bytes).
@@ -455,11 +537,11 @@ impl App {
         self.selection.range = ids;
     }
 
-    /// Focus or blur the search bar.
+    /// Focus or blur the search bar without reflowing the list.
     ///
-    /// The UI uses [`crate::input::Command::SearchFocus`] and
-    /// [`crate::input::Command::SearchBlur`], which also reflow the list; this
-    /// hook exists for tests and hosts that set the focus directly.
+    /// This is a test/integration hook. The UI uses [`App::focus_search`] and
+    /// [`App::blur_search`], which keep the row model, suggestions, and scroll
+    /// offset in step.
     pub fn set_search_focused(&mut self, focused: bool) {
         if focused {
             self.search.focus();
@@ -579,11 +661,80 @@ impl App {
         self.clamp_offset();
     }
 
+    /// Focus the search bar, refresh its suggestions, and reflow the list.
+    ///
+    /// The focused bar takes two rows, so the list height changes; the reflow
+    /// keeps the cursor row visible at the new height.
+    pub fn focus_search(&mut self) {
+        let was_visible = self.search_visible();
+        self.search.focus();
+        self.refresh_search_suggestions();
+        if self.search_visible() != was_visible {
+            crate::nav::reflow(self);
+        } else {
+            self.clamp_offset();
+        }
+    }
+
+    /// Blur the search bar, keeping the query, and reflow or clamp the list.
+    ///
+    /// This is the production blur path (the mouse row click uses it too), so
+    /// the row model and viewport stay consistent.
+    pub fn blur_search(&mut self) {
+        let was_visible = self.search_visible();
+        self.search.blur();
+        if self.search_visible() != was_visible {
+            crate::nav::reflow(self);
+        } else {
+            self.clamp_offset();
+        }
+    }
+
+    /// Blur the search bar, clear the query, and rebuild the row model.
+    pub fn clear_search(&mut self) {
+        self.search.blur();
+        self.search.clear();
+        crate::nav::rebuild(self);
+    }
+
+    /// Edit the query, then rebuild the row model and refresh suggestions.
+    ///
+    /// Every query edit goes through here, so a caller cannot forget either
+    /// step. Cursor-only moves use [`App::move_query_cursor`] instead.
+    pub fn edit_query(&mut self, edit: impl FnOnce(&mut SearchBar)) {
+        edit(&mut self.search);
+        crate::nav::rebuild(self);
+        self.refresh_search_suggestions();
+    }
+
+    /// Move the query cursor without changing the query.
+    ///
+    /// The filter is unchanged, so only the suggestion list is refreshed.
+    pub fn move_query_cursor(&mut self, edit: impl FnOnce(&mut SearchBar)) {
+        edit(&mut self.search);
+        self.refresh_search_suggestions();
+    }
+
+    /// Move the suggestion highlight up (`direction < 0`) or down.
+    pub fn select_suggestion(&mut self, direction: isize) {
+        if direction < 0 {
+            self.search.suggestion_previous();
+        } else {
+            self.search.suggestion_next();
+        }
+    }
+
+    /// Apply the highlighted suggestion to the query and rebuild the filter.
+    pub fn apply_suggestion(&mut self) {
+        if self.search.suggestion_apply() {
+            crate::nav::rebuild(self);
+            self.refresh_search_suggestions();
+        }
+    }
+
     /// Replace the query, move the cursor to its end, and reconcile selection.
     pub fn set_query(&mut self, query: impl Into<String>) {
-        self.search.set_query(query);
-        self.refresh_search_suggestions();
-        crate::nav::rebuild(self);
+        self.edit_query(|search| search.set_query(query));
     }
 
     /// Toggle the hidden-todo view, reconcile selection, and toast the state.
@@ -829,7 +980,7 @@ impl App {
     /// Ink app's read-only recovery state.
     fn begin_mutation(&mut self, now: Instant) -> bool {
         if self.read_only {
-            self.push_toast_at(crate::input::READ_ONLY_MESSAGE, now);
+            self.push_toast_at(READ_ONLY_MESSAGE, now);
             return false;
         }
         true
@@ -879,8 +1030,7 @@ impl App {
         }
         let suggestions = self.search.suggestions();
         let start = suggestions.start();
-        let query = self.search.query();
-        let before: String = query.chars().take(start).collect();
+        let before: String = self.query_chars().iter().take(start).collect();
         let width = u16::try_from(ratatui::text::Line::from(sanitize_for_display(&before)).width())
             .unwrap_or(u16::MAX);
         Some(crate::suggest::Overlay {
@@ -913,17 +1063,31 @@ impl App {
         self.finish_mutation(now);
     }
 
-    /// Append one todo per line and select the last added todo.
+    /// Append one todo per line and select the last added todo when visible.
     ///
-    /// Returns the new ids; an empty result means the command was refused.
-    pub fn add_todos(&mut self, texts: &[String], now: Instant) -> Vec<TodoId> {
+    /// The batch is validated as a whole by
+    /// [`thar_core::validate_todo_batch`] before any history is recorded, so a
+    /// rejected line adds nothing. An empty batch, a read-only session, and a
+    /// command refused by the mutation gate all return `Ok(vec![])`; the gate
+    /// has already shown its own toast.
+    ///
+    /// The cursor moves to the last added todo only when that todo is present
+    /// in the current row model. A new todo filtered out by the active search
+    /// or hidden by the hidden view leaves the cursor on a visible todo.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`TodoInputError`] from [`thar_core::validate_todo_batch`]:
+    /// the batch limit, the list capacity, or the first bad line.
+    pub fn add_todos(
+        &mut self,
+        texts: &[String],
+        now: Instant,
+    ) -> Result<Vec<TodoId>, TodoInputError> {
         if texts.is_empty() || !self.begin_mutation(now) {
-            return Vec::new();
+            return Ok(Vec::new());
         }
-        if self.todos.len().saturating_add(texts.len()) > MAX_TODOS {
-            self.push_toast_at(format!("Too many todos; the limit is {MAX_TODOS}"), now);
-            return Vec::new();
-        }
+        validate_todo_batch(texts, self.todos.len(), MAX_PASTE_TODOS)?;
 
         self.record_history();
         let today = self.today;
@@ -936,12 +1100,14 @@ impl App {
         }
         self.finish_mutation(now);
         if let Some(last) = added.last().copied() {
-            self.selection.cursor = Some(last);
-            self.selection.range.clear();
-            self.selection.anchor = None;
+            if self.row_for(last).is_some() {
+                self.selection.cursor = Some(last);
+                self.selection.range.clear();
+                self.selection.anchor = None;
+            }
             crate::nav::reflow(self);
         }
-        added
+        Ok(added)
     }
 
     /// Delete every todo whose id is in `ids`.
@@ -968,18 +1134,12 @@ impl App {
         for id in ids {
             if let Some(index) = self.index_of(*id) {
                 let next_id = self.allocate_id();
-                match self.todos[index].toggle_state(today, next_id) {
-                    Ok(outcome) => {
-                        self.replace_todo(index, outcome.updated);
-                        if let Some(copy) = outcome.recurring {
-                            recurring.push(copy);
-                        }
-                    }
-                    Err(error) => {
-                        let message = error.to_string();
-                        self.replace_todo(index, error.updated);
-                        errors.push(message);
-                    }
+                let outcome = self.todos[index].toggle_state(today, next_id);
+                self.replace_todo(index, outcome.updated);
+                match outcome.recurring {
+                    Ok(Some(copy)) => recurring.push(copy),
+                    Ok(None) => {}
+                    Err(error) => errors.push(error.to_string()),
                 }
             }
         }
@@ -1016,8 +1176,8 @@ impl App {
     }
 
     /// Set or remove `rec:` on `ids`.
-    pub fn set_recurrence_ids(&mut self, ids: &[TodoId], value: Option<String>, now: Instant) {
-        self.update_ids(ids, now, |todo| match value.as_deref() {
+    pub fn set_recurrence_ids(&mut self, ids: &[TodoId], value: Option<Recurrence>, now: Instant) {
+        self.update_ids(ids, now, |todo| match value {
             Some(value) => todo.clone().set_recurrence(value),
             None => todo.clone().remove_recurrence(),
         });
@@ -1042,7 +1202,7 @@ impl App {
     /// Undo one mutation.
     pub fn undo(&mut self, now: Instant) -> bool {
         if self.read_only {
-            self.push_toast_at(crate::input::READ_ONLY_MESSAGE, now);
+            self.push_toast_at(READ_ONLY_MESSAGE, now);
             return false;
         }
         if !self.history.undo(&mut self.todos) {
@@ -1056,7 +1216,7 @@ impl App {
     /// Redo one undo.
     pub fn redo(&mut self, now: Instant) -> bool {
         if self.read_only {
-            self.push_toast_at(crate::input::READ_ONLY_MESSAGE, now);
+            self.push_toast_at(READ_ONLY_MESSAGE, now);
             return false;
         }
         if !self.history.redo(&mut self.todos) {
@@ -1104,10 +1264,11 @@ impl App {
     /// method owns the limits and the confirmation so both are testable
     /// without a clipboard. Lines are split, `thar_core::js_trim`-trimmed and
     /// empty lines dropped, then the whole batch is validated by
-    /// [`thar_core::validate_default_batch`] before anything is added or a
+    /// [`thar_core::validate_todo_batch`] before anything is added or a
     /// confirmation opens. That makes the paste path share the core rules: a
     /// leading date, an over-long line, a control character, and a batch over
-    /// [`thar_core::MAX_PASTE_TODOS`] are all rejected with the core message.
+    /// [`thar_core::MAX_PASTE_TODOS`] are all rejected with the core message
+    /// under the `Paste failed:` prefix.
     ///
     /// A batch above [`PASTE_CONFIRM_THRESHOLD`] (but within the core limit)
     /// opens the existing confirmation screen; a smaller batch is applied
@@ -1115,7 +1276,7 @@ impl App {
     ///
     /// The shared mutation gate runs before splitting, validation, or opening a
     /// confirmation, so a read-only session rejects every paste with exactly
-    /// one [`crate::input::READ_ONLY_MESSAGE`] toast. The write path reaches
+    /// one [`READ_ONLY_MESSAGE`] toast. The write path reaches
     /// [`App::add_todos`], whose second gate call is a no-op.
     pub fn receive_clipboard(&mut self, text: &str, now: Instant) {
         if !self.begin_mutation(now) {
@@ -1130,8 +1291,8 @@ impl App {
         if lines.is_empty() {
             return;
         }
-        if let Err(error) = validate_default_batch(&lines, self.todos.len()) {
-            self.push_toast_at(error.message(), now);
+        if let Err(error) = validate_todo_batch(&lines, self.todos.len(), MAX_PASTE_TODOS) {
+            self.push_toast_at(format!("Paste failed: {error}"), now);
             return;
         }
         if lines.len() > PASTE_CONFIRM_THRESHOLD {
@@ -1257,7 +1418,9 @@ impl App {
             Action::Toast(message) => self.push_toast_at(message, now),
             Action::Open(id) => self.open_modal(id),
             Action::AddTodos(texts) => {
-                let _ = self.add_todos(&texts, now);
+                if let Err(error) = self.add_todos(&texts, now) {
+                    self.push_toast_at(error.to_string(), now);
+                }
                 self.modals.close();
             }
             Action::UpdateText { ids, text } => {
@@ -1326,9 +1489,13 @@ impl App {
                 self.modals.close();
             }
             Action::PasteLines { lines } => {
-                let added = self.add_todos(&lines, now);
-                if !added.is_empty() && self.writable() {
-                    self.push_toast_at(format!("Pasted {} todo(s)", added.len()), now);
+                match self.add_todos(&lines, now) {
+                    Ok(added) => {
+                        if !added.is_empty() && self.writable() {
+                            self.push_toast_at(format!("Pasted {} todo(s)", added.len()), now);
+                        }
+                    }
+                    Err(error) => self.push_toast_at(format!("Paste failed: {error}"), now),
                 }
                 self.modals.close();
             }
@@ -1347,6 +1514,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::{App, SAVE_DEBOUNCE, SAVE_RETRY, SaveState};
+    use crate::messages::READ_ONLY_MESSAGE;
     use crate::modal::{Action, Modal};
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::time::{Duration, Instant};
@@ -1388,10 +1556,7 @@ mod tests {
         );
         assert!(!app.todos[0].is_done());
         assert!(!app.is_dirty());
-        assert_eq!(
-            app.toast_message(now()),
-            Some(crate::input::READ_ONLY_MESSAGE)
-        );
+        assert_eq!(app.toast_message(now()), Some(READ_ONLY_MESSAGE));
     }
 
     #[test]
@@ -1407,7 +1572,7 @@ mod tests {
         app.receive_clipboard(&text, at);
         assert_eq!(app.todos.len(), 1, "a read-only paste adds nothing");
         assert!(!app.modals.is_open(), "no confirmation may open");
-        assert_eq!(app.toast_message(at), Some(crate::input::READ_ONLY_MESSAGE));
+        assert_eq!(app.toast_message(at), Some(READ_ONLY_MESSAGE));
         assert_eq!(app.history.undo_len(), 0);
         assert!(!app.is_dirty());
     }
@@ -1432,7 +1597,9 @@ mod tests {
     #[test]
     fn create_assigns_stable_ids_and_delete_keeps_the_rest() {
         let mut app = app(&["one", "two"]);
-        let added = app.add_todos(&["three".to_owned(), "four".to_owned()], now());
+        let added = app
+            .add_todos(&["three".to_owned(), "four".to_owned()], now())
+            .expect("added");
         assert_eq!(added.len(), 2);
         assert_ne!(added[0], app.todos[0].id);
         assert_ne!(added[1], added[0]);
@@ -1569,7 +1736,7 @@ mod tests {
         assert_eq!(app.todos.len(), 1, "nothing may be added");
         assert_eq!(
             app.toast_message(now()),
-            Some("Todo text cannot start with a date; use the date picker")
+            Some("Paste failed: Todo text cannot start with a date; use the date picker")
         );
     }
 
@@ -1581,7 +1748,7 @@ mod tests {
         assert_eq!(app.todos.len(), 1);
         assert_eq!(
             app.toast_message(now()),
-            Some("Todo is too long; the limit is 2000 characters")
+            Some("Paste failed: Todo is too long; the limit is 2000 characters")
         );
     }
 
@@ -1611,8 +1778,66 @@ mod tests {
         assert_eq!(app.todos.len(), 1);
         assert_eq!(
             app.toast_message(now()),
-            Some("Todo contains a disallowed control character")
+            Some("Paste failed: Todo contains a disallowed control character")
         );
+    }
+
+    #[test]
+    fn a_confirmed_paste_that_fails_validation_uses_the_paste_prefix() {
+        let mut app = app(&["one"]);
+        app.apply_action(
+            Action::PasteLines {
+                lines: vec!["2026-11-15 buy milk".to_owned()],
+            },
+            now(),
+        );
+        assert_eq!(app.todos.len(), 1, "nothing may be added");
+        assert!(!app.modals.is_open());
+        assert_eq!(
+            app.toast_message(now()),
+            Some("Paste failed: Todo text cannot start with a date; use the date picker")
+        );
+    }
+
+    #[test]
+    fn the_create_action_keeps_the_bare_validation_message() {
+        let mut app = app(&["one"]);
+        app.apply_action(
+            Action::AddTodos(vec!["2026-11-15 buy milk".to_owned()]),
+            now(),
+        );
+        assert_eq!(app.todos.len(), 1, "nothing may be added");
+        assert!(!app.modals.is_open());
+        assert_eq!(
+            app.toast_message(now()),
+            Some("Todo text cannot start with a date; use the date picker")
+        );
+    }
+
+    #[test]
+    fn a_new_todo_excluded_by_the_search_keeps_the_cursor_visible() {
+        let mut app = app(&["alpha", "beta"]);
+        app.set_query("alpha");
+        let added = app.add_todos(&["gamma".to_owned()], now()).expect("added");
+        assert_eq!(added.len(), 1);
+        assert_eq!(app.todo_count(), 3);
+
+        let cursor = app.cursor().expect("a cursor remains");
+        assert_ne!(cursor, added[0], "the new todo is filtered out");
+        assert!(app.row_for(cursor).is_some(), "the cursor stays visible");
+    }
+
+    #[test]
+    fn a_new_hidden_todo_keeps_the_cursor_visible() {
+        let mut app = app(&["visible"]);
+        let added = app
+            .add_todos(&["secret h:1".to_owned()], now())
+            .expect("added");
+        assert_eq!(added.len(), 1);
+
+        let cursor = app.cursor().expect("a cursor remains");
+        assert_ne!(cursor, added[0], "the new todo is hidden");
+        assert!(app.row_for(cursor).is_some(), "the cursor stays visible");
     }
 
     #[test]

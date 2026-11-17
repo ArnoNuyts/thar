@@ -85,9 +85,8 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
     // Cursor position is a character index into the **raw** query. Sanitizing
     // the whole query first would make it longer (a C1 control becomes six
     // cells), so the index would land on the wrong cell. Slice first, then
-    // sanitize each piece. Read the query once per frame.
-    let query = app.query();
-    let raw: Vec<char> = query.chars().collect();
+    // sanitize each piece. Read the query once per frame, without allocating.
+    let raw = app.query_chars();
     let cursor = app.query_cursor().min(raw.len());
     let before = sanitize_for_display(&raw[..cursor].iter().collect::<String>());
     let at = raw.get(cursor).map_or_else(
@@ -109,7 +108,10 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
         ));
         spans.push(Span::styled(after, query_style));
     } else {
-        spans.push(Span::styled(sanitize_for_display(&query), query_style));
+        spans.push(Span::styled(
+            sanitize_for_display(&raw.iter().collect::<String>()),
+            query_style,
+        ));
     }
     spans.push(Span::styled(" / ", prompt));
 

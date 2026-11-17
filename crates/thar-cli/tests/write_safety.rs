@@ -139,7 +139,9 @@ fn a_read_only_directory_refuses_the_save_and_keeps_the_target() {
 
     let result = std::panic::catch_unwind(|| {
         let mut guard = SaveGuard::open(&target, BackupPolicy::Bak).expect("guard");
-        let error = guard.save(&todos(&["new"])).expect_err("save refused");
+        let error = guard
+            .save(todos(&["new"]).iter())
+            .expect_err("save refused");
         assert!(matches!(error, StoreError::Io { .. }), "{error:?}");
 
         // The target is byte-identical and nothing new was created, including
@@ -162,7 +164,9 @@ fn an_external_edit_between_load_and_save_is_refused() {
     // Another program changes the file after this session loaded it.
     std::fs::write(&path, b"external\nedit from elsewhere\n").expect("external edit");
 
-    let error = guard.save(&todos(&["mine"])).expect_err("save refused");
+    let error = guard
+        .save(todos(&["mine"]).iter())
+        .expect_err("save refused");
     assert!(
         matches!(error, StoreError::ChangedOnDisk { .. }),
         "{error:?}"
@@ -250,7 +254,7 @@ fn a_save_does_not_reload_its_own_bytes() {
     let mut sync = FileSync::new(&path, ReadLimits::DEFAULT);
     let saved_at = start + Duration::from_millis(10);
 
-    guard.save(&todos(&["one", "two"])).expect("save");
+    guard.save(todos(&["one", "two"]).iter()).expect("save");
     sync.note_write(saved_at);
     sync.adopt(guard.last_bytes());
 
@@ -299,7 +303,8 @@ fn a_failed_reload_keeps_the_list_cancels_the_save_and_is_not_retried() {
     let start = Instant::now();
     let mut sync = FileSync::new(&path, limits);
     let mut app = app(&["Original"]);
-    app.add_todos(&["Queued".to_owned()], current_time());
+    app.add_todos(&["Queued".to_owned()], current_time())
+        .expect("queued");
     assert!(app.is_dirty(), "the in-memory edit is pending");
 
     // An external writer poisons the file with a rejected control character.
@@ -403,7 +408,8 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
     // Saving works again and the guard accepts the reloaded baseline.
     let mut guard = SaveGuard::open(&path, BackupPolicy::None).expect("guard");
     guard.set_baseline(bytes);
-    app.add_todos(&["Persisted".to_owned()], current_time());
+    app.add_todos(&["Persisted".to_owned()], current_time())
+        .expect("persisted");
     assert!(app.is_dirty());
     guard.save(app.todos()).expect("save after recovery");
     let saved = std::fs::read_to_string(&path).expect("read saved");

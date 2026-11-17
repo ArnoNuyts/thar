@@ -12,6 +12,8 @@
 //! - [`event`] is the leaf terminal-event module shared by input and modals;
 //! - [`editor`] is the one-line text editor behind the create/edit screen and
 //!   the search bar;
+//! - [`messages`] holds the bounded user-facing strings shared by input and
+//!   the app;
 //! - [`search_bar`] owns the query, its cursor and the suggestion popup;
 //! - [`suggest`] collects project/context tag sources and drives the
 //!   suggestion list;
@@ -42,6 +44,7 @@ mod history;
 pub mod input;
 pub mod layout;
 pub mod list;
+pub mod messages;
 pub mod modal;
 pub mod nav;
 pub mod search;
@@ -50,7 +53,7 @@ pub mod suggest;
 pub mod theme;
 pub mod view;
 
-pub use app::{App, Effect};
+pub use app::{App, Effect, Todos};
 pub use layout::Layout;
 pub use list::{ListModel, ListRow};
 pub use modal::{

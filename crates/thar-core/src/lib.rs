@@ -74,17 +74,18 @@ pub use date::{
 };
 pub use error::CoreError;
 pub use input::{TodoInputError, validate_default_batch, validate_todo_batch, validate_todo_text};
-pub use js::{is_js_whitespace, is_rejected_control, js_trim};
+pub use js::{find_unsafe_control, is_js_whitespace, is_rejected_control, js_trim};
 pub use limits::{
     DEFAULT_MAX_FILE_BYTES, DEFAULT_MAX_LINE_CHARS, DEFAULT_MAX_READ_TODOS, MAX_PASTE_TODOS,
     MAX_TODO_CHARS, MAX_TODOS, ReadLimits,
 };
 pub use model::{
-    Priority, State, TagValue, Todo, TodoId, TodoParts, ToggleError, ToggleOutcome, ToggleResult,
-    serialize_file,
+    Priority, State, TagValue, Todo, TodoId, TodoParts, ToggleOutcome, serialize_file,
 };
 pub use nav::{SelectionRange, calculate_scroll_offset};
-pub use query::{SearchView, filter_by_search, sort_by_importance, view_matches};
+pub use query::{
+    OwnedSearchView, SearchView, SearchViewLike, filter_by_search, sort_by_importance, view_matches,
+};
 pub use recurrence::{
     MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, RecurrenceUnit, is_valid_recurrence,
     plan_recurrence,

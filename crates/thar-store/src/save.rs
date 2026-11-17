@@ -72,8 +72,9 @@ impl SaveGuard {
 
     /// Serialize and atomically replace the file.
     ///
-    /// The argument is any iterator of `&Todo`, so a caller that shares todos
-    /// through `Rc<Todo>` can save without cloning the values.
+    /// The argument is any `ExactSizeIterator` of `&Todo`, so a caller that
+    /// shares todos through `Rc<Todo>` can save without cloning the values and
+    /// the capacity check does not need a second collection.
     ///
     /// # Errors
     ///
@@ -83,9 +84,8 @@ impl SaveGuard {
     /// failure. The target is untouched on every error.
     pub fn save<'a>(
         &mut self,
-        todos: impl IntoIterator<Item = &'a Todo>,
+        todos: impl ExactSizeIterator<Item = &'a Todo>,
     ) -> Result<Saved, StoreError> {
-        let todos: Vec<&Todo> = todos.into_iter().collect();
         if todos.len() > MAX_TODOS {
             return Err(StoreError::TooManyTodos {
                 count: todos.len(),
@@ -93,7 +93,7 @@ impl SaveGuard {
             });
         }
 
-        let text = serialize_file(todos.iter().copied());
+        let text = serialize_file(todos);
         validate_file_content(&text, &ReadLimits::DEFAULT)?;
         let bytes = text.into_bytes();
 
@@ -203,14 +203,14 @@ mod tests {
         std::fs::write(&path, b"old\n").expect("seed");
         let mut guard = SaveGuard::open(&path, BackupPolicy::Bak).expect("guard");
 
-        let saved = guard.save(&todos(&["new"])).expect("save");
+        let saved = guard.save(todos(&["new"]).iter()).expect("save");
         assert_eq!(saved.bytes, 4);
         assert!(saved.backup.is_some());
         assert_eq!(std::fs::read(&path).expect("read"), b"new\n");
         assert_eq!(guard.last_bytes(), b"new\n");
 
         // A second save is allowed because the guard has the new baseline.
-        guard.save(&todos(&["newer"])).expect("save again");
+        guard.save(todos(&["newer"]).iter()).expect("save again");
     }
 
     #[test]
@@ -221,7 +221,7 @@ mod tests {
         let mut guard = SaveGuard::open(&path, BackupPolicy::None).expect("guard");
 
         std::fs::write(&path, b"external\n").expect("external edit");
-        let error = guard.save(&todos(&["mine"])).expect_err("refused");
+        let error = guard.save(todos(&["mine"]).iter()).expect_err("refused");
         assert!(matches!(error, StoreError::ChangedOnDisk { .. }));
         assert_eq!(std::fs::read(&path).expect("read"), b"external\n");
     }
@@ -234,7 +234,7 @@ mod tests {
         let mut guard = SaveGuard::open(&path, BackupPolicy::None).expect("guard");
         std::fs::remove_file(&path).expect("delete");
 
-        let error = guard.save(&todos(&["mine"])).expect_err("refused");
+        let error = guard.save(todos(&["mine"]).iter()).expect_err("refused");
         assert!(matches!(error, StoreError::ChangedOnDisk { .. }));
         assert!(!path.exists());
     }

@@ -129,6 +129,15 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
 
+      # `rust-version` is a promise to every crate consumer. The rest of the
+      # job uses the pinned 1.99.1 toolchain, so check the declared minimum
+      # explicitly instead of trusting it.
+      - name: Install MSRV toolchain
+        run: rustup toolchain install 1.88.0 --profile minimal
+
+      - name: Check MSRV
+        run: cargo +1.88.0 check --locked --workspace --all-targets
+
       - name: Verify formatting
         # `cargo fmt` does not resolve dependencies, so it has no `--locked`.
         run: cargo fmt --all --check
@@ -215,7 +224,9 @@ jobs:
           key: wasm
 
       - name: Install wasm-pack
-        uses: taiki-e/install-action@wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.15.1
 
       # wasm-pack uses a system `wasm-opt` when binaryen is on PATH, so on CI
       # this apt install is the optimizer that runs. The crate's

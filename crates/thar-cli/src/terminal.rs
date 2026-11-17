@@ -33,7 +33,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::cursor::Show;
 use ratatui::crossterm::event::{
     self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-    Event, KeyEventKind, MouseButton, MouseEventKind,
+    Event, MouseButton, MouseEventKind,
 };
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
@@ -262,14 +262,7 @@ impl TerminalSession {
             let timeout = next_poll_timeout(app, Instant::now(), &sync);
             if event::poll(timeout)? {
                 match event::read()? {
-                    Event::Key(key) => {
-                        if key.kind != KeyEventKind::Release
-                            && !app.handle_modal_key(key, now)
-                            && let Some(command) = input::command_for_key_in(app, key)
-                        {
-                            input::apply(app, command, now);
-                        }
-                    }
+                    Event::Key(key) => input::handle_key(app, key, now),
                     Event::Mouse(mouse) => {
                         if let Some(kind) = mouse_kind(mouse.kind) {
                             let input = MouseInput {
@@ -280,24 +273,11 @@ impl TerminalSession {
                                     .modifiers
                                     .contains(ratatui::crossterm::event::KeyModifiers::SHIFT),
                             };
-                            if app.handle_modal_mouse(input, now) {
-                                // The modal consumed the click.
-                            } else {
-                                let (next, command) =
-                                    input::handle_mouse(app, input, last_click, now);
-                                last_click = next;
-                                if let Some(command) = command {
-                                    input::apply(app, command, now);
-                                }
-                            }
+                            last_click = input::handle_mouse_event(app, input, last_click, now);
                         }
                     }
                     Event::Resize(width, height) => app.resize(width, height),
-                    Event::Paste(text) => {
-                        if !app.handle_modal_paste(&text, now) {
-                            paste_into_focused(app, &text, now);
-                        }
-                    }
+                    Event::Paste(text) => input::handle_paste(app, &text, now),
                     // Focus does not change any read-only state. The next
                     // iteration redraws and re-checks the local day.
                     Event::FocusGained | Event::FocusLost => {}
@@ -504,49 +484,14 @@ fn mouse_kind(kind: MouseEventKind) -> Option<MouseKind> {
     }
 }
 
-/// True for a character that may be inserted by a bracketed paste.
-///
-/// Line breaks, tabs and the other C0/C1 controls (plus the two Unicode line
-/// separators) are dropped: the search input is one line, and pasted terminal
-/// control data must never reach the query.
-fn is_pastable(character: char) -> bool {
-    !thar_core::is_rejected_control(character)
-}
-
-/// Bracketed paste into the focused surface.
-///
-/// The search bar keeps its one-line filter. The list hands the raw text to
-/// [`App::receive_clipboard`], which owns splitting, trimming, the core
-/// validation (including control characters), the paste limit, the large paste
-/// confirmation and the shared read-only gate. Modals receive their paste
-/// through [`App::handle_modal_paste`] before this function runs.
-///
-/// There is deliberately no read-only early return here: the list paste must go
-/// through [`App::receive_clipboard`] so the one mutation gate produces the
-/// bounded toast instead of silently dropping the paste.
-fn paste_into_focused(app: &mut App, text: &str, now: Instant) {
-    if app.search_focused() {
-        let text: String = text
-            .chars()
-            .filter(|character| is_pastable(*character))
-            .collect();
-        input::insert_query_text(app, &text);
-        return;
-    }
-
-    app.receive_clipboard(text, now);
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        is_pastable, panic_value_is_trigger, paste_into_focused, today_local,
-        until_next_local_midnight,
-    };
+    use super::{panic_value_is_trigger, today_local, until_next_local_midnight};
     use std::time::{Duration, Instant};
 
     use thar_core::TodoDate;
     use thar_tui::App;
+    use thar_tui::input;
 
     #[test]
     fn today_is_a_valid_calendar_date() {
@@ -589,17 +534,6 @@ mod tests {
     }
 
     #[test]
-    fn paste_drops_controls_and_keeps_text() {
-        assert!(is_pastable('a'));
-        assert!(is_pastable('🚀'));
-        assert!(!is_pastable('\n'));
-        assert!(!is_pastable('\t'));
-        assert!(!is_pastable('\u{001B}'));
-        assert!(!is_pastable('\u{007F}'));
-        assert!(!is_pastable('\u{2028}'));
-    }
-
-    #[test]
     fn a_read_only_list_paste_hits_the_shared_gate() {
         let mut app = App::new(
             "todo.txt",
@@ -612,7 +546,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
 
-        paste_into_focused(&mut app, &text, now);
+        input::handle_paste(&mut app, &text, now);
         assert!(app.todos().is_empty(), "a read-only paste adds nothing");
         assert!(!app.modals().is_open(), "no confirmation may open");
         assert_eq!(
@@ -632,7 +566,7 @@ mod tests {
         app.set_read_only(false);
         let now = Instant::now();
 
-        paste_into_focused(&mut app, "  one  \n\n\ttwo\t\n", now);
+        input::handle_paste(&mut app, "  one  \n\n\ttwo\t\n", now);
         let texts: Vec<&str> = app.todos().iter().map(|todo| todo.text.as_str()).collect();
         assert_eq!(texts, ["one", "two"]);
         assert!(app.is_dirty());
@@ -640,7 +574,7 @@ mod tests {
         // Control-character validation belongs to the app's core batch check.
         // The list branch must not keep a second, divergent pre-check, and a
         // rejected batch must add nothing.
-        paste_into_focused(&mut app, "safe\na\u{001B}b", now);
+        input::handle_paste(&mut app, "safe\na\u{001B}b", now);
         assert_eq!(app.todos().len(), 2);
     }
 }

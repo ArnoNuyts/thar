@@ -20,14 +20,15 @@ wasm-bindgen.workspace = true
 [dev-dependencies]
 serde_json = "1.0"
 
-# wasm-pack 0.13.1 bundles binaryen 117, whose defaults predate the post-MVP
-# features rustc 1.99 emits (bulk memory first). Enable them explicitly so the
-# bundled fallback optimizer works on every machine.
+# The build uses the workspace's custom `wasm` profile, so wasm-pack reads the
+# `custom` metadata table (0.14+). The bundled binaryen predates the post-MVP
+# features rustc 1.99 emits (bulk memory first), so enable them explicitly for
+# a developer without a system optimizer.
 #
 # These flags only apply to that bundled fallback: wasm-pack uses a system
 # `wasm-opt` when one is on `PATH`, and CI installs binaryen from apt. Keep both
-# paths working, because a developer without binaryen gets the bundled one.
-[package.metadata.wasm-pack.profile.release]
+# paths working.
+[package.metadata.wasm-pack.profile.custom]
 wasm-opt = [
   "-O",
   "--strip-debug",
