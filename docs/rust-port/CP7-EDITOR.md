@@ -96,8 +96,8 @@ One `TextModal` with a `Create`/`Edit` mode:
 - A rejected value returns `Outcome::Actions([Action::Toast(message)])` and the
   screen stays open.
 - Rendering: `» ` prompt, the character under the cursor in an inverse cell,
-  then the shared `‹ Save ›` / `« Save »` button row and the Ink help line.
-  Suggestions are a floating popup (`view::suggestion`) sized to the longest
+  then the shared `‹ Save ›` / `« Save »` button row. Suggestions are a
+  floating popup (`view::suggestion`) sized to the longest
   name and anchored under the typed `+`/`@`; it is painted after the modal, can
   cover the body and buttons like the Ink root-level overlay, and never changes
   the modal's fixed body height. The modal chrome itself is the Ink one: a left
@@ -176,8 +176,6 @@ as the CP6/CP7-write assets.
   flips above the anchor when there is no room below. At most six rows are drawn
   at once; the window scrolls with the highlight. The search bar uses the same
   popup with its `" / "` prompt origin.
-- **The help line is clipped at the modal width** instead of wrapping like
-  `countWrappedLines`, because `body_rows` cannot know the terminal width.
 - **The input scrolls horizontally** instead of wrapping. A wrapped input would
   change `body_rows` per frame and make the cursor cell ambiguous at a soft
   wrap.

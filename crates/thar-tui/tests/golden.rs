@@ -218,7 +218,7 @@ fn the_search_bar_owns_the_first_two_rows() {
     let backend = draw(&app, 80, 24);
     let screen = screen_lines(&backend);
 
-    assert_eq!(screen[0], " / plan  /");
+    assert_eq!(screen[0], format!(" / plan{}/", " ".repeat(80 - 7 - 1)));
     assert_eq!(screen[1], "─".repeat(80));
     assert_eq!(screen[2], "  None (1)");
     assert_eq!(screen[3], " 1 [ ] read the plan +thar");

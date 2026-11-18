@@ -244,7 +244,7 @@ fn search_filters_shows_no_results_and_clears() {
 
     // `/` focuses the search bar (two rows at the top).
     session.send(b"/");
-    session.wait_text(" /   /"); // focused caret is an inverse blank cell
+    session.wait_text(" / "); // focused caret is an inverse blank cell
 
     // Typing filters the list.
     session.send(b"milk");
@@ -265,9 +265,9 @@ fn search_filters_shows_no_results_and_clears() {
     session.wait_todo_text("buy milk");
 
     // Enter keeps the filter and leaves the search bar: the caret cell is gone,
-    // so the bar renders exactly ` / milk /`.
+    // and the closing slash stays anchored to the right edge.
     session.send(ENTER);
-    session.wait_text(" / milk /");
+    session.wait_text(" / milk");
     session.wait_focused("buy milk");
     let snapshot = session.snapshot();
     assert!(
@@ -284,7 +284,7 @@ fn search_filters_shows_no_results_and_clears() {
     session.send(b"/");
     session.send(ESC);
     session.wait_todo_text("water the plants");
-    session.wait_no_text(" / milk /");
+    session.wait_no_text(" / milk");
 }
 
 #[test]

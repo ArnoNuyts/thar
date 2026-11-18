@@ -89,6 +89,11 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
     // strings per frame; an unfocused bar renders the query in one piece.
     let raw = app.search().chars();
 
+    // The query keeps the left ` / ` prompt. The closing slash is drawn
+    // separately on the last cell of the row so it stays anchored to the right
+    // edge however long the query is; the query itself is clipped before it.
+    let content = Rect::new(row.x, row.y, row.width.saturating_sub(2), row.height);
+
     let mut spans = vec![Span::styled(" / ", prompt)];
     if focused {
         let cursor = app.search().cursor().min(raw.len());
@@ -112,9 +117,16 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
         let query: String = raw.iter().collect();
         spans.push(Span::styled(sanitize_for_display(&query), query_style));
     }
-    spans.push(Span::styled(" / ", prompt));
 
-    frame.render_widget(Paragraph::new(Line::from(spans)), row);
+    frame.render_widget(Paragraph::new(Line::from(spans)), content);
+
+    if row.width >= 4 {
+        let close = Rect::new(row.width.saturating_sub(2), row.y, 2, 1);
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(" /", prompt))),
+            close,
+        );
+    }
 
     let border = Rect::new(0, layout.search_border_row(), layout.width, 1);
     frame.render_widget(
@@ -630,6 +642,27 @@ mod tests {
         app.set_search_focused(true);
         app.set_query(query);
         app
+    }
+
+    #[test]
+    fn the_search_bar_closes_on_the_right_edge() {
+        for focused in [true, false] {
+            let mut app = focused_query("milk");
+            app.set_search_focused(focused);
+            let mut terminal = Terminal::new(TestBackend::new(40, 10)).expect("test terminal");
+            terminal
+                .draw(|frame| render(frame, &app))
+                .expect("draw succeeds");
+            let buffer = terminal.backend().buffer();
+
+            // Left prompt unchanged, query starts at cell 3.
+            assert_eq!(buffer[(0, 0)].symbol(), " ");
+            assert_eq!(buffer[(1, 0)].symbol(), "/");
+            assert_eq!(buffer[(3, 0)].symbol(), "m");
+            // The closing slash is the last cell of the row.
+            assert_eq!(buffer[(38, 0)].symbol(), " ", "focused={focused}");
+            assert_eq!(buffer[(39, 0)].symbol(), "/", "focused={focused}");
+        }
     }
 
     #[test]
