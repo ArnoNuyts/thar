@@ -53,8 +53,9 @@ pub const fn is_rejected_control(character: char) -> bool {
 /// The first unsafe control code point in `text`.
 ///
 /// Tab is safe inside a todo line, so a text that only holds a tab reports
-/// `None`. This is the one scanner the read validator, the write validator, the
-/// input validator, and the renderer share.
+/// `None`. This is the scanner the input validator and both file validators
+/// share; the renderer calls [`is_rejected_control`] per character while it
+/// sanitizes a line.
 #[must_use]
 pub fn find_unsafe_control(text: &str) -> Option<char> {
     text.chars()

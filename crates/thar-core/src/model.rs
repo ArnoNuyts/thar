@@ -579,7 +579,8 @@ impl Todo {
     /// Set the `rec:` recurrence value.
     ///
     /// A [`Recurrence`] is parsed and range-checked when it is built, so it is
-    /// always storable.
+    /// always storable. The tag keeps the text the value was parsed from, like
+    /// `Todo#setRecurrence` in the oracle: `05w` and `+1d` serialize unchanged.
     #[must_use]
     pub fn set_recurrence(mut self, value: Recurrence) -> Self {
         self.set_tag("rec", value.to_string());
@@ -1361,16 +1362,16 @@ mod tests {
     }
 
     #[test]
-    fn recurrence_is_stored_canonically() {
+    fn recurrence_serializes_the_text_it_was_parsed_from() {
         let plus = "+1d".parse::<Recurrence>().expect("valid");
         let zeros = "0001d".parse::<Recurrence>().expect("valid");
         assert_eq!(
             parse("task").set_recurrence(plus).to_string(),
-            "task rec:1d"
+            "task rec:+1d"
         );
         assert_eq!(
             parse("task").set_recurrence(zeros).to_string(),
-            "task rec:1d"
+            "task rec:0001d"
         );
     }
 
@@ -1547,7 +1548,6 @@ mod tests {
             let outcome = parse(line).toggle_state(today, TodoId::new(0));
             assert!(outcome.updated.is_done(), "line {line:?}");
             let error = outcome.recurring.expect_err("recurrence error");
-            assert_eq!(error.message(), message, "line {line:?}");
             assert_eq!(error.to_string(), message, "line {line:?}");
         }
     }

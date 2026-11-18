@@ -41,9 +41,8 @@ use std::sync::OnceLock;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use thar_core::{
-    CoreError, Priority, ReadLimits, Recurrence, RecurrenceError, Row, SearchView, State, Todo,
-    TodoDate, TodoId, create_rows, filter_by_search, is_valid_recurrence, plan_recurrence,
-    serialize_file, sort_by_importance,
+    CoreError, Priority, ReadLimits, Recurrence, Row, SearchView, State, Todo, TodoDate, TodoId,
+    create_rows, filter_by_search, plan_recurrence, serialize_file, sort_by_importance,
 };
 
 fn expectations_dir() -> PathBuf {
@@ -548,15 +547,19 @@ fn recurrence_matches_the_oracle() {
             }
             (None, Some(error)) => {
                 assert_eq!(
-                    planned.expect_err("bad recurrence must fail").message(),
-                    error,
+                    planned.expect_err("bad recurrence must fail").to_string(),
+                    error.as_str(),
                     "error for {:?}",
                     case.value
                 );
             }
             (None, None) => {
                 // An invalid value is not storable.
-                assert!(!is_valid_recurrence(&case.value), "value {:?}", case.value);
+                assert!(
+                    case.value.parse::<Recurrence>().is_err(),
+                    "value {:?}",
+                    case.value
+                );
             }
             (Some(_), Some(_)) => panic!("case has both nextDue and error"),
         }
@@ -668,7 +671,7 @@ fn toggles_match_the_oracle() {
             case.line
         );
         assert_eq!(
-            error.map(RecurrenceError::message),
+            error.map(|error| error.to_string()).as_deref(),
             case.error.as_deref(),
             "recurrence error for {:?}",
             case.line

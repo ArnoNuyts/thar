@@ -14928,6 +14928,22 @@
       "expected": "task rec:9999d"
     },
     {
+      "line": "task",
+      "op": "set_recurrence",
+      "arg": "05w",
+      "preserve": false,
+      "original": "task",
+      "expected": "task rec:05w"
+    },
+    {
+      "line": "task",
+      "op": "set_recurrence",
+      "arg": "+1d",
+      "preserve": false,
+      "original": "task",
+      "expected": "task rec:+1d"
+    },
+    {
       "line": "task rec:1d",
       "op": "remove_recurrence",
       "arg": null,

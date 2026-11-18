@@ -505,6 +505,8 @@ const SETTER_CASES: SetterCase[] = [
   { line: "task rec:2w", op: "set_recurrence", arg: "1d" },
   { line: "task rec:2w", op: "set_recurrence", arg: "0d" },
   { line: "task", op: "set_recurrence", arg: "9999d" },
+  { line: "task", op: "set_recurrence", arg: "05w" },
+  { line: "task", op: "set_recurrence", arg: "+1d" },
   { line: "task rec:1d", op: "remove_recurrence" },
   {
     line: "task +project @context other:keep",

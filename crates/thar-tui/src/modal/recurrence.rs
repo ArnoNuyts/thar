@@ -449,6 +449,19 @@ mod tests {
     }
 
     #[test]
+    fn a_typed_amount_keeps_its_leading_zeros_when_serialized() {
+        let mut app = app(&["task"]);
+        let mut modal = SetRecurrenceModal::new(&app);
+        modal.handle_key(key(KeyCode::Down)); // Weekly
+        modal.handle_key(key(KeyCode::Enter));
+        type_digits(&mut modal, "05");
+        for action in actions(modal.handle_key(key(KeyCode::Enter))) {
+            app.apply_action(action, Instant::now());
+        }
+        assert!(app.todos()[0].to_string().contains("rec:05w"));
+    }
+
+    #[test]
     fn selecting_a_base_resets_the_amount() {
         let app = app(&["task"]);
         let mut modal = SetRecurrenceModal::new(&app);

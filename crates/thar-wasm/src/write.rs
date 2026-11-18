@@ -179,7 +179,7 @@ fn serialize_todos(todos: &[Todo]) -> Result<String, WriteError> {
         if let Some(code_point) = find_unsafe_control(&line) {
             return Err(WriteError::UnsafeControl {
                 line_number: index + 1,
-                code_point: code_point as u32,
+                code_point: u32::from(code_point),
             });
         }
         if index > 0 {

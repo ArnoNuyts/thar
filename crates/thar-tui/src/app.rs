@@ -1103,8 +1103,8 @@ impl App {
         value: Option<Recurrence>,
         now: Instant,
     ) {
-        self.update_ids(ids, now, |todo| match value {
-            Some(value) => todo.clone().set_recurrence(value),
+        self.update_ids(ids, now, |todo| match &value {
+            Some(value) => todo.clone().set_recurrence(value.clone()),
             None => todo.clone().remove_recurrence(),
         });
     }

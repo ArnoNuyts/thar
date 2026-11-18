@@ -202,18 +202,6 @@ pub struct OwnedSearchView {
     pub projects: Vec<String>,
 }
 
-impl OwnedSearchView {
-    /// Borrow the owned fields as a [`SearchView`].
-    #[must_use]
-    pub fn as_view(&self) -> SearchView<'_> {
-        SearchView {
-            text: &self.text,
-            contexts: &self.contexts,
-            projects: &self.projects,
-        }
-    }
-}
-
 /// A search-view source that can be borrowed as a [`SearchView`].
 ///
 /// Implemented for the borrowed [`SearchView`] and the owned
@@ -232,7 +220,11 @@ impl SearchViewLike for SearchView<'_> {
 
 impl SearchViewLike for OwnedSearchView {
     fn as_view(&self) -> SearchView<'_> {
-        OwnedSearchView::as_view(self)
+        SearchView {
+            text: &self.text,
+            contexts: &self.contexts,
+            projects: &self.projects,
+        }
     }
 }
 
@@ -484,21 +476,18 @@ mod tests {
 
     #[test]
     fn search_replays_host_normalized_final_sigma() {
-        // JavaScript lowercases `aΣ.Α` to `aσ.α` (the sigma is followed by a
+        // The host lowercases `aΣ.Α` to `aσ.α` (the sigma is followed by a
         // case-ignorable `.` and then a cased letter, so it is not final) and
-        // the term strips to `aσ.`, which matches the text. Rust's unconditional
-        // mapping gives the same string here, but the old adjacent-neighbour
-        // final-sigma rule gave `aς.` and dropped the match.
+        // the term strips to `aσ.`, which matches the text. The core never
+        // folds case; `search::normalize` in thar-tui owns that step.
         assert_eq!(
             filter_by_search(&[view("aσ.", &[], &[])], &["aσ."]),
             vec![0]
         );
 
         // `aβ\u{0301}Σ.` lowercases to `aβ\u{0301}ς.`: the sigma is final
-        // because the only following character is `.`. The text keeps its
-        // non-final sigma, so the oracle does not match. Rust cannot derive the
-        // final sigma from the adjacent character (the combining mark), which
-        // is why the host passes the terms in.
+        // because the only following character is `.`. This side keeps its
+        // non-final sigma, so the normalized pair does not match.
         assert_eq!(
             filter_by_search(&[view("aβ\u{0301}σ.", &[], &[])], &["aβ\u{0301}ς."]),
             Vec::<usize>::new()
@@ -509,8 +498,7 @@ mod tests {
     fn search_never_folds_case_itself() {
         // The host lowercases both sides. A view that still has uppercase text
         // and a term that still has uppercase letters must not match: folding
-        // here would hide a host that forgot to normalize, and Rust's mapping is
-        // not JavaScript's anyway (Final_Sigma, Unicode version).
+        // here would hide a host that forgot to normalize.
         assert_eq!(
             filter_by_search(&[view("MILK", &[], &[])], &["milk"]),
             Vec::<usize>::new()
@@ -523,17 +511,6 @@ mod tests {
             filter_by_search(&[view("milk", &[], &[])], &["milk"]),
             vec![0]
         );
-    }
-
-    #[test]
-    fn character_level_case_mapping_is_not_javascript_case_mapping() {
-        // Guards why the host owns folding: `char::to_lowercase` has no
-        // context, so the old helper's per-character mapping plus an
-        // adjacent-neighbour rule missed the `Case_Ignorable` skip. Rust's
-        // `str::to_lowercase` models the full rule today, but its Unicode
-        // version can still trail the host's; the host value is the contract.
-        assert_eq!('Σ'.to_lowercase().to_string(), "σ");
-        assert_eq!("ΑΣ".to_lowercase(), "ας");
     }
 
     #[test]

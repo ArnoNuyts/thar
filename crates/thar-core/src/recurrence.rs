@@ -68,11 +68,14 @@ impl RecurrenceUnit {
 
 /// A parsed and validated `rec:` value.
 ///
-/// Construction always validates, so a `Recurrence` is always storable.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// Construction always validates, so a `Recurrence` is always storable. The
+/// original spelling is kept, because the oracle stores the string it is given:
+/// `setRecurrence("05w")` writes `rec:05w`, not `rec:5w`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Recurrence {
     amount: u32,
     unit: RecurrenceUnit,
+    raw: String,
 }
 
 impl FromStr for Recurrence {
@@ -116,20 +119,24 @@ impl FromStr for Recurrence {
             return Err(RecurrenceError::OutOfRange);
         }
 
-        Ok(Self { amount, unit })
+        Ok(Self {
+            amount,
+            unit,
+            raw: value.to_owned(),
+        })
     }
 }
 
 impl Recurrence {
     /// The amount, always `1..=`[`MAX_RECURRENCE_AMOUNT`].
     #[must_use]
-    pub const fn amount(self) -> u32 {
+    pub const fn amount(&self) -> u32 {
         self.amount
     }
 
     /// The unit.
     #[must_use]
-    pub const fn unit(self) -> RecurrenceUnit {
+    pub const fn unit(&self) -> RecurrenceUnit {
         self.unit
     }
 
@@ -141,7 +148,7 @@ impl Recurrence {
     /// supported years 1..=9999, matching `isValidTodoDate(nextDue)` in the
     /// oracle.
     #[must_use = "the planned day must be used"]
-    pub fn plan(self, base: TodoDate) -> Result<TodoDate, RecurrenceError> {
+    pub fn plan(&self, base: TodoDate) -> Result<TodoDate, RecurrenceError> {
         let planned = match self.unit {
             RecurrenceUnit::Days => add_days(base, i64::from(self.amount)),
             RecurrenceUnit::Weeks => add_weeks(base, i64::from(self.amount)),
@@ -154,10 +161,10 @@ impl Recurrence {
 }
 
 impl fmt::Display for Recurrence {
-    /// The canonical `rec:` value: the amount followed by the unit letter,
-    /// without the optional leading `+`.
+    /// The value exactly as it was parsed, so serialization writes what the
+    /// caller typed: a leading `+` and leading zeros are preserved.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.amount, self.unit.as_char())
+        f.write_str(&self.raw)
     }
 }
 
@@ -175,8 +182,7 @@ pub enum RecurrenceError {
 
 impl RecurrenceError {
     /// The user-facing message, identical to `logic/recurrence.ts`.
-    #[must_use]
-    pub const fn message(self) -> &'static str {
+    const fn message(self) -> &'static str {
         match self {
             Self::Invalid => INVALID_MESSAGE,
             Self::OutOfRange => OUT_OF_RANGE_MESSAGE,
@@ -191,23 +197,6 @@ impl fmt::Display for RecurrenceError {
 }
 
 impl std::error::Error for RecurrenceError {}
-
-/// True when `value` can be stored in a `rec:` tag.
-///
-/// # Example
-///
-/// ```
-/// use thar_core::is_valid_recurrence;
-///
-/// assert!(is_valid_recurrence("+2d"));
-/// assert!(!is_valid_recurrence("0d"));
-/// assert!(!is_valid_recurrence("10000d"));
-/// assert!(!is_valid_recurrence("1D"));
-/// ```
-#[must_use]
-pub fn is_valid_recurrence(value: &str) -> bool {
-    value.parse::<Recurrence>().is_ok()
-}
 
 /// Resolve the next due day for a `rec:` value relative to `base`.
 ///
@@ -225,8 +214,7 @@ pub fn plan_recurrence(value: &str, base: TodoDate) -> Result<TodoDate, Recurren
 #[cfg(test)]
 mod tests {
     use super::{
-        MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, RecurrenceUnit, is_valid_recurrence,
-        plan_recurrence,
+        MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, RecurrenceUnit, plan_recurrence,
     };
     use crate::date::TodoDate;
 
@@ -241,29 +229,25 @@ mod tests {
     }
 
     #[test]
-    fn parses_every_unit_with_an_optional_plus() {
-        for (value, unit, amount, canonical) in [
-            ("1d", RecurrenceUnit::Days, 1, "1d"),
-            ("2w", RecurrenceUnit::Weeks, 2, "2w"),
-            ("3m", RecurrenceUnit::Months, 3, "3m"),
-            ("1y", RecurrenceUnit::Years, 1, "1y"),
-            ("+1d", RecurrenceUnit::Days, 1, "1d"),
-            (
-                "+9999y",
-                RecurrenceUnit::Years,
-                MAX_RECURRENCE_AMOUNT,
-                "9999y",
-            ),
-            ("0001d", RecurrenceUnit::Days, 1, "1d"),
+    fn parses_every_unit_and_keeps_the_original_text() {
+        for (value, unit, amount) in [
+            ("1d", RecurrenceUnit::Days, 1),
+            ("2w", RecurrenceUnit::Weeks, 2),
+            ("3m", RecurrenceUnit::Months, 3),
+            ("1y", RecurrenceUnit::Years, 1),
+            ("+1d", RecurrenceUnit::Days, 1),
+            ("+9999y", RecurrenceUnit::Years, MAX_RECURRENCE_AMOUNT),
+            ("0001d", RecurrenceUnit::Days, 1),
         ] {
             let recurrence = value.parse::<Recurrence>().expect("valid recurrence");
             assert_eq!(recurrence.amount(), amount, "amount for {value:?}");
             assert_eq!(recurrence.unit(), unit, "unit for {value:?}");
+            assert_eq!(recurrence.unit().as_char(), value.chars().last().unwrap());
             assert_eq!(
-                recurrence.unit().as_char(),
-                canonical.chars().last().unwrap()
+                recurrence.to_string(),
+                value,
+                "serialization for {value:?} keeps the typed text"
             );
-            assert_eq!(recurrence.to_string(), canonical, "canonical for {value:?}");
         }
     }
 
@@ -278,7 +262,6 @@ mod tests {
                 Err(RecurrenceError::Invalid),
                 "value {value:?}"
             );
-            assert!(!is_valid_recurrence(value), "value {value:?}");
         }
     }
 
