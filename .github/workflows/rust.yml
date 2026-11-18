@@ -100,6 +100,11 @@ on:
       - "tsconfig.json"
       - ".github/workflows/rust.yml"
   workflow_dispatch:
+  # `release.yml` calls this workflow before publishing, so a red Rust result
+  # blocks both the npm release and the native archives. The path filters above
+  # only apply to the `push` and `pull_request` triggers; a called workflow
+  # always runs in full.
+  workflow_call:
 
 permissions:
   contents: read
@@ -242,10 +247,11 @@ jobs:
         with:
           tool: wasm-pack@0.15.1
 
-      # wasm-pack uses a system `wasm-opt` when binaryen is on PATH, so on CI
-      # this apt install is the optimizer that runs. The crate's
-      # `[package.metadata.wasm-pack.profile.custom]` flags only cover the
-      # bundled binaryen fallback used by developers without it; keep both.
+      # wasm-pack 0.15.1 runs whichever `wasm-opt` it finds on PATH and only
+      # downloads a binaryen release when PATH has none. It passes that
+      # optimizer the `[package.metadata.wasm-pack.profile.custom]` arguments
+      # from `crates/thar-wasm/Cargo.toml` either way, so on CI this apt package
+      # is the optimizer and those flags must stay valid for it.
       - name: Install binaryen
         run: |
           sudo apt-get update

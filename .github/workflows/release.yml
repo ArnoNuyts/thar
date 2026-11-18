@@ -22,8 +22,15 @@ jobs:
   verify:
     uses: ./.github/workflows/ci.yml
 
+  # The Rust suite gates the release: the npm package ships the WASM core and
+  # `native` builds the archives from the release tag, so neither may ship from
+  # a commit where `rust.yml` is red. A called workflow ignores `rust.yml`'s
+  # path filters, so the whole suite runs here.
+  rust:
+    uses: ./.github/workflows/rust.yml
+
   publish:
-    needs: verify
+    needs: [verify, rust]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -262,9 +269,13 @@ jobs:
   native:
     name: native (${{ matrix.target }})
     needs: publish
-    # Upload only once `publish` has proved the release exists. This is true for
-    # a fresh release and for a re-run that recovered a missing release.
-    if: needs.publish.outputs.release_ready == 'true'
+    # `publish` reports `skip == 'true'` when the version is already published.
+    # Together with `release_ready` this gates the upload: a plain push to
+    # `main` for an already-released version (a docs-only commit, say) must not
+    # rebuild and clobber its archives with new bytes and checksums. A rerun or
+    # a manual dispatch still uploads, which is how a failed matrix leg is
+    # repaired.
+    if: needs.publish.outputs.release_ready == 'true' && (needs.publish.outputs.skip != 'true' || github.run_attempt != '1' || github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix:
@@ -296,6 +307,11 @@ jobs:
     steps:
       - name: Setup repo
         uses: actions/checkout@v7
+        with:
+          # Build the bytes that belong to the tag, not the head of `main`. The
+          # tag was created by `publish` (or already existed for a rerun), so
+          # its commit is the one the release describes.
+          ref: ${{ needs.publish.outputs.tag }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.99.1
