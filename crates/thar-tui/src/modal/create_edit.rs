@@ -529,15 +529,14 @@ pub fn extract_tags_and_contexts(query: &str) -> String {
 #[must_use]
 pub fn create(app: &App) -> Box<dyn Modal> {
     let prefill = extract_tags_and_contexts(&app.search().query());
-    let todos = app.todos();
     Box::new(TextModal {
         mode: Mode::Create,
         editor: Editor::with_cursor(&prefill, 0),
-        sources: TagSources::collect(todos.iter()),
+        sources: app.tag_sources().clone(),
         suggestions: Suggestions::new(),
         selected_button: 0,
         max_chars: MAX_TODO_CHARS,
-        existing_count: todos.len(),
+        existing_count: app.todos().len(),
         ids: Vec::new(),
     })
 }
@@ -553,16 +552,15 @@ pub fn edit(app: &App) -> Box<dyn Modal> {
     let text = todo.map(|todo| todo.text.clone()).unwrap_or_default();
     let ids = todo.map(|todo| vec![todo.id]).unwrap_or_default();
     let max_chars = MAX_TODO_CHARS.max(text.encode_utf16().count());
-    let todos = app.todos();
 
     Box::new(TextModal {
         mode: Mode::Edit,
         editor: Editor::new(&text),
-        sources: TagSources::collect(todos.iter()),
+        sources: app.tag_sources().clone(),
         suggestions: Suggestions::new(),
         selected_button: 0,
         max_chars,
-        existing_count: todos.len(),
+        existing_count: app.todos().len(),
         ids,
     })
 }

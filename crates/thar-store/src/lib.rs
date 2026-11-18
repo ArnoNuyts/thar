@@ -26,7 +26,7 @@ pub use atomic::write_atomic;
 pub use backup::{BACKUP_SUFFIX, BackupPolicy, backup_path};
 pub use done::append_done;
 pub use error::StoreError;
-pub use save::{SaveGuard, Saved, ensure_file};
+pub use save::{SaveGuard, ensure_file};
 
 /// Temp-directory helpers for the crate's tests.
 #[cfg(test)]

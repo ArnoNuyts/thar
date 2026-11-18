@@ -104,7 +104,7 @@ pub fn load_with_limits(path: &Path, limits: &ReadLimits) -> Result<LoadedFile, 
 /// Read the bytes of `path`, enforcing the byte limit, without decoding.
 ///
 /// The reload path uses this so it can hold the exact bytes it parsed and make
-/// them the [`thar_store::SaveGuard`] baseline; [`load_with_limits`] is this
+/// them the [`crate::sync::FileSync`] baseline; [`load_with_limits`] is this
 /// plus [`parse_bytes`]. A missing file stays an error here: unlike the initial
 /// load, a delete after startup must not silently become an empty list.
 ///

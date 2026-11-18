@@ -11,7 +11,8 @@ use std::time::Instant;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use thar_core::{Todo, TodoDate, TodoId};
 use thar_tui::App;
-use thar_tui::input::{self, Command, NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE, command_for_key};
+use thar_tui::input::{self, Command, command_for_key};
+use thar_tui::messages::{NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE};
 use thar_tui::modal::{ModalId, UpdateModel};
 
 const NONE: KeyModifiers = KeyModifiers::NONE;

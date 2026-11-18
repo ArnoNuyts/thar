@@ -1,10 +1,8 @@
 //! One owned entry per todo: the shared handle plus its cached search view.
 //!
-//! The app used to keep two parallel vectors, `Vec<Rc<Todo>>` and
-//! `Vec<OwnedView>`, and relied on every mutation updating both in step. One
-//! entry per todo makes that alignment structural: the handle and the view for
-//! a todo are replaced together by [`TodoEntry::replace`], and a row build sees
-//! the same slice as both the todo source and the search-view source.
+//! One entry per todo keeps the alignment structural: the handle and the view
+//! for a todo are replaced together by [`TodoEntry::replace`], and a row build
+//! sees the same slice as both the todo source and the search-view source.
 //!
 //! The handle keeps the undo/redo sharing intact: a snapshot copies only the
 //! `Rc` handles, and a mutation replaces just the touched entry with a fresh
@@ -13,15 +11,15 @@
 use std::borrow::Borrow;
 use std::rc::Rc;
 
-use thar_core::{SearchView, SearchViewLike, Todo};
+use thar_core::{OwnedSearchView, SearchView, SearchViewLike, Todo};
 
-use crate::search::{OwnedView, view_for};
+use crate::search::view_for;
 
 /// A todo plus the lowercased search view cached for it.
 #[derive(Debug)]
 pub(crate) struct TodoEntry {
     todo: Rc<Todo>,
-    view: OwnedView,
+    view: OwnedSearchView,
 }
 
 impl TodoEntry {

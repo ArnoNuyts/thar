@@ -32,11 +32,19 @@ jiff = "0.2.45"
 [profile.release]
 lto = true
 codegen-units = 1
+# Ship without symbols: the archives only contain the binary, and this keeps
+# them small. Native keeps the default `panic = "unwind"`; the `wasm` profile
+# below overrides that to `abort`.
+strip = true
 
 # Keep the shipped WASM small: the size gate is 250 KB raw / 100 KB gzip.
 #
 # This is deliberately a separate profile so the native `thar-rs` release build
-# keeps `panic = "unwind"` (and the default speed optimization).
+# keeps `panic = "unwind"` (and the default speed optimization). `strip` is
+# reset because wasm-bindgen needs the `target_features` custom section to
+# detect which Wasm features the module uses; with `strip = true` it warns that
+# the section is missing. The `wasm-opt --strip-debug` step configured in
+# `crates/thar-wasm/Cargo.toml` does the stripping instead.
 # `scripts/build-wasm.mjs` selects it with `wasm-pack build --profile wasm`
 # (wasm-pack 0.14+; CI pins 0.15.1). The same profile is available to a direct
 # `cargo build --profile wasm --target wasm32-unknown-unknown`.
@@ -44,3 +52,4 @@ codegen-units = 1
 inherits = "release"
 opt-level = "s"
 panic = "abort"
+strip = "none"

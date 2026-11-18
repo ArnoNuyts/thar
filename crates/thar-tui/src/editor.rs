@@ -34,6 +34,26 @@ pub struct Editor {
     cursor: usize,
 }
 
+/// How far one editor command moves or deletes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Step {
+    /// One character.
+    Char,
+    /// One whitespace-delimited word.
+    Word,
+}
+
+impl Step {
+    /// The step for a key press: a word when `word_modifier` is set.
+    const fn from_word(word_modifier: bool) -> Self {
+        if word_modifier {
+            Self::Word
+        } else {
+            Self::Char
+        }
+    }
+}
+
 /// True for the modifiers that make `Ctrl`/`Meta` word commands.
 fn is_word_modifier(modifiers: KeyModifiers) -> bool {
     modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::META)
@@ -87,49 +107,45 @@ impl Editor {
         self.cursor
     }
 
-    /// Move the cursor one character left, clamped at the start.
-    pub fn move_left(&mut self, word: bool) {
-        self.cursor = if word {
-            self.word_left()
-        } else {
-            self.cursor.saturating_sub(1)
+    /// Move the cursor left by one [`Step`], clamped at the start.
+    pub fn move_left(&mut self, step: Step) {
+        self.cursor = match step {
+            Step::Word => self.word_left(),
+            Step::Char => self.cursor.saturating_sub(1),
         };
     }
 
-    /// Move the cursor one character right, clamped at the end.
-    pub fn move_right(&mut self, word: bool) {
-        self.cursor = if word {
-            self.word_right(false)
-        } else {
-            (self.cursor + 1).min(self.chars.len())
+    /// Move the cursor right by one [`Step`], clamped at the end.
+    pub fn move_right(&mut self, step: Step) {
+        self.cursor = match step {
+            Step::Word => self.word_right(false),
+            Step::Char => (self.cursor + 1).min(self.chars.len()),
         };
     }
 
-    /// Delete the character, or the word when `word` is set, before the cursor.
+    /// Delete one [`Step`] before the cursor.
     ///
     /// A backspace at the start is a no-op, so callers can drive it from a key
     /// event without a bounds check.
-    pub fn backspace(&mut self, word: bool) {
+    pub fn backspace(&mut self, step: Step) {
         if self.cursor == 0 {
             return;
         }
-        let start = if word {
-            self.word_left()
-        } else {
-            self.cursor - 1
+        let start = match step {
+            Step::Word => self.word_left(),
+            Step::Char => self.cursor - 1,
         };
         self.delete_range(start, self.cursor);
     }
 
-    /// Delete the character, or the word when `word` is set, at the cursor.
-    pub fn delete_forward(&mut self, word: bool) {
+    /// Delete one [`Step`] at the cursor.
+    pub fn delete_forward(&mut self, step: Step) {
         if self.cursor >= self.chars.len() {
             return;
         }
-        let end = if word {
-            self.word_right(self.chars[self.cursor] == ' ')
-        } else {
-            self.cursor + 1
+        let end = match step {
+            Step::Word => self.word_right(self.chars[self.cursor] == ' '),
+            Step::Char => self.cursor + 1,
         };
         self.delete_range(self.cursor, end);
     }
@@ -197,15 +213,15 @@ impl Editor {
     /// the vertical arrows are left to the modal, so this never submits or
     /// closes anything.
     pub fn handle_key(&mut self, key: KeyEvent) -> bool {
-        let word = is_word_modifier(key.modifiers);
+        let step = Step::from_word(is_word_modifier(key.modifiers));
 
         match key.code {
             KeyCode::Left => {
-                self.move_left(word);
+                self.move_left(step);
                 true
             }
             KeyCode::Right => {
-                self.move_right(word);
+                self.move_right(step);
                 true
             }
             KeyCode::Home => {
@@ -217,11 +233,11 @@ impl Editor {
                 true
             }
             KeyCode::Backspace => {
-                self.backspace(word);
+                self.backspace(step);
                 true
             }
             KeyCode::Delete => {
-                self.delete_forward(word);
+                self.delete_forward(step);
                 true
             }
             KeyCode::Char(character) if !is_command_modifier(key.modifiers) => {

@@ -36,25 +36,22 @@ pub fn select_row(app: &mut App, row: usize, shift: bool) {
     let Some(entry) = app.rows().get(row) else {
         return;
     };
-    let Some(id) = row_todo_id(app, entry) else {
+    let Some(id) = app.row_todo_id(entry) else {
         return;
     };
 
     if shift {
-        let selection = app.selection();
-        let anchor = selection
+        let anchor = app
+            .selection
             .anchor
-            .unwrap_or_else(|| selection.cursor.unwrap_or(id));
-        app.selection_mut().anchor = Some(anchor);
-        let range = range_between(app, anchor, id);
-        app.selection_mut().range = range;
+            .unwrap_or_else(|| app.selection.cursor.unwrap_or(id));
+        app.selection.anchor = Some(anchor);
+        app.selection.range = range_between(app, anchor, id);
     } else {
-        let selection = app.selection_mut();
-        selection.anchor = None;
-        selection.range.clear();
+        app.selection.collapse();
     }
 
-    app.selection_mut().cursor = Some(id);
+    app.selection.cursor = Some(id);
     scroll_to(app, row);
 }
 
@@ -64,7 +61,7 @@ pub fn select_row(app: &mut App, row: usize, shift: bool) {
 /// todo row, never on a header.
 pub fn move_cursor(app: &mut App, step: isize, shift: bool) {
     let current = app
-        .selection()
+        .selection
         .cursor
         .and_then(|id| app.row_for(id))
         .unwrap_or(0);
@@ -98,7 +95,7 @@ pub fn select_last(app: &mut App) {
 /// The group must directly follow its header; an empty group is not entered,
 /// matching the oracle's loop that stops at the next header.
 pub fn move_context(app: &mut App, direction: isize, shift: bool) {
-    let Some(current) = app.selection().cursor.and_then(|id| app.row_for(id)) else {
+    let Some(current) = app.selection.cursor.and_then(|id| app.row_for(id)) else {
         return;
     };
 
@@ -144,14 +141,12 @@ pub fn scroll(app: &mut App, direction: isize) {
     } else {
         app.offset().saturating_add(1).min(max)
     };
-    app.set_offset_raw(next);
+    app.set_offset(next);
 }
 
 /// Clear a shift-selection, keeping the cursor.
 pub fn clear_range(app: &mut App) {
-    let selection = app.selection_mut();
-    selection.anchor = None;
-    selection.range.clear();
+    app.selection.collapse();
 }
 
 /// Rebuild the row model after a query change and reconcile the selection.
@@ -174,7 +169,7 @@ pub fn rebuild(app: &mut App) {
 /// range-aware [`calculate_scroll_offset`]; with no cursor the offset is simply
 /// clamped.
 pub fn reflow(app: &mut App) {
-    match app.selection().cursor.and_then(|id| app.row_for(id)) {
+    match app.selection.cursor.and_then(|id| app.row_for(id)) {
         Some(row) => scroll_to(app, row),
         None => app.clamp_offset(),
     }
@@ -190,36 +185,33 @@ struct Previous {
 
 impl Previous {
     fn capture(app: &App) -> Self {
-        let selection = app.selection();
         Self {
-            cursor: selection.cursor,
-            anchor: selection.anchor,
-            range: selection.range.clone(),
-            row: selection.cursor.and_then(|id| app.row_for(id)).unwrap_or(0),
+            cursor: app.selection.cursor,
+            anchor: app.selection.anchor,
+            range: app.selection.range.clone(),
+            row: app
+                .selection
+                .cursor
+                .and_then(|id| app.row_for(id))
+                .unwrap_or(0),
         }
     }
 
     /// Restore the cursor and range over the rebuilt row model.
     fn reconcile(self, app: &mut App) {
-        app.selection_mut().cursor = match self.cursor {
+        app.selection.cursor = match self.cursor {
             Some(id) if app.row_for(id).is_some() => Some(id),
             _ => validate_cursor(app, self.row),
         };
 
         if self.range.iter().all(|id| app.row_for(*id).is_some()) {
-            let selection = app.selection_mut();
-            selection.range = self.range;
-            selection.anchor = self.anchor;
+            app.selection.range = self.range;
+            app.selection.anchor = self.anchor;
         } else {
-            let selection = app.selection_mut();
-            selection.range.clear();
-            selection.anchor = None;
+            app.selection.collapse();
         }
 
-        match app.selection().cursor.and_then(|id| app.row_for(id)) {
-            Some(row) => scroll_to(app, row),
-            None => app.clamp_offset(),
-        }
+        reflow(app);
     }
 }
 
@@ -238,12 +230,12 @@ fn validate_cursor(app: &App, last_row: usize) -> Option<TodoId> {
     let target = last_row.min(rows.len() - 1);
     rows[target..]
         .iter()
-        .find_map(|row| row_todo_id(app, row))
+        .find_map(|row| app.row_todo_id(row))
         .or_else(|| {
             rows[..target]
                 .iter()
                 .rev()
-                .find_map(|row| row_todo_id(app, row))
+                .find_map(|row| app.row_todo_id(row))
         })
 }
 
@@ -290,11 +282,10 @@ fn scroll_to(app: &mut App, row: usize) {
         return;
     }
 
-    let range = app.selection().range.clone();
+    let range = app.selection.range.clone();
     let selection = selection_range_rows(app, &range, row);
     let offset = calculate_scroll_offset(row, selection, app.offset(), height, app.rows().len());
-    app.set_offset_raw(offset);
-    app.clamp_offset();
+    app.set_offset(offset);
 }
 
 /// First and last rows covered by `range`, always including `fallback`.
@@ -316,7 +307,7 @@ fn selection_range_rows(app: &App, range: &[TodoId], fallback: usize) -> Selecti
     // usually far smaller than the range.
     let selected: HashSet<TodoId> = range.iter().copied().collect();
     for (index, row) in app.rows().iter().enumerate() {
-        if let Some(id) = row_todo_id(app, row)
+        if let Some(id) = app.row_todo_id(row)
             && selected.contains(&id)
         {
             selection.min = selection.min.min(index);
@@ -343,15 +334,8 @@ fn range_between(app: &App, left: TodoId, right: TodoId) -> Vec<TodoId> {
 
     app.rows()[start..=end]
         .iter()
-        .filter_map(|row| row_todo_id(app, row))
+        .filter_map(|row| app.row_todo_id(row))
         .collect()
-}
-
-/// Todo id behind a todo row, or `None` for a header.
-fn row_todo_id(app: &App, row: &ListRow) -> Option<TodoId> {
-    row.todo_index()
-        .and_then(|index| app.todo_at(index))
-        .map(|todo| todo.id)
 }
 
 #[cfg(test)]
@@ -410,7 +394,7 @@ mod tests {
         select_first(&mut app);
         move_cursor(&mut app, 1, true);
         assert_eq!(app.selected_todos().len(), 2);
-        assert_eq!(app.selection().anchor, Some(TodoId::new(1)));
+        assert_eq!(app.selection.anchor, Some(TodoId::new(1)));
         clear_range(&mut app);
         assert_eq!(app.selected_todos().len(), 1);
     }

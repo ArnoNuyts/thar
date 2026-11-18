@@ -14,8 +14,8 @@
 //! instead of growing without bound.
 //!
 //! [`History::undo`] and [`History::redo`] take the live vector and swap it in
-//! place with [`std::mem::take`], so a successful swap does not clone the list
-//! and does not clone any `Todo`.
+//! place with [`std::mem::replace`], so a successful swap does not clone the
+//! list and does not clone any `Todo`.
 
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -68,8 +68,7 @@ impl History {
         let Some(previous) = self.undo.pop_back() else {
             return false;
         };
-        let replaced = std::mem::take(current);
-        *current = previous;
+        let replaced = std::mem::replace(current, previous);
         push_capped(&mut self.redo, replaced);
         true
     }
@@ -82,8 +81,7 @@ impl History {
         let Some(next) = self.redo.pop_back() else {
             return false;
         };
-        let replaced = std::mem::take(current);
-        *current = next;
+        let replaced = std::mem::replace(current, next);
         push_capped(&mut self.undo, replaced);
         true
     }

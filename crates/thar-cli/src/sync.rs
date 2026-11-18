@@ -84,13 +84,13 @@ pub enum ReloadOutcome {
     /// The on-disk bytes differ from the last accepted content.
     ///
     /// The caller decodes and parses them with [`crate::file::parse_bytes`],
-    /// then hands them to [`FileSync::adopt`] and the save guard baseline.
+    /// then hands them to [`FileSync::adopt`], which is also the save baseline.
     Changed(Vec<u8>),
     /// The file was rewritten with exactly the accepted bytes.
     ///
     /// A touch is a no-op for a healthy session, but it is the only signal that
     /// a previously failed reload can be cleared when the external fix restores
-    /// the original content.
+    /// the original content: the caller re-parses [`FileSync::baseline`].
     Unchanged,
     /// The file exists but could not be read; the message is bounded and
     /// content-free, safe to show in the action bar.
@@ -153,10 +153,20 @@ impl FileSync {
     /// Adopt bytes the caller has just read, parsed, or written.
     ///
     /// After a reload this is the exact content that became the in-memory list;
-    /// after a save it is the bytes [`thar_store::SaveGuard`] wrote. Both make
-    /// a later identical read a no-op instead of a spurious reload.
+    /// after a save it is the bytes written. Both make a later identical read a
+    /// no-op instead of a spurious reload.
     pub fn adopt(&mut self, bytes: &[u8]) {
         self.baseline = bytes.to_vec();
+    }
+
+    /// The content this session last accepted.
+    ///
+    /// This is the only save baseline: a save passes it to the guard, and a
+    /// failed reload recovers by re-parsing it when the file returns to the
+    /// same bytes.
+    #[must_use]
+    pub fn baseline(&self) -> &[u8] {
+        &self.baseline
     }
 
     /// Record a save at `now`.

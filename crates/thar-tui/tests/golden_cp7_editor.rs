@@ -65,7 +65,8 @@ fn screen_lines(backend: &TestBackend) -> Vec<String> {
 
 fn type_text(app: &mut App, text: &str) {
     for character in text.chars() {
-        app.handle_modal_key(
+        thar_tui::input::handle_key(
+            app,
             KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE),
             current_time(),
         );

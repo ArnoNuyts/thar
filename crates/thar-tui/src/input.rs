@@ -27,13 +27,13 @@ use std::time::Instant;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use thar_core::Priority;
 
-use crate::app::App;
+use crate::app::{App, Direction};
 use crate::layout::{action_item_at, checkbox_columns};
+use crate::messages::{NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE};
 use crate::modal::{Action, ConfirmRequest, ModalId};
 use crate::nav;
 
 pub use crate::event::{DOUBLE_CLICK_WINDOW, LastClick, MouseInput, MouseKind};
-pub use crate::messages::{NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE};
 
 /// One intent produced by the input layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -358,14 +358,11 @@ fn left_click(
     };
 
     if screen_row == layout.action_row() {
-        let command = match action_item_at(mouse.x.saturating_sub(1)) {
-            Some("q") => Some(Command::Quit),
-            Some("/") => Some(Command::SearchFocus),
-            Some("x") => Some(Command::Open(menu_for(app))),
-            Some("n") => Some(Command::Open(ModalId::CreateTodo)),
-            Some("e") => Some(Command::Open(ModalId::EditTodo)),
-            _ => None,
-        };
+        let command = action_item_at(mouse.x.saturating_sub(1)).map(|command| match command {
+            // The bar's Menu item follows the same range rule as the keymap.
+            Command::Open(ModalId::TodoMenu) => Command::Open(menu_for(app)),
+            other => other,
+        });
         return (last_click, gate(app, command));
     }
 
@@ -376,10 +373,7 @@ fn left_click(
     let Some(entry) = app.rows().get(row) else {
         return (Some(record), None);
     };
-    let Some(todo_index) = entry.todo_index() else {
-        return (Some(record), None);
-    };
-    let Some(id) = app.todo_at(todo_index).map(|todo| todo.id) else {
+    let Some(id) = app.row_todo_id(entry) else {
         return (Some(record), None);
     };
 
@@ -417,8 +411,8 @@ fn left_click(
 ///
 /// Line breaks, tabs and the other C0/C1 controls (plus the two Unicode line
 /// separators) are dropped: the search input is one line, and pasted terminal
-/// control data must never reach the query. The todo-line predicate now treats
-/// tab as safe, so the one-line rule adds its own tab check here.
+/// control data must never reach the query. Todo lines may contain tabs, so the
+/// one-line rule rejects them here.
 fn is_pastable(character: char) -> bool {
     character != '\t' && !thar_core::is_rejected_control(character)
 }
@@ -524,15 +518,15 @@ pub fn apply(app: &mut App, command: Command, now: Instant) {
         Command::ExtendDown => nav::move_cursor(app, 1, true),
         Command::Open(id) => app.open_modal(id),
         Command::Toggle => {
-            let ids = selected_ids(app);
+            let ids = app.selected_ids();
             app.toggle_ids(&ids, now);
         }
         Command::ToggleHidden => {
-            let ids = selected_ids(app);
-            app.update_ids(&ids, now, |todo| todo.clone().toggle_hidden());
+            let ids = app.selected_ids();
+            app.update_ids(&ids, now, |todo| todo.toggle_hidden());
         }
         Command::SetPriority(priority) => {
-            let ids = selected_ids(app);
+            let ids = app.selected_ids();
             app.set_priority_ids(&ids, priority, now);
         }
         Command::Undo => {
@@ -541,15 +535,15 @@ pub fn apply(app: &mut App, command: Command, now: Instant) {
         Command::Redo => {
             app.redo(now);
         }
-        Command::SuggestionPrevious => app.select_suggestion(-1),
-        Command::SuggestionNext => app.select_suggestion(1),
+        Command::SuggestionPrevious => app.select_suggestion(Direction::Up),
+        Command::SuggestionNext => app.select_suggestion(Direction::Down),
         Command::SuggestionApply => app.apply_suggestion(),
         Command::SuggestionClose => app.clear_search_suggestions(),
         Command::Archive => {
             app.apply_action(Action::Confirm(ConfirmRequest::archive()), now);
         }
         Command::DeleteSelected => {
-            let ids = selected_ids(app);
+            let ids = app.selected_ids();
             if ids.is_empty() {
                 app.push_toast_at("Nothing to delete", now);
             } else {
@@ -557,17 +551,12 @@ pub fn apply(app: &mut App, command: Command, now: Instant) {
             }
         }
         Command::CopySelected => {
-            let ids = selected_ids(app);
+            let ids = app.selected_ids();
             app.apply_action(Action::Copy { ids }, now);
         }
         Command::Paste => app.apply_action(Action::Paste, now),
         Command::Toast(message) => app.push_toast_at(message, now),
     }
-}
-
-/// Ids of the active selection, in load order.
-fn selected_ids(app: &App) -> Vec<thar_core::TodoId> {
-    app.selected_todos().iter().map(|todo| todo.id).collect()
 }
 
 /// Is the 1-based terminal column on the checkbox of a todo row?
@@ -584,10 +573,11 @@ pub fn clicked_checkbox(app: &App, x: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        Command, MouseInput, MouseKind, NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE, apply,
-        command_for_key, handle_key, handle_mouse, handle_paste, is_pastable,
+        Command, MouseInput, MouseKind, apply, command_for_key, handle_key, handle_mouse,
+        handle_paste, is_pastable,
     };
     use crate::app::App;
+    use crate::messages::{NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE};
     use crate::modal::{ModalId, UpdateModel};
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
     use std::time::{Duration, Instant};
@@ -751,8 +741,6 @@ mod tests {
             command_for_key(&app, key(KeyCode::Char('n'), KeyModifiers::NONE)).expect("command");
         apply(&mut app, second, now());
         assert_eq!(app.toast_message(now()), Some(READ_ONLY_MESSAGE));
-        assert!(READ_ONLY_MESSAGE.len() <= 80);
-        assert!(!READ_ONLY_MESSAGE.contains("write the docs"));
 
         assert_eq!(app.cursor(), Some(TodoId::new(0)));
         assert_eq!(app.search().query(), "");

@@ -13,10 +13,9 @@
 
 use std::borrow::Borrow;
 
-use thar_core::{Row, RowError, Rows, Todo, TodoDate, build_rows};
+use thar_core::{OwnedSearchView, Row, RowError, Rows, Todo, TodoDate, build_rows};
 
 use crate::entry::TodoEntry;
-use crate::search::OwnedView;
 
 /// One row in the owned list model.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -63,35 +62,33 @@ impl ListRow {
     }
 }
 
-/// The rows plus the sorted/filtered order they were produced from.
+/// The owned row list.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ListModel {
-    /// Sorted, filtered, searched todo indexes, in row order.
-    pub order: Vec<usize>,
     /// The complete row list, headers included.
     pub rows: Vec<ListRow>,
 }
 
 impl ListModel {
-    /// Build the row list from the load-order todos and their cached views.
+    /// Build the row list from a separate todo slice and its cached views.
     ///
-    /// `query` is normalized inside the call (one allocation per keystroke);
-    /// `views` must be aligned with `todos`, which is the caller's invariant.
-    /// [`crate::app::App`] cannot break that invariant any more because it keeps
-    /// one entry per todo that supplies both halves; this entry point stays for
-    /// callers that hold the two slices separately.
+    /// [`crate::app::App`] builds rows through [`ListModel::from_entries`],
+    /// where one entry supplies both halves. This entry point exists for the
+    /// row-parity tests, which compare that path against two slices.
     ///
-    /// `todos` may be any slice of values that borrow a [`Todo`], so the app can
-    /// keep its per-todo `Rc<Todo>` sharing intact and still build rows.
+    /// `query` is normalized inside the call (one allocation per keystroke).
+    ///
+    /// `todos` may be any slice of values that borrow a [`Todo`].
     ///
     /// # Errors
     ///
     /// Returns [`RowError::ViewCountMismatch`] when `views` is not aligned with
     /// `todos`. A misalignment means at least one row would point at a foreign
     /// view, so no row is produced instead of a silently truncated list.
+    #[doc(hidden)]
     pub fn build<T: Borrow<Todo>>(
         todos: &[T],
-        views: &[OwnedView],
+        views: &[OwnedSearchView],
         query: &str,
         show_hidden: bool,
         today: TodoDate,
@@ -146,10 +143,7 @@ impl ListModel {
             }
         }
 
-        Self {
-            order: rows.todo_indexes().to_vec(),
-            rows: owned,
-        }
+        Self { rows: owned }
     }
 
     /// Number of rows, headers included.
@@ -162,12 +156,6 @@ impl ListModel {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
-    }
-
-    /// The row at `index`, if any.
-    #[must_use]
-    pub fn get(&self, index: usize) -> Option<&ListRow> {
-        self.rows.get(index)
     }
 
     /// The visible slice for a viewport, clamped to the row list.
@@ -202,6 +190,11 @@ mod tests {
         let list = todos(lines);
         let views: Vec<_> = list.iter().map(view_for).collect();
         ListModel::build(&list, &views, query, false, today()).expect("aligned")
+    }
+
+    /// The todo indexes in row order, headers skipped.
+    fn indexes(model: &ListModel) -> Vec<usize> {
+        model.rows.iter().filter_map(ListRow::todo_index).collect()
     }
 
     #[test]
@@ -261,7 +254,7 @@ mod tests {
     #[test]
     fn search_filters_rows_but_keeps_load_order_indexes() {
         let rows = build(&["write docs @work", "buy milk"], "docs");
-        assert_eq!(rows.order, [0]);
+        assert_eq!(indexes(&rows), [0]);
         assert_eq!(
             rows.rows,
             [
@@ -279,8 +272,8 @@ mod tests {
 
     #[test]
     fn empty_and_punctuation_queries_match_everything() {
-        assert_eq!(build(&["one", "two"], "").order.len(), 2);
-        assert_eq!(build(&["one", "two"], "!!!").order.len(), 2);
+        assert_eq!(indexes(&build(&["one", "two"], "")).len(), 2);
+        assert_eq!(indexes(&build(&["one", "two"], "!!!")).len(), 2);
     }
 
     #[test]

@@ -279,6 +279,13 @@ fn restoring_the_original_bytes_clears_read_only_recovery() {
     session.wait_text("READ-ONLY");
     session.wait_text("Todo file line 1");
 
+    // A mutation made while writes are blocked still changes the list in
+    // memory, but it must never be reported as saved: the recovery reload has
+    // to replace it with the accepted bytes.
+    session.send(b" ");
+    session.wait_text("[x] one");
+    session.wait_text("Not saved");
+
     std::fs::write(&path, b"one\ntwo\n").expect("restore the original bytes");
     session.wait_text("File reloaded");
     session.wait_text("WRITE");
@@ -286,6 +293,7 @@ fn restoring_the_original_bytes_clears_read_only_recovery() {
     session.wait_no_text("Todo file line 1");
     session.wait_todo_text("one");
     session.wait_todo_text("two");
+    session.wait_no_todo_text("[x] one");
 
     session.send(b"q");
     let status = session.wait_exit(TIMEOUT);

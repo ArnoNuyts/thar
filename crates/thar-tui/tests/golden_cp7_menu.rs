@@ -147,7 +147,8 @@ fn eighty_by_twenty_four_pins_the_single_todo_menu() {
 
     // Down moves the marker to Delete without changing the labels.
     let mut app = app;
-    app.handle_modal_key(
+    thar_tui::input::handle_key(
+        &mut app,
         ratatui::crossterm::event::KeyEvent::new(
             ratatui::crossterm::event::KeyCode::Down,
             ratatui::crossterm::event::KeyModifiers::NONE,

@@ -219,6 +219,10 @@ impl TerminalSession {
         app: &mut App,
         mut store: Option<&mut SaveGuard>,
     ) -> io::Result<()> {
+        // Write mode has one source of truth: the presence of the store. The
+        // caller opens a store exactly when `--write` is active.
+        app.set_read_only(store.is_none());
+
         // The reload path must use the same limits as the initial load, so an
         // environment override cannot make a reload accept a file the startup
         // read would reject (or the reverse). `run` already turned an invalid
@@ -260,43 +264,31 @@ impl TerminalSession {
             self.terminal.hide_cursor()?;
 
             let timeout = next_poll_timeout(app, Instant::now(), &sync);
-            if event::poll(timeout)? {
-                match event::read()? {
-                    Event::Key(key) => input::handle_key(app, key, now),
-                    Event::Mouse(mouse) => {
-                        if let Some(kind) = mouse_kind(mouse.kind) {
-                            let input = MouseInput {
-                                kind,
-                                x: mouse.column.saturating_add(1),
-                                y: mouse.row.saturating_add(1),
-                                shift: mouse
-                                    .modifiers
-                                    .contains(ratatui::crossterm::event::KeyModifiers::SHIFT),
-                            };
-                            last_click = input::handle_mouse_event(app, input, last_click, now);
-                        }
-                    }
-                    Event::Resize(width, height) => app.resize(width, height),
-                    Event::Paste(text) => input::handle_paste(app, &text, now),
-                    // Focus does not change any read-only state. The next
-                    // iteration redraws and re-checks the local day.
-                    Event::FocusGained | Event::FocusLost => {}
-                }
-            }
+            let event_now = if event::poll(timeout)? {
+                let event = event::read()?;
+                // Timestamp the event after the read: `poll` may have waited
+                // most of the timeout, and an early stamp would misjudge
+                // double clicks, the save debounce and toast expiry. The
+                // earlier `now` stays the frame clock for draw and timers.
+                let event_now = Instant::now();
+                handle_event(app, event, event_now, &mut last_click);
+                event_now
+            } else {
+                now
+            };
+
+            // Apply the effects queued by this event before the reload: an
+            // effect was gated by the app state when the key was handled, and
+            // a reload first could flip the session into read-only recovery
+            // between the queue and the host step (for example, archiving to
+            // `done.txt` after the file became unreadable).
+            process_effects(app, event_now);
 
             // After every event or timeout: reload an externally edited file.
             // A reload that lands while a save is pending drops the in-memory
             // edit (the external file wins) because `App::reloaded` clears the
             // pending save, which is the Ink hook's `onLoad` behaviour.
-            apply_reload(
-                app,
-                &mut sync,
-                store.as_deref_mut(),
-                &limits,
-                Instant::now(),
-            );
-
-            process_effects(app, store.as_deref_mut(), now);
+            apply_reload(app, &mut sync, &limits, Instant::now());
 
             // A timeout at (or past) midnight lands here and re-derives the
             // local day, rebuilding overdue/threshold verdicts exactly once.
@@ -342,32 +334,29 @@ pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()
 
 /// Write the dirty list now and record the outcome on the app.
 ///
-/// A successful save records the self-write window on the watcher and adopts
-/// the written bytes as the comparison baseline, so the save's own metadata
-/// change does not schedule a reload. A failed save (including
+/// The watcher's accepted bytes are the one save baseline: the guard compares
+/// the target against them, and the bytes it returns become the new baseline.
+/// A successful save also records the self-write window, so the save's own
+/// metadata change does not schedule a reload. A failed save (including
 /// [`thar_store::StoreError::ChangedOnDisk`]) keeps the target untouched, shows
 /// one bounded message, keeps the list dirty and retries after the app's
 /// backoff. The watcher normally reloads the external file first, which clears
-/// the dirty state and rebaselines both the guard and the watcher; a quit
-/// before that happens exits non-zero rather than reporting a false save.
+/// the dirty state and rebaselines the watcher; a quit before that happens
+/// exits non-zero rather than reporting a false save.
 fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync, now: Instant) {
     let Some(store) = store else {
-        if app.is_read_only() {
-            app.mark_saved();
-        } else {
-            // A write-enabled app must never report a successful save without
-            // a store. This is a programming error, not a user error, but it
-            // still must not drop the edit silently.
-            app.mark_save_failed(now, "no write store is attached");
-        }
+        // `run_with_store` makes the store the single source of write mode:
+        // no store means a read-only app, which never schedules a save. Do not
+        // mark it saved: claiming a save here would hide a pending edit.
+        debug_assert!(app.is_read_only());
         return;
     };
-    match store.save(app.todos()) {
-        Ok(_) => {
+    match store.save(app.todos().iter(), sync.baseline()) {
+        Ok(bytes) => {
             // The window starts after the rename, not before the serialization,
             // so a slow filesystem cannot shorten it.
             sync.note_write(Instant::now());
-            sync.adopt(store.last_bytes());
+            sync.adopt(&bytes);
             app.mark_saved();
         }
         Err(error) => app.mark_save_failed(now, error.to_string()),
@@ -376,16 +365,9 @@ fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync,
 
 /// Apply one watcher outcome: reload the list, or enter read-only recovery.
 ///
-/// On success the parsed bytes become both the watcher baseline and the save
-/// guard baseline in one step, so the bytes that were parsed are exactly the
-/// bytes a later save compares against.
-fn apply_reload(
-    app: &mut App,
-    sync: &mut FileSync,
-    store: Option<&mut SaveGuard>,
-    limits: &ReadLimits,
-    now: Instant,
-) {
+/// On success the parsed bytes become the watcher baseline in one step, so the
+/// bytes that were parsed are exactly the bytes a later save compares against.
+fn apply_reload(app: &mut App, sync: &mut FileSync, limits: &ReadLimits, now: Instant) {
     let outcome = match sync.poll(now) {
         Some(outcome) => outcome,
         None => return,
@@ -394,19 +376,26 @@ fn apply_reload(
     match outcome {
         ReloadOutcome::Changed(bytes) => match parse_bytes(&bytes, limits) {
             Ok(todos) => {
-                app.reloaded(todos);
-                if let Some(store) = store {
-                    store.set_baseline(bytes.clone());
-                }
                 sync.adopt(&bytes);
+                app.reloaded(todos);
                 app.push_toast(RELOADED_MESSAGE);
             }
             Err(error) => app.reload_failed(bounded_message(&error.to_string())),
         },
         ReloadOutcome::Unchanged => {
+            // The file was rewritten with the bytes this session already
+            // accepts. After a failed reload that is the recovery signal, but
+            // the in-memory list may hold unsaved edits made while writes were
+            // blocked: re-parse the accepted bytes instead of marking those
+            // edits as saved.
             if app.load_error().is_some() {
-                app.recovered();
-                app.push_toast(RELOADED_MESSAGE);
+                match parse_bytes(sync.baseline(), limits) {
+                    Ok(todos) => {
+                        app.reloaded(todos);
+                        app.push_toast(RELOADED_MESSAGE);
+                    }
+                    Err(error) => app.reload_failed(bounded_message(&error.to_string())),
+                }
             }
         }
         ReloadOutcome::Unreadable(message) => app.reload_failed(message),
@@ -414,33 +403,23 @@ fn apply_reload(
 }
 
 /// Drain the host effects queued by commands.
-fn process_effects(app: &mut App, mut store: Option<&mut SaveGuard>, now: Instant) {
+fn process_effects(app: &mut App, now: Instant) {
     for effect in app.take_effects() {
         match effect {
-            Effect::ArchiveCompleted => archive(app, store.as_deref_mut(), now),
+            Effect::Archive(todos) => archive(app, todos, now),
             Effect::Copy(text) => copy_to_clipboard(app, &text),
             Effect::Paste => paste_from_clipboard(app, now),
         }
     }
 }
 
-fn archive(app: &mut App, store: Option<&mut SaveGuard>, now: Instant) {
-    let ids = app.completed_ids();
-    if ids.is_empty() {
-        return;
-    }
-    let Some(_store) = store else {
-        app.push_toast(thar_tui::app::NOT_SAVED_MESSAGE);
-        return;
-    };
-    // `done.txt` is a write. A session in read-only recovery must not append
-    // to it either, matching the Ink provider's archive guard.
-    if !app.writable() {
-        app.push_toast(thar_tui::app::NOT_SAVED_MESSAGE);
-        return;
-    }
-
-    let todos = app.todos_by_ids(&ids);
+/// Append the completed todos to `done.txt` and remove them from the list.
+///
+/// `App` owns the archive gate (write mode and healthy recovery state) and
+/// passes the completed todos in the effect; this host half only performs the
+/// file append and reports a failure.
+fn archive(app: &mut App, todos: Vec<thar_core::Todo>, now: Instant) {
+    let ids: Vec<_> = todos.iter().map(|todo| todo.id).collect();
     let done = done_path(app.filename());
 
     match thar_store::append_done(&done, &todos) {
@@ -468,7 +447,7 @@ fn paste_from_clipboard(app: &mut App, now: Instant) {
 }
 
 fn done_path(filename: &std::path::Path) -> std::path::PathBuf {
-    std::path::Path::new(filename)
+    filename
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
         .join("done.txt")
@@ -484,14 +463,149 @@ fn mouse_kind(kind: MouseEventKind) -> Option<MouseKind> {
     }
 }
 
+/// Apply one crossterm event at `now`.
+///
+/// On Windows `crossterm` does not report a bracketed paste as
+/// [`Event::Paste`], so a paste arrives as individual key presses and would
+/// otherwise run the single-key list commands (`q` quits, space toggles, …).
+/// A key press is therefore extended with the events already queued: a burst
+/// of three or more printable presses is delivered as one paste.
+fn handle_event(app: &mut App, event: Event, now: Instant, last_click: &mut Option<LastClick>) {
+    #[cfg(windows)]
+    if matches!(&event, Event::Key(key) if is_burst_key(key)) {
+        let mut burst = vec![event];
+        burst.extend(drain_queued());
+        for event in coalesce_burst(&burst) {
+            dispatch_event(app, event, now, last_click);
+        }
+        return;
+    }
+    dispatch_event(app, event, now, last_click);
+}
+
+/// Apply one event to the app.
+fn dispatch_event(app: &mut App, event: Event, now: Instant, last_click: &mut Option<LastClick>) {
+    match event {
+        Event::Key(key) => input::handle_key(app, key, now),
+        Event::Mouse(mouse) => {
+            if let Some(kind) = mouse_kind(mouse.kind) {
+                let input = MouseInput {
+                    kind,
+                    x: mouse.column.saturating_add(1),
+                    y: mouse.row.saturating_add(1),
+                    shift: mouse
+                        .modifiers
+                        .contains(ratatui::crossterm::event::KeyModifiers::SHIFT),
+                };
+                *last_click = input::handle_mouse_event(app, input, *last_click, now);
+            }
+        }
+        Event::Resize(width, height) => app.resize(width, height),
+        Event::Paste(text) => input::handle_paste(app, &text, now),
+        // Focus does not change any read-only state. The next iteration
+        // redraws and re-checks the local day.
+        Event::FocusGained | Event::FocusLost => {}
+    }
+}
+
+/// Windows: the minimum printable presses in one burst that are a paste.
+#[cfg(any(windows, test))]
+const BURST_PASTE_MIN: usize = 3;
+
+/// True for a key press that can be part of a Windows paste.
+///
+/// Enter and printable characters qualify unless Ctrl or Alt is held;
+/// releases, Ctrl combinations, navigation keys and function keys stay single
+/// keys.
+#[cfg(any(windows, test))]
+fn is_burst_key(key: &ratatui::crossterm::event::KeyEvent) -> bool {
+    use ratatui::crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+
+    if key.kind == KeyEventKind::Release
+        || key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+    {
+        return false;
+    }
+    match key.code {
+        KeyCode::Enter => true,
+        KeyCode::Char(character) => !character.is_control(),
+        _ => false,
+    }
+}
+
+/// Windows: the events that are already queued, without waiting.
+#[cfg(windows)]
+fn drain_queued() -> Vec<Event> {
+    let mut queued = Vec::new();
+    while event::poll(Duration::ZERO).unwrap_or(false) {
+        match event::read() {
+            Ok(event) => queued.push(event),
+            Err(_) => break,
+        }
+    }
+    queued
+}
+
+/// Coalesce a burst of key presses into one paste event.
+///
+/// A run of [`BURST_PASTE_MIN`] or more printable or Enter presses becomes
+/// `Event::Paste(text)` with `\n` for Enter; shorter runs and every other
+/// event pass through unchanged.
+#[cfg(any(windows, test))]
+fn coalesce_burst(events: &[Event]) -> Vec<Event> {
+    let mut coalesced = Vec::with_capacity(events.len());
+    let mut run = Vec::new();
+    for event in events {
+        match event {
+            Event::Key(key) if is_burst_key(key) => run.push(*key),
+            event => {
+                flush_burst(&mut run, &mut coalesced);
+                coalesced.push(event.clone());
+            }
+        }
+    }
+    flush_burst(&mut run, &mut coalesced);
+    coalesced
+}
+
+/// Append one run of burst keys, as a paste when it is long enough.
+#[cfg(any(windows, test))]
+fn flush_burst(run: &mut Vec<ratatui::crossterm::event::KeyEvent>, coalesced: &mut Vec<Event>) {
+    use ratatui::crossterm::event::KeyCode;
+
+    if run.len() >= BURST_PASTE_MIN {
+        let mut text = String::with_capacity(run.len());
+        for key in run.drain(..) {
+            match key.code {
+                KeyCode::Enter => text.push('\n'),
+                KeyCode::Char(character) => text.push(character),
+                // `is_burst_key` admits only these two. A future predicate
+                // change skips the extra key instead of panicking.
+                _ => {}
+            }
+        }
+        coalesced.push(Event::Paste(text));
+    } else {
+        coalesced.extend(run.drain(..).map(Event::Key));
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{panic_value_is_trigger, today_local, until_next_local_midnight};
-    use std::time::{Duration, Instant};
+    use super::{
+        apply_reload, coalesce_burst, panic_value_is_trigger, today_local,
+        until_next_local_midnight,
+    };
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-    use thar_core::TodoDate;
-    use thar_tui::App;
-    use thar_tui::input;
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+    use thar_core::{ReadLimits, Todo, TodoDate, TodoId};
+    use thar_tui::{Action, App};
+
+    use crate::sync::{FileSync, POLL_INTERVAL};
 
     #[test]
     fn today_is_a_valid_calendar_date() {
@@ -534,47 +648,178 @@ mod tests {
     }
 
     #[test]
-    fn a_read_only_list_paste_hits_the_shared_gate() {
-        let mut app = App::new(
-            "todo.txt",
-            Vec::new(),
-            TodoDate::new(2026, 11, 17).expect("valid date"),
-        );
-        let now = Instant::now();
-        let text = (1..=11)
-            .map(|index| format!("pasted {index}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        input::handle_paste(&mut app, &text, now);
-        assert!(app.todos().is_empty(), "a read-only paste adds nothing");
-        assert!(!app.modals().is_open(), "no confirmation may open");
+    fn a_burst_of_three_or_more_presses_is_one_paste() {
+        let events = [
+            key('q'),
+            key('u'),
+            Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            key('x'),
+        ];
         assert_eq!(
-            app.toast_message(now),
-            Some(thar_tui::input::READ_ONLY_MESSAGE)
+            coalesce_burst(&events),
+            [Event::Paste("qu\nx".to_owned())],
+            "a pasted 'qu\\nx' must not run 'q' or Enter as list commands"
         );
-        assert!(!app.is_dirty());
     }
 
     #[test]
-    fn list_paste_delegates_splitting_and_validation_to_the_app() {
+    fn a_lone_press_stays_a_key() {
+        let events = [key('z')];
+        assert_eq!(coalesce_burst(&events), events, "one key is not a paste");
+    }
+
+    #[test]
+    fn a_short_burst_stays_keys() {
+        let events = [key('h'), key('i')];
+        assert_eq!(coalesce_burst(&events), events, "two keys are not a paste");
+    }
+
+    #[test]
+    fn a_burst_ends_at_the_first_non_key_event() {
+        let events = [
+            key('a'),
+            key('b'),
+            key('c'),
+            Event::Resize(80, 24),
+            key('d'),
+            key('e'),
+            key('f'),
+        ];
+        assert_eq!(
+            coalesce_burst(&events),
+            [
+                Event::Paste("abc".to_owned()),
+                Event::Resize(80, 24),
+                Event::Paste("def".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn modified_keys_and_navigation_stay_single_keys() {
+        let events = [
+            Event::Key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)),
+            key('b'),
+            Event::Key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+            Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::ALT)),
+        ];
+        assert_eq!(coalesce_burst(&events), events);
+    }
+
+    #[test]
+    fn releases_do_not_join_a_burst() {
+        let release = KeyEvent {
+            kind: KeyEventKind::Release,
+            ..key_event('x')
+        };
+        let events = [key('a'), key('b'), Event::Key(release)];
+        assert_eq!(coalesce_burst(&events), events);
+    }
+
+    /// A uniquely named scratch directory, removed on drop.
+    struct ScratchDir(PathBuf);
+
+    impl ScratchDir {
+        fn new(label: &str) -> Self {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos());
+            let path = std::env::temp_dir().join(format!(
+                "thar-rs-terminal-{label}-{}-{nanos}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&path).expect("create scratch dir");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Advance the clock in poll-sized steps, driving the real `apply_reload`,
+    /// until `condition` holds. `apply_reload` owns the `FileSync::poll` call,
+    /// so the test observes the resulting app state instead of the outcome.
+    fn reload_until(
+        app: &mut App,
+        sync: &mut FileSync,
+        limits: ReadLimits,
+        start: Instant,
+        condition: impl Fn(&App) -> bool,
+    ) -> Instant {
+        let mut now = start;
+        for _ in 0..64 {
+            apply_reload(app, sync, &limits, now);
+            if condition(app) {
+                return now;
+            }
+            now += POLL_INTERVAL;
+        }
+        panic!(
+            "apply_reload never reached the expected state; load_error: {:?}",
+            app.load_error()
+        );
+    }
+
+    #[test]
+    fn recovery_replaces_unsaved_edits_with_the_restored_bytes() {
+        let directory = ScratchDir::new("recovery");
+        let path = directory.path().join("todo.txt");
+        std::fs::write(&path, b"a\n").expect("seed the file");
+        let limits = ReadLimits::DEFAULT;
+
         let mut app = App::new(
-            "todo.txt",
-            Vec::new(),
-            TodoDate::new(2026, 11, 17).expect("valid date"),
+            path.clone(),
+            vec![Todo::parse_line("a", TodoId::new(0))],
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
         app.set_read_only(false);
-        let now = Instant::now();
+        let mut sync = FileSync::new(path.clone(), limits);
+        let start = Instant::now();
 
-        input::handle_paste(&mut app, "  one  \n\n\ttwo\t\n", now);
-        let texts: Vec<&str> = app.todos().iter().map(|todo| todo.text.as_str()).collect();
-        assert_eq!(texts, ["one", "two"]);
-        assert!(app.is_dirty());
+        // The file disappears: the first successful reload is a failure, so the
+        // session enters read-only recovery.
+        std::fs::remove_file(&path).expect("delete the file");
+        reload_until(&mut app, &mut sync, limits, start, |app| {
+            app.load_error().is_some()
+        });
+        assert!(!app.writable(), "a failed reload blocks writes");
 
-        // Control-character validation belongs to the app's core batch check.
-        // The list branch must not keep a second, divergent pre-check, and a
-        // rejected batch must add nothing.
-        input::handle_paste(&mut app, "safe\na\u{001B}b", now);
-        assert_eq!(app.todos().len(), 2);
+        // A mutation still lands in memory while recovery blocks its save.
+        let id = app.todos()[0].id;
+        app.apply_action(Action::Toggle { ids: vec![id] }, start);
+        assert!(app.todos()[0].is_done(), "the toggle is in memory");
+        assert!(!app.is_dirty(), "recovery does not schedule a save");
+
+        // Restoring the accepted bytes is the recovery signal: the reload must
+        // replace the list, not report the in-memory toggle as saved.
+        std::fs::write(&path, b"a\n").expect("restore the file");
+        reload_until(&mut app, &mut sync, limits, start, |app| {
+            app.load_error().is_none()
+        });
+
+        assert!(!app.is_dirty());
+        assert!(app.writable(), "recovery re-enables writes");
+        assert_eq!(app.todos().len(), 1);
+        assert_eq!(app.todos()[0].text, "a");
+        assert!(
+            !app.todos()[0].is_done(),
+            "the list must match the disk again, not keep the unsaved toggle"
+        );
+        assert_eq!(std::fs::read(&path).expect("read the file"), b"a\n");
+    }
+
+    fn key_event(character: char) -> KeyEvent {
+        KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)
+    }
+
+    fn key(character: char) -> Event {
+        Event::Key(key_event(character))
     }
 }

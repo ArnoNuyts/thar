@@ -94,9 +94,9 @@ fn fixture() -> App {
 fn open_calendar(app: &mut App) {
     app.open_modal(ModalId::SetDueDate);
     for _ in 0..4 {
-        app.handle_modal_key(key(KeyCode::Down), current_time());
+        thar_tui::input::handle_key(app, key(KeyCode::Down), current_time());
     }
-    app.handle_modal_key(key(KeyCode::Enter), current_time());
+    thar_tui::input::handle_key(app, key(KeyCode::Enter), current_time());
 }
 
 fn current_time() -> std::time::Instant {
@@ -208,8 +208,8 @@ fn the_calendar_moves_one_month_with_shift_right_at_100x30() {
     let mut app = fixture();
     app.resize(100, 30);
     open_calendar(&mut app);
-    app.handle_modal_key(shift_key(KeyCode::Right), current_time());
-    app.handle_modal_key(key(KeyCode::Right), current_time());
+    thar_tui::input::handle_key(&mut app, shift_key(KeyCode::Right), current_time());
+    thar_tui::input::handle_key(&mut app, key(KeyCode::Right), current_time());
     let lines = draw(&app, 100, 30);
     let block = modal_block(&lines);
     assert!(block[3].contains("June 2024"), "{block:#?}");
@@ -259,9 +259,9 @@ fn the_recurrence_amount_matches_at_80x24() {
     let mut app = app(&["water the plants rec:1w", "plain follow-up"]);
     app.resize(80, 24);
     app.open_modal(ModalId::SetRecurrence);
-    app.handle_modal_key(key(KeyCode::Down), current_time());
-    app.handle_modal_key(key(KeyCode::Enter), current_time());
-    app.handle_modal_key(key(KeyCode::Char('3')), current_time());
+    thar_tui::input::handle_key(&mut app, key(KeyCode::Down), current_time());
+    thar_tui::input::handle_key(&mut app, key(KeyCode::Enter), current_time());
+    thar_tui::input::handle_key(&mut app, key(KeyCode::Char('3')), current_time());
     let lines = draw(&app, 80, 24);
     let block = modal_block(&lines);
     assert_eq!(block.len(), 7, "{block:#?}");

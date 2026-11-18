@@ -76,10 +76,10 @@ impl ConfirmRequest {
 
     /// The multi-line paste confirmation shown above ten lines.
     #[must_use]
-    pub fn paste(count: usize, lines: Vec<String>) -> Self {
+    pub fn paste(lines: Vec<String>) -> Self {
         Self::new(
             "Paste Multiple Todos",
-            format!("Are you sure you want to paste {count} todos?"),
+            format!("Are you sure you want to paste {} todos?", lines.len()),
             Action::PasteLines { lines },
         )
     }
@@ -399,7 +399,7 @@ mod tests {
         assert_eq!(archive.title, "Archive Completed");
         assert_eq!(archive.message, "Archive all completed todos to done.txt?");
 
-        let paste = ConfirmRequest::paste(12, vec!["one".to_owned()]);
+        let paste = ConfirmRequest::paste((0..12).map(|index| format!("todo {index}")).collect());
         assert_eq!(paste.title, "Paste Multiple Todos");
         assert_eq!(paste.message, "Are you sure you want to paste 12 todos?");
     }
