@@ -90,15 +90,18 @@ One `TextModal` with a `Create`/`Edit` mode:
   the highlight, Enter/Tab/Shift+Tab apply it, Escape only closes the list;
   otherwise Tab/Shift+Tab toggle Save/Cancel, Enter activates the selected
   button, Escape closes.
+- Mouse: hovering Save/Cancel highlights it and clicking activates it. The row
+  is the shared `modal::buttons` row, so the screen looks and hit-tests like the
+  confirmation and update screens.
 - A rejected value returns `Outcome::Actions([Action::Toast(message)])` and the
   screen stays open.
 - Rendering: `» ` prompt, the character under the cursor in an inverse cell,
-  then a bordered Save/Cancel row and the Ink help line. Suggestions are a
-  floating popup (`view::suggestion`) sized to the longest name and anchored
-  under the typed `+`/`@`; it is painted after the modal, can cover the body
-  and buttons like the Ink root-level overlay, and never changes the modal's
-  fixed body height. The modal chrome itself is the Ink one: a left accent bar
-  and a primary title chip, not a box border.
+  then the shared `‹ Save ›` / `« Save »` button row and the Ink help line.
+  Suggestions are a floating popup (`view::suggestion`) sized to the longest
+  name and anchored under the typed `+`/`@`; it is painted after the modal, can
+  cover the body and buttons like the Ink root-level overlay, and never changes
+  the modal's fixed body height. The modal chrome itself is the Ink one: a left
+  accent bar and a primary title chip, not a box border.
 
 The single exhaustive registry in `modal/registry.rs` builds every screen id.
 It returns `OpenError::Unavailable` only when the host did not supply the update
@@ -126,8 +129,9 @@ New tests, all passing:
 | `crates/thar-core/src/input.rs`              | 6             | validation table (accepted + every code), exact messages, UTF-16 cap, batch atomicity/capacity                                                                                      |
 | `crates/thar-tui/src/editor.rs`              | 6             | 27-row keymap table, consumed/not-consumed keys, paste rules, char cursor, replace-range clamping                                                                                   |
 | `crates/thar-tui/src/suggest.rs`             | 5             | source collection, word-start shapes, prefix filtering, wrap, apply                                                                                                                 |
-| `crates/thar-tui/src/modal/create_edit.rs`   | 16            | prefill, create/edit outcomes, empty/invalid/control/leading-date rejection, Tab/Shift+Tab, Escape ordering, suggestions + apply, paste, overlong grandfathering, suggestion window |
-| `crates/thar-tui/tests/golden_cp7_editor.rs` | 3             | cell-exact frames at 80×24 (create + suggestions, create prefill) and 100×30 (edit), plus inverse cursor / selected suggestion / selected button styles                             |
+| `crates/thar-tui/src/modal/create_edit.rs`   | 20            | prefill, create/edit outcomes, empty/invalid/control/leading-date rejection, Tab/Shift+Tab, Escape ordering, suggestions + apply, paste, overlong grandfathering, suggestion window |
+| `crates/thar-tui/src/modal/buttons.rs`       | 3             | shared row render + proportional hit map (two and three buttons)                                                                                                                    |
+| `crates/thar-tui/tests/golden_cp7_editor.rs` | 4             | cell-exact frames at 80×24 (create + suggestions, create prefill) and 100×30 (edit), plus inverse cursor / selected suggestion / selected button styles                             |
 | `crates/thar-cli/tests/pty/cp7_editor.rs`    | 2 + 1 ignored | real PTY: `n` → type → suggestion → apply → submit → file gained the todo; Escape cancels byte-identically; ignored screenshot generator                                            |
 
 Gates run from the branch head:
@@ -163,9 +167,9 @@ as the CP6/CP7-write assets.
   has no quit, so `Ctrl+C` cannot reach the app keymap. Closing the screen is
   the least surprising bounded behaviour; making `Ctrl+C` global needs a
   foundation change (`Action::Quit` or a pre-dispatch check).
-- **No mouse in the create/edit screens.** The suggestion list is
-  keyboard-only, per the workstream scope; Ink also supports hover and click on
-  the Save/Cancel buttons.
+- **No mouse on the suggestion list.** The list is keyboard-only, per the
+  workstream scope; Save/Cancel use the shared button row, so hover and click
+  work like the other screens.
 - **The suggestion list is a floating, content-sized popup.** It is anchored
   two columns left of the typed marker (so the row prefix aligns with it), sized
   to the longest name plus prefix/padding/borders, clamped to the frame, and

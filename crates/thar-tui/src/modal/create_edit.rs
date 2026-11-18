@@ -27,6 +27,12 @@
 //! - Enter activates the selected button (Save validates and submits, Cancel
 //!   closes) and Escape closes the screen.
 //!
+//! # Mouse
+//!
+//! The button row uses the shared [`super::buttons`] row, so hovering a button
+//! highlights it and a click activates it, the same as the confirmation and
+//! update screens.
+//!
 //! # Rendering
 //!
 //! The input is drawn as `» ` plus the text with the character under the cursor
@@ -34,7 +40,7 @@
 //! floating popup owned by [`crate::view::suggestion`]: it is sized to the
 //! longest name and anchored under the typed `+`/`@`, and the modal itself
 //! keeps a fixed body height so it never jumps while the list opens or closes.
-//! The Save/Cancel row is a pair of bordered boxes.
+//! The Save/Cancel row is the shared `‹ Save ›` / `« Save »` button row.
 
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -47,6 +53,8 @@ use thar_core::{MAX_TODO_CHARS, TodoId, validate_todo_batch, validate_todo_text}
 use crate::app::App;
 use crate::display::sanitize_for_display;
 use crate::editor::Editor;
+use crate::event::{MouseInput, MouseKind};
+use crate::modal::geometry;
 use crate::modal::{Action, Modal, ModalId, ModalRect, ModalWidth, Outcome};
 use crate::suggest::{Anchor, Overlay, Suggestions, TagSources};
 use crate::theme;
@@ -58,10 +66,15 @@ const HELP_TEXT: &str = "Tab/Shift+Tab = toggle action, Enter = selected action,
 /// The input prompt, two cells wide.
 const PROMPT: &str = "» ";
 
-/// Rows in the fixed body: the input, a spacer, the three bordered-button rows,
-/// a spacer and the help line. Suggestions float above this and never change
-/// the height.
-const BASE_ROWS: u16 = 7;
+/// Labels of the two buttons, in order.
+const BUTTON_LABELS: [&str; 2] = ["Save", "Cancel"];
+
+/// Body row of the button row: input, spacer, buttons, spacer, help.
+const BUTTON_ROW: u16 = 2;
+
+/// Rows in the fixed body: the input, a spacer, the button row, a spacer and
+/// the help line. Suggestions float above this and never change the height.
+const BASE_ROWS: u16 = 5;
 
 /// Which screen this is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,9 +91,13 @@ pub struct TextModal {
     suggestions: Suggestions,
     /// 0 = Save, 1 = Cancel.
     selected_button: usize,
+    /// Button under the pointer, if any.
+    hovered: Option<usize>,
     max_chars: usize,
     existing_count: usize,
     ids: Vec<TodoId>,
+    terminal_width: u16,
+    terminal_height: u16,
 }
 
 impl TextModal {
@@ -137,6 +154,15 @@ impl TextModal {
     fn toggle_button(&mut self) {
         self.selected_button = if self.selected_button == 0 { 1 } else { 0 };
     }
+
+    /// The centred modal rectangle for the current terminal size.
+    fn geometry(&self) -> ModalRect {
+        geometry::resolve(
+            Rect::new(0, 0, self.terminal_width, self.terminal_height),
+            self.width(),
+            BASE_ROWS,
+        )
+    }
 }
 impl Modal for TextModal {
     fn id(&self) -> ModalId {
@@ -160,6 +186,11 @@ impl Modal for TextModal {
 
     fn body_rows(&self) -> u16 {
         BASE_ROWS
+    }
+
+    fn resize(&mut self, width: u16, height: u16) {
+        self.terminal_width = width;
+        self.terminal_height = height;
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Outcome {
@@ -219,6 +250,26 @@ impl Modal for TextModal {
         Outcome::Continue
     }
 
+    fn handle_mouse(&mut self, mouse: MouseInput) -> Outcome {
+        let rect = self.geometry();
+        match mouse.kind {
+            MouseKind::Move => {
+                self.hovered = super::buttons::hit(rect, BUTTON_ROW, &BUTTON_LABELS, mouse);
+                Outcome::Continue
+            }
+            MouseKind::LeftClick => {
+                let Some(index) = super::buttons::hit(rect, BUTTON_ROW, &BUTTON_LABELS, mouse)
+                else {
+                    return Outcome::Continue;
+                };
+                self.hovered = Some(index);
+                self.selected_button = index;
+                self.activate()
+            }
+            _ => Outcome::Continue,
+        }
+    }
+
     fn render(&self, frame: &mut Frame, rect: ModalRect) {
         let content = content_rect(rect.body);
         if content.width == 0 || content.height == 0 {
@@ -231,8 +282,15 @@ impl Modal for TextModal {
 
         // Spacer, buttons, spacer, help.
         row += 1;
-        render_buttons(frame, content, row, self.selected_button);
-        row += 3;
+        super::buttons::render(
+            frame,
+            rect,
+            BUTTON_ROW,
+            &BUTTON_LABELS,
+            self.selected_button,
+            self.hovered,
+        );
+        row += 1;
         row += 1;
         render_help(frame, content, row);
     }
@@ -400,56 +458,6 @@ fn render_input(frame: &mut Frame, content: Rect, offset: u16, editor: &Editor) 
     );
 }
 
-/// Draw the bordered Save/Cancel row across three body rows.
-fn render_buttons(frame: &mut Frame, content: Rect, offset: u16, selected: usize) {
-    let labels = ["Save", "Cancel"];
-    let widths: Vec<u16> = labels
-        .iter()
-        .map(|label| u16::try_from(label.chars().count() + 4).unwrap_or(0))
-        .collect();
-    let spacing: u16 = 2;
-    let total = widths.iter().sum::<u16>() + spacing;
-    let left = content.x + content.width.saturating_sub(total) / 2;
-
-    let mut x = left;
-    for (index, label) in labels.iter().enumerate() {
-        let width = widths[index];
-        let is_selected = index == selected;
-        let style = if is_selected {
-            Style::default()
-                .bg(theme::BUTTON_BACKGROUND)
-                .fg(theme::INVERSE_FOREGROUND)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-                .bg(theme::MODAL_BACKGROUND)
-                .fg(theme::MUTED)
-        };
-
-        let lines = [
-            format!("┌{}┐", "─".repeat(usize::from(width.saturating_sub(2)))),
-            format!("│ {label} │"),
-            format!("└{}┘", "─".repeat(usize::from(width.saturating_sub(2)))),
-        ];
-        for (line_index, line) in lines.iter().enumerate() {
-            let row = offset.saturating_add(u16::try_from(line_index).unwrap_or(0));
-            let Some(full) = row_rect(content, row) else {
-                continue;
-            };
-            let available = full.width.saturating_sub(x.saturating_sub(content.x));
-            let area = Rect::new(x, full.y, width.min(available), 1);
-            if area.width == 0 {
-                continue;
-            }
-            frame.render_widget(
-                Paragraph::new(Span::styled(sanitize_for_display(line), style)).style(style),
-                area,
-            );
-        }
-        x = x.saturating_add(width).saturating_add(spacing);
-    }
-}
-
 /// Draw the muted help line, clipped to the modal width.
 fn render_help(frame: &mut Frame, content: Rect, offset: u16) {
     let Some(area) = row_rect(content, offset) else {
@@ -535,9 +543,12 @@ pub fn create(app: &App) -> Box<dyn Modal> {
         sources: app.tag_sources().clone(),
         suggestions: Suggestions::new(),
         selected_button: 0,
+        hovered: None,
         max_chars: MAX_TODO_CHARS,
         existing_count: app.todos().len(),
         ids: Vec::new(),
+        terminal_width: app.width(),
+        terminal_height: app.height(),
     })
 }
 
@@ -559,9 +570,12 @@ pub fn edit(app: &App) -> Box<dyn Modal> {
         sources: app.tag_sources().clone(),
         suggestions: Suggestions::new(),
         selected_button: 0,
+        hovered: None,
         max_chars,
         existing_count: app.todos().len(),
         ids,
+        terminal_width: app.width(),
+        terminal_height: app.height(),
     })
 }
 
@@ -569,8 +583,13 @@ pub fn edit(app: &App) -> Box<dyn Modal> {
 mod tests {
     use super::extract_tags_and_contexts;
     use crate::app::App;
+    use crate::event::{MouseInput, MouseKind};
+    use crate::modal::geometry;
     use crate::modal::{Action, Modal, ModalId, Outcome};
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::layout::Rect;
     use thar_core::{Todo, TodoDate, TodoId};
 
     const NONE: KeyModifiers = KeyModifiers::NONE;
@@ -737,6 +756,104 @@ mod tests {
         assert!(matches!(
             modal.handle_key(key(KeyCode::Esc)),
             Outcome::Close
+        ));
+    }
+
+    fn mouse(kind: MouseKind, x: u16, y: u16) -> MouseInput {
+        MouseInput {
+            kind,
+            x,
+            y,
+            shift: false,
+        }
+    }
+
+    fn screen(modal: &dyn Modal) -> (Rect, crate::modal::ModalRect) {
+        let terminal = Rect::new(0, 0, 80, 24);
+        let rect = geometry::resolve(terminal, modal.width(), modal.body_rows());
+        (terminal, rect)
+    }
+
+    /// The mouse cell inside the slice of button `index`.
+    fn button_cell(modal: &dyn Modal, index: usize) -> (u16, u16) {
+        let (_, rect) = screen(modal);
+        let width = rect.body.width.saturating_sub(2);
+        let column = if index == 0 {
+            0
+        } else {
+            width.saturating_sub(1)
+        };
+        (
+            rect.body.x.saturating_add(1).saturating_add(column),
+            rect.body
+                .y
+                .saturating_add(super::BUTTON_ROW)
+                .saturating_add(1),
+        )
+    }
+
+    #[test]
+    fn hovering_a_button_highlights_it_with_the_shared_row() {
+        let app = app(&["one"]);
+        let mut modal = super::create(&app);
+        let (x, y) = button_cell(&*modal, 1);
+        assert!(matches!(
+            modal.handle_mouse(mouse(MouseKind::Move, x, y)),
+            Outcome::Continue
+        ));
+
+        let (terminal, rect) = screen(&*modal);
+        let mut backend = Terminal::new(TestBackend::new(terminal.width, terminal.height))
+            .expect("test terminal");
+        backend
+            .draw(|frame| modal.render(frame, rect))
+            .expect("draw succeeds");
+        let buffer = backend.backend().buffer();
+        let row: String = (rect.body.x..rect.body.x + rect.body.width)
+            .map(|x| buffer[(x, y.saturating_sub(1))].symbol())
+            .collect();
+        // Save is the selection and Cancel is hovered, so both are active.
+        assert!(row.contains("« Save »"), "{row:?}");
+        assert!(row.contains("« Cancel »"), "{row:?}");
+        let cancel = (rect.body.x..rect.body.x + rect.body.width)
+            .find(|x| buffer[(*x, y.saturating_sub(1))].symbol() == "C")
+            .expect("Cancel label");
+        assert_eq!(
+            buffer[(cancel, y.saturating_sub(1))].style().fg,
+            Some(crate::theme::WARNING)
+        );
+    }
+
+    #[test]
+    fn clicking_a_button_activates_it() {
+        let app = app(&["one"]);
+        let mut modal = super::create(&app);
+        type_text(&mut *modal, "buy milk");
+        let (x, y) = button_cell(&*modal, 0);
+        assert_eq!(
+            actions(modal.handle_mouse(mouse(MouseKind::LeftClick, x, y))),
+            [Action::AddTodos(vec!["buy milk".to_owned()])]
+        );
+
+        let mut modal = super::create(&app);
+        let (x, y) = button_cell(&*modal, 1);
+        assert!(matches!(
+            modal.handle_mouse(mouse(MouseKind::LeftClick, x, y)),
+            Outcome::Close
+        ));
+    }
+
+    #[test]
+    fn clicking_outside_the_button_row_does_nothing() {
+        let app = app(&["one"]);
+        let mut modal = super::create(&app);
+        type_text(&mut *modal, "buy milk");
+        let (x, _) = button_cell(&*modal, 1);
+        let (_, rect) = screen(&*modal);
+        let input_row = rect.body.y.saturating_add(1);
+        assert!(matches!(
+            modal.handle_mouse(mouse(MouseKind::LeftClick, x, input_row)),
+            Outcome::Continue
         ));
     }
 
