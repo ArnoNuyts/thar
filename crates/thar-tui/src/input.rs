@@ -523,7 +523,7 @@ pub fn apply(app: &mut App, command: Command, now: Instant) {
         }
         Command::ToggleHidden => {
             let ids = app.selected_ids();
-            app.update_ids(&ids, now, |todo| todo.clone().toggle_hidden());
+            app.update_ids(&ids, now, |todo| todo.toggle_hidden());
         }
         Command::SetPriority(priority) => {
             let ids = app.selected_ids();

@@ -61,6 +61,18 @@ fn violations(path: &Path, source: &str) -> Vec<&'static str> {
         .collect()
 }
 
+/// The part of a source file that is compiled into the binary.
+///
+/// Every file in these crates keeps its unit tests in one trailing
+/// `#[cfg(test)] mod tests`, and test-only scratch files are not part of the
+/// shipped binary, so they are outside the read-only guarantee. Production code
+/// that appears before the test module is still scanned in full.
+fn production_source(source: &str) -> &str {
+    source
+        .split_once("\n#[cfg(test)]\nmod ")
+        .map_or(source, |(production, _)| production)
+}
+
 fn rust_sources(directory: &Path, found: &mut Vec<PathBuf>) {
     let entries = std::fs::read_dir(directory)
         .unwrap_or_else(|error| panic!("read {}: {error}", directory.display()));
@@ -94,13 +106,14 @@ fn the_tui_crates_contain_no_write_path() {
     for path in &sources {
         let source = std::fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
-        if source.contains("File::open")
-            || source.contains("fs::read")
-            || source.contains("fs::metadata")
+        let production = production_source(&source);
+        if production.contains("File::open")
+            || production.contains("fs::read")
+            || production.contains("fs::metadata")
         {
             found_read = true;
         }
-        let violations = violations(path, &source);
+        let violations = violations(path, production);
         assert!(
             violations.is_empty(),
             "{} contains the write API {violations:?}; CP6 must stay read-only",
@@ -134,5 +147,22 @@ fn clipboard_is_scanned_except_for_the_child_pipe_write() {
     assert_eq!(
         violations(Path::new("terminal.rs"), "stdin.write_all(input)?;"),
         ["write_all("]
+    );
+}
+
+#[test]
+fn test_modules_are_outside_the_scan() {
+    // Test-only scratch files do not ship. Production code before the test
+    // module must still be rejected, so the exemption cannot hide a real write.
+    let source = "\
+std::fs::write(\"todo.txt\", bytes);
+#[cfg(test)]
+mod tests {
+    std::fs::remove_file(\"todo.txt\");
+}
+";
+    assert_eq!(
+        violations(Path::new("terminal.rs"), production_source(source)),
+        ["fs::write"]
     );
 }

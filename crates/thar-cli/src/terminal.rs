@@ -277,13 +277,18 @@ impl TerminalSession {
                 now
             };
 
+            // Apply the effects queued by this event before the reload: an
+            // effect was gated by the app state when the key was handled, and
+            // a reload first could flip the session into read-only recovery
+            // between the queue and the host step (for example, archiving to
+            // `done.txt` after the file became unreadable).
+            process_effects(app, event_now);
+
             // After every event or timeout: reload an externally edited file.
             // A reload that lands while a save is pending drops the in-memory
             // edit (the external file wins) because `App::reloaded` clears the
             // pending save, which is the Ink hook's `onLoad` behaviour.
             apply_reload(app, &mut sync, &limits, Instant::now());
-
-            process_effects(app, event_now);
 
             // A timeout at (or past) midnight lands here and re-derives the
             // local day, rebuilding overdue/threshold verdicts exactly once.
@@ -340,8 +345,10 @@ pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()
 /// exits non-zero rather than reporting a false save.
 fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync, now: Instant) {
     let Some(store) = store else {
-        // Read-only sessions never become dirty, so there is nothing to write.
-        app.mark_saved();
+        // `run_with_store` makes the store the single source of write mode:
+        // no store means a read-only app, which never schedules a save. Do not
+        // mark it saved: claiming a save here would hide a pending edit.
+        debug_assert!(app.is_read_only());
         return;
     };
     match store.save(app.todos().iter(), sync.baseline()) {
@@ -585,10 +592,18 @@ fn flush_burst(run: &mut Vec<ratatui::crossterm::event::KeyEvent>, coalesced: &m
 
 #[cfg(test)]
 mod tests {
-    use super::{coalesce_burst, panic_value_is_trigger, today_local, until_next_local_midnight};
-    use std::time::Duration;
+    use super::{
+        apply_reload, coalesce_burst, panic_value_is_trigger, today_local,
+        until_next_local_midnight,
+    };
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+    use thar_core::{ReadLimits, Todo, TodoDate, TodoId};
+    use thar_tui::{Action, App};
+
+    use crate::sync::{FileSync, POLL_INTERVAL};
 
     #[test]
     fn today_is_a_valid_calendar_date() {
@@ -697,6 +712,105 @@ mod tests {
         };
         let events = [key('a'), key('b'), Event::Key(release)];
         assert_eq!(coalesce_burst(&events), events);
+    }
+
+    /// A uniquely named scratch directory, removed on drop.
+    struct ScratchDir(PathBuf);
+
+    impl ScratchDir {
+        fn new(label: &str) -> Self {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos());
+            let path = std::env::temp_dir().join(format!(
+                "thar-rs-terminal-{label}-{}-{nanos}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&path).expect("create scratch dir");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Advance the clock in poll-sized steps, driving the real `apply_reload`,
+    /// until `condition` holds. `apply_reload` owns the `FileSync::poll` call,
+    /// so the test observes the resulting app state instead of the outcome.
+    fn reload_until(
+        app: &mut App,
+        sync: &mut FileSync,
+        limits: ReadLimits,
+        start: Instant,
+        condition: impl Fn(&App) -> bool,
+    ) -> Instant {
+        let mut now = start;
+        for _ in 0..64 {
+            apply_reload(app, sync, &limits, now);
+            if condition(app) {
+                return now;
+            }
+            now += POLL_INTERVAL;
+        }
+        panic!(
+            "apply_reload never reached the expected state; load_error: {:?}",
+            app.load_error()
+        );
+    }
+
+    #[test]
+    fn recovery_replaces_unsaved_edits_with_the_restored_bytes() {
+        let directory = ScratchDir::new("recovery");
+        let path = directory.path().join("todo.txt");
+        std::fs::write(&path, b"a\n").expect("seed the file");
+        let limits = ReadLimits::DEFAULT;
+
+        let mut app = App::new(
+            path.clone(),
+            vec![Todo::parse_line("a", TodoId::new(0))],
+            "2026-11-15".parse::<TodoDate>().expect("valid date"),
+        );
+        app.set_read_only(false);
+        let mut sync = FileSync::new(path.clone(), limits);
+        let start = Instant::now();
+
+        // The file disappears: the first successful reload is a failure, so the
+        // session enters read-only recovery.
+        std::fs::remove_file(&path).expect("delete the file");
+        reload_until(&mut app, &mut sync, limits, start, |app| {
+            app.load_error().is_some()
+        });
+        assert!(!app.writable(), "a failed reload blocks writes");
+
+        // A mutation still lands in memory while recovery blocks its save.
+        let id = app.todos()[0].id;
+        app.apply_action(Action::Toggle { ids: vec![id] }, start);
+        assert!(app.todos()[0].is_done(), "the toggle is in memory");
+        assert!(!app.is_dirty(), "recovery does not schedule a save");
+
+        // Restoring the accepted bytes is the recovery signal: the reload must
+        // replace the list, not report the in-memory toggle as saved.
+        std::fs::write(&path, b"a\n").expect("restore the file");
+        reload_until(&mut app, &mut sync, limits, start, |app| {
+            app.load_error().is_none()
+        });
+
+        assert!(!app.is_dirty());
+        assert!(app.writable(), "recovery re-enables writes");
+        assert_eq!(app.todos().len(), 1);
+        assert_eq!(app.todos()[0].text, "a");
+        assert!(
+            !app.todos()[0].is_done(),
+            "the list must match the disk again, not keep the unsaved toggle"
+        );
+        assert_eq!(std::fs::read(&path).expect("read the file"), b"a\n");
     }
 
     fn key_event(character: char) -> KeyEvent {

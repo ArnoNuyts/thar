@@ -179,10 +179,17 @@ impl Index<usize> for Todos<'_> {
 
 /// The save lifecycle of the in-memory list.
 ///
-/// `Clean` means the list matches the last accepted bytes. `Pending` is the
-/// debounce window after the most recent unsaved mutation (a trailing
-/// debounce, matching [`App::mark_dirty`]). `Retrying` keeps the list dirty
-/// after a failed save and delays the next attempt by [`SAVE_RETRY`]
+/// `Clean` means no save is pending. Normally the list also matches the last
+/// accepted bytes, but there is one exception: a mutation accepted while a
+/// reload is failing (`App::load_error` is set) changes the list in memory
+/// without scheduling a save, so the state stays `Clean` while the list
+/// temporarily differs from disk. The next successful reload replaces that
+/// blocked mutation with the accepted bytes, matching the TypeScript app's
+/// recovery behaviour.
+///
+/// `Pending` is the debounce window after the most recent unsaved mutation (a
+/// trailing debounce, matching [`App::mark_dirty`]). `Retrying` keeps the list
+/// dirty after a failed save and delays the next attempt by [`SAVE_RETRY`]
 /// while holding the last error. A new mutation resets the debounce window but
 /// keeps the last error so the status bar does not forget a failure the user
 /// has already seen.

@@ -43,9 +43,20 @@ impl std::error::Error for ClipboardError {}
 /// missing, or [`ClipboardError::Failed`] with the last real failure when a
 /// command started but failed.
 pub fn copy(text: &str) -> Result<(), ClipboardError> {
+    copy_candidates(copy_commands(), text.as_bytes())
+}
+
+/// Try each copy candidate until one succeeds.
+///
+/// Separated from [`copy`] so the fallback loop can be tested without changing
+/// the process-global command table.
+fn copy_candidates(
+    candidates: &[(&'static str, &'static [&'static str])],
+    input: &[u8],
+) -> Result<(), ClipboardError> {
     let mut failure = None;
-    for (program, args) in copy_commands() {
-        match copy_with(program, args, text.as_bytes()) {
+    for &(program, args) in candidates {
+        match copy_with(program, args, input) {
             Ok(()) => return Ok(()),
             Err(Some(message)) => failure = Some(message),
             Err(None) => {}
@@ -62,8 +73,17 @@ pub fn copy(text: &str) -> Result<(), ClipboardError> {
 /// missing, or [`ClipboardError::Failed`] when a command ran but failed (a
 /// non-zero exit, unreadable output, or invalid UTF-8).
 pub fn paste() -> Result<String, ClipboardError> {
+    paste_candidates(paste_commands())
+}
+
+/// Try each paste candidate until one succeeds.
+///
+/// The paste twin of [`copy_candidates`], kept for the same testability.
+fn paste_candidates(
+    candidates: &[(&'static str, &'static [&'static str])],
+) -> Result<String, ClipboardError> {
     let mut failure = None;
-    for (program, args) in paste_commands() {
+    for &(program, args) in candidates {
         match paste_with(program, args) {
             Ok(text) => return Ok(text),
             Err(Some(message)) => failure = Some(message),
@@ -187,7 +207,7 @@ fn paste_commands() -> &'static [(&'static str, &'static [&'static str])] {
         &[
             "-NoProfile",
             "-Command",
-            "$b = [Text.Encoding]::UTF8.GetBytes((Get-Clipboard -Raw)); $o = [Console]::OpenStandardOutput(); $o.Write($b, 0, $b.Length)",
+            "$t = Get-Clipboard -Raw; if ($null -eq $t) { $t = '' }; $b = [Text.Encoding]::UTF8.GetBytes($t); $o = [Console]::OpenStandardOutput(); $o.Write($b, 0, $b.Length)",
         ],
     )]
 }
@@ -202,12 +222,58 @@ fn paste_commands() -> &'static [(&'static str, &'static [&'static str])] {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClipboardError, copy_commands, paste_commands};
+    use super::{ClipboardError, copy_candidates, copy_commands, paste_candidates, paste_commands};
 
     #[test]
     fn every_platform_has_at_least_one_command() {
         assert!(!copy_commands().is_empty());
         assert!(!paste_commands().is_empty());
+    }
+
+    #[test]
+    fn every_candidate_missing_is_unavailable() {
+        let candidates = &[("thar-rs-no-such-clipboard-command", &[] as &[&str])];
+        assert_eq!(
+            copy_candidates(candidates, b"todo"),
+            Err(ClipboardError::Unavailable)
+        );
+        assert_eq!(
+            paste_candidates(candidates),
+            Err(ClipboardError::Unavailable)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_candidate_that_ran_and_failed_is_failed() {
+        let candidates = &[("/bin/false", &[] as &[&str])];
+        assert!(matches!(
+            copy_candidates(candidates, b"todo"),
+            Err(ClipboardError::Failed(_))
+        ));
+        assert!(matches!(
+            paste_candidates(candidates),
+            Err(ClipboardError::Failed(_))
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_missing_later_candidate_keeps_the_real_failure() {
+        // The last-failure-wins rule: a probe that was never installed must not
+        // hide the command that ran and failed.
+        let candidates = &[
+            ("/bin/false", &[] as &[&str]),
+            ("thar-rs-no-such-clipboard-command", &[] as &[&str]),
+        ];
+        assert!(matches!(
+            copy_candidates(candidates, b"todo"),
+            Err(ClipboardError::Failed(_))
+        ));
+        assert!(matches!(
+            paste_candidates(candidates),
+            Err(ClipboardError::Failed(_))
+        ));
     }
 
     #[test]

@@ -5,6 +5,10 @@
 //! so that validation is O(range) instead of O(range x todos); this test fails
 //! by construction on the old positional-vector implementation, where each
 //! lookup scanned the whole list once more.
+//!
+//! The query keeps every row on purpose: a query that filters the whole list
+//! would let the range check short-circuit after the first missing id and the
+//! quadratic path would stay hidden.
 
 use std::time::Instant;
 
@@ -32,10 +36,14 @@ fn ten_thousand_selected_todos_search_once_under_budget() {
     app.set_range((0..10_000).map(TodoId::new).collect());
 
     let start = Instant::now();
-    app.set_query("zzz-no-match");
+    app.set_query("todo");
     let elapsed = start.elapsed();
 
-    assert!(app.rows().is_empty(), "the query filters every todo");
+    let todo_rows = app.rows().iter().filter(|row| row.is_todo()).count();
+    assert_eq!(
+        todo_rows, 10_000,
+        "the query must keep every row so the whole selection range is validated"
+    );
     assert!(
         elapsed < BUDGET,
         "reconciling 10k selected ids took {elapsed:?}, over the {BUDGET:?} budget"

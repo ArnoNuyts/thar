@@ -11,6 +11,8 @@
 //! formatting (at least four uppercase hexadecimal digits), so a future golden
 //! comparison against the Ink app matches byte-for-byte.
 
+use std::fmt::Write as _;
+
 use thar_core::is_rejected_control;
 
 /// Escape control characters so terminal output can only show text.
@@ -33,7 +35,7 @@ pub fn sanitize_for_display(text: &str) -> String {
 
     for ch in text.chars() {
         if is_rejected_control(ch) {
-            safe.push_str(&format!("\\u{:04X}", ch as u32));
+            let _ = write!(safe, "\\u{:04X}", ch as u32);
         } else {
             safe.push(ch);
         }

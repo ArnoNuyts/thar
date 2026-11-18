@@ -420,6 +420,13 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
     assert!(saved.contains("Persisted"), "{saved:?}");
 }
 
+/// Secondary check for the recovery step: the watcher reports `Unchanged` for
+/// restored bytes and the host re-parses the baseline instead of marking the
+/// in-memory edit saved.
+///
+/// The primary coverage drives the private `terminal::apply_reload` itself in
+/// `crates/thar-cli/src/terminal.rs`; this test keeps the same contract at the
+/// watcher/app boundary so a change in either half is visible here too.
 #[test]
 fn recovery_with_restored_bytes_replaces_unsaved_edits() {
     let directory = TempDir::new("write-safety-recovery-unchanged");
