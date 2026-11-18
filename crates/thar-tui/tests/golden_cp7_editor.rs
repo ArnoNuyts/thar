@@ -208,7 +208,7 @@ fn eighty_by_twenty_four_create_modal_prefills_tags_from_the_search() {
     let backend = draw(&app, 80, 24);
 
     let expected: Vec<String> = [
-        " / @work                                                                       /",
+        " / @work                                                                      /",
         "────────────────────────────────────────────────────────────────────────────────",
         "  work (1)",
         " 1 [ ] write the port @work +thar",

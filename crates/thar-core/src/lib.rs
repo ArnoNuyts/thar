@@ -86,9 +86,7 @@ pub use nav::{SelectionRange, calculate_scroll_offset};
 pub use query::{
     OwnedSearchView, SearchView, SearchViewLike, filter_by_search, sort_by_importance, view_matches,
 };
-pub use recurrence::{
-    MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, RecurrenceUnit, plan_recurrence,
-};
+pub use recurrence::{MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, plan_recurrence};
 pub use rows::{NONE_CONTEXT, Row, RowError, Rows, build_rows, create_rows};
 pub use validation::{is_blank_line, validate_file_bytes, validate_file_content};
 

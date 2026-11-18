@@ -57,12 +57,21 @@ pub struct TodoRow {
 pub struct Snapshot {
     /// The whole screen, rows joined with `\n`.
     pub text: String,
+    /// Every screen row built from the parsed cells, without trimming interior
+    /// or trailing spaces. Indexed by 0-based row in [`Snapshot::row`].
+    pub rows: Vec<String>,
     /// Todo rows in screen order. Context headers, the search bar and the
     /// action bar are excluded.
     pub todos: Vec<TodoRow>,
 }
 
 impl Snapshot {
+    /// One whole screen row, including trailing spaces.
+    #[must_use]
+    pub fn row(&self, row: u16) -> String {
+        self.rows.get(usize::from(row)).cloned().unwrap_or_default()
+    }
+
     /// The first highlighted todo row. With no shift range there is exactly
     /// one: the cursor.
     #[must_use]
@@ -278,6 +287,43 @@ impl Session {
         });
     }
 
+    /// Wait until one whole screen row equals `expected` cell for cell.
+    pub fn wait_row(&self, row: u16, expected: &str) {
+        self.wait_until(&format!("row {row} to be {expected:?}"), |snapshot| {
+            snapshot.row(row) == expected
+        });
+    }
+
+    /// True when the cell at 0-based `row`/`col` is painted in reverse video.
+    #[must_use]
+    pub fn cell_reversed(&self, row: u16, col: u16) -> bool {
+        self.with_screen(|screen| screen.cell(row, col).is_some_and(|cell| cell.inverse()))
+    }
+
+    /// Wait until the cell at `row`/`col` has (or no longer has) reverse video.
+    ///
+    /// This reads the live parsed screen rather than a [`Snapshot`] because the
+    /// text snapshot drops styles.
+    pub fn wait_cell_reversed(&self, row: u16, col: u16, reversed: bool) {
+        let description = if reversed {
+            format!("cell ({row}, {col}) to be reversed")
+        } else {
+            format!("cell ({row}, {col}) to lose reverse video")
+        };
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            if self.cell_reversed(row, col) == reversed {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for {description}; last screen:\n{}",
+                self.snapshot().text
+            );
+            thread::sleep(POLL_INTERVAL);
+        }
+    }
+
     /// Wait until the whole screen no longer contains `needle`.
     pub fn wait_no_text(&self, needle: &str) {
         self.wait_until(&format!("screen text without {needle:?}"), |snapshot| {
@@ -411,9 +457,14 @@ fn snapshot_of(screen: &vt100::Screen) -> Snapshot {
     let (rows, cols) = screen.size();
     let background = dominant_background(screen);
     let mut todos = Vec::new();
+    let mut lines = Vec::with_capacity(usize::from(rows.get()));
 
-    for row in 0..rows.get().saturating_sub(ACTION_BAR_ROWS) {
+    for row in 0..rows.get() {
         let text = row_text(screen, row, cols.get());
+        lines.push(whole_row_text(screen, row, cols.get()));
+        if row >= rows.get().saturating_sub(ACTION_BAR_ROWS) {
+            continue;
+        }
         if !is_todo_row(&text) {
             continue;
         }
@@ -423,8 +474,20 @@ fn snapshot_of(screen: &vt100::Screen) -> Snapshot {
 
     Snapshot {
         text: screen.contents(),
+        rows: lines,
         todos,
     }
+}
+
+/// The full row from the parsed cells, retaining every trailing space.
+fn whole_row_text(screen: &vt100::Screen, row: u16, cols: u16) -> String {
+    let mut text = String::with_capacity(usize::from(cols));
+    for col in 0..cols {
+        if let Some(cell) = screen.cell(row, col) {
+            text.push_str(cell.contents());
+        }
+    }
+    text
 }
 
 /// The most common background colour in the list area.
@@ -457,13 +520,7 @@ fn dominant_background(screen: &vt100::Screen) -> Option<vt100::Color> {
 }
 
 fn row_text(screen: &vt100::Screen, row: u16, cols: u16) -> String {
-    let mut text = String::with_capacity(usize::from(cols));
-    for col in 0..cols {
-        if let Some(cell) = screen.cell(row, col) {
-            text.push_str(cell.contents());
-        }
-    }
-    text.trim_end().to_owned()
+    whole_row_text(screen, row, cols).trim_end().to_owned()
 }
 
 /// A rendered todo row starts with the 1-based number and carries a checkbox.

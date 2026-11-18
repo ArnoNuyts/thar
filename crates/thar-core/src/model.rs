@@ -647,7 +647,7 @@ impl Todo {
     /// planned **from `today`** (the completion day), never from the existing
     /// `due:` tag. The new instance is open, has no completion date, and asks
     /// `recurring_id` for its id only when a copy is actually planned; the host
-    /// owns id allocation.
+    /// owns id allocation. The closure is called at most once.
     ///
     /// An invalid or out-of-range `rec:` value still completes the todo and
     /// returns the completed value in [`ToggleOutcome::updated`]; the reason is
@@ -656,7 +656,7 @@ impl Todo {
     pub fn toggle_state(
         &self,
         today: TodoDate,
-        recurring_id: &mut impl FnMut() -> TodoId,
+        recurring_id: impl FnOnce() -> TodoId,
     ) -> ToggleOutcome {
         let mut updated = self.clone();
         updated.state = if self.state.is_done() {
@@ -1498,7 +1498,7 @@ mod tests {
     fn toggle_state_completes_and_plans_from_today() {
         let today = date("2026-11-15");
         let todo = parse("due:2026-11-01 rec:2d");
-        let outcome = todo.clone().toggle_state(today, &mut || TodoId::new(7));
+        let outcome = todo.clone().toggle_state(today, || TodoId::new(7));
 
         assert_eq!(
             outcome.updated.to_string(),
@@ -1521,7 +1521,7 @@ mod tests {
     #[test]
     fn toggle_state_uses_the_completion_day_not_the_due_date() {
         let outcome =
-            parse("due:2026-12-31 rec:1m").toggle_state(date("2026-11-15"), &mut || TodoId::new(0));
+            parse("due:2026-12-31 rec:1m").toggle_state(date("2026-11-15"), || TodoId::new(0));
         assert_eq!(
             outcome
                 .recurring
@@ -1550,7 +1550,7 @@ mod tests {
                 "Invalid recurrence value; no new todo was created",
             ),
         ] {
-            let outcome = parse(line).toggle_state(today, &mut || TodoId::new(0));
+            let outcome = parse(line).toggle_state(today, || TodoId::new(0));
             assert!(outcome.updated.is_done(), "line {line:?}");
             let error = outcome.recurring.expect_err("recurrence error");
             assert_eq!(error.to_string(), message, "line {line:?}");
@@ -1560,22 +1560,22 @@ mod tests {
     #[test]
     fn toggle_state_reopens_a_done_todo_without_planning() {
         let today = date("2026-11-15");
-        let outcome = parse("x 2024-03-02 2024-03-01 done rec:1w")
-            .toggle_state(today, &mut || TodoId::new(0));
+        let outcome =
+            parse("x 2024-03-02 2024-03-01 done rec:1w").toggle_state(today, || TodoId::new(0));
         assert!(!outcome.updated.is_done());
         assert_eq!(outcome.updated.to_string(), "2024-03-01 done rec:1w");
         assert_eq!(outcome.recurring, Ok(None));
 
         // A plain todo has nothing to plan.
-        let plain = parse("plain").toggle_state(today, &mut || TodoId::new(0));
+        let plain = parse("plain").toggle_state(today, || TodoId::new(0));
         assert_eq!(plain.updated.to_string(), "x 2026-11-15 plain");
         assert_eq!(plain.recurring, Ok(None));
     }
 
     #[test]
     fn toggle_state_preserves_literal_dates_in_text() {
-        let outcome = parse("2023-02-29 literal rec:1d")
-            .toggle_state(date("2026-11-15"), &mut || TodoId::new(0));
+        let outcome =
+            parse("2023-02-29 literal rec:1d").toggle_state(date("2026-11-15"), || TodoId::new(0));
         assert!(outcome.updated.is_done());
         assert_eq!(
             outcome.updated.to_string(),

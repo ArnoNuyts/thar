@@ -29,17 +29,20 @@
 //!   The next successful reload clears it and re-enables writes.
 //! - A failed reload is not retried on a timer: the metadata must change again
 //!   before another read happens, so a rejected file cannot cause a toast loop.
+//! - A session that starts without a file stays quiet until the file first
+//!   appears: a never-present file is the startup note, not an unreadable
+//!   event. Once the watcher has seen the file, deleting it is reported.
 //! - The target is never written from here. Deletes and unreadable files are
 //!   reported instead of recreated.
 
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
 use thar_core::ReadLimits;
 
-use crate::file::read_bytes;
+use crate::file::{LoadError, read_bytes};
 
 /// How often the file metadata is checked, while the loop is idle.
 pub const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -99,9 +102,12 @@ pub enum ReloadOutcome {
 
 /// A poll-based watcher for one todo file.
 ///
-/// Construct it once per session with the limits the initial load used. The
-/// file bytes are read when the watcher is created, so the first poll compares
-/// against the state the process started from.
+/// Construct it once per session with the limits the initial load used and the
+/// exact bytes the caller loaded. The first poll compares the on-disk content
+/// against that caller-supplied baseline: equal bytes are [`ReloadOutcome::Unchanged`]
+/// (a no-op for a healthy session), different bytes reload. Nothing is read at
+/// construction, so a change between the load and the watcher cannot be
+/// mistaken for the session's own state.
 #[derive(Debug)]
 pub struct FileSync {
     path: PathBuf,
@@ -110,6 +116,10 @@ pub struct FileSync {
     baseline: Vec<u8>,
     /// The metadata seen at the last poll, or `None` when the file is missing.
     observed: Option<Stamp>,
+    /// True until the watcher has seen `path` exist. The initial load already
+    /// reported a never-present file, so the first poll must not turn that note
+    /// into a read error; a file that disappears after being seen still is one.
+    started_missing: bool,
     /// When the next metadata check is due.
     next_poll: Instant,
     /// When a metadata change was first seen, for the reload debounce.
@@ -122,32 +132,26 @@ pub struct FileSync {
 
 impl FileSync {
     /// Start watching `path` with the same limits the initial load used.
+    ///
+    /// `baseline` is the bytes the caller loaded and parsed; it becomes the
+    /// first comparison target and the save baseline. The watcher arms one
+    /// debounce immediately, so the first poll re-reads the file once the
+    /// quiet period ends and reports whether it still matches `baseline`.
     #[must_use]
-    pub fn new(path: impl Into<PathBuf>, limits: ReadLimits) -> Self {
+    pub fn new(path: impl Into<PathBuf>, limits: ReadLimits, baseline: Vec<u8>) -> Self {
         let path = path.into();
-        let observed = fs::metadata(&path)
-            .ok()
-            .map(|metadata| Stamp::of(&metadata));
-        // A read failure here is not NEW: the initial load already reported it.
-        // An empty baseline only means the first reload comparison is against
-        // an unknown state, which the metadata stamp still triggers.
-        let baseline = read_bytes(&path, &limits).unwrap_or_default();
+        let started_missing = fs::metadata(&path).is_err();
         Self {
             path,
             limits,
             baseline,
-            observed,
+            observed: None,
+            started_missing,
             next_poll: Instant::now(),
-            changed_at: None,
+            changed_at: Some(Instant::now()),
             suppress_until: None,
             content_reads: 0,
         }
-    }
-
-    /// The file this watcher follows.
-    #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.path
     }
 
     /// Adopt bytes the caller has just read, parsed, or written.
@@ -155,8 +159,8 @@ impl FileSync {
     /// After a reload this is the exact content that became the in-memory list;
     /// after a save it is the bytes written. Both make a later identical read a
     /// no-op instead of a spurious reload.
-    pub fn adopt(&mut self, bytes: &[u8]) {
-        self.baseline = bytes.to_vec();
+    pub fn adopt(&mut self, bytes: Vec<u8>) {
+        self.baseline = bytes;
     }
 
     /// The content this session last accepted.
@@ -231,6 +235,16 @@ impl FileSync {
         match read_bytes(&self.path, &self.limits) {
             Ok(bytes) if bytes == self.baseline => Some(ReloadOutcome::Unchanged),
             Ok(bytes) => Some(ReloadOutcome::Changed(bytes)),
+            // The process started without a file (the initial load already
+            // reported that) and the file has never existed since. Wait for it
+            // to appear instead of replacing the startup note with a read
+            // error; a file that was seen and then deleted still reports.
+            Err(LoadError::Io(error))
+                if error.kind() == io::ErrorKind::NotFound && self.started_missing =>
+            {
+                self.observed = None;
+                None
+            }
             Err(error) => Some(ReloadOutcome::Unreadable(bounded_message(
                 &error.to_string(),
             ))),
@@ -251,6 +265,9 @@ impl FileSync {
     fn observe(&mut self, now: Instant) {
         match fs::metadata(&self.path) {
             Ok(metadata) => {
+                // From here on a disappearance is a real deletion, not the
+                // startup state.
+                self.started_missing = false;
                 let stamp = Stamp::of(&metadata);
                 if self.observed != Some(stamp) {
                     self.observed = Some(stamp);

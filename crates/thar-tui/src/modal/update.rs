@@ -300,15 +300,14 @@ impl Modal for UpdateModal {
 
     fn handle_mouse(&mut self, mouse: MouseInput) -> Outcome {
         let rect = self.geometry();
-        let labels: Vec<&str> = self.actions().iter().map(|action| action.label()).collect();
+        let count = self.actions().len();
         match mouse.kind {
             MouseKind::Move => {
-                self.hovered = super::buttons::hit(rect, self.button_row(), &labels, mouse);
+                self.hovered = super::buttons::hit(rect, self.button_row(), count, mouse);
                 Outcome::Continue
             }
             MouseKind::LeftClick => {
-                let Some(index) = super::buttons::hit(rect, self.button_row(), &labels, mouse)
-                else {
+                let Some(index) = super::buttons::hit(rect, self.button_row(), count, mouse) else {
                     return Outcome::Continue;
                 };
                 self.hovered = Some(index);

@@ -65,14 +65,10 @@ impl core::fmt::Display for StoreError {
     }
 }
 
-impl std::error::Error for StoreError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Io { source, .. } => Some(source),
-            _ => None,
-        }
-    }
-}
+// `Display` already includes the underlying I/O message, so this deliberately
+// does not override `source()`: repeating it would duplicate the text in a
+// source chain.
+impl std::error::Error for StoreError {}
 
 impl From<thar_core::CoreError> for StoreError {
     fn from(error: thar_core::CoreError) -> Self {

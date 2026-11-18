@@ -248,15 +248,20 @@ impl Modal for TextModal {
     }
 
     fn handle_mouse(&mut self, mouse: MouseInput) -> Outcome {
+        // The suggestion popup is painted over the button row, so a click that
+        // lands on the overlay must not reach Save/Cancel underneath it.
+        if self.suggestions.is_open() {
+            return Outcome::Continue;
+        }
         let rect = self.geometry();
+        let count = BUTTON_LABELS.len();
         match mouse.kind {
             MouseKind::Move => {
-                self.hovered = super::buttons::hit(rect, BUTTON_ROW, &BUTTON_LABELS, mouse);
+                self.hovered = super::buttons::hit(rect, BUTTON_ROW, count, mouse);
                 Outcome::Continue
             }
             MouseKind::LeftClick => {
-                let Some(index) = super::buttons::hit(rect, BUTTON_ROW, &BUTTON_LABELS, mouse)
-                else {
+                let Some(index) = super::buttons::hit(rect, BUTTON_ROW, count, mouse) else {
                     return Outcome::Continue;
                 };
                 self.hovered = Some(index);
@@ -832,6 +837,40 @@ mod tests {
             modal.handle_mouse(mouse(MouseKind::LeftClick, x, input_row)),
             Outcome::Continue
         ));
+    }
+
+    #[test]
+    fn a_click_on_the_suggestion_popup_does_not_press_a_button() {
+        let app = app(&["one +thar @home", "two +thar-tui @work"]);
+        let mut modal = super::create(&app);
+        type_text(&mut *modal, "+th");
+        assert!(overlay_open(&*modal));
+
+        // The popup is painted over the button row. Pick the popup cell that
+        // shares the button row: without the guard it would activate Save.
+        let (terminal, rect) = screen(&*modal);
+        let overlay = modal.suggestion_overlay(rect).expect("the popup is open");
+        let popup = crate::view::suggestion::layout(&overlay, terminal).expect("popup geometry");
+        let click = mouse(MouseKind::LeftClick, popup.area.x + 1, popup.area.y + 2);
+        assert_eq!(
+            geometry::body_row(rect, click),
+            Some(super::BUTTON_ROW),
+            "the click must overlap the button row"
+        );
+
+        assert!(matches!(modal.handle_mouse(click), Outcome::Continue));
+        assert!(overlay_open(&*modal), "the modal must stay open");
+
+        // The editor text is unchanged: Escape closes the list and Enter
+        // submits exactly "+th".
+        assert!(matches!(
+            modal.handle_key(key(KeyCode::Esc)),
+            Outcome::Continue
+        ));
+        assert_eq!(
+            actions(modal.handle_key(key(KeyCode::Enter))),
+            [Action::AddTodos(vec!["+th".to_owned()])]
+        );
     }
 
     #[test]

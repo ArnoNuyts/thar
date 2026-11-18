@@ -199,25 +199,20 @@ impl TerminalSession {
         Ok(session)
     }
 
-    /// Draw one frame and wait for one event, without a write path.
+    /// Run the event loop until the app quits, saving through `store` when it
+    /// is present.
+    ///
+    /// `baseline` is the exact bytes the caller loaded and parsed; the watcher
+    /// compares the first poll against it.
     ///
     /// # Errors
     ///
     /// Propagates draw, event-read, and size failures.
-    pub fn run(&mut self, app: &mut App) -> io::Result<()> {
-        self.run_with_store(app, None)
-    }
-
-    /// Draw one frame and wait for one event, saving through `store` when it is
-    /// present.
-    ///
-    /// # Errors
-    ///
-    /// Propagates draw, event-read, and size failures.
-    pub fn run_with_store(
+    pub fn run(
         &mut self,
         app: &mut App,
         mut store: Option<&mut SaveGuard>,
+        baseline: Vec<u8>,
     ) -> io::Result<()> {
         // Write mode has one source of truth: the presence of the store. The
         // caller opens a store exactly when `--write` is active.
@@ -229,7 +224,7 @@ impl TerminalSession {
         // override into exit code 2; the default is only a library-caller
         // fallback.
         let limits = get_read_limits().unwrap_or_default();
-        let mut sync = FileSync::new(app.filename(), limits);
+        let mut sync = FileSync::new(app.filename(), limits, baseline);
         let mut last_click: Option<LastClick> = None;
 
         loop {
@@ -238,8 +233,10 @@ impl TerminalSession {
 
             let now = Instant::now();
             app.expire_toast(now);
-            if app.save_due(now) {
-                flush_save(app, store.as_deref_mut(), &mut sync, now);
+            if app.save_due(now)
+                && let Some(store) = store.as_deref_mut()
+            {
+                flush_save(app, store, &mut sync, now);
             }
             self.terminal.draw(|frame| view::render(frame, app))?;
 
@@ -248,8 +245,10 @@ impl TerminalSession {
                 // flushes it, because losing the last keystroke of an edit is
                 // exactly the data-safety failure this checkpoint exists to
                 // prevent.
-                if app.is_dirty() {
-                    flush_save(app, store.as_deref_mut(), &mut sync, now);
+                if app.is_dirty()
+                    && let Some(store) = store.as_deref_mut()
+                {
+                    flush_save(app, store, &mut sync, now);
                 }
                 if app.is_dirty() {
                     return Err(io::Error::other(
@@ -271,7 +270,7 @@ impl TerminalSession {
                 // double clicks, the save debounce and toast expiry. The
                 // earlier `now` stays the frame clock for draw and timers.
                 let event_now = Instant::now();
-                handle_event(app, event, event_now, &mut last_click);
+                handle_event(app, event, event_now, &mut last_click)?;
                 event_now
             } else {
                 now
@@ -314,22 +313,15 @@ impl Drop for TerminalSession {
 
 /// Enter the TUI, run it until quit, and restore the terminal.
 ///
-/// # Errors
-///
-/// Propagates terminal setup and draw errors.
-pub fn run_tui(app: &mut App) -> io::Result<()> {
-    let mut session = TerminalSession::start()?;
-    session.run(app)
-}
-
-/// Enter the TUI with a write path and restore the terminal on exit.
+/// `store` is the write path; `None` is read-only. `baseline` is the exact
+/// bytes the caller loaded, used as the watcher's first comparison target.
 ///
 /// # Errors
 ///
 /// Propagates terminal setup and draw errors.
-pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()> {
+pub fn run_tui(app: &mut App, store: Option<&mut SaveGuard>, baseline: Vec<u8>) -> io::Result<()> {
     let mut session = TerminalSession::start()?;
-    session.run_with_store(app, Some(store))
+    session.run(app, store, baseline)
 }
 
 /// Write the dirty list now and record the outcome on the app.
@@ -343,20 +335,13 @@ pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()
 /// backoff. The watcher normally reloads the external file first, which clears
 /// the dirty state and rebaselines the watcher; a quit before that happens
 /// exits non-zero rather than reporting a false save.
-fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync, now: Instant) {
-    let Some(store) = store else {
-        // `run_with_store` makes the store the single source of write mode:
-        // no store means a read-only app, which never schedules a save. Do not
-        // mark it saved: claiming a save here would hide a pending edit.
-        debug_assert!(app.is_read_only());
-        return;
-    };
+fn flush_save(app: &mut App, store: &mut SaveGuard, sync: &mut FileSync, now: Instant) {
     match store.save(app.todos().iter(), sync.baseline()) {
         Ok(bytes) => {
             // The window starts after the rename, not before the serialization,
             // so a slow filesystem cannot shorten it.
             sync.note_write(Instant::now());
-            sync.adopt(&bytes);
+            sync.adopt(bytes);
             app.mark_saved();
         }
         Err(error) => app.mark_save_failed(now, error.to_string()),
@@ -376,7 +361,7 @@ fn apply_reload(app: &mut App, sync: &mut FileSync, limits: &ReadLimits, now: In
     match outcome {
         ReloadOutcome::Changed(bytes) => match parse_bytes(&bytes, limits) {
             Ok(todos) => {
-                sync.adopt(&bytes);
+                sync.adopt(bytes);
                 app.reloaded(todos);
                 app.push_toast(RELOADED_MESSAGE);
             }
@@ -469,18 +454,28 @@ fn mouse_kind(kind: MouseEventKind) -> Option<MouseKind> {
 /// [`Event::Paste`], so a paste arrives as individual key presses and would
 /// otherwise run the single-key list commands (`q` quits, space toggles, …).
 /// A key press is therefore extended with the events already queued: a burst
-/// of three or more printable presses is delivered as one paste.
-fn handle_event(app: &mut App, event: Event, now: Instant, last_click: &mut Option<LastClick>) {
+/// of three or more distinct printable presses is delivered as one paste.
+///
+/// # Errors
+///
+/// Propagates event-read failures from draining the queue on Windows.
+fn handle_event(
+    app: &mut App,
+    event: Event,
+    now: Instant,
+    last_click: &mut Option<LastClick>,
+) -> io::Result<()> {
     #[cfg(windows)]
-    if matches!(&event, Event::Key(key) if is_burst_key(key)) {
-        let mut burst = vec![event];
-        burst.extend(drain_queued());
-        for event in coalesce_burst(&burst) {
+    if matches!(&event, Event::Key(key) if burst::is_burst_key(key)) {
+        let mut queued = vec![event];
+        queued.extend(burst::drain_queued()?);
+        for event in burst::coalesce_burst(&queued) {
             dispatch_event(app, event, now, last_click);
         }
-        return;
+        return Ok(());
     }
     dispatch_event(app, event, now, last_click);
+    Ok(())
 }
 
 /// Apply one event to the app.
@@ -508,103 +503,117 @@ fn dispatch_event(app: &mut App, event: Event, now: Instant, last_click: &mut Op
     }
 }
 
-/// Windows: the minimum printable presses in one burst that are a paste.
+/// Windows paste-burst detection, compiled in for unit tests on every host.
 #[cfg(any(windows, test))]
-const BURST_PASTE_MIN: usize = 3;
+mod burst {
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-/// True for a key press that can be part of a Windows paste.
-///
-/// Enter and printable characters qualify unless Ctrl or Alt is held;
-/// releases, Ctrl combinations, navigation keys and function keys stay single
-/// keys.
-#[cfg(any(windows, test))]
-fn is_burst_key(key: &ratatui::crossterm::event::KeyEvent) -> bool {
-    use ratatui::crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+    /// Windows: the minimum printable presses in one burst that are a paste.
+    pub(super) const BURST_PASTE_MIN: usize = 3;
 
-    if key.kind == KeyEventKind::Release
-        || key
-            .modifiers
-            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-    {
-        return false;
-    }
-    match key.code {
-        KeyCode::Enter => true,
-        KeyCode::Char(character) => !character.is_control(),
-        _ => false,
-    }
-}
-
-/// Windows: the events that are already queued, without waiting.
-#[cfg(windows)]
-fn drain_queued() -> Vec<Event> {
-    let mut queued = Vec::new();
-    while event::poll(Duration::ZERO).unwrap_or(false) {
-        match event::read() {
-            Ok(event) => queued.push(event),
-            Err(_) => break,
+    /// True for a key press that can be part of a Windows paste.
+    ///
+    /// Enter qualifies only without Ctrl or Alt. A printable character
+    /// qualifies unless Ctrl or Alt is held, except that both together is
+    /// AltGr and must stay a typed character. Releases, navigation keys and
+    /// function keys stay single keys.
+    pub(super) fn is_burst_key(key: &KeyEvent) -> bool {
+        if key.kind == KeyEventKind::Release {
+            return false;
+        }
+        match key.code {
+            KeyCode::Enter => !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT),
+            KeyCode::Char(character) => {
+                if character.is_control() {
+                    return false;
+                }
+                if key
+                    .modifiers
+                    .contains(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                {
+                    // AltGr is reported as Ctrl+Alt; it types a character, not
+                    // a command.
+                    true
+                } else {
+                    !key.modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                }
+            }
+            _ => false,
         }
     }
-    queued
-}
 
-/// Coalesce a burst of key presses into one paste event.
-///
-/// A run of [`BURST_PASTE_MIN`] or more printable or Enter presses becomes
-/// `Event::Paste(text)` with `\n` for Enter; shorter runs and every other
-/// event pass through unchanged.
-#[cfg(any(windows, test))]
-fn coalesce_burst(events: &[Event]) -> Vec<Event> {
-    let mut coalesced = Vec::with_capacity(events.len());
-    let mut run = Vec::new();
-    for event in events {
-        match event {
-            Event::Key(key) if is_burst_key(key) => run.push(*key),
-            event => {
-                flush_burst(&mut run, &mut coalesced);
-                coalesced.push(event.clone());
+    /// Windows: the events that are already queued, without waiting.
+    #[cfg(windows)]
+    pub(super) fn drain_queued() -> std::io::Result<Vec<Event>> {
+        let mut queued = Vec::new();
+        while ratatui::crossterm::event::poll(std::time::Duration::ZERO)? {
+            queued.push(ratatui::crossterm::event::read()?);
+        }
+        Ok(queued)
+    }
+
+    /// Coalesce a burst of key presses into one paste event.
+    ///
+    /// A run of at least [`BURST_PASTE_MIN`] presses with a second distinct
+    /// [`KeyCode`] becomes `Event::Paste(text)` with `\n` for Enter; shorter
+    /// runs, auto-repeat of one key, and every other event pass through
+    /// unchanged. Releases are dropped without ending the run, because
+    /// crossterm reports one for every key-up on Windows.
+    pub(super) fn coalesce_burst(events: &[Event]) -> Vec<Event> {
+        let mut coalesced = Vec::with_capacity(events.len());
+        let mut run = Vec::new();
+        for event in events {
+            match event {
+                Event::Key(key) if key.kind == KeyEventKind::Release => {}
+                Event::Key(key) if is_burst_key(key) => run.push(*key),
+                event => {
+                    flush_burst(&mut run, &mut coalesced);
+                    coalesced.push(event.clone());
+                }
             }
         }
+        flush_burst(&mut run, &mut coalesced);
+        coalesced
     }
-    flush_burst(&mut run, &mut coalesced);
-    coalesced
-}
 
-/// Append one run of burst keys, as a paste when it is long enough.
-#[cfg(any(windows, test))]
-fn flush_burst(run: &mut Vec<ratatui::crossterm::event::KeyEvent>, coalesced: &mut Vec<Event>) {
-    use ratatui::crossterm::event::KeyCode;
-
-    if run.len() >= BURST_PASTE_MIN {
-        let mut text = String::with_capacity(run.len());
-        for key in run.drain(..) {
-            match key.code {
-                KeyCode::Enter => text.push('\n'),
-                KeyCode::Char(character) => text.push(character),
-                // `is_burst_key` admits only these two. A future predicate
-                // change skips the extra key instead of panicking.
-                _ => {}
+    /// Append one run of burst keys, as a paste when it is long enough.
+    pub(super) fn flush_burst(run: &mut Vec<KeyEvent>, coalesced: &mut Vec<Event>) {
+        // Auto-repeat of one key is not a paste: a real burst types at least
+        // two different characters.
+        let coalesce =
+            run.len() >= BURST_PASTE_MIN && run.iter().skip(1).any(|key| key.code != run[0].code);
+        if coalesce {
+            let mut text = String::with_capacity(run.len());
+            for key in run.drain(..) {
+                match key.code {
+                    KeyCode::Enter => text.push('\n'),
+                    KeyCode::Char(character) => text.push(character),
+                    _ => unreachable!("is_burst_key admits only Enter and Char"),
+                }
             }
+            coalesced.push(Event::Paste(text));
+        } else {
+            coalesced.extend(run.drain(..).map(Event::Key));
         }
-        coalesced.push(Event::Paste(text));
-    } else {
-        coalesced.extend(run.drain(..).map(Event::Key));
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        apply_reload, coalesce_burst, panic_value_is_trigger, today_local,
-        until_next_local_midnight,
-    };
+    use super::burst::coalesce_burst;
+    use super::{apply_reload, panic_value_is_trigger, today_local, until_next_local_midnight};
     use std::path::{Path, PathBuf};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
     use thar_core::{ReadLimits, Todo, TodoDate, TodoId};
+    use thar_store::{BackupPolicy, SaveGuard, StoreError};
     use thar_tui::{Action, App};
 
+    use crate::file::load_with_limits;
     use crate::sync::{FileSync, POLL_INTERVAL};
 
     #[test]
@@ -707,13 +716,24 @@ mod tests {
     }
 
     #[test]
-    fn releases_do_not_join_a_burst() {
-        let release = KeyEvent {
-            kind: KeyEventKind::Release,
-            ..key_event('x')
-        };
-        let events = [key('a'), key('b'), Event::Key(release)];
+    fn releases_do_not_break_a_burst() {
+        // crossterm emits a Release for every key-up on Windows; it must be
+        // dropped without ending the run.
+        let events = [p('a'), r('a'), p('b'), r('b'), p('c'), r('c')];
+        assert_eq!(coalesce_burst(&events), [Event::Paste("abc".to_owned())]);
+    }
+
+    #[test]
+    fn auto_repeat_is_not_a_paste() {
+        // Holding one key produces a run of the same character, not a paste.
+        let events = [p('z'), p('z'), p('z')];
         assert_eq!(coalesce_burst(&events), events);
+    }
+
+    #[test]
+    fn altgr_characters_join_a_burst() {
+        let events = [p('a'), altgr('@'), p('b')];
+        assert_eq!(coalesce_burst(&events), [Event::Paste("a@b".to_owned())]);
     }
 
     /// A uniquely named scratch directory, removed on drop.
@@ -780,7 +800,11 @@ mod tests {
             "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
         app.set_read_only(false);
-        let mut sync = FileSync::new(path.clone(), limits);
+        let mut sync = FileSync::new(
+            path.clone(),
+            limits,
+            std::fs::read(&path).unwrap_or_default(),
+        );
         let start = Instant::now();
 
         // The file disappears: the first successful reload is a failure, so the
@@ -815,11 +839,49 @@ mod tests {
         assert_eq!(std::fs::read(&path).expect("read the file"), b"a\n");
     }
 
+    #[test]
+    fn a_change_between_load_and_watcher_construction_is_detected() {
+        let directory = ScratchDir::new("startup-race");
+        let path = directory.path().join("todo.txt");
+        std::fs::write(&path, b"a\n").expect("seed the file");
+        let limits = ReadLimits::DEFAULT;
+
+        // The load succeeds, then another program changes the file before the
+        // watcher is constructed. The baseline comes from the load, not from a
+        // second read, so the save must see the mismatch.
+        let loaded = load_with_limits(&path, &limits).expect("load");
+        std::fs::write(&path, b"external\n").expect("external edit");
+        let sync = FileSync::new(&path, limits, loaded.bytes);
+        let mut guard = SaveGuard::new(&path, BackupPolicy::None);
+        assert!(matches!(
+            guard.save(loaded.todos.iter(), sync.baseline()),
+            Err(StoreError::ChangedOnDisk { .. })
+        ));
+    }
+
     fn key_event(character: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)
     }
 
     fn key(character: char) -> Event {
         Event::Key(key_event(character))
+    }
+
+    fn p(character: char) -> Event {
+        key(character)
+    }
+
+    fn r(character: char) -> Event {
+        Event::Key(KeyEvent {
+            kind: KeyEventKind::Release,
+            ..key_event(character)
+        })
+    }
+
+    fn altgr(character: char) -> Event {
+        Event::Key(KeyEvent::new(
+            KeyCode::Char(character),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        ))
     }
 }

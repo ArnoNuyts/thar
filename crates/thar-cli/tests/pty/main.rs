@@ -24,7 +24,7 @@ mod cp7_menu;
 mod cp7_sync;
 mod cp7_write;
 
-use session::{Session, TIMEOUT};
+use session::{COLS, Session, TIMEOUT};
 use support::{TempDir, modified};
 
 /// Fixture for the initial-screen, keyboard and mouse tests.
@@ -62,6 +62,17 @@ fn open_fixture(label: &str, contents: &str) -> (TempDir, Session) {
     let path = directory.write("todo.txt", contents.as_bytes());
     let session = Session::open(&path);
     (directory, session)
+}
+
+/// The exact first screen row for a search bar holding `query` at [`COLS`].
+///
+/// The bar is `" / "` + the query + blank cells, then the three-cell closing
+/// delimiter `" / "` anchored at `COLS - 3`.
+fn search_row(query: &str) -> String {
+    let mut row = format!(" / {query}");
+    row.push_str(&" ".repeat(usize::from(COLS) - 3 - row.len()));
+    row.push_str(" / ");
+    row
 }
 
 /// An SGR mouse event, encoded the way xterm sends it.
@@ -242,13 +253,16 @@ fn search_filters_shows_no_results_and_clears() {
     let (_directory, mut session) = open_fixture("search", FIXTURE);
     session.wait_text("water the plants");
 
-    // `/` focuses the search bar (two rows at the top).
+    // `/` focuses the search bar (two rows at the top). The whole first row
+    // and the inverse cursor cell right after the `" / "` prompt prove it.
     session.send(b"/");
-    session.wait_text(" / "); // focused caret is an inverse blank cell
+    session.wait_row(0, &search_row(""));
+    session.wait_cell_reversed(0, 3, true);
 
-    // Typing filters the list.
+    // Typing filters the list; the cursor cell moves after the query.
     session.send(b"milk");
-    session.wait_text("/ milk");
+    session.wait_row(0, &search_row("milk"));
+    session.wait_cell_reversed(0, 7, true);
     session.wait_todo_text("buy milk");
     session.wait_no_todo_text("water the plants");
 
@@ -264,10 +278,12 @@ fn search_filters_shows_no_results_and_clears() {
     session.send(&[BACKSPACE; 3]);
     session.wait_todo_text("buy milk");
 
-    // Enter keeps the filter and leaves the search bar: the caret cell is gone,
-    // and the closing slash stays anchored to the right edge.
+    // Enter keeps the filter and leaves the search bar: the exact row is the
+    // blurred query (no inverse cursor) with the closing delimiter at
+    // COLS - 3, and the cell that held the cursor is no longer reversed.
     session.send(ENTER);
-    session.wait_text(" / milk");
+    session.wait_row(0, &search_row("milk"));
+    session.wait_cell_reversed(0, 7, false);
     session.wait_focused("buy milk");
     let snapshot = session.snapshot();
     assert!(
@@ -279,12 +295,15 @@ fn search_filters_shows_no_results_and_clears() {
         snapshot.text
     );
 
-    // Escape clears the filter and blurs the bar. Both bytes are written in
-    // order, so the app is focused by the time it decodes the Escape.
+    // Escape clears the filter, blurs the bar and hides it: the first row is
+    // the list's first header again, not a search row.
     session.send(b"/");
     session.send(ESC);
     session.wait_todo_text("water the plants");
-    session.wait_no_text(" / milk");
+    session.wait_row(
+        0,
+        &format!("  None (2){}", " ".repeat(usize::from(COLS) - 10)),
+    );
 }
 
 #[test]

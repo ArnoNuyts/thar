@@ -339,11 +339,13 @@ fn cp6_paste_fix_screenshot() {
 
     session.wait_text("READ-ONLY");
     session.send(b"/");
-    session.wait_text(" / ");
+    session.wait_row(0, &crate::search_row(""));
+    session.wait_cell_reversed(0, 3, true);
     // The terminal's bracketed-paste sequence, exactly as a real terminal
     // sends it: the query must read "milk", not "klim".
     session.send(b"\x1b[200~milk\x1b[201~");
-    session.wait_text("/ milk");
+    session.wait_row(0, &crate::search_row("milk"));
+    session.wait_cell_reversed(0, 7, true);
     session.wait_todo_text("buy milk");
 
     let image = session.with_screen(svg);

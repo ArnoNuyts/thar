@@ -89,10 +89,11 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
     // strings per frame; an unfocused bar renders the query in one piece.
     let raw = app.search().chars();
 
-    // The query keeps the left ` / ` prompt. The closing slash is drawn
-    // separately on the last cell of the row so it stays anchored to the right
-    // edge however long the query is; the query itself is clipped before it.
-    let content = Rect::new(row.x, row.y, row.width.saturating_sub(2), row.height);
+    // The query keeps the left ` / ` prompt. The closing delimiter is the same
+    // three cells anchored to the right edge (`row.x + row.width - 3`), so the
+    // query keeps the same usable width as Ink's prompt + flexGrow + close; the
+    // query itself is clipped before it.
+    let content = Rect::new(row.x, row.y, row.width.saturating_sub(3), row.height);
 
     let mut spans = vec![Span::styled(" / ", prompt)];
     if focused {
@@ -121,9 +122,14 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
     frame.render_widget(Paragraph::new(Line::from(spans)), content);
 
     if row.width >= 4 {
-        let close = Rect::new(row.width.saturating_sub(2), row.y, 2, 1);
+        let close = Rect::new(
+            row.x.saturating_add(row.width).saturating_sub(3),
+            row.y,
+            3,
+            1,
+        );
         frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(" /", prompt))),
+            Paragraph::new(Line::from(Span::styled(" / ", prompt))),
             close,
         );
     }
@@ -659,9 +665,11 @@ mod tests {
             assert_eq!(buffer[(0, 0)].symbol(), " ");
             assert_eq!(buffer[(1, 0)].symbol(), "/");
             assert_eq!(buffer[(3, 0)].symbol(), "m");
-            // The closing slash is the last cell of the row.
-            assert_eq!(buffer[(38, 0)].symbol(), " ", "focused={focused}");
-            assert_eq!(buffer[(39, 0)].symbol(), "/", "focused={focused}");
+            // The closing delimiter is the 3 cells anchored at width - 3.
+            assert_eq!(buffer[(36, 0)].symbol(), " ", "focused={focused}");
+            assert_eq!(buffer[(37, 0)].symbol(), " ", "focused={focused}");
+            assert_eq!(buffer[(38, 0)].symbol(), "/", "focused={focused}");
+            assert_eq!(buffer[(39, 0)].symbol(), " ", "focused={focused}");
         }
     }
 

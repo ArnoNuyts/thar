@@ -1074,7 +1074,7 @@ impl App {
             // mutably; `toggle_state` only asks for an id when it plans a
             // recurring copy.
             let todo = Rc::clone(self.entries[index].shared());
-            let outcome = todo.toggle_state(today, &mut || self.allocate_id());
+            let outcome = todo.toggle_state(today, || self.allocate_id());
             self.replace_todo(index, outcome.updated);
             match outcome.recurring {
                 Ok(Some(copy)) => recurring.push(copy),
@@ -1206,27 +1206,6 @@ impl App {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n")
-    }
-
-    /// Copies of the todos with `ids`, in load order.
-    #[must_use]
-    fn todos_by_ids(&self, ids: &[TodoId]) -> Vec<Todo> {
-        let selected: HashSet<TodoId> = ids.iter().copied().collect();
-        self.todos()
-            .iter()
-            .filter(|todo| selected.contains(&todo.id))
-            .cloned()
-            .collect()
-    }
-
-    /// Ids of every completed todo, in load order.
-    #[must_use]
-    fn completed_ids(&self) -> Vec<TodoId> {
-        self.todos()
-            .iter()
-            .filter(|todo| todo.is_done())
-            .map(|todo| todo.id)
-            .collect()
     }
 
     /// Split clipboard text into todo lines and add them, confirming above ten.
@@ -1481,11 +1460,15 @@ impl App {
                 self.modals.close();
             }
             Action::ArchiveCompleted => {
-                let completed = self.completed_ids();
-                if !completed.is_empty() {
+                let done: Vec<Todo> = self
+                    .todos()
+                    .iter()
+                    .filter(|todo| todo.is_done())
+                    .cloned()
+                    .collect();
+                if !done.is_empty() {
                     if self.writable() {
-                        let todos = self.todos_by_ids(&completed);
-                        self.effects.push(Effect::Archive(todos));
+                        self.effects.push(Effect::Archive(done));
                     } else {
                         self.push_toast_at(NOT_SAVED_MESSAGE, now);
                     }
@@ -2037,8 +2020,9 @@ mod tests {
         app.toggle_ids(&[app.todos()[0].id], now());
         assert!(app.todos()[0].is_done());
 
-        // The initial id is 0, so the next created todo must be 1. A plain
-        // toggle used to burn an id even though it planned no recurring copy.
+        // A plain toggle allocates no id, so the initial id 0 is followed by
+        // 1: the next created todo is 1 even though no recurring copy was
+        // planned.
         let added = app.add_todos(&["two".to_owned()], now()).expect("added");
         assert_eq!(added, vec![TodoId::new(1)]);
     }

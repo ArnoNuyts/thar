@@ -43,26 +43,9 @@ impl std::error::Error for ClipboardError {}
 /// missing, or [`ClipboardError::Failed`] with the last real failure when a
 /// command started but failed.
 pub fn copy(text: &str) -> Result<(), ClipboardError> {
-    copy_candidates(copy_commands(), text.as_bytes())
-}
-
-/// Try each copy candidate until one succeeds.
-///
-/// Separated from [`copy`] so the fallback loop can be tested without changing
-/// the process-global command table.
-fn copy_candidates(
-    candidates: &[(&'static str, &'static [&'static str])],
-    input: &[u8],
-) -> Result<(), ClipboardError> {
-    let mut failure = None;
-    for &(program, args) in candidates {
-        match copy_with(program, args, input) {
-            Ok(()) => return Ok(()),
-            Err(Some(message)) => failure = Some(message),
-            Err(None) => {}
-        }
-    }
-    Err(failure.map_or(ClipboardError::Unavailable, ClipboardError::Failed))
+    first_success(copy_commands(), |program, args| {
+        copy_with(program, args, text.as_bytes())
+    })
 }
 
 /// Read the system clipboard as text.
@@ -73,19 +56,23 @@ fn copy_candidates(
 /// missing, or [`ClipboardError::Failed`] when a command ran but failed (a
 /// non-zero exit, unreadable output, or invalid UTF-8).
 pub fn paste() -> Result<String, ClipboardError> {
-    paste_candidates(paste_commands())
+    first_success(paste_commands(), paste_with)
 }
 
-/// Try each paste candidate until one succeeds.
+/// Try each candidate until one succeeds, keeping the last real failure.
 ///
-/// The paste twin of [`copy_candidates`], kept for the same testability.
-fn paste_candidates(
+/// `run` returns `Ok` on success, `Err(None)` when the program was not found
+/// (so the next candidate may still work), and `Err(Some(message))` when it
+/// started and failed. The last real failure wins, because a later
+/// "command not found" must not hide a command that ran and failed.
+fn first_success<T>(
     candidates: &[(&'static str, &'static [&'static str])],
-) -> Result<String, ClipboardError> {
+    mut run: impl FnMut(&'static str, &'static [&'static str]) -> Result<T, Option<String>>,
+) -> Result<T, ClipboardError> {
     let mut failure = None;
     for &(program, args) in candidates {
-        match paste_with(program, args) {
-            Ok(text) => return Ok(text),
+        match run(program, args) {
+            Ok(value) => return Ok(value),
             Err(Some(message)) => failure = Some(message),
             Err(None) => {}
         }
@@ -222,7 +209,9 @@ fn paste_commands() -> &'static [(&'static str, &'static [&'static str])] {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClipboardError, copy_candidates, copy_commands, paste_candidates, paste_commands};
+    use super::{
+        ClipboardError, copy_commands, copy_with, first_success, paste_commands, paste_with,
+    };
 
     #[test]
     fn every_platform_has_at_least_one_command() {
@@ -234,11 +223,13 @@ mod tests {
     fn every_candidate_missing_is_unavailable() {
         let candidates = &[("thar-rs-no-such-clipboard-command", &[] as &[&str])];
         assert_eq!(
-            copy_candidates(candidates, b"todo"),
+            first_success(candidates, |program, args| copy_with(
+                program, args, b"todo"
+            )),
             Err(ClipboardError::Unavailable)
         );
         assert_eq!(
-            paste_candidates(candidates),
+            first_success(candidates, paste_with),
             Err(ClipboardError::Unavailable)
         );
     }
@@ -248,11 +239,13 @@ mod tests {
     fn a_candidate_that_ran_and_failed_is_failed() {
         let candidates = &[("/bin/false", &[] as &[&str])];
         assert!(matches!(
-            copy_candidates(candidates, b"todo"),
+            first_success(candidates, |program, args| copy_with(
+                program, args, b"todo"
+            )),
             Err(ClipboardError::Failed(_))
         ));
         assert!(matches!(
-            paste_candidates(candidates),
+            first_success(candidates, paste_with),
             Err(ClipboardError::Failed(_))
         ));
     }
@@ -267,11 +260,13 @@ mod tests {
             ("thar-rs-no-such-clipboard-command", &[] as &[&str]),
         ];
         assert!(matches!(
-            copy_candidates(candidates, b"todo"),
+            first_success(candidates, |program, args| copy_with(
+                program, args, b"todo"
+            )),
             Err(ClipboardError::Failed(_))
         ));
         assert!(matches!(
-            paste_candidates(candidates),
+            first_success(candidates, paste_with),
             Err(ClipboardError::Failed(_))
         ));
     }

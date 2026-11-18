@@ -24,34 +24,19 @@ pub struct SaveGuard {
 }
 
 impl SaveGuard {
-    /// Open a guard for `path`.
+    /// Create a guard for `path`.
     ///
-    /// The baseline is supplied by the caller on every save, because the file
-    /// watcher already reads the file and owns the accepted bytes. A missing
-    /// file is allowed, so the first save can create it; the caller decides
-    /// whether creating a missing file is allowed (`--write` only).
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`StoreError::Io`] when the file exists but cannot be read.
-    pub fn open(path: impl Into<PathBuf>, policy: BackupPolicy) -> Result<Self, StoreError> {
-        let path = path.into();
-        match fs::read(&path) {
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(StoreError::io(&path, error)),
-        }
-        Ok(Self {
-            path,
+    /// This does no I/O. The baseline is supplied by the caller on every save,
+    /// because the file watcher already reads the file and owns the accepted
+    /// bytes. The caller decides whether creating a missing file is allowed
+    /// (`--write` only).
+    #[must_use]
+    pub fn new(path: impl Into<PathBuf>, policy: BackupPolicy) -> Self {
+        Self {
+            path: path.into(),
             policy,
             backed_up: policy == BackupPolicy::None,
-        })
-    }
-
-    /// The file this guard writes.
-    #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.path
+        }
     }
 
     /// Serialize and atomically replace the file.
@@ -153,7 +138,7 @@ mod tests {
         let directory = temp_dir("guard-save");
         let path = directory.join("todo.txt");
         std::fs::write(&path, b"old\n").expect("seed");
-        let mut guard = SaveGuard::open(&path, BackupPolicy::Bak).expect("guard");
+        let mut guard = SaveGuard::new(&path, BackupPolicy::Bak);
 
         let written = guard.save(todos(&["new"]).iter(), b"old\n").expect("save");
         assert_eq!(written, b"new\n");
@@ -172,7 +157,7 @@ mod tests {
         let directory = temp_dir("guard-changed");
         let path = directory.join("todo.txt");
         std::fs::write(&path, b"old\n").expect("seed");
-        let mut guard = SaveGuard::open(&path, BackupPolicy::None).expect("guard");
+        let mut guard = SaveGuard::new(&path, BackupPolicy::None);
 
         std::fs::write(&path, b"external\n").expect("external edit");
         let error = guard
@@ -187,7 +172,7 @@ mod tests {
         let directory = temp_dir("guard-deleted");
         let path = directory.join("todo.txt");
         std::fs::write(&path, b"old\n").expect("seed");
-        let mut guard = SaveGuard::open(&path, BackupPolicy::None).expect("guard");
+        let mut guard = SaveGuard::new(&path, BackupPolicy::None);
         std::fs::remove_file(&path).expect("delete");
 
         let error = guard

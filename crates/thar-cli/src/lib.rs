@@ -32,7 +32,7 @@ pub use file::{
     read_limits_from,
 };
 pub use sync::{FileSync, ReloadOutcome};
-pub use terminal::{run_tui, run_tui_with_store, today_local};
+pub use terminal::{run_tui, today_local};
 
 /// Version printed by `thar-rs --version`.
 ///
@@ -104,36 +104,22 @@ fn run_editor(file: std::path::PathBuf, write: Option<thar_store::BackupPolicy>)
         }
     };
 
+    let LoadedFile {
+        todos,
+        error,
+        bytes,
+    } = loaded;
+
     let today = today_local();
-    let mut app = thar_tui::App::new(file.clone(), loaded.todos, today);
-    app.set_load_error(loaded.error);
-    // `run_with_store` derives the read-only flag from the presence of the
-    // store, so write mode has one source of truth.
-
-    let Some(policy) = write else {
-        // The read-only binary still watches the file: an external edit
-        // refreshes the view and can only toast, because no writer is linked.
-        return match run_tui(&mut app) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => {
-                eprintln!("thar-rs: {error}");
-                ExitCode::from(1)
-            }
-        };
-    };
-
-    // Open the save guard whenever `--write` is set, even when `load_error`
-    // is already set (a file deleted between the create and the read). The
-    // session then writes nothing until the watcher reloads a file that
-    // exists again, which is the Ink app's recovery path.
-    let mut guard = match thar_store::SaveGuard::open(file.clone(), policy) {
-        Ok(guard) => guard,
-        Err(error) => {
-            eprintln!("thar-rs: {error}");
-            return ExitCode::from(1);
-        }
-    };
-    match run_tui_with_store(&mut app, &mut guard) {
+    let mut app = thar_tui::App::new(file.clone(), todos, today);
+    app.set_load_error(error);
+    // `run_tui` derives the read-only flag from the presence of the store, so
+    // write mode has one source of truth. The guard is created only in write
+    // mode, even when `load_error` is already set (a file deleted between the
+    // create and the read): the session then writes nothing until the watcher
+    // reloads a file that exists again, which is the Ink app's recovery path.
+    let mut guard = write.map(|policy| thar_store::SaveGuard::new(file, policy));
+    match run_tui(&mut app, guard.as_mut(), bytes) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("thar-rs: {error}");
