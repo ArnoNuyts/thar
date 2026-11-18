@@ -71,6 +71,12 @@ pub struct LoadedFile {
     pub todos: Vec<Todo>,
     /// A bounded message to show in the TUI, if the file was absent.
     pub error: Option<String>,
+    /// The exact bytes that were parsed (empty when the file was missing).
+    ///
+    /// This is the startup baseline for [`crate::sync::FileSync`], so the
+    /// watcher compares the first poll against what this session actually read
+    /// instead of reading the file a second time.
+    pub bytes: Vec<u8>,
 }
 
 /// Read and parse `path` read-only with the environment's limits.
@@ -95,6 +101,7 @@ pub fn load_with_limits(path: &Path, limits: &ReadLimits) -> Result<LoadedFile, 
         Ok(bytes) => Ok(LoadedFile {
             todos: parse_bytes(&bytes, limits)?,
             error: None,
+            bytes,
         }),
         Err(LoadError::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(missing_file()),
         Err(error) => Err(error),
@@ -172,6 +179,7 @@ fn missing_file() -> LoadedFile {
     LoadedFile {
         todos: Vec::new(),
         error: Some(MISSING_FILE_NOTE.to_owned()),
+        bytes: Vec::new(),
     }
 }
 

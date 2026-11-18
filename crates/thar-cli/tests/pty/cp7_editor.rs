@@ -155,12 +155,12 @@ fn search_suggestions_popup_applies_to_the_query() {
 
     session.wait_text("WRITE");
     session.send(b"/");
-    session.wait_text(" / ");
+    session.wait_row(0, &crate::search_row(""));
     session.send(b"+th");
     session.wait_text("│ +thar");
 
     session.send(ENTER);
-    session.wait_text(" / +thar");
+    session.wait_row(0, &crate::search_row("+thar"));
 
     session.send(ESC);
     session.wait_no_text(" / +thar");

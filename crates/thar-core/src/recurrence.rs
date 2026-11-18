@@ -42,7 +42,7 @@ const OUT_OF_RANGE_MESSAGE: &str = "Recurrence is out of range; no new todo was 
 
 /// The unit of a `rec:` value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum RecurrenceUnit {
+enum RecurrenceUnit {
     /// `d`: whole calendar days.
     Days,
     /// `w`: whole weeks (seven calendar days).
@@ -53,24 +53,15 @@ pub enum RecurrenceUnit {
     Years,
 }
 
-impl RecurrenceUnit {
-    /// The lowercase unit letter used by the `rec:` grammar.
-    #[must_use]
-    pub const fn as_char(self) -> char {
-        match self {
-            Self::Days => 'd',
-            Self::Weeks => 'w',
-            Self::Months => 'm',
-            Self::Years => 'y',
-        }
-    }
-}
-
 /// A parsed and validated `rec:` value.
 ///
 /// Construction always validates, so a `Recurrence` is always storable. The
 /// original spelling is kept, because the oracle stores the string it is given:
 /// `setRecurrence("05w")` writes `rec:05w`, not `rec:5w`.
+///
+/// The derived `PartialEq` therefore compares the original spelling: `"05w"`
+/// and `"5w"` are unequal even though both plan the same day. Callers that need
+/// semantic equality compare [`Recurrence::plan`] results instead.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Recurrence {
     amount: u32,
@@ -128,18 +119,6 @@ impl FromStr for Recurrence {
 }
 
 impl Recurrence {
-    /// The amount, always `1..=`[`MAX_RECURRENCE_AMOUNT`].
-    #[must_use]
-    pub const fn amount(&self) -> u32 {
-        self.amount
-    }
-
-    /// The unit.
-    #[must_use]
-    pub const fn unit(&self) -> RecurrenceUnit {
-        self.unit
-    }
-
     /// Resolve the next due day relative to `base`.
     ///
     /// # Errors
@@ -180,19 +159,13 @@ pub enum RecurrenceError {
     OutOfRange,
 }
 
-impl RecurrenceError {
+impl fmt::Display for RecurrenceError {
     /// The user-facing message, identical to `logic/recurrence.ts`.
-    const fn message(self) -> &'static str {
-        match self {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
             Self::Invalid => INVALID_MESSAGE,
             Self::OutOfRange => OUT_OF_RANGE_MESSAGE,
-        }
-    }
-}
-
-impl fmt::Display for RecurrenceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.message())
+        })
     }
 }
 
@@ -213,9 +186,7 @@ pub fn plan_recurrence(value: &str, base: TodoDate) -> Result<TodoDate, Recurren
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        MAX_RECURRENCE_AMOUNT, Recurrence, RecurrenceError, RecurrenceUnit, plan_recurrence,
-    };
+    use super::{Recurrence, RecurrenceError, plan_recurrence};
     use crate::date::TodoDate;
 
     fn date(value: &str) -> TodoDate {
@@ -230,25 +201,34 @@ mod tests {
 
     #[test]
     fn parses_every_unit_and_keeps_the_original_text() {
-        for (value, unit, amount) in [
-            ("1d", RecurrenceUnit::Days, 1),
-            ("2w", RecurrenceUnit::Weeks, 2),
-            ("3m", RecurrenceUnit::Months, 3),
-            ("1y", RecurrenceUnit::Years, 1),
-            ("+1d", RecurrenceUnit::Days, 1),
-            ("+9999y", RecurrenceUnit::Years, MAX_RECURRENCE_AMOUNT),
-            ("0001d", RecurrenceUnit::Days, 1),
+        for (value, base, planned) in [
+            ("1d", "2026-01-15", "2026-01-16"),
+            ("2w", "2026-01-15", "2026-01-29"),
+            ("3m", "2026-01-15", "2026-04-15"),
+            ("1y", "2026-01-15", "2027-01-15"),
+            ("+1d", "2026-01-15", "2026-01-16"),
+            ("0001d", "2026-01-15", "2026-01-16"),
         ] {
             let recurrence = value.parse::<Recurrence>().expect("valid recurrence");
-            assert_eq!(recurrence.amount(), amount, "amount for {value:?}");
-            assert_eq!(recurrence.unit(), unit, "unit for {value:?}");
-            assert_eq!(recurrence.unit().as_char(), value.chars().last().unwrap());
+            assert_eq!(
+                recurrence.plan(date(base)).expect("valid plan").to_string(),
+                planned,
+                "plan for {value:?}"
+            );
             assert_eq!(
                 recurrence.to_string(),
                 value,
                 "serialization for {value:?} keeps the typed text"
             );
         }
+
+        // The maximum amount parses, but a plan from a modern day overflows.
+        let max_years = "+9999y".parse::<Recurrence>().expect("valid recurrence");
+        assert_eq!(max_years.to_string(), "+9999y");
+        assert_eq!(
+            max_years.plan(date("2026-01-15")),
+            Err(RecurrenceError::OutOfRange)
+        );
     }
 
     #[test]
@@ -289,12 +269,8 @@ mod tests {
     #[test]
     fn messages_match_the_oracle() {
         assert_eq!(
-            RecurrenceError::Invalid.message(),
+            RecurrenceError::Invalid.to_string(),
             "Invalid recurrence value; no new todo was created"
-        );
-        assert_eq!(
-            RecurrenceError::OutOfRange.message(),
-            "Recurrence is out of range; no new todo was created"
         );
         assert_eq!(
             RecurrenceError::OutOfRange.to_string(),

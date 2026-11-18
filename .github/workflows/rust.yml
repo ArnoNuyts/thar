@@ -187,12 +187,15 @@ jobs:
         # on non-Unix hosts, so this never runs a PTY test on Windows.
         run: cargo test --locked -p thar-cli --test pty
 
-  # portable-pty is Unix-focused, so Windows gets a compile check instead of a
-  # PTY run: it still validates the crate, the binary and every test target. It
-  # also links and runs the release binary, which is the only place the static
-  # CRT used by the release archive is exercised.
+  # portable-pty is Unix-focused, so Windows runs the workspace unit tests
+  # instead of the Unix-only PTY integration suite. Those tests execute the
+  # Windows-only runtime paths (`#[cfg(windows)]` and
+  # `#[cfg(any(windows, test))]`: paste burst, clipboard and lone-surrogate
+  # argument parsing), so they check behaviour rather than just compilation. The
+  # job also links and runs the release binary, which is the only place the
+  # static CRT used by the release archive is exercised.
   windows:
-    name: Windows compile check
+    name: Windows tests
     runs-on: windows-latest
     timeout-minutes: 15
 
@@ -210,6 +213,9 @@ jobs:
 
       - name: Check every target
         run: cargo check --locked -p thar-cli --all-targets
+
+      - name: Unit tests
+        run: cargo test --locked --workspace --lib
 
       - name: Link and run the release binary
         env:

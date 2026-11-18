@@ -411,8 +411,10 @@ mod tests {
     }
 
     // A lone UTF-16 surrogate is not valid UTF-8 but is a legal Windows
-    // filename component, so parsing must keep it as a path or reject it as an
-    // option, never panic while decoding it.
+    // filename component. A bare positional token must be preserved verbatim as
+    // the path, while a value attached to the `--file=` flag cannot be checked
+    // as a flag and is therefore rejected as option-shaped. Neither case may
+    // panic while decoding.
     #[cfg(windows)]
     fn lone_surrogate() -> OsString {
         use std::os::windows::ffi::OsStringExt;
@@ -423,10 +425,13 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn a_lone_surrogate_positional_path_does_not_panic() {
-        match parse_cli_args(&[lone_surrogate()]) {
-            Ok(CliCommand::Run { file, .. }) => assert!(!file.as_os_str().is_empty()),
-            Ok(other) => panic!("expected a run command, got {other:?}"),
-            Err(error) => assert!(!error.to_string().is_empty()),
+        let command = parse_cli_args(&[lone_surrogate()])
+            .expect("a lone surrogate positional path must be preserved");
+        match command {
+            CliCommand::Run { file, .. } => {
+                assert_eq!(file.as_os_str(), lone_surrogate().as_os_str());
+            }
+            other => panic!("expected a run command, got {other:?}"),
         }
     }
 
@@ -437,12 +442,12 @@ mod tests {
 
         let mut wide: Vec<u16> = "--file=".encode_utf16().collect();
         wide.push(0xD800);
-        match parse_cli_args(&[OsString::from_wide(&wide)]) {
-            // A non-UTF-8 token cannot be checked as a flag, so `--file=<bad>`
-            // is rejected as option-shaped; it must never become the path.
-            Ok(CliCommand::Run { file, .. }) => assert!(!file.as_os_str().is_empty()),
-            Ok(other) => panic!("expected a run command, got {other:?}"),
-            Err(error) => assert!(!error.to_string().is_empty()),
-        }
+        // A non-UTF-8 token cannot be checked as a flag, so `--file=<bad>` is
+        // rejected as option-shaped; it must never become the path.
+        let result = parse_cli_args(&[OsString::from_wide(&wide)]);
+        assert!(
+            result.is_err(),
+            "a non-UTF-8 --file= value must be rejected, got {result:?}"
+        );
     }
 }

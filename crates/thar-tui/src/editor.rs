@@ -44,19 +44,14 @@ pub enum Step {
 }
 
 impl Step {
-    /// The step for a key press: a word when `word_modifier` is set.
-    const fn from_word(word_modifier: bool) -> Self {
-        if word_modifier {
+    /// The step for a key press: a word for the word modifiers.
+    fn for_modifiers(modifiers: KeyModifiers) -> Self {
+        if modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::META) {
             Self::Word
         } else {
             Self::Char
         }
     }
-}
-
-/// True for the modifiers that make `Ctrl`/`Meta` word commands.
-fn is_word_modifier(modifiers: KeyModifiers) -> bool {
-    modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::META)
 }
 
 /// True when a key press carries a modifier that makes it a command, not text.
@@ -213,7 +208,7 @@ impl Editor {
     /// the vertical arrows are left to the modal, so this never submits or
     /// closes anything.
     pub fn handle_key(&mut self, key: KeyEvent) -> bool {
-        let step = Step::from_word(is_word_modifier(key.modifiers));
+        let step = Step::for_modifiers(key.modifiers);
 
         match key.code {
             KeyCode::Left => {

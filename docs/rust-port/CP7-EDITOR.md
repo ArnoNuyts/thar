@@ -170,6 +170,9 @@ as the CP6/CP7-write assets.
 - **No mouse on the suggestion list.** The list is keyboard-only, per the
   workstream scope; Save/Cancel use the shared button row, so hover and click
   work like the other screens.
+- **No help line on the create/edit screen.** Ink's `ModalTodoInput.tsx` draws
+  `HELP_TEXT` under the buttons and grows the body; the Rust screen keeps a
+  fixed 3-row body (input, spacer, buttons).
 - **The suggestion list is a floating, content-sized popup.** It is anchored
   two columns left of the typed marker (so the row prefix aligns with it), sized
   to the longest name plus prefix/padding/borders, clamped to the frame, and

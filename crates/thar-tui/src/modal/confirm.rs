@@ -205,6 +205,9 @@ impl Modal for ConfirmModal {
         match key.code {
             KeyCode::Esc => return self.activate(1),
             KeyCode::Tab => {
+                // A keyboard move takes over from a pointer hover; Enter then
+                // follows the keyboard selection instead of the stale hover.
+                self.hovered = None;
                 self.move_by(if key.modifiers.contains(KeyModifiers::SHIFT) {
                     -1
                 } else {
@@ -213,10 +216,12 @@ impl Modal for ConfirmModal {
                 return Outcome::Continue;
             }
             KeyCode::Left => {
+                self.hovered = None;
                 self.move_by(-1);
                 return Outcome::Continue;
             }
             KeyCode::Right => {
+                self.hovered = None;
                 self.move_by(1);
                 return Outcome::Continue;
             }
@@ -230,15 +235,14 @@ impl Modal for ConfirmModal {
 
     fn handle_mouse(&mut self, mouse: MouseInput) -> Outcome {
         let rect = self.geometry();
+        let count = BUTTON_LABELS.len();
         match mouse.kind {
             MouseKind::Move => {
-                self.hovered = super::buttons::hit(rect, self.button_row(), &BUTTON_LABELS, mouse);
+                self.hovered = super::buttons::hit(rect, self.button_row(), count, mouse);
                 Outcome::Continue
             }
             MouseKind::LeftClick => {
-                let Some(index) =
-                    super::buttons::hit(rect, self.button_row(), &BUTTON_LABELS, mouse)
-                else {
+                let Some(index) = super::buttons::hit(rect, self.button_row(), count, mouse) else {
                     return Outcome::Continue;
                 };
                 self.hovered = Some(index);
@@ -270,10 +274,6 @@ impl Modal for ConfirmModal {
             frame.render_widget(Paragraph::new(Span::styled(line.clone(), base)), area);
         }
 
-        let button_y = rect.body.y.saturating_add(self.button_row());
-        if button_y >= rect.body.y.saturating_add(rect.body.height) {
-            return;
-        }
         super::buttons::render(
             frame,
             rect,
@@ -446,5 +446,57 @@ mod tests {
         };
         modal.handle_mouse(elsewhere);
         assert_eq!(modal.hovered, None);
+    }
+
+    fn modal_with_cancel() -> ConfirmModal {
+        let mut request = ConfirmRequest::archive();
+        request.cancel = Some(Box::new(Action::ToggleHiddenView));
+        ConfirmModal::new(request, 100, 30)
+    }
+
+    #[test]
+    fn a_keyboard_move_clears_a_stale_hover_before_enter() {
+        let mut modal = modal_with_cancel();
+        let rect = modal.geometry();
+        let button_y = rect.body.y + modal.button_row();
+        let hover_confirm = MouseInput {
+            kind: MouseKind::Move,
+            x: rect.body.x + 1,
+            y: button_y + 1,
+            shift: false,
+        };
+
+        // Hover Confirm, then Tab to Cancel: Enter must activate Cancel, not
+        // the pointer hover.
+        assert!(matches!(
+            modal.handle_mouse(hover_confirm),
+            Outcome::Continue
+        ));
+        assert_eq!(modal.hovered, Some(0));
+        assert!(matches!(
+            modal.handle_key(key(KeyCode::Tab)),
+            Outcome::Continue
+        ));
+        assert_eq!(modal.selected(), 1);
+        assert_eq!(modal.hovered, None);
+        assert_eq!(
+            actions(modal.handle_key(key(KeyCode::Enter))),
+            vec![Action::Close, Action::ToggleHiddenView]
+        );
+
+        // Left does the same.
+        let mut modal = modal_with_cancel();
+        assert!(matches!(
+            modal.handle_mouse(hover_confirm),
+            Outcome::Continue
+        ));
+        assert_eq!(modal.hovered, Some(0));
+        modal.handle_key(key(KeyCode::Left));
+        assert_eq!(modal.selected(), 1);
+        assert_eq!(modal.hovered, None);
+        assert_eq!(
+            actions(modal.handle_key(key(KeyCode::Enter))),
+            vec![Action::Close, Action::ToggleHiddenView]
+        );
     }
 }

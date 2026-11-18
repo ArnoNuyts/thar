@@ -15,13 +15,13 @@ unchanged.
 | Area         | Change                                                                                                                                                                                                                                                                       |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Watcher      | New `crates/thar-cli/src/sync.rs` with `FileSync`, `ReloadOutcome`, `bounded_message` and the poll/debounce/suppression constants. std only (`fs::metadata`, `fs::File`).                                                                                                    |
-| Event loop   | `terminal::run_with_store` owns one `FileSync`, extends the `event::poll` timeout with the watcher deadline, and calls `apply_reload` after every event or timeout.                                                                                                          |
+| Event loop   | `terminal::run_tui` owns one `FileSync`, extends the `event::poll` timeout with the watcher deadline, and calls `apply_reload` after every event or timeout. The watcher starts from the bytes the initial load parsed, not a second read.                                   |
 | Reload       | Reads the bytes once, lossy-decodes and parses with the startup `ReadLimits`, calls `App::reloaded` (which calls `set_todos`, clearing the undo history), adopts the parsed bytes as the watcher baseline (the save guard's `expected` bytes), and toasts `File reloaded`.   |
 | Failure      | Sets `app.load_error`, toasts the bounded message, cancels a pending save, and shows `READ-ONLY` until a later reload succeeds.                                                                                                                                              |
 | Recovery     | `App::reloaded` clears `load_error`, so `App::writable()` is true again and the next mutation saves. When the file returns with the already-accepted bytes, the host re-parses `FileSync::baseline()` and calls `App::reloaded`, so unsaved edits are not reported as saved. |
 | Save refusal | `StoreError::ChangedOnDisk` keeps the target untouched, shows one bounded toast, keeps the list dirty and retries with the app's 1 s backoff; the watcher normally reloads the external file first, which clears the dirty state.                                            |
 | Store        | `FileSync` owns the baseline; `SaveGuard::save(todos, expected)` compares against it and returns the written bytes; `atomic::write_atomic` gained a debug-only `THAR_SAVE_CRASH=before-rename` abort hook.                                                                   |
-| Tests        | `crates/thar-cli/tests/write_safety.rs` (13 `#[test]`s: 12 passing + 1 ignored helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (5 passing + 1 ignored generator).                                                                                                        |
+| Tests        | `crates/thar-cli/tests/write_safety.rs` (15 `#[test]`s: 14 passing + 1 ignored helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (5 passing + 1 ignored generator).                                                                                                        |
 | Asset        | `docs/rust-port/assets/cp7-sync.png` from a real 100×30 PTY frame.                                                                                                                                                                                                           |
 
 ## Policy
@@ -183,10 +183,11 @@ an externally added `ship the CP7 sync @work +thar` row, the badge reads
   observed write) can be missed. The byte compare cannot help because no change
   is detected. Modern Linux (ext4, btrfs, xfs), APFS and NTFS report
   sub-second times. A manual refresh command is a possible later addition.
-- **Startup handoff window.** `FileSync::new` reads the baseline a few
-  milliseconds after the initial load. An edit in that window is treated as the
-  starting content. The Ink hook has the same window between `repository.load`
-  and its first watcher event.
+- **Startup handoff is content-checked.** The watcher takes the exact bytes the
+  initial load parsed as its baseline and compares the file once after the
+  first debounce. An edit between the load and the watcher's first poll is
+  therefore reloaded (or refused by the save guard) instead of being mistaken
+  for the starting content.
 - **A write session whose initial read _fails validation_ still exits** with a
   message before the TUI starts (CP6 behaviour, unchanged here). The recovery
   path covers a file that becomes invalid, unreadable or deleted after startup,

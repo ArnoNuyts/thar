@@ -35,7 +35,7 @@ pub fn sanitize_for_display(text: &str) -> String {
 
     for ch in text.chars() {
         if is_rejected_control(ch) {
-            let _ = write!(safe, "\\u{:04X}", ch as u32);
+            let _ = write!(safe, "\\u{:04X}", u32::from(ch));
         } else {
             safe.push(ch);
         }

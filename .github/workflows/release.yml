@@ -10,6 +10,11 @@ on:
         required: true
         type: choice
         options: [stable, beta]
+      force:
+        description: "Rebuild and clobber existing native archives"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -277,9 +282,12 @@ jobs:
     # Together with `release_ready` this gates the upload: a plain push to
     # `main` for an already-released version (a docs-only commit, say) must not
     # rebuild and clobber its archives with new bytes and checksums. This run
-    # still uploads when it created the release (recovery of a release whose
-    # assets were never built), and a rerun or a manual dispatch still uploads,
-    # which is how a failed matrix leg is repaired.
+    # still starts when it created the release (recovery of a release whose
+    # assets were never built), and a rerun or a manual dispatch still starts so
+    # a failed matrix leg can be repaired. The attach step then skips the upload
+    # when all ten native assets are already present unless the `force` input is
+    # set, so rerunning a docs-only release no longer clobbers existing
+    # archives.
     if: needs.publish.outputs.release_ready == 'true' && (needs.publish.outputs.skip != 'true' || needs.publish.outputs.created == 'true' || github.run_attempt != '1' || github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
@@ -395,4 +403,34 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.publish.outputs.tag }}
-        run: gh release upload "$TAG" thar-* --clobber
+          # Empty for pushes; only a manual dispatch can set it to `true`.
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          expected=(
+            thar-linux-x64.tar.gz
+            thar-linux-x64.tar.gz.sha256
+            thar-linux-arm64.tar.gz
+            thar-linux-arm64.tar.gz.sha256
+            thar-macos-x64.tar.gz
+            thar-macos-x64.tar.gz.sha256
+            thar-macos-arm64.tar.gz
+            thar-macos-arm64.tar.gz.sha256
+            thar-windows-x64.zip
+            thar-windows-x64.zip.sha256
+          )
+          assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          if [ "$FORCE" != "true" ]; then
+            complete=true
+            for name in "${expected[@]}"; do
+              if ! grep -Fxq "$name" <<<"$assets"; then
+                complete=false
+                break
+              fi
+            done
+            if [ "$complete" = true ]; then
+              echo "All native archives are already attached to $TAG; skipping upload (dispatch with force=true to rebuild and clobber)."
+              exit 0
+            fi
+          fi
+          gh release upload "$TAG" thar-* --clobber
