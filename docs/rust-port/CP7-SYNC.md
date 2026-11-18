@@ -12,17 +12,17 @@ unchanged.
 
 ## What landed
 
-| Area         | Change                                                                                                                                                                                                                                                      |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Watcher      | New `crates/thar-cli/src/sync.rs` with `FileSync`, `ReloadOutcome`, `bounded_message` and the poll/debounce/suppression constants. std only (`fs::metadata`, `fs::File`).                                                                                   |
-| Event loop   | `terminal::run_with_store` owns one `FileSync`, extends the `event::poll` timeout with the watcher deadline, and calls `apply_reload` after every event or timeout.                                                                                         |
-| Reload       | Reads the bytes once, lossy-decodes and parses with the startup `ReadLimits`, calls `App::reloaded` (which calls `set_todos`, clearing the undo history), adopts the parsed bytes as the watcher baseline (the save guard's `expected` bytes), and toasts `File reloaded`. |
-| Failure      | Sets `app.load_error`, toasts the bounded message, cancels a pending save, and shows `READ-ONLY` until a later reload succeeds.                                                                                                                             |
-| Recovery     | `App::reloaded` clears `load_error`, so `App::writable()` is true again and the next mutation saves. When the file returns with the already-accepted bytes, the host re-parses `FileSync::baseline()` and calls `App::reloaded`, so unsaved edits are not reported as saved. |                                                                                                                                                        |
-| Save refusal | `StoreError::ChangedOnDisk` keeps the target untouched, shows one bounded toast, keeps the list dirty and retries with the app's 1 s backoff; the watcher normally reloads the external file first, which clears the dirty state.                           |
-| Store        | `FileSync` owns the baseline; `SaveGuard::save(todos, expected)` compares against it and returns the written bytes; `atomic::write_atomic` gained a debug-only `THAR_SAVE_CRASH=before-rename` abort hook.                                                                                                         |
-| Tests        | `crates/thar-cli/tests/write_safety.rs` (11 passing + 1 helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (5 passing + 1 ignored generator).                                                                                                              |
-| Asset        | `docs/rust-port/assets/cp7-sync.png` from a real 100×30 PTY frame.                                                                                                                                                                                          |
+| Area         | Change                                                                                                                                                                                                                                                                       |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Watcher      | New `crates/thar-cli/src/sync.rs` with `FileSync`, `ReloadOutcome`, `bounded_message` and the poll/debounce/suppression constants. std only (`fs::metadata`, `fs::File`).                                                                                                    |
+| Event loop   | `terminal::run_with_store` owns one `FileSync`, extends the `event::poll` timeout with the watcher deadline, and calls `apply_reload` after every event or timeout.                                                                                                          |
+| Reload       | Reads the bytes once, lossy-decodes and parses with the startup `ReadLimits`, calls `App::reloaded` (which calls `set_todos`, clearing the undo history), adopts the parsed bytes as the watcher baseline (the save guard's `expected` bytes), and toasts `File reloaded`.   |
+| Failure      | Sets `app.load_error`, toasts the bounded message, cancels a pending save, and shows `READ-ONLY` until a later reload succeeds.                                                                                                                                              |
+| Recovery     | `App::reloaded` clears `load_error`, so `App::writable()` is true again and the next mutation saves. When the file returns with the already-accepted bytes, the host re-parses `FileSync::baseline()` and calls `App::reloaded`, so unsaved edits are not reported as saved. |
+| Save refusal | `StoreError::ChangedOnDisk` keeps the target untouched, shows one bounded toast, keeps the list dirty and retries with the app's 1 s backoff; the watcher normally reloads the external file first, which clears the dirty state.                                            |
+| Store        | `FileSync` owns the baseline; `SaveGuard::save(todos, expected)` compares against it and returns the written bytes; `atomic::write_atomic` gained a debug-only `THAR_SAVE_CRASH=before-rename` abort hook.                                                                   |
+| Tests        | `crates/thar-cli/tests/write_safety.rs` (13 `#[test]`s: 12 passing + 1 ignored helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (5 passing + 1 ignored generator).                                                                                                        |
+| Asset        | `docs/rust-port/assets/cp7-sync.png` from a real 100×30 PTY frame.                                                                                                                                                                                                           |
 
 ## Policy
 
@@ -71,13 +71,14 @@ of truth. `App::reloaded` cancels the pending save by construction.
 
 When a save fails with `StoreError::ChangedOnDisk`:
 
-- the target is not written (`SaveGuard::save` compares the current bytes with
-  its baseline and returns before serializing to disk);
+- the target is not written (`SaveGuard::save` compares the current bytes
+  with the `expected` bytes supplied by `FileSync` and refuses before
+  writing);
 - the action bar shows one bounded `Save failed: … changed on disk …` toast and
   `App::save_error` records it;
 - the list stays dirty and the app retries after its 1 s backoff; the watcher
   normally reloads the external file first, which clears the dirty state and
-  rebaselines both the guard and the watcher;
+  rebaselines the watcher;
 - the watcher notices the same metadata change independently and, after the
   debounce, reloads the external file.
 
@@ -158,9 +159,9 @@ cargo test --locked --workspace --all-features
 ```
 
 Results: fmt clean, clippy clean, workspace tests green. New coverage:
-`thar-cli` unit 15, `tests/write_safety.rs` 11 passed + 1 ignored helper,
-`tests/pty` 17 passed + 3 ignored generators, plus every pre-existing CP6/CP7
-suite.
+`thar-cli` unit 15, `tests/write_safety.rs` 13 tests (12 passed + 1 ignored
+helper), `tests/pty` 17 passed + 3 ignored generators, plus every pre-existing
+CP6/CP7 suite.
 
 The screenshot generator, rerun from the repository root:
 

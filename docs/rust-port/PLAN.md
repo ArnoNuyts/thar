@@ -852,17 +852,18 @@ undo/redo commands, while the modal screens arrive in parallel workstreams.
   scan of `thar-cli/src` and `thar-tui/src` still proves the read-only path:
   - `atomic::write_atomic` writes a sibling temp file, syncs it, preserves the
     target mode, and renames over the target; the temp is removed on error.
-  - `save::SaveGuard` remembers the bytes the session last read or wrote and
-    refuses to save when the file changed on disk (an external edit or delete),
-    leaving the target byte-identical.
+  - `save::SaveGuard` compares every save with the accepted bytes the caller
+    supplies (the watcher's baseline) and refuses to save when the file changed
+    on disk (an external edit or delete), leaving the target byte-identical.
   - `backup` keeps one `todo.txt.bak` with mode `0600` before the first save;
     an existing backup is never overwritten, and `--no-backup` disables it.
   - `done::append_done` is the archive append; `clipboard` is the
     `pbcopy`/`clip`/`wl-copy`/`xclip` port.
 - **Stable ids.** `TodoId` no longer doubles as the load-order index: create,
-  delete and paste shift the vector, so `App::index_of` now looks the id up and
-  every new todo gets a monotonic id from the session allocator. This was the
-  CP6 invariant that could not survive CP7.
+  delete and paste shift the vector, so `App::row_for` looks the id up in the
+  `row_by_id` map rebuilt with the row model, and every new todo gets a
+  monotonic id from the session allocator. This was the CP6 invariant that
+  could not survive CP7.
 - **Undo/redo.** `thar-tui::history` snapshots the whole list per mutation, one
   step per command (matching `todo-context.tsx`), clears both stacks on a load,
   and is exposed through `z`/`Z`. Snapshots store `Rc<Todo>` handles, so a

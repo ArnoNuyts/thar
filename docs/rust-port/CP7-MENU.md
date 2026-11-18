@@ -103,10 +103,13 @@ shows `Pasted N todo(s)`.
 
 ### Archive
 
-The foundation terminal path is unchanged: `Effect::ArchiveCompleted` appends
-the completed todos to `<file-dir>/done.txt` through `thar_store::append_done`
-and only then removes their ids. The PTY test asserts both sides of the round
-trip: `done.txt` gains the serialized line and `todo.txt` loses it.
+The archive gate lives in `App::apply_action`: for `Action::ArchiveCompleted` it
+collects the completed todos, checks `App::writable()` and queues
+`Effect::Archive(Vec<Todo>)` (or shows the read-only toast). The host half
+appends those todos to `<file-dir>/done.txt` through `thar_store::append_done`
+and only then calls `App::remove_ids`; a failed append toasts instead. The PTY
+test asserts both sides of the round trip: `done.txt` gains the serialized line
+and `todo.txt` loses it.
 
 ### Foundation additions
 

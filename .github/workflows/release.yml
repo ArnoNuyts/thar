@@ -42,6 +42,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       skip: ${{ steps.check.outputs.skip }}
       tag_exists: ${{ steps.check.outputs.tag_exists }}
+      created: ${{ steps.gh_release.outputs.created }}
       release_ready: ${{ steps.release_ready.outputs.ready }}
 
     steps:
@@ -204,6 +205,7 @@ jobs:
         run: npm publish --provenance --access public --tag "$DIST_TAG"
 
       - name: Create or update GitHub release
+        id: gh_release
         # Runs for a fresh release, and also recovers an earlier run that
         # created the tag and published npm but failed before creating the
         # release notes. Without that recovery a re-run would skip publishing,
@@ -232,6 +234,7 @@ jobs:
             else
               gh release edit "$TAG" --latest
             fi
+            echo "created=false" >> "$GITHUB_OUTPUT"
           else
             if [ "$CHANNEL" = "beta" ]; then
               gh release create "$TAG" \
@@ -246,6 +249,7 @@ jobs:
                 --latest \
                 "${start_args[@]}"
             fi
+            echo "created=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check the GitHub release is ready
@@ -272,10 +276,11 @@ jobs:
     # `publish` reports `skip == 'true'` when the version is already published.
     # Together with `release_ready` this gates the upload: a plain push to
     # `main` for an already-released version (a docs-only commit, say) must not
-    # rebuild and clobber its archives with new bytes and checksums. A rerun or
-    # a manual dispatch still uploads, which is how a failed matrix leg is
-    # repaired.
-    if: needs.publish.outputs.release_ready == 'true' && (needs.publish.outputs.skip != 'true' || github.run_attempt != '1' || github.event_name == 'workflow_dispatch')
+    # rebuild and clobber its archives with new bytes and checksums. This run
+    # still uploads when it created the release (recovery of a release whose
+    # assets were never built), and a rerun or a manual dispatch still uploads,
+    # which is how a failed matrix leg is repaired.
+    if: needs.publish.outputs.release_ready == 'true' && (needs.publish.outputs.skip != 'true' || needs.publish.outputs.created == 'true' || github.run_attempt != '1' || github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix:
