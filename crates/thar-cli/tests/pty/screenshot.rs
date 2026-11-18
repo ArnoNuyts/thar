@@ -339,7 +339,7 @@ fn cp6_paste_fix_screenshot() {
 
     session.wait_text("READ-ONLY");
     session.send(b"/");
-    session.wait_text(" /   /");
+    session.wait_text(" / ");
     // The terminal's bracketed-paste sequence, exactly as a real terminal
     // sends it: the query must read "milk", not "klim".
     session.send(b"\x1b[200~milk\x1b[201~");

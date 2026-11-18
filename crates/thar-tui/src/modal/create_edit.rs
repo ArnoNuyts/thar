@@ -40,7 +40,8 @@
 //! floating popup owned by [`crate::view::suggestion`]: it is sized to the
 //! longest name and anchored under the typed `+`/`@`, and the modal itself
 //! keeps a fixed body height so it never jumps while the list opens or closes.
-//! The Save/Cancel row is the shared `‹ Save ›` / `« Save »` button row.
+//! The Save/Cancel row is the shared `‹ Save ›` / `« Save »` button row, with
+//! no help line underneath.
 
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -59,22 +60,18 @@ use crate::modal::{Action, Modal, ModalId, ModalRect, ModalWidth, Outcome};
 use crate::suggest::{Anchor, Overlay, Suggestions, TagSources};
 use crate::theme;
 
-/// Help line under the buttons, copied from `ModalTodoInput.tsx` so the Rust
-/// and Ink screens describe the same keys.
-const HELP_TEXT: &str = "Tab/Shift+Tab = toggle action, Enter = selected action, Esc = cancel";
-
 /// The input prompt, two cells wide.
 const PROMPT: &str = "» ";
 
 /// Labels of the two buttons, in order.
 const BUTTON_LABELS: [&str; 2] = ["Save", "Cancel"];
 
-/// Body row of the button row: input, spacer, buttons, spacer, help.
+/// Body row of the button row: input, spacer, buttons.
 const BUTTON_ROW: u16 = 2;
 
-/// Rows in the fixed body: the input, a spacer, the button row, a spacer and
-/// the help line. Suggestions float above this and never change the height.
-const BASE_ROWS: u16 = 5;
+/// Rows in the fixed body: the input, a spacer and the button row.
+/// Suggestions float above this and never change the height.
+const BASE_ROWS: u16 = 3;
 
 /// Which screen this is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -276,12 +273,9 @@ impl Modal for TextModal {
             return;
         }
 
-        let mut row = 0;
-        render_input(frame, content, row, &self.editor);
-        row += 1;
+        render_input(frame, content, 0, &self.editor);
 
-        // Spacer, buttons, spacer, help.
-        row += 1;
+        // Spacer, buttons.
         super::buttons::render(
             frame,
             rect,
@@ -290,9 +284,6 @@ impl Modal for TextModal {
             self.selected_button,
             self.hovered,
         );
-        row += 1;
-        row += 1;
-        render_help(frame, content, row);
     }
 
     fn suggestion_overlay(&self, rect: ModalRect) -> Option<Overlay<'_>> {
@@ -454,20 +445,6 @@ fn render_input(frame: &mut Frame, content: Rect, offset: u16, editor: &Editor) 
 
     frame.render_widget(
         Paragraph::new(Line::from(spans)).style(Style::default().bg(theme::MODAL_BACKGROUND)),
-        area,
-    );
-}
-
-/// Draw the muted help line, clipped to the modal width.
-fn render_help(frame: &mut Frame, content: Rect, offset: u16) {
-    let Some(area) = row_rect(content, offset) else {
-        return;
-    };
-    let style = Style::default()
-        .bg(theme::MODAL_BACKGROUND)
-        .fg(theme::MUTED);
-    frame.render_widget(
-        Paragraph::new(sanitize_for_display(HELP_TEXT)).style(style),
         area,
     );
 }
