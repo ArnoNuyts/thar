@@ -13,22 +13,28 @@
 //! in `view/overlay.rs` and `modal/geometry.rs` rather than changing these
 //! base rows.
 
+use crate::input::Command;
+use crate::modal::ModalId;
+
 /// Rows occupied by the action bar: its top border and its content row.
 pub const ACTION_BAR_HEIGHT: u16 = 2;
 /// Rows occupied by the search bar: its content row and its bottom border.
 pub const SEARCH_BAR_HEIGHT: u16 = 2;
 /// Width of the scrollbar column.
 pub const SCROLLBAR_WIDTH: u16 = 1;
-/// Action-bar items in render order: `(key, label)`.
+/// Action-bar items in render order: `(key, label, command)`.
 ///
-/// The renderer and the click hit-test both read this table, so a label change
-/// cannot silently move the clickable region.
-pub const ACTION_ITEMS: [(&str, &str); 5] = [
-    ("x", "Menu"),
-    ("q", "Quit"),
-    ("n", "New"),
-    ("e", "Edit"),
-    ("/", "Search"),
+/// The renderer, the click hit-test and the command dispatch all read this
+/// table, so a label change cannot silently move the clickable region and a
+/// click cannot fall through on a mistyped key.
+pub const ACTION_ITEMS: [(&str, &str, Command); 5] = [
+    // The Menu item opens the single- or multi-select screen depending on the
+    // active range; `input::left_click` resolves it with `menu_for`.
+    ("x", "Menu", Command::Open(ModalId::TodoMenu)),
+    ("q", "Quit", Command::Quit),
+    ("n", "New", Command::Open(ModalId::CreateTodo)),
+    ("e", "Edit", Command::Open(ModalId::EditTodo)),
+    ("/", "Search", Command::SearchFocus),
 ];
 /// Width of one action-bar item including its surrounding spaces.
 pub const fn action_item_width(key: &str, label: &str) -> u16 {
@@ -128,17 +134,17 @@ pub fn checkbox_columns(max_digits: usize) -> core::ops::RangeInclusive<u16> {
     start..=start.saturating_add(2)
 }
 
-/// The action-bar key at an 0-based screen column, if any.
+/// The action-bar command at an 0-based screen column, if any.
 ///
 /// The Ink bar lays items out from column 1 (1-based) with the segment
 /// `" <key> <label>  "`; this maps the same regions to 0-based columns.
 #[must_use]
-pub fn action_item_at(column: u16) -> Option<&'static str> {
+pub fn action_item_at(column: u16) -> Option<Command> {
     let mut start = 0_u16;
-    for (key, label) in ACTION_ITEMS {
+    for (key, label, command) in ACTION_ITEMS {
         let width = action_item_width(key, label);
         if (start..start + width).contains(&column) {
-            return Some(key);
+            return Some(command);
         }
         start = start.saturating_add(width);
     }
@@ -206,17 +212,19 @@ mod tests {
     #[test]
     fn action_items_cover_the_rendered_segments() {
         use super::{ACTION_ITEMS, action_item_at, action_item_width};
+        use crate::input::Command;
+        use crate::modal::ModalId;
 
         let widths: Vec<u16> = ACTION_ITEMS
             .iter()
-            .map(|(key, label)| action_item_width(key, label))
+            .map(|(key, label, _)| action_item_width(key, label))
             .collect();
         assert_eq!(widths, [9, 9, 8, 9, 11]);
-        assert_eq!(action_item_at(0), Some("x"));
-        assert_eq!(action_item_at(8), Some("x"));
-        assert_eq!(action_item_at(9), Some("q"));
-        assert_eq!(action_item_at(44), Some("/"));
-        assert_eq!(action_item_at(45), Some("/"));
+        assert_eq!(action_item_at(0), Some(Command::Open(ModalId::TodoMenu)));
+        assert_eq!(action_item_at(8), Some(Command::Open(ModalId::TodoMenu)));
+        assert_eq!(action_item_at(9), Some(Command::Quit));
+        assert_eq!(action_item_at(44), Some(Command::SearchFocus));
+        assert_eq!(action_item_at(45), Some(Command::SearchFocus));
         assert_eq!(action_item_at(46), None);
     }
 }

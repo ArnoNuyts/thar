@@ -257,6 +257,15 @@ pub enum Effect {
     Paste,
 }
 
+/// Where [`App::select_suggestion`] moves the suggestion highlight.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Direction {
+    /// The previous suggestion (Up).
+    Up,
+    /// The next suggestion (Down).
+    Down,
+}
+
 impl App {
     /// Create the app for an already-loaded, read-only todo list.
     #[must_use]
@@ -626,12 +635,11 @@ impl App {
         self.refresh_search_suggestions();
     }
 
-    /// Move the suggestion highlight up (`direction < 0`) or down.
-    pub(crate) fn select_suggestion(&mut self, direction: isize) {
-        if direction < 0 {
-            self.search.suggestion_previous();
-        } else {
-            self.search.suggestion_next();
+    /// Move the suggestion highlight up ([`Direction::Up`]) or down.
+    pub(crate) fn select_suggestion(&mut self, direction: Direction) {
+        match direction {
+            Direction::Up => self.search.suggestion_previous(),
+            Direction::Down => self.search.suggestion_next(),
         }
     }
 
@@ -722,7 +730,7 @@ impl App {
     /// Ids of the selected todos: the range when one is active, otherwise the
     /// cursor.
     #[must_use]
-    pub fn selected_ids(&self) -> Vec<TodoId> {
+    pub(crate) fn selected_ids(&self) -> Vec<TodoId> {
         self.selected_todos().iter().map(|todo| todo.id).collect()
     }
 

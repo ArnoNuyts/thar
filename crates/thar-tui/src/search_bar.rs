@@ -9,7 +9,7 @@
 //! Insertion is a verbatim splice: a bracketed paste keeps its order and text,
 //! and only the clipboard path trims or validates whole todo lines.
 
-use crate::editor::Editor;
+use crate::editor::{Editor, Step};
 use crate::suggest::{Suggestions, TagSources};
 
 /// The query text, its cursor, focus, and the current suggestion list.
@@ -81,9 +81,8 @@ impl SearchBar {
 
     /// Insert one character at the cursor.
     pub fn insert_char(&mut self, character: char) {
-        let cursor = self.editor.cursor();
-        self.editor
-            .replace_range(cursor, cursor, &character.to_string());
+        let mut buffer = [0; 4];
+        self.insert_text(character.encode_utf8(&mut buffer));
     }
 
     /// Splice pasted text at the cursor, verbatim and in order.
@@ -97,22 +96,22 @@ impl SearchBar {
 
     /// Delete the character before the cursor.
     pub fn backspace(&mut self) {
-        self.editor.backspace(false);
+        self.editor.backspace(Step::Char);
     }
 
     /// Delete the character at the cursor.
     pub fn delete(&mut self) {
-        self.editor.delete_forward(false);
+        self.editor.delete_forward(Step::Char);
     }
 
     /// Move the cursor one character left, clamped at the start.
     pub fn move_left(&mut self) {
-        self.editor.move_left(false);
+        self.editor.move_left(Step::Char);
     }
 
     /// Move the cursor one character right, clamped at the end.
     pub fn move_right(&mut self) {
-        self.editor.move_right(false);
+        self.editor.move_right(Step::Char);
     }
 
     /// Recompute the suggestion list from the current query and cursor.

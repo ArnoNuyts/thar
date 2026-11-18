@@ -50,8 +50,8 @@ pub fn open(app: &App, id: ModalId) -> Result<Box<dyn Modal>, OpenError> {
     match id {
         ModalId::CreateTodo => Ok(create_edit::create(app)),
         ModalId::EditTodo => Ok(create_edit::edit(app)),
-        ModalId::TodoMenu => Ok(Box::new(Menu::single(selected_ids(app), width, height))),
-        ModalId::MultiSelectMenu => Ok(Box::new(Menu::multi(selected_ids(app), width, height))),
+        ModalId::TodoMenu => Ok(Box::new(Menu::single(app.selected_ids(), width, height))),
+        ModalId::MultiSelectMenu => Ok(Box::new(Menu::multi(app.selected_ids(), width, height))),
         ModalId::SetDueDate => Ok(Box::new(SetDateModal::new(app, DateKind::Due))),
         ModalId::SetThresholdDate => Ok(Box::new(SetDateModal::new(app, DateKind::Threshold))),
         ModalId::SetRecurrence => Ok(Box::new(SetRecurrenceModal::new(app))),
@@ -75,11 +75,6 @@ pub fn confirm(
     terminal_height: u16,
 ) -> Box<dyn Modal> {
     Box::new(ConfirmModal::new(request, terminal_width, terminal_height))
-}
-
-/// Ids of the current selection, in load order.
-fn selected_ids(app: &App) -> Vec<thar_core::TodoId> {
-    app.selected_todos().iter().map(|todo| todo.id).collect()
 }
 
 #[cfg(test)]

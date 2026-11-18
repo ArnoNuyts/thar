@@ -372,11 +372,11 @@ fn render_action_bar(frame: &mut Frame, app: &App, layout: Layout) {
     let row = Rect::new(0, layout.action_row(), layout.width, 1);
     let action_width: u16 = ACTION_ITEMS
         .iter()
-        .map(|(key, label)| action_item_width(key, label))
+        .map(|(key, label, _)| action_item_width(key, label))
         .sum();
 
     let mut spans = Vec::new();
-    for (key, label) in ACTION_ITEMS {
+    for (key, label, _) in ACTION_ITEMS {
         spans.push(Span::styled(
             format!(" {key}"),
             Style::default().fg(theme::PRIMARY),

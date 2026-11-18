@@ -8,10 +8,10 @@ use std::time::{Duration, Instant};
 
 use thar_core::{Todo, TodoDate, TodoId};
 use thar_tui::input::{
-    self, Command, DOUBLE_CLICK_WINDOW, MouseInput, MouseKind, READ_ONLY_MESSAGE, clicked_checkbox,
-    handle_mouse,
+    self, Command, DOUBLE_CLICK_WINDOW, MouseInput, MouseKind, clicked_checkbox, handle_mouse,
 };
 use thar_tui::layout::{self, Layout};
+use thar_tui::messages::READ_ONLY_MESSAGE;
 use thar_tui::{App, nav};
 
 fn app_with(lines: &[&str], width: u16, height: u16) -> App {
@@ -252,14 +252,14 @@ fn action_bar_clicks_map_to_their_command() {
 #[test]
 fn action_bar_covers_every_layout_segment() {
     // The hit-test must agree with the shared table, including its boundaries.
-    for (index, (key, label)) in layout::ACTION_ITEMS.iter().enumerate() {
+    for (index, (key, label, command)) in layout::ACTION_ITEMS.iter().enumerate() {
         let start: u16 = layout::ACTION_ITEMS[..index]
             .iter()
-            .map(|(key, label)| layout::action_item_width(key, label))
+            .map(|(key, label, _)| layout::action_item_width(key, label))
             .sum();
         let end = start + layout::action_item_width(key, label) - 1;
-        assert_eq!(layout::action_item_at(start), Some(*key));
-        assert_eq!(layout::action_item_at(end), Some(*key));
+        assert_eq!(layout::action_item_at(start), Some(*command));
+        assert_eq!(layout::action_item_at(end), Some(*command));
     }
 }
 

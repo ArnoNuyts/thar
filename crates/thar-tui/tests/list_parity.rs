@@ -313,18 +313,13 @@ fn owned_row_model_matches_the_oracle() {
             let model =
                 ListModel::build(&todos, &views, query, show_hidden, today).expect("aligned");
 
+            let row_indexes: Vec<usize> =
+                model.rows.iter().filter_map(ListRow::todo_index).collect();
             expected_order(
                 case.get("order")
                     .unwrap_or_else(|| panic!("{label}: case is missing order")),
             )
-            .verify(&format!("{label}: order"), &model.order);
-
-            let row_indexes: Vec<usize> =
-                model.rows.iter().filter_map(ListRow::todo_index).collect();
-            assert_eq!(
-                row_indexes, model.order,
-                "{label}: todo rows must map to the ordered input indexes"
-            );
+            .verify(&format!("{label}: order"), &row_indexes);
 
             expected_rows(
                 case.get("rows")
@@ -346,7 +341,5 @@ fn empty_lists_produce_an_empty_model() {
     let model = ListModel::build(&todos, &views, "anything", false, today).expect("aligned");
     assert!(model.is_empty());
     assert_eq!(model.len(), 0);
-    assert!(model.order.is_empty());
-    assert!(model.get(0).is_none());
     assert!(model.visible(0, 10).is_empty());
 }

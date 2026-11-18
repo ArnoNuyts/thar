@@ -20,7 +20,14 @@ use crate::modal::{Action, Modal, ModalId, ModalRect, ModalWidth, Outcome, geome
 use crate::theme;
 
 /// Inline priority letters, in shortcut order (`logic/priority.ts`).
-pub(crate) const PRIORITIES: [char; 6] = ['A', 'B', 'C', 'D', 'E', 'F'];
+pub(crate) const PRIORITIES: [Priority; 6] = [
+    Priority::new('A').expect("A is a priority"),
+    Priority::new('B').expect("B is a priority"),
+    Priority::new('C').expect("C is a priority"),
+    Priority::new('D').expect("D is a priority"),
+    Priority::new('E').expect("E is a priority"),
+    Priority::new('F').expect("F is a priority"),
+];
 
 /// The `Set Priority` screen.
 pub(crate) struct SetPriorityModal {
@@ -37,10 +44,7 @@ impl SetPriorityModal {
         let ids: Vec<TodoId> = selected.iter().map(|todo| todo.id).collect();
         let has_priority = selected.first().is_some_and(|todo| todo.priority.is_some());
 
-        let mut options: Vec<Option<Priority>> = PRIORITIES
-            .iter()
-            .map(|letter| Priority::new(*letter))
-            .collect();
+        let mut options: Vec<Option<Priority>> = PRIORITIES.iter().copied().map(Some).collect();
         if has_priority {
             options.push(None);
         }
@@ -66,13 +70,18 @@ impl SetPriorityModal {
         )
     }
 
-    fn move_selection(&mut self, delta: i32) {
-        if self.options.is_empty() {
-            return;
+    fn select_previous(&mut self) {
+        let len = self.options.len();
+        if len > 0 {
+            self.selected = (self.selected + len - 1) % len;
         }
-        let count = i32::try_from(self.options.len()).unwrap_or(1);
-        let current = i32::try_from(self.selected).unwrap_or(0);
-        self.selected = usize::try_from((current + delta).rem_euclid(count)).unwrap_or(0);
+    }
+
+    fn select_next(&mut self) {
+        let len = self.options.len();
+        if len > 0 {
+            self.selected = (self.selected + 1) % len;
+        }
     }
 
     fn apply(&mut self, index: usize) -> Outcome {
@@ -111,11 +120,11 @@ impl Modal for SetPriorityModal {
         match key.code {
             KeyCode::Esc => Outcome::Close,
             KeyCode::Up => {
-                self.move_selection(-1);
+                self.select_previous();
                 Outcome::Continue
             }
             KeyCode::Down => {
-                self.move_selection(1);
+                self.select_next();
                 Outcome::Continue
             }
             KeyCode::Enter => self.apply(self.selected),
@@ -365,7 +374,7 @@ mod tests {
     #[test]
     fn the_priority_table_matches_the_typescript_order() {
         assert_eq!(
-            PRIORITIES,
+            PRIORITIES.map(Priority::as_char),
             ['A', 'B', 'C', 'D', 'E', 'F'],
             "the modal and the inline shortcuts share one order"
         );

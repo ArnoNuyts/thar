@@ -17,9 +17,7 @@
 //!   (which is not `char::is_whitespace`), and strips the oracle's wrapper
 //!   punctuation with ASCII-only `\w` semantics.
 
-use thar_core::Todo;
-
-pub use thar_core::OwnedSearchView as OwnedView;
+use thar_core::{OwnedSearchView, Todo};
 
 /// Lowercase one string the way the search views and terms need it.
 ///
@@ -46,8 +44,8 @@ pub fn normalize(value: &str) -> String {
 
 /// Build the persistent search view for one todo.
 #[must_use]
-pub fn view_for(todo: &Todo) -> OwnedView {
-    OwnedView {
+pub fn view_for(todo: &Todo) -> OwnedSearchView {
+    OwnedSearchView {
         text: normalize(&todo.text),
         contexts: todo.contexts.iter().map(|value| normalize(value)).collect(),
         projects: todo.projects.iter().map(|value| normalize(value)).collect(),
