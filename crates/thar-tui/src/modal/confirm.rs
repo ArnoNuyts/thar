@@ -7,15 +7,15 @@
 //! second modal registry entry.
 //!
 //! Layout follows the Ink body: one row per wrapped message line, one blank
-//! margin row, then the button row (`body_rows = lines + 2`). The buttons are
-//! centred in equal halves of the modal width, which is also the click map:
-//! the left half confirms and the right half cancels. Hover is label-exact,
-//! like `getHoveredButtonIndex`.
+//! margin row, then the button row (`body_rows = lines + 2`). The buttons use
+//! the shared [`super::buttons`] row, so the whole left half confirms and the
+//! whole right half cancels, and hover/click behave like the create/edit and
+//! update screens.
 
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use thar_core::TodoId;
@@ -142,6 +142,7 @@ impl ConfirmModal {
             .saturating_sub(5)
     }
 
+    /// The button row is the shared look and hit map; see [`super::buttons`].
     fn button_row(&self) -> u16 {
         // One blank margin row above the buttons, matching the Ink modal's
         // `buttonRowIndex = lines + 1`.
@@ -173,36 +174,6 @@ impl ConfirmModal {
         } else {
             Outcome::Close
         }
-    }
-
-    /// Label-exact hover hit test, matching `getHoveredButtonIndex`.
-    fn hovered_at(&self, rect: ModalRect, mouse: MouseInput) -> Option<usize> {
-        let row = geometry::body_row(rect, mouse)?;
-        if row != self.button_row() {
-            return None;
-        }
-        // The body has one pad column, so the labels start one cell in.
-        let column = geometry::body_column(rect, mouse)?.checked_sub(1)?;
-
-        let content_width = rect.body.width.saturating_sub(2);
-        let left_half = content_width / 2;
-        let right_half = content_width - left_half;
-        for (index, label) in BUTTON_LABELS.iter().enumerate() {
-            let rendered = format!("« {label} »");
-            let label_width = u16::try_from(rendered.chars().count()).unwrap_or(content_width);
-            let (section_start, section_width) = if index == 0 {
-                (0, left_half)
-            } else {
-                (left_half, right_half)
-            };
-            let offset =
-                section_start.saturating_add(section_width.saturating_sub(label_width) / 2);
-            let end = offset.saturating_add(label_width);
-            if (offset..end).contains(&column) {
-                return Some(index);
-            }
-        }
-        None
     }
 }
 
@@ -261,25 +232,14 @@ impl Modal for ConfirmModal {
         let rect = self.geometry();
         match mouse.kind {
             MouseKind::Move => {
-                self.hovered = self.hovered_at(rect, mouse);
+                self.hovered = super::buttons::hit(rect, self.button_row(), &BUTTON_LABELS, mouse);
                 Outcome::Continue
             }
             MouseKind::LeftClick => {
-                let Some(row) = geometry::body_row(rect, mouse) else {
+                let Some(index) =
+                    super::buttons::hit(rect, self.button_row(), &BUTTON_LABELS, mouse)
+                else {
                     return Outcome::Continue;
-                };
-                if row != self.button_row() {
-                    return Outcome::Continue;
-                }
-                let Some(column) = geometry::body_column(rect, mouse) else {
-                    return Outcome::Continue;
-                };
-                let content_column = column.saturating_sub(1);
-                let content_width = rect.body.width.saturating_sub(2);
-                let index = if content_column < content_width / 2 {
-                    0
-                } else {
-                    1
                 };
                 self.hovered = Some(index);
                 self.selected = index;
@@ -314,45 +274,14 @@ impl Modal for ConfirmModal {
         if button_y >= rect.body.y.saturating_add(rect.body.height) {
             return;
         }
-        let content_left = rect.body.x.saturating_add(1);
-        let content_width = rect.body.width.saturating_sub(2);
-        let left_half = content_width / 2;
-        let right_half = content_width - left_half;
-
-        for (index, label) in BUTTON_LABELS.iter().enumerate() {
-            let active = self.selected == index || self.hovered == Some(index);
-            let rendered = if active {
-                format!("« {label} »")
-            } else {
-                format!("‹ {label} ›")
-            };
-            let label_width = u16::try_from(rendered.chars().count()).unwrap_or(content_width);
-            let (half_start, half_width) = if index == 0 {
-                (0, left_half)
-            } else {
-                (left_half, right_half)
-            };
-            let offset = half_start.saturating_add(half_width.saturating_sub(label_width) / 2);
-            let width = label_width.min(content_width.saturating_sub(offset));
-            let area = Rect::new(content_left.saturating_add(offset), button_y, width, 1);
-            let text: String = rendered.chars().take(usize::from(width)).collect();
-            let color = if self.hovered == Some(index) {
-                theme::WARNING
-            } else if self.selected == index {
-                theme::FOREGROUND
-            } else {
-                theme::MUTED
-            };
-            let style = base.fg(color).add_modifier(if active {
-                Modifier::BOLD
-            } else {
-                Modifier::empty()
-            });
-            frame.render_widget(
-                Paragraph::new(Span::styled(text, style)).alignment(Alignment::Center),
-                area,
-            );
-        }
+        super::buttons::render(
+            frame,
+            rect,
+            self.button_row(),
+            &BUTTON_LABELS,
+            self.selected,
+            self.hovered,
+        );
     }
 }
 
@@ -481,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn hover_is_label_exact_and_does_not_change_the_selection() {
+    fn hover_uses_the_whole_half_and_does_not_change_the_selection() {
         let mut modal = modal();
         let rect = modal.geometry();
         let button_y = rect.body.y + modal.button_row();
@@ -497,14 +426,25 @@ mod tests {
         assert_eq!(modal.hovered, Some(0));
         assert_eq!(modal.selected(), 0);
 
-        // A cell between the labels is not a hover.
-        let gap = MouseInput {
+        // The whole half is a hover target, not only the glyphs: a cell well
+        // left of the centred label still highlights Confirm.
+        let empty_part = MouseInput {
             kind: MouseKind::Move,
-            x: rect.area.x + 1,
+            x: rect.body.x + 1,
             y: button_y + 1,
             shift: false,
         };
-        modal.handle_mouse(gap);
+        modal.handle_mouse(empty_part);
+        assert_eq!(modal.hovered, Some(0));
+
+        // Off the button row there is no hover.
+        let elsewhere = MouseInput {
+            kind: MouseKind::Move,
+            x: rect.body.x + 1,
+            y: button_y,
+            shift: false,
+        };
+        modal.handle_mouse(elsewhere);
         assert_eq!(modal.hovered, None);
     }
 }

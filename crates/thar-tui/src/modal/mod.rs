@@ -20,6 +20,7 @@ pub mod registry;
 pub mod text;
 pub mod update;
 
+mod buttons;
 mod create_edit;
 mod date;
 mod priority;

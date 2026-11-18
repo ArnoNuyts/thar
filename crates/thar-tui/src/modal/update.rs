@@ -11,7 +11,7 @@
 
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::layout::{Alignment, Rect};
+use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
@@ -244,19 +244,6 @@ impl UpdateModal {
             None => Outcome::Continue,
         }
     }
-
-    /// Proportional action index for a relative cell column.
-    fn index_at(&self, rect: ModalRect, column: u16) -> usize {
-        let actions = self.actions().len().max(1);
-        let width = usize::from(rect.body.width.saturating_sub(2).max(1));
-        let column = usize::from(column.saturating_sub(1));
-        (column * actions / width).min(actions - 1)
-    }
-
-    /// True when the mouse is on the button row.
-    fn on_button_row(&self, rect: ModalRect, mouse: MouseInput) -> bool {
-        geometry::body_row(rect, mouse) == Some(self.button_row())
-    }
 }
 
 impl Modal for UpdateModal {
@@ -313,23 +300,17 @@ impl Modal for UpdateModal {
 
     fn handle_mouse(&mut self, mouse: MouseInput) -> Outcome {
         let rect = self.geometry();
+        let labels: Vec<&str> = self.actions().iter().map(|action| action.label()).collect();
         match mouse.kind {
             MouseKind::Move => {
-                self.hovered = if self.on_button_row(rect, mouse) {
-                    geometry::body_column(rect, mouse).map(|column| self.index_at(rect, column))
-                } else {
-                    None
-                };
+                self.hovered = super::buttons::hit(rect, self.button_row(), &labels, mouse);
                 Outcome::Continue
             }
             MouseKind::LeftClick => {
-                if !self.on_button_row(rect, mouse) {
-                    return Outcome::Continue;
-                }
-                let Some(column) = geometry::body_column(rect, mouse) else {
+                let Some(index) = super::buttons::hit(rect, self.button_row(), &labels, mouse)
+                else {
                     return Outcome::Continue;
                 };
-                let index = self.index_at(rect, column);
                 self.hovered = Some(index);
                 self.selected = index;
                 self.activate(index)
@@ -364,57 +345,15 @@ impl Modal for UpdateModal {
             frame.render_widget(Paragraph::new(Span::styled(line.clone(), style)), area);
         }
 
-        let button_y = rect.body.y.saturating_add(self.button_row());
-        if button_y >= rect.body.y.saturating_add(rect.body.height) {
-            return;
-        }
-
-        let actions = self.actions();
-        let count = u16::try_from(actions.len()).unwrap_or(1).max(1);
-        let content_left = rect.body.x.saturating_add(1);
-        let content_width = rect.body.width.saturating_sub(2);
-        let span = content_width / count;
-
-        for (index, action) in actions.iter().enumerate() {
-            let active = self.selected == index || self.hovered == Some(index);
-            let label = action.label();
-            let rendered = if active {
-                format!("« {label} »")
-            } else {
-                format!("‹ {label} ›")
-            };
-            let offset = u16::try_from(index).unwrap_or(0).saturating_mul(span);
-            let width = if index + 1 == actions.len() {
-                content_width.saturating_sub(offset)
-            } else {
-                span
-            };
-            // If the decorated label does not fit, fall back to the bare label;
-            // a tiny terminal clips rather than painting over the frame.
-            let text = if u16::try_from(rendered.chars().count()).unwrap_or(u16::MAX) <= width {
-                rendered
-            } else {
-                label.to_owned()
-            };
-            let text: String = text.chars().take(usize::from(width)).collect();
-            let area = Rect::new(content_left.saturating_add(offset), button_y, width, 1);
-            let color = if self.hovered == Some(index) {
-                theme::WARNING
-            } else if self.selected == index {
-                theme::FOREGROUND
-            } else {
-                theme::MUTED
-            };
-            let style = base.fg(color).add_modifier(if active {
-                Modifier::BOLD
-            } else {
-                Modifier::empty()
-            });
-            frame.render_widget(
-                Paragraph::new(Span::styled(text, style)).alignment(Alignment::Center),
-                area,
-            );
-        }
+        let labels: Vec<&str> = self.actions().iter().map(|action| action.label()).collect();
+        super::buttons::render(
+            frame,
+            rect,
+            self.button_row(),
+            &labels,
+            self.selected,
+            self.hovered,
+        );
     }
 }
 

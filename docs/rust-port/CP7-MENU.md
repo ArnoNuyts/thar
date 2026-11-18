@@ -57,11 +57,11 @@ the follow-up only after the modal has released its borrow. Exact strings:
 | paste > 10  | `Paste Multiple Todos` | `Are you sure you want to paste N todos?`    |
 
 Keys: Enter/Space activate the hovered-or-selected button, Tab (and
-Left/Right) navigate with wrap, Escape cancels. The buttons are centred in
-equal halves of the modal width; a left-half click confirms and a right-half
-click cancels (the Ink `bodyCell.column < modalWidth / 2` map). Hover is
-label-exact, like `getHoveredButtonIndex`: only the `« Confirm »` / `« Cancel »`
-cells set a hover, and the hover wins over the selection on Enter.
+Left/Right) navigate with wrap, Escape cancels. The buttons use the shared
+`modal/buttons.rs` row: equal slices of the modal width, the left slice
+confirms and the right slice cancels (the Ink `bodyCell.column < modalWidth / 2`
+map), and the whole slice is a hover target. The hover wins over the selection
+on Enter.
 
 ### `modal/update.rs` — the update screen
 
