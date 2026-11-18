@@ -21,7 +21,7 @@ unchanged.
 | Recovery     | `App::reloaded` clears `load_error`, so `App::writable()` is true again and the next mutation saves. When the file returns with the already-accepted bytes, the host re-parses `FileSync::baseline()` and calls `App::reloaded`, so unsaved edits are not reported as saved. |
 | Save refusal | `StoreError::ChangedOnDisk` keeps the target untouched, shows one bounded toast, keeps the list dirty and retries with the app's 1 s backoff; the watcher normally reloads the external file first, which clears the dirty state.                                            |
 | Store        | `FileSync` owns the baseline; `SaveGuard::save(todos, expected)` compares against it and returns the written bytes; `atomic::write_atomic` gained a debug-only `THAR_SAVE_CRASH=before-rename` abort hook.                                                                   |
-| Tests        | `crates/thar-cli/tests/write_safety.rs` (15 `#[test]`s: 14 passing + 1 ignored helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (5 passing + 1 ignored generator).                                                                                                       |
+| Tests        | `crates/thar-cli/tests/write_safety.rs` (15 `#[test]`s: 14 passing + 1 ignored helper) and `crates/thar-cli/tests/pty/cp7_sync.rs` (5 passing + 1 ignored generator).                                                                                                        |
 | Asset        | `docs/rust-port/assets/cp7-sync.png` from a real 100×30 PTY frame.                                                                                                                                                                                                           |
 
 ## Policy
