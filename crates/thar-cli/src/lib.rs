@@ -107,7 +107,8 @@ fn run_editor(file: std::path::PathBuf, write: Option<thar_store::BackupPolicy>)
     let today = today_local();
     let mut app = thar_tui::App::new(file.clone(), loaded.todos, today);
     app.set_load_error(loaded.error);
-    app.set_read_only(write.is_none());
+    // `run_with_store` derives the read-only flag from the presence of the
+    // store, so write mode has one source of truth.
 
     let Some(policy) = write else {
         // The read-only binary still watches the file: an external edit

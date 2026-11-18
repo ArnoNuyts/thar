@@ -86,7 +86,7 @@ impl TagModal {
         let ids: Vec<TodoId> = selected.iter().map(|todo| todo.id).collect();
 
         let mut names: Vec<String> = Vec::new();
-        for todo in app.todos() {
+        for todo in app.todos().iter() {
             let tags = match kind {
                 TagKind::Project => &todo.projects,
                 TagKind::Context => &todo.contexts,

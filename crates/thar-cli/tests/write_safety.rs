@@ -31,7 +31,7 @@ use thar_cli::sync::{
 };
 use thar_core::{ReadLimits, Todo, TodoDate, TodoId};
 use thar_store::{BackupPolicy, SaveGuard, StoreError};
-use thar_tui::App;
+use thar_tui::{Action, App};
 
 use support::TempDir;
 
@@ -140,7 +140,7 @@ fn a_read_only_directory_refuses_the_save_and_keeps_the_target() {
     let result = std::panic::catch_unwind(|| {
         let mut guard = SaveGuard::open(&target, BackupPolicy::Bak).expect("guard");
         let error = guard
-            .save(todos(&["new"]).iter())
+            .save(todos(&["new"]).iter(), b"Locked\n")
             .expect_err("save refused");
         assert!(matches!(error, StoreError::Io { .. }), "{error:?}");
 
@@ -148,7 +148,6 @@ fn a_read_only_directory_refuses_the_save_and_keeps_the_target() {
         // no backup and no leftover temporary file.
         assert_eq!(std::fs::read(&target).expect("read target"), b"Locked\n");
         assert_eq!(entry_names(&locked), ["todo.txt"]);
-        assert_eq!(guard.last_bytes(), b"Locked\n".as_slice());
     });
 
     set_directory_mode(&locked, 0o755);
@@ -165,7 +164,7 @@ fn an_external_edit_between_load_and_save_is_refused() {
     std::fs::write(&path, b"external\nedit from elsewhere\n").expect("external edit");
 
     let error = guard
-        .save(todos(&["mine"]).iter())
+        .save(todos(&["mine"]).iter(), b"one\n")
         .expect_err("save refused");
     assert!(
         matches!(error, StoreError::ChangedOnDisk { .. }),
@@ -178,7 +177,6 @@ fn an_external_edit_between_load_and_save_is_refused() {
         b"external\nedit from elsewhere\n"
     );
     assert_eq!(entry_names(directory.path()), ["todo.txt"]);
-    assert_eq!(guard.last_bytes(), b"one\n".as_slice());
 }
 
 #[test]
@@ -254,9 +252,11 @@ fn a_save_does_not_reload_its_own_bytes() {
     let mut sync = FileSync::new(&path, ReadLimits::DEFAULT);
     let saved_at = start + Duration::from_millis(10);
 
-    guard.save(todos(&["one", "two"]).iter()).expect("save");
+    let written = guard
+        .save(todos(&["one", "two"]).iter(), b"one\n")
+        .expect("save");
     sync.note_write(saved_at);
-    sync.adopt(guard.last_bytes());
+    sync.adopt(&written);
 
     assert!(
         sync.poll(saved_at + POLL_INTERVAL).is_none(),
@@ -407,16 +407,70 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
 
     // Saving works again and the guard accepts the reloaded baseline.
     let mut guard = SaveGuard::open(&path, BackupPolicy::None).expect("guard");
-    guard.set_baseline(bytes);
     app.add_todos(&["Persisted".to_owned()], current_time())
         .expect("persisted");
     assert!(app.is_dirty());
-    guard.save(app.todos()).expect("save after recovery");
+    guard
+        .save(app.todos().iter(), &bytes)
+        .expect("save after recovery");
     let saved = std::fs::read_to_string(&path).expect("read saved");
     // New todos are stamped with the session's creation date, matching the Ink
     // app, so assert the rows rather than a hand-written byte string.
     assert!(saved.starts_with("Recovered\nsecond\n"), "{saved:?}");
     assert!(saved.contains("Persisted"), "{saved:?}");
+}
+
+#[test]
+fn recovery_with_restored_bytes_replaces_unsaved_edits() {
+    let directory = TempDir::new("write-safety-recovery-unchanged");
+    let path = directory.write("todo.txt", b"a\n");
+    let limits = ReadLimits::DEFAULT;
+
+    let start = Instant::now();
+    let mut sync = FileSync::new(&path, limits);
+    let mut app = app(&["a"]);
+
+    // The file disappears: the watcher reports it unreadable and the app enters
+    // read-only recovery.
+    std::fs::remove_file(&path).expect("delete");
+    let outcome = poll_until(&mut sync, start + POLL_INTERVAL).expect("a change");
+    let ReloadOutcome::Unreadable(message) = outcome else {
+        panic!("expected an unreadable file, got {outcome:?}");
+    };
+    app.reload_failed(message);
+    assert!(!app.writable());
+
+    // A mutation still lands in memory, but recovery mode refuses to schedule
+    // a save for it.
+    let id = app.todos()[0].id;
+    app.apply_action(Action::Toggle { ids: vec![id] }, current_time());
+    assert!(app.todos()[0].is_done());
+    assert!(!app.is_dirty());
+
+    // Restoring the accepted bytes is the recovery signal.
+    std::fs::write(&path, b"a\n").expect("restore");
+    set_modified(&path, SystemTime::now() + Duration::from_secs(60));
+    let outcome = poll_until(&mut sync, start + POLL_INTERVAL).expect("a change");
+    assert!(
+        matches!(outcome, ReloadOutcome::Unchanged),
+        "restored bytes are the accepted baseline: {outcome:?}"
+    );
+
+    // The host re-parses the accepted baseline on this path. The in-memory
+    // toggle must not survive as a falsely clean list.
+    let reloaded = parse_bytes(sync.baseline(), &limits).expect("parse baseline");
+    app.reloaded(reloaded);
+
+    assert!(app.load_error().is_none());
+    assert!(app.writable(), "recovery re-enables writes");
+    assert!(!app.is_dirty());
+    assert_eq!(app.todos().len(), 1);
+    assert_eq!(app.todos()[0].text, "a");
+    assert!(
+        !app.todos()[0].is_done(),
+        "the list matches disk instead of hiding an unsaved edit"
+    );
+    assert_eq!(std::fs::read(&path).expect("read target"), b"a\n");
 }
 
 #[test]

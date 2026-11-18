@@ -219,6 +219,10 @@ impl TerminalSession {
         app: &mut App,
         mut store: Option<&mut SaveGuard>,
     ) -> io::Result<()> {
+        // Write mode has one source of truth: the presence of the store. The
+        // caller opens a store exactly when `--write` is active.
+        app.set_read_only(store.is_none());
+
         // The reload path must use the same limits as the initial load, so an
         // environment override cannot make a reload accept a file the startup
         // read would reject (or the reverse). `run` already turned an invalid
@@ -277,15 +281,9 @@ impl TerminalSession {
             // A reload that lands while a save is pending drops the in-memory
             // edit (the external file wins) because `App::reloaded` clears the
             // pending save, which is the Ink hook's `onLoad` behaviour.
-            apply_reload(
-                app,
-                &mut sync,
-                store.as_deref_mut(),
-                &limits,
-                Instant::now(),
-            );
+            apply_reload(app, &mut sync, &limits, Instant::now());
 
-            process_effects(app, store.as_deref_mut(), event_now);
+            process_effects(app, event_now);
 
             // A timeout at (or past) midnight lands here and re-derives the
             // local day, rebuilding overdue/threshold verdicts exactly once.
@@ -331,32 +329,27 @@ pub fn run_tui_with_store(app: &mut App, store: &mut SaveGuard) -> io::Result<()
 
 /// Write the dirty list now and record the outcome on the app.
 ///
-/// A successful save records the self-write window on the watcher and adopts
-/// the written bytes as the comparison baseline, so the save's own metadata
-/// change does not schedule a reload. A failed save (including
+/// The watcher's accepted bytes are the one save baseline: the guard compares
+/// the target against them, and the bytes it returns become the new baseline.
+/// A successful save also records the self-write window, so the save's own
+/// metadata change does not schedule a reload. A failed save (including
 /// [`thar_store::StoreError::ChangedOnDisk`]) keeps the target untouched, shows
 /// one bounded message, keeps the list dirty and retries after the app's
 /// backoff. The watcher normally reloads the external file first, which clears
-/// the dirty state and rebaselines both the guard and the watcher; a quit
-/// before that happens exits non-zero rather than reporting a false save.
+/// the dirty state and rebaselines the watcher; a quit before that happens
+/// exits non-zero rather than reporting a false save.
 fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync, now: Instant) {
     let Some(store) = store else {
-        if app.is_read_only() {
-            app.mark_saved();
-        } else {
-            // A write-enabled app must never report a successful save without
-            // a store. This is a programming error, not a user error, but it
-            // still must not drop the edit silently.
-            app.mark_save_failed(now, "no write store is attached");
-        }
+        // Read-only sessions never become dirty, so there is nothing to write.
+        app.mark_saved();
         return;
     };
-    match store.save(app.todos()) {
-        Ok(_) => {
+    match store.save(app.todos().iter(), sync.baseline()) {
+        Ok(bytes) => {
             // The window starts after the rename, not before the serialization,
             // so a slow filesystem cannot shorten it.
             sync.note_write(Instant::now());
-            sync.adopt(store.last_bytes());
+            sync.adopt(&bytes);
             app.mark_saved();
         }
         Err(error) => app.mark_save_failed(now, error.to_string()),
@@ -365,16 +358,9 @@ fn flush_save(app: &mut App, store: Option<&mut SaveGuard>, sync: &mut FileSync,
 
 /// Apply one watcher outcome: reload the list, or enter read-only recovery.
 ///
-/// On success the parsed bytes become both the watcher baseline and the save
-/// guard baseline in one step, so the bytes that were parsed are exactly the
-/// bytes a later save compares against.
-fn apply_reload(
-    app: &mut App,
-    sync: &mut FileSync,
-    store: Option<&mut SaveGuard>,
-    limits: &ReadLimits,
-    now: Instant,
-) {
+/// On success the parsed bytes become the watcher baseline in one step, so the
+/// bytes that were parsed are exactly the bytes a later save compares against.
+fn apply_reload(app: &mut App, sync: &mut FileSync, limits: &ReadLimits, now: Instant) {
     let outcome = match sync.poll(now) {
         Some(outcome) => outcome,
         None => return,
@@ -383,19 +369,26 @@ fn apply_reload(
     match outcome {
         ReloadOutcome::Changed(bytes) => match parse_bytes(&bytes, limits) {
             Ok(todos) => {
-                app.reloaded(todos);
-                if let Some(store) = store {
-                    store.set_baseline(bytes.clone());
-                }
                 sync.adopt(&bytes);
+                app.reloaded(todos);
                 app.push_toast(RELOADED_MESSAGE);
             }
             Err(error) => app.reload_failed(bounded_message(&error.to_string())),
         },
         ReloadOutcome::Unchanged => {
+            // The file was rewritten with the bytes this session already
+            // accepts. After a failed reload that is the recovery signal, but
+            // the in-memory list may hold unsaved edits made while writes were
+            // blocked: re-parse the accepted bytes instead of marking those
+            // edits as saved.
             if app.load_error().is_some() {
-                app.recovered();
-                app.push_toast(RELOADED_MESSAGE);
+                match parse_bytes(sync.baseline(), limits) {
+                    Ok(todos) => {
+                        app.reloaded(todos);
+                        app.push_toast(RELOADED_MESSAGE);
+                    }
+                    Err(error) => app.reload_failed(bounded_message(&error.to_string())),
+                }
             }
         }
         ReloadOutcome::Unreadable(message) => app.reload_failed(message),
@@ -403,33 +396,23 @@ fn apply_reload(
 }
 
 /// Drain the host effects queued by commands.
-fn process_effects(app: &mut App, mut store: Option<&mut SaveGuard>, now: Instant) {
+fn process_effects(app: &mut App, now: Instant) {
     for effect in app.take_effects() {
         match effect {
-            Effect::ArchiveCompleted => archive(app, store.as_deref_mut(), now),
+            Effect::Archive(todos) => archive(app, todos, now),
             Effect::Copy(text) => copy_to_clipboard(app, &text),
             Effect::Paste => paste_from_clipboard(app, now),
         }
     }
 }
 
-fn archive(app: &mut App, store: Option<&mut SaveGuard>, now: Instant) {
-    let ids = app.completed_ids();
-    if ids.is_empty() {
-        return;
-    }
-    let Some(_store) = store else {
-        app.push_toast(thar_tui::app::NOT_SAVED_MESSAGE);
-        return;
-    };
-    // `done.txt` is a write. A session in read-only recovery must not append
-    // to it either, matching the Ink provider's archive guard.
-    if !app.writable() {
-        app.push_toast(thar_tui::app::NOT_SAVED_MESSAGE);
-        return;
-    }
-
-    let todos = app.todos_by_ids(&ids);
+/// Append the completed todos to `done.txt` and remove them from the list.
+///
+/// `App` owns the archive gate (write mode and healthy recovery state) and
+/// passes the completed todos in the effect; this host half only performs the
+/// file append and reports a failure.
+fn archive(app: &mut App, todos: Vec<thar_core::Todo>, now: Instant) {
+    let ids: Vec<_> = todos.iter().map(|todo| todo.id).collect();
     let done = done_path(app.filename());
 
     match thar_store::append_done(&done, &todos) {

@@ -32,6 +32,7 @@
 //! debounce and retry state are deterministic in tests. Convenience toasts that
 //! are not part of the save state may still use the host clock.
 
+use std::collections::{HashMap, HashSet};
 use std::ops::Index;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -100,16 +101,23 @@ pub(crate) struct Selection {
     pub(crate) range: Vec<TodoId>,
 }
 
+impl Selection {
+    /// Clear the anchor and the range, keeping the cursor.
+    pub(crate) fn collapse(&mut self) {
+        self.anchor = None;
+        self.range.clear();
+    }
+}
+
 /// A borrowed, allocation-free view of the app's todos.
 ///
 /// [`App::todos`] returns this instead of collecting a `Vec<&Todo>`, so a caller
-/// that indexes, iterates, or counts the list does not allocate. The view also
-/// implements [`Iterator`] and [`ExactSizeIterator`] over the todo references;
-/// [`Todos::iter`] returns a fresh view from the start.
+/// that indexes, counts, or iterates the list does not allocate. Indexing uses
+/// [`Todos::len`] order; [`Todos::iter`] and the [`IntoIterator`] impl yield the
+/// same todos from the start.
 #[derive(Clone, Copy, Debug)]
 pub struct Todos<'a> {
     todos: &'a [TodoEntry],
-    position: usize,
 }
 
 impl<'a> Todos<'a> {
@@ -125,28 +133,41 @@ impl<'a> Todos<'a> {
         self.todos.is_empty()
     }
 
-    /// A fresh iterator over every todo, in load order.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &'a Todo> + 'a {
-        self.todos.iter().map(|entry| entry.todo())
+    /// An iterator over every todo, in load order.
+    pub fn iter(&self) -> TodosIter<'a> {
+        TodosIter {
+            inner: self.todos.iter(),
+        }
     }
 }
 
-impl<'a> Iterator for Todos<'a> {
+/// Iterator over the todos of an [`App`], in load order.
+pub struct TodosIter<'a> {
+    inner: std::slice::Iter<'a, TodoEntry>,
+}
+
+impl<'a> Iterator for TodosIter<'a> {
     type Item = &'a Todo;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let todo = self.todos.get(self.position)?;
-        self.position += 1;
-        Some(todo.todo())
+        self.inner.next().map(TodoEntry::todo)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.todos.len().saturating_sub(self.position);
-        (remaining, Some(remaining))
+        self.inner.size_hint()
     }
 }
 
-impl ExactSizeIterator for Todos<'_> {}
+impl ExactSizeIterator for TodosIter<'_> {}
+
+impl<'a> IntoIterator for Todos<'a> {
+    type Item = &'a Todo;
+    type IntoIter = TodosIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
 
 impl Index<usize> for Todos<'_> {
     type Output = Todo;
@@ -198,16 +219,16 @@ pub struct App {
     /// mutation replaces only the entry it changed.
     entries: Vec<TodoEntry>,
     list: ListModel,
-    row_of: Vec<Option<usize>>,
+    /// Row index for every todo currently in the row model.
+    row_by_id: HashMap<TodoId, usize>,
     today: TodoDate,
     /// Search bar: query, cursor, focus and suggestions.
     search: SearchBar,
     tag_sources: TagSources,
     show_hidden: bool,
     /// Cursor, anchor and range. `crate::nav` is the one module that
-    /// implements the selection transitions; it reaches the field through the
-    /// crate-internal accessors below.
-    selection: Selection,
+    /// implements the selection transitions.
+    pub(crate) selection: Selection,
     /// First row drawn in the list viewport. Written by `crate::nav` only.
     offset: usize,
     width: u16,
@@ -227,8 +248,9 @@ pub struct App {
 /// An operation that needs the host (filesystem or clipboard).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Effect {
-    /// Append every completed todo to `done.txt`, then remove them.
-    ArchiveCompleted,
+    /// Append these completed todos to `done.txt`, then remove them from the
+    /// list on success.
+    Archive(Vec<Todo>),
     /// Copy this exact text to the clipboard.
     Copy(String),
     /// Read the clipboard and add its lines as todos.
@@ -251,7 +273,7 @@ impl App {
             filename: filename.into(),
             entries,
             list: ListModel::default(),
-            row_of: Vec::new(),
+            row_by_id: HashMap::new(),
             today,
             search: SearchBar::default(),
             tag_sources,
@@ -288,12 +310,12 @@ impl App {
     /// Todos in load order; row indexes point into the underlying list.
     ///
     /// The return value borrows the list without allocating: index it
-    /// (`app.todos()[0]`), iterate it, or ask for [`Todos::len`].
+    /// (`app.todos()[0]`), iterate it (`app.todos().iter()`), or ask for
+    /// [`Todos::len`].
     #[must_use]
     pub fn todos(&self) -> Todos<'_> {
         Todos {
             todos: &self.entries,
-            position: 0,
         }
     }
 
@@ -307,20 +329,9 @@ impl App {
         &self.search
     }
 
-    /// Selection state for the navigation module.
-    #[must_use]
-    pub(crate) fn selection(&self) -> &Selection {
-        &self.selection
-    }
-
-    /// Mutable selection state for the navigation module.
-    pub(crate) fn selection_mut(&mut self) -> &mut Selection {
-        &mut self.selection
-    }
-
-    /// Set the viewport offset without clamping, for `crate::nav`.
-    pub(crate) fn set_offset_raw(&mut self, offset: usize) {
-        self.offset = offset;
+    /// Project and context names cached for the search and modal suggestions.
+    pub(crate) fn tag_sources(&self) -> &TagSources {
+        &self.tag_sources
     }
 
     /// Cursor todo id.
@@ -447,6 +458,7 @@ impl App {
     ///
     /// This is a test/integration hook; the UI moves the cursor through
     /// [`crate::nav`], which also scrolls and reconciles the range.
+    #[doc(hidden)]
     pub fn set_cursor(&mut self, cursor: Option<TodoId>) {
         self.selection.cursor = cursor;
     }
@@ -455,6 +467,7 @@ impl App {
     ///
     /// This is a test/integration hook; the UI builds ranges through
     /// [`crate::nav`].
+    #[doc(hidden)]
     pub fn set_range(&mut self, ids: Vec<TodoId>) {
         self.selection.range = ids;
     }
@@ -476,6 +489,7 @@ impl App {
     ///
     /// The UI scrolls through [`crate::nav`]; this hook keeps tests from
     /// depending on a key sequence to park the viewport.
+    #[doc(hidden)]
     pub fn set_offset(&mut self, offset: usize) {
         self.offset = offset;
         self.clamp_offset();
@@ -487,10 +501,9 @@ impl App {
     /// metadata that refers to the previous list.
     pub(crate) fn set_todos(&mut self, todos: Vec<Todo>) {
         self.entries = todos.into_iter().map(TodoEntry::new).collect();
-        self.tag_sources = TagSources::collect(self.entries.iter().map(TodoEntry::todo));
+        self.tag_sources = TagSources::collect(self.todos().iter());
         self.refresh_search_suggestions();
-        self.selection.range.clear();
-        self.selection.anchor = None;
+        self.selection.collapse();
         self.selection.cursor = None;
         self.next_id = self
             .entries
@@ -516,17 +529,6 @@ impl App {
     pub fn reloaded(&mut self, todos: Vec<Todo>) {
         self.set_todos(todos);
         self.load_error = None;
-    }
-
-    /// Clear a previous reload failure after the file was rewritten with the
-    /// bytes this session already accepts.
-    ///
-    /// This is the "same bytes restored" recovery path: there is no new list to
-    /// adopt, but [`App::writable`] must turn true again and the banner must
-    /// disappear.
-    pub fn recovered(&mut self) {
-        self.load_error = None;
-        self.save = SaveState::Clean;
     }
 
     /// Record a failed file reload.
@@ -558,14 +560,14 @@ impl App {
         let query = self.search.query();
         self.list = ListModel::from_entries(&self.entries, &query, self.show_hidden, self.today);
 
-        self.row_of = vec![None; self.entries.len()];
-        for (row, entry) in self.list.rows.iter().enumerate() {
-            if let Some(index) = entry.todo_index()
-                && let Some(slot) = self.row_of.get_mut(index)
-            {
-                *slot = Some(row);
-            }
-        }
+        let row_by_id = self
+            .list
+            .rows
+            .iter()
+            .enumerate()
+            .filter_map(|(row, list_row)| self.row_todo_id(list_row).map(|id| (id, row)))
+            .collect();
+        self.row_by_id = row_by_id;
 
         self.clamp_offset();
     }
@@ -681,23 +683,11 @@ impl App {
 
     /// Row index for a todo id, if it is visible.
     ///
-    /// `row_of` is indexed in O(1) by the todo's current vector position; the
-    /// position lookup itself is O(n) because ids are stable and no longer
-    /// equal their index.
+    /// The id-to-row map is rebuilt with the row model, so the lookup is O(1)
+    /// and a stale id from a filtered-out or deleted todo returns `None`.
     #[must_use]
     pub fn row_for(&self, id: TodoId) -> Option<usize> {
-        let index = self.index_of(id)?;
-        self.row_of.get(index).copied().flatten()
-    }
-
-    /// Current position of a todo id in load order.
-    ///
-    /// Ids are stable for the life of the session but no longer equal the
-    /// index: create/delete/paste shift the vector. A missing id returns
-    /// `None`.
-    #[must_use]
-    pub(crate) fn index_of(&self, id: TodoId) -> Option<usize> {
-        self.entries.iter().position(|entry| entry.todo().id == id)
+        self.row_by_id.get(&id).copied()
     }
 
     /// Todo for a load-order index.
@@ -715,10 +705,25 @@ impl App {
             .map(TodoEntry::todo)
     }
 
+    /// Todo id behind a todo row, or `None` for a header.
+    #[must_use]
+    pub(crate) fn row_todo_id(&self, row: &ListRow) -> Option<TodoId> {
+        row.todo_index()
+            .and_then(|index| self.todo_at(index))
+            .map(|todo| todo.id)
+    }
+
     /// The cursor todo, if it is still visible.
     #[must_use]
     pub fn selected_todo(&self) -> Option<&Todo> {
         self.selection.cursor.and_then(|id| self.todo_by_id(id))
+    }
+
+    /// Ids of the selected todos: the range when one is active, otherwise the
+    /// cursor.
+    #[must_use]
+    pub fn selected_ids(&self) -> Vec<TodoId> {
+        self.selected_todos().iter().map(|todo| todo.id).collect()
     }
 
     /// The selected todos: the range when one is active, otherwise the cursor.
@@ -728,9 +733,10 @@ impl App {
             return self.selected_todo().into_iter().collect();
         }
 
+        let selected: HashSet<TodoId> = self.selection.range.iter().copied().collect();
         self.entries
             .iter()
-            .filter(|entry| self.selection.range.contains(&entry.todo().id))
+            .filter(|entry| selected.contains(&entry.todo().id))
             .map(TodoEntry::todo)
             .collect()
     }
@@ -744,21 +750,17 @@ impl App {
     /// First todo id in the row model.
     #[must_use]
     pub(crate) fn first_todo_id(&self) -> Option<TodoId> {
-        self.list.rows.iter().find_map(|row| {
-            row.todo_index()
-                .and_then(|index| self.entries.get(index))
-                .map(|entry| entry.todo().id)
-        })
+        self.list.rows.iter().find_map(|row| self.row_todo_id(row))
     }
 
     /// Last todo id in the row model.
     #[must_use]
     pub(crate) fn last_todo_id(&self) -> Option<TodoId> {
-        self.list.rows.iter().rev().find_map(|row| {
-            row.todo_index()
-                .and_then(|index| self.entries.get(index))
-                .map(|entry| entry.todo().id)
-        })
+        self.list
+            .rows
+            .iter()
+            .rev()
+            .find_map(|row| self.row_todo_id(row))
     }
 
     /// Number of digits in the largest todo number, for row alignment.
@@ -910,7 +912,7 @@ impl App {
 
     /// Finish a mutation: reconcile the row model and schedule a save.
     fn finish_mutation(&mut self, now: Instant) {
-        self.tag_sources = TagSources::collect(self.entries.iter().map(TodoEntry::todo));
+        self.tag_sources = TagSources::collect(self.todos().iter());
         self.refresh_search_suggestions();
         crate::nav::rebuild(self);
         if self.load_error.is_some() {
@@ -960,17 +962,22 @@ impl App {
     /// is the Ink provider's grouping.
     pub(crate) fn update_ids<F>(&mut self, ids: &[TodoId], now: Instant, mut update: F)
     where
-        F: FnMut(&Todo) -> Todo,
+        F: FnMut(Todo) -> Todo,
     {
         if ids.is_empty() || !self.begin_mutation(now) {
             return;
         }
         self.record_history();
-        for id in ids {
-            if let Some(index) = self.index_of(*id) {
-                let updated = update(self.entries[index].todo());
-                self.replace_todo(index, updated);
-            }
+        let targets: HashSet<TodoId> = ids.iter().copied().collect();
+        for index in 0..self.entries.len() {
+            let updated = {
+                let todo = self.entries[index].todo();
+                if !targets.contains(&todo.id) {
+                    continue;
+                }
+                update(todo.clone())
+            };
+            self.replace_todo(index, updated);
         }
         self.finish_mutation(now);
     }
@@ -1014,8 +1021,7 @@ impl App {
         if let Some(last) = added.last().copied() {
             if self.row_for(last).is_some() {
                 self.selection.cursor = Some(last);
-                self.selection.range.clear();
-                self.selection.anchor = None;
+                self.selection.collapse();
             }
             crate::nav::reflow(self);
         }
@@ -1028,7 +1034,9 @@ impl App {
             return;
         }
         self.record_history();
-        self.entries.retain(|entry| !ids.contains(&entry.todo().id));
+        let removed: HashSet<TodoId> = ids.iter().copied().collect();
+        self.entries
+            .retain(|entry| !removed.contains(&entry.todo().id));
         self.finish_mutation(now);
     }
 
@@ -1039,18 +1047,25 @@ impl App {
         }
         self.record_history();
         let today = self.today;
+        let targets: HashSet<TodoId> = ids.iter().copied().collect();
         let mut recurring = Vec::new();
-        let mut errors = Vec::new();
+        let mut first_error: Option<thar_core::RecurrenceError> = None;
 
-        for id in ids {
-            if let Some(index) = self.index_of(*id) {
-                let next_id = self.allocate_id();
-                let outcome = self.entries[index].todo().toggle_state(today, next_id);
-                self.replace_todo(index, outcome.updated);
-                match outcome.recurring {
-                    Ok(Some(copy)) => recurring.push(copy),
-                    Ok(None) => {}
-                    Err(error) => errors.push(error.to_string()),
+        for index in 0..self.entries.len() {
+            if !targets.contains(&self.entries[index].todo().id) {
+                continue;
+            }
+            // Clone the handle first so the id allocator can borrow the app
+            // mutably; `toggle_state` only asks for an id when it plans a
+            // recurring copy.
+            let todo = Rc::clone(self.entries[index].shared());
+            let outcome = todo.toggle_state(today, &mut || self.allocate_id());
+            self.replace_todo(index, outcome.updated);
+            match outcome.recurring {
+                Ok(Some(copy)) => recurring.push(copy),
+                Ok(None) => {}
+                Err(error) => {
+                    first_error.get_or_insert(error);
                 }
             }
         }
@@ -1060,8 +1075,8 @@ impl App {
         }
 
         self.finish_mutation(now);
-        if let Some(error) = errors.first() {
-            self.push_toast_at(error.clone(), now);
+        if let Some(error) = first_error {
+            self.push_toast_at(error.to_string(), now);
         }
     }
 
@@ -1072,14 +1087,14 @@ impl App {
         priority: Option<Priority>,
         now: Instant,
     ) {
-        self.update_ids(ids, now, |todo| todo.clone().set_priority(priority));
+        self.update_ids(ids, now, |todo| todo.set_priority(priority));
     }
 
     /// Set or remove `due:` on `ids`.
     pub(crate) fn set_due_ids(&mut self, ids: &[TodoId], date: Option<TodoDate>, now: Instant) {
         self.update_ids(ids, now, |todo| match date {
-            Some(date) => todo.clone().set_due(date),
-            None => todo.clone().remove_due(),
+            Some(date) => todo.set_due(date),
+            None => todo.remove_due(),
         });
     }
 
@@ -1091,8 +1106,8 @@ impl App {
         now: Instant,
     ) {
         self.update_ids(ids, now, |todo| match date {
-            Some(date) => todo.clone().set_threshold(date),
-            None => todo.clone().remove_threshold(),
+            Some(date) => todo.set_threshold(date),
+            None => todo.remove_threshold(),
         });
     }
 
@@ -1104,16 +1119,16 @@ impl App {
         now: Instant,
     ) {
         self.update_ids(ids, now, |todo| match &value {
-            Some(value) => todo.clone().set_recurrence(value.clone()),
-            None => todo.clone().remove_recurrence(),
+            Some(value) => todo.set_recurrence(value.clone()),
+            None => todo.remove_recurrence(),
         });
     }
 
     /// Add a project or context token to `ids`.
     pub(crate) fn add_tag_ids(&mut self, ids: &[TodoId], kind: TagKind, name: &str, now: Instant) {
         self.update_ids(ids, now, |todo| match kind {
-            TagKind::Project => todo.clone().add_project(name),
-            TagKind::Context => todo.clone().add_context(name),
+            TagKind::Project => todo.add_project(name),
+            TagKind::Context => todo.add_context(name),
         });
     }
 
@@ -1126,56 +1141,53 @@ impl App {
         now: Instant,
     ) {
         self.update_ids(ids, now, |todo| match kind {
-            TagKind::Project => todo.clone().remove_project(name),
-            TagKind::Context => todo.clone().remove_context(name),
+            TagKind::Project => todo.remove_project(name),
+            TagKind::Context => todo.remove_context(name),
         });
+    }
+
+    /// Step one undo or redo after the mutation gate.
+    ///
+    /// `step` swaps the live handle vector with a history snapshot in place, so
+    /// a successful step does not clone any `Todo`.
+    fn restore(
+        &mut self,
+        now: Instant,
+        step: fn(&mut History, &mut Vec<Rc<Todo>>) -> bool,
+    ) -> bool {
+        if !self.begin_mutation(now) {
+            return false;
+        }
+        let mut current: Vec<Rc<Todo>> = self
+            .entries
+            .iter()
+            .map(|entry| Rc::clone(entry.shared()))
+            .collect();
+        if !step(&mut self.history, &mut current) {
+            return false;
+        }
+        self.set_shared_entries(current);
+        self.finish_mutation(now);
+        true
     }
 
     /// Undo one mutation.
     pub fn undo(&mut self, now: Instant) -> bool {
-        if self.read_only {
-            self.push_toast_at(READ_ONLY_MESSAGE, now);
-            return false;
-        }
-        let mut current: Vec<Rc<Todo>> = self
-            .entries
-            .iter()
-            .map(|entry| Rc::clone(entry.shared()))
-            .collect();
-        if !self.history.undo(&mut current) {
-            return false;
-        }
-        self.set_shared_entries(current);
-        self.finish_mutation(now);
-        true
+        self.restore(now, History::undo)
     }
 
     /// Redo one undo.
     pub fn redo(&mut self, now: Instant) -> bool {
-        if self.read_only {
-            self.push_toast_at(READ_ONLY_MESSAGE, now);
-            return false;
-        }
-        let mut current: Vec<Rc<Todo>> = self
-            .entries
-            .iter()
-            .map(|entry| Rc::clone(entry.shared()))
-            .collect();
-        if !self.history.redo(&mut current) {
-            return false;
-        }
-        self.set_shared_entries(current);
-        self.finish_mutation(now);
-        true
+        self.restore(now, History::redo)
     }
 
     /// Serialized lines for `ids`, in load order, joined by `\n`.
     #[must_use]
     pub(crate) fn copy_text(&self, ids: &[TodoId]) -> String {
-        self.entries
+        let selected: HashSet<TodoId> = ids.iter().copied().collect();
+        self.todos()
             .iter()
-            .map(TodoEntry::todo)
-            .filter(|todo| ids.contains(&todo.id))
+            .filter(|todo| selected.contains(&todo.id))
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n")
@@ -1183,21 +1195,20 @@ impl App {
 
     /// Copies of the todos with `ids`, in load order.
     #[must_use]
-    pub fn todos_by_ids(&self, ids: &[TodoId]) -> Vec<Todo> {
-        self.entries
+    fn todos_by_ids(&self, ids: &[TodoId]) -> Vec<Todo> {
+        let selected: HashSet<TodoId> = ids.iter().copied().collect();
+        self.todos()
             .iter()
-            .map(TodoEntry::todo)
-            .filter(|todo| ids.contains(&todo.id))
+            .filter(|todo| selected.contains(&todo.id))
             .cloned()
             .collect()
     }
 
     /// Ids of every completed todo, in load order.
     #[must_use]
-    pub fn completed_ids(&self) -> Vec<TodoId> {
-        self.entries
+    fn completed_ids(&self) -> Vec<TodoId> {
+        self.todos()
             .iter()
-            .map(TodoEntry::todo)
             .filter(|todo| todo.is_done())
             .map(|todo| todo.id)
             .collect()
@@ -1242,7 +1253,7 @@ impl App {
         }
         if lines.len() > PASTE_CONFIRM_THRESHOLD {
             self.modals.open(modal::registry::confirm(
-                ConfirmRequest::paste(lines.len(), lines),
+                ConfirmRequest::paste(lines),
                 self.width,
                 self.height,
             ));
@@ -1309,7 +1320,7 @@ impl App {
     ///
     /// Returns true when a modal consumed the key, so the list keymap never
     /// sees it.
-    pub fn handle_modal_key(&mut self, key: KeyEvent, now: Instant) -> bool {
+    pub(crate) fn handle_modal_key(&mut self, key: KeyEvent, now: Instant) -> bool {
         let Some(modal) = self.modals.top_mut() else {
             return false;
         };
@@ -1379,7 +1390,7 @@ impl App {
                 self.modals.close();
             }
             Action::UpdateText { ids, text } => {
-                self.update_ids(&ids, now, |todo| todo.clone().set_text(&text, true));
+                self.update_ids(&ids, now, |todo| todo.set_text(&text, true));
                 self.modals.close();
             }
             Action::Delete { ids } => {
@@ -1391,7 +1402,7 @@ impl App {
                 self.modals.close();
             }
             Action::ToggleHidden { ids } => {
-                self.update_ids(&ids, now, |todo| todo.clone().toggle_hidden());
+                self.update_ids(&ids, now, |todo| todo.toggle_hidden());
                 self.modals.close();
             }
             Action::SetDue { ids, date } => {
@@ -1455,7 +1466,15 @@ impl App {
                 self.modals.close();
             }
             Action::ArchiveCompleted => {
-                self.effects.push(Effect::ArchiveCompleted);
+                let completed = self.completed_ids();
+                if !completed.is_empty() {
+                    if self.writable() {
+                        let todos = self.todos_by_ids(&completed);
+                        self.effects.push(Effect::Archive(todos));
+                    } else {
+                        self.push_toast_at(NOT_SAVED_MESSAGE, now);
+                    }
+                }
                 self.modals.close();
             }
             Action::Confirm(request) => {
@@ -1828,14 +1847,20 @@ mod tests {
     }
 
     #[test]
-    fn the_archive_confirmation_queues_the_host_effect() {
+    fn the_archive_confirmation_queues_the_completed_todos() {
         let mut app = app(&["x 2026-11-01 done", "open"]);
         app.apply_action(
             Action::Confirm(crate::modal::ConfirmRequest::archive()),
             now(),
         );
         app.handle_modal_key(enter(), now());
-        assert_eq!(app.take_effects(), vec![crate::Effect::ArchiveCompleted]);
+        let effects = app.take_effects();
+        assert_eq!(effects.len(), 1);
+        let crate::Effect::Archive(todos) = &effects[0] else {
+            panic!("expected an archive effect, got {:?}", effects[0]);
+        };
+        assert_eq!(todos.len(), 1);
+        assert_eq!(todos[0].text, "done");
         assert!(!app.modals.is_open());
     }
 
@@ -1946,15 +1971,42 @@ mod tests {
     }
 
     #[test]
-    fn set_todos_and_recovery_reset_the_save_state() {
+    fn recovery_does_not_hide_unsaved_edits() {
+        let mut app = app(&["a"]);
+        app.reload_failed("gone");
+        app.add_todos(&["b".to_owned()], now()).expect("added");
+        assert_eq!(app.todos().len(), 2, "the edit is still in memory");
+        assert!(
+            !app.is_dirty(),
+            "a blocked mutation must not schedule a save"
+        );
+
+        // The file returns with the bytes this session already accepted. The
+        // recovery path re-parses the baseline instead of trusting the edited
+        // in-memory list.
+        let baseline = vec![Todo::parse_line("a", TodoId::new(0))];
+        app.reloaded(baseline);
+
+        assert!(app.load_error().is_none());
+        assert!(
+            !app.is_dirty(),
+            "the recovered list matches the bytes on disk"
+        );
+        assert_eq!(
+            app.todos()
+                .iter()
+                .map(|todo| todo.text.as_str())
+                .collect::<Vec<_>>(),
+            ["a"],
+            "the unsaved edit must not survive as a clean list"
+        );
+    }
+
+    #[test]
+    fn set_todos_resets_the_save_state() {
         let mut app = app(&["one"]);
         app.toggle_ids(&[app.todos()[0].id], now());
-        app.mark_save_failed(now(), "disk full");
         assert!(app.is_dirty());
-
-        app.recovered();
-        assert!(!app.is_dirty());
-        assert_eq!(app.save_error(), None);
 
         app.toggle_ids(&[app.todos()[0].id], now());
         assert!(app.is_dirty());
@@ -1962,5 +2014,17 @@ mod tests {
         app.set_todos(todos);
         assert!(!app.is_dirty());
         assert_eq!(app.save_deadline(), None);
+    }
+
+    #[test]
+    fn a_plain_toggle_does_not_allocate_an_id() {
+        let mut app = app(&["one"]);
+        app.toggle_ids(&[app.todos()[0].id], now());
+        assert!(app.todos()[0].is_done());
+
+        // The initial id is 0, so the next created todo must be 1. A plain
+        // toggle used to burn an id even though it planned no recurring copy.
+        let added = app.add_todos(&["two".to_owned()], now()).expect("added");
+        assert_eq!(added, vec![TodoId::new(1)]);
     }
 }

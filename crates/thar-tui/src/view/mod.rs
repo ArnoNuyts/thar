@@ -84,23 +84,24 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
 
     // Cursor position is a character index into the **raw** query. Sanitizing
     // the whole query first would make it longer (a C1 control becomes six
-    // cells), so the index would land on the wrong cell. Slice first, then
-    // sanitize each piece. Read the query once per frame, without allocating.
+    // cells), so the focused branch slices first and sanitizes each piece. The
+    // sanitizer returns owned strings, so the cursor split allocates a few
+    // strings per frame; an unfocused bar renders the query in one piece.
     let raw = app.search().chars();
-    let cursor = app.search().cursor().min(raw.len());
-    let before = sanitize_for_display(&raw[..cursor].iter().collect::<String>());
-    let at = raw.get(cursor).map_or_else(
-        || " ".to_owned(),
-        |character| sanitize_for_display(&character.to_string()),
-    );
-    let after = sanitize_for_display(
-        &raw[cursor.saturating_add(1).min(raw.len())..]
-            .iter()
-            .collect::<String>(),
-    );
 
     let mut spans = vec![Span::styled(" / ", prompt)];
     if focused {
+        let cursor = app.search().cursor().min(raw.len());
+        let before = sanitize_for_display(&raw[..cursor].iter().collect::<String>());
+        let at = raw.get(cursor).map_or_else(
+            || " ".to_owned(),
+            |character| sanitize_for_display(&character.to_string()),
+        );
+        let after = sanitize_for_display(
+            &raw[cursor.saturating_add(1).min(raw.len())..]
+                .iter()
+                .collect::<String>(),
+        );
         spans.push(Span::styled(before, query_style));
         spans.push(Span::styled(
             at,
@@ -108,10 +109,8 @@ fn render_search(frame: &mut Frame, app: &App, layout: Layout) {
         ));
         spans.push(Span::styled(after, query_style));
     } else {
-        spans.push(Span::styled(
-            sanitize_for_display(&raw.iter().collect::<String>()),
-            query_style,
-        ));
+        let query: String = raw.iter().collect();
+        spans.push(Span::styled(sanitize_for_display(&query), query_style));
     }
     spans.push(Span::styled(" / ", prompt));
 
@@ -293,17 +292,12 @@ fn text_spans(text: &str, base: Style, highlighted: bool) -> Vec<Span<'static>> 
 
 fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
     let area = Rect::new(0, layout.list_top, layout.width, layout.list_height);
-    // Read the editor's characters directly; only the no-results branch needs
-    // an owned string, and it is exactly the text the message has to show.
-    let chars = app.search().chars();
-    let has_query = chars.iter().any(|character| !character.is_whitespace());
-    let query: String = if has_query {
-        chars.iter().collect::<String>().trim().to_owned()
-    } else {
-        String::new()
-    };
+    // This branch only runs for an empty list, so the owned query string is
+    // cheap enough to keep the original trim-and-show form.
+    let q = app.search().query();
+    let q = q.trim();
 
-    let lines = if query.is_empty() {
+    let lines = if q.is_empty() {
         if let Some(error) = app.load_error() {
             // There is no list to explain the failure next to, so the empty
             // state owns the bounded read error instead of the welcome quote.
@@ -344,10 +338,7 @@ fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
         vec![
             Line::from(vec![
                 Span::raw("No results found for '"),
-                Span::styled(
-                    sanitize_for_display(&query),
-                    Style::default().fg(theme::WARNING),
-                ),
+                Span::styled(sanitize_for_display(q), Style::default().fg(theme::WARNING)),
                 Span::raw("'"),
             ]),
             Line::from(""),

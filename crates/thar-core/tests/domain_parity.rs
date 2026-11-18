@@ -644,7 +644,7 @@ fn setters_match_the_oracle() {
 }
 
 fn toggle_result(line: &str) -> thar_core::ToggleOutcome {
-    Todo::parse_line(line, TodoId::new(0)).toggle_state(clock_day(), TodoId::new(1))
+    Todo::parse_line(line, TodoId::new(0)).toggle_state(clock_day(), &mut || TodoId::new(1))
 }
 
 #[test]

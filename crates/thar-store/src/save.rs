@@ -1,10 +1,10 @@
 //! Whole-file saves with an external-edit guard.
 //!
-//! [`SaveGuard`] remembers the exact bytes this session last read or wrote.
-//! Every save re-reads the target first: if it differs, the save is refused
-//! instead of silently replacing an edit made by another program. This is the
-//! CP7 "byte-compare against the current file shape" rule, implemented before
-//! the write rather than after it.
+//! [`SaveGuard`] compares every save against the bytes the caller last
+//! accepted. The file watcher owns that baseline: if the target no longer
+//! matches it, the save is refused instead of silently replacing an edit made
+//! by another program. This is the CP7 "byte-compare against the current file
+//! shape" rule, implemented before the write rather than after it.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,44 +15,34 @@ use crate::atomic;
 use crate::backup::{self, BackupPolicy};
 use crate::error::StoreError;
 
-/// What one save changed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Saved {
-    /// Bytes written.
-    pub bytes: usize,
-    /// Backup path, when this save created the safety copy.
-    pub backup: Option<PathBuf>,
-}
-
-/// A session's view of the todo file and its last known bytes.
+/// A session's write path to the todo file.
 #[derive(Debug)]
 pub struct SaveGuard {
     path: PathBuf,
-    last_bytes: Vec<u8>,
     policy: BackupPolicy,
     backed_up: bool,
 }
 
 impl SaveGuard {
-    /// Open a guard for `path` with the current bytes as the baseline.
+    /// Open a guard for `path`.
     ///
-    /// A missing file starts with an empty baseline, so the first save creates
-    /// it. The caller decides whether creating a missing file is allowed
-    /// (`--write` only).
+    /// The baseline is supplied by the caller on every save, because the file
+    /// watcher already reads the file and owns the accepted bytes. A missing
+    /// file is allowed, so the first save can create it; the caller decides
+    /// whether creating a missing file is allowed (`--write` only).
     ///
     /// # Errors
     ///
     /// Returns a [`StoreError::Io`] when the file exists but cannot be read.
     pub fn open(path: impl Into<PathBuf>, policy: BackupPolicy) -> Result<Self, StoreError> {
         let path = path.into();
-        let last_bytes = match fs::read(&path) {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        match fs::read(&path) {
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(StoreError::io(&path, error)),
-        };
+        }
         Ok(Self {
             path,
-            last_bytes,
             policy,
             backed_up: policy == BackupPolicy::None,
         })
@@ -64,28 +54,30 @@ impl SaveGuard {
         &self.path
     }
 
-    /// The bytes the guard last read or wrote.
-    #[must_use]
-    pub fn last_bytes(&self) -> &[u8] {
-        &self.last_bytes
-    }
-
     /// Serialize and atomically replace the file.
     ///
     /// The argument is any `ExactSizeIterator` of `&Todo`, so a caller that
     /// shares todos through `Rc<Todo>` can save without cloning the values and
     /// the capacity check does not need a second collection.
     ///
+    /// `expected` is the accepted baseline owned by the file watcher. A target
+    /// that differs from it (including a file deleted after a non-empty
+    /// baseline) refuses the save.
+    ///
+    /// Returns the bytes written, so the caller can adopt them as the new
+    /// baseline without a second read.
+    ///
     /// # Errors
     ///
     /// Returns [`StoreError::ChangedOnDisk`] when the target no longer matches
-    /// [`SaveGuard::last_bytes`], [`StoreError::Invalid`] when the text
-    /// violates the file limits, and [`StoreError::Io`] for a filesystem
-    /// failure. The target is untouched on every error.
+    /// `expected`, [`StoreError::Invalid`] when the text violates the file
+    /// limits, and [`StoreError::Io`] for a filesystem failure. The target is
+    /// untouched on every error.
     pub fn save<'a>(
         &mut self,
         todos: impl ExactSizeIterator<Item = &'a Todo>,
-    ) -> Result<Saved, StoreError> {
+        expected: &[u8],
+    ) -> Result<Vec<u8>, StoreError> {
         if todos.len() > MAX_TODOS {
             return Err(StoreError::TooManyTodos {
                 count: todos.len(),
@@ -97,66 +89,26 @@ impl SaveGuard {
         validate_file_content(&text, &ReadLimits::DEFAULT)?;
         let bytes = text.into_bytes();
 
-        match fs::read(&self.path) {
-            Ok(current) if current != self.last_bytes => {
-                return Err(StoreError::ChangedOnDisk {
-                    path: self.path.clone(),
-                });
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                if !self.last_bytes.is_empty() {
-                    return Err(StoreError::ChangedOnDisk {
-                        path: self.path.clone(),
-                    });
-                }
-            }
+        let current = match fs::read(&self.path) {
+            Ok(current) => current,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(error) => return Err(StoreError::io(&self.path, error)),
+        };
+        if current != expected {
+            return Err(StoreError::ChangedOnDisk {
+                path: self.path.clone(),
+            });
         }
 
-        let backup = if self.backed_up {
-            None
-        } else {
-            let created = backup::create(&self.path, &self.last_bytes, self.policy)?;
+        if !self.backed_up {
+            backup::create(&self.path, &current, self.policy)?;
             self.backed_up = true;
-            created
-        };
+        }
 
         atomic::write_atomic(&self.path, &bytes)
             .map_err(|error| StoreError::io(&self.path, error))?;
 
-        let saved = Saved {
-            bytes: bytes.len(),
-            backup,
-        };
-        self.last_bytes = bytes;
-        Ok(saved)
-    }
-
-    /// Forget the current baseline and reload it from disk.
-    ///
-    /// Returns the bytes now on disk and makes them the save baseline.
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`StoreError::Io`] when the file cannot be read.
-    pub fn reload(&mut self) -> Result<Vec<u8>, StoreError> {
-        let bytes = fs::read(&self.path).map_err(|error| StoreError::io(&self.path, error))?;
-        self.last_bytes = bytes.clone();
         Ok(bytes)
-    }
-
-    /// Adopt bytes the host has just read from disk as the save baseline.
-    ///
-    /// The file watcher reads a file once, decodes and parses those exact
-    /// bytes, and then hands them here. Re-reading the path inside the guard
-    /// would open a race in which the file changes again between the parse and
-    /// the baseline, so the reload path passes the bytes it parsed instead.
-    ///
-    /// This does not write anything; a caller that passes bytes which are not
-    /// the current file content would defeat the external-edit guard.
-    pub fn set_baseline(&mut self, bytes: Vec<u8>) {
-        self.last_bytes = bytes;
     }
 }
 
@@ -203,14 +155,16 @@ mod tests {
         std::fs::write(&path, b"old\n").expect("seed");
         let mut guard = SaveGuard::open(&path, BackupPolicy::Bak).expect("guard");
 
-        let saved = guard.save(todos(&["new"]).iter()).expect("save");
-        assert_eq!(saved.bytes, 4);
-        assert!(saved.backup.is_some());
+        let written = guard.save(todos(&["new"]).iter(), b"old\n").expect("save");
+        assert_eq!(written, b"new\n");
+        assert!(crate::backup::backup_path(&path).exists());
         assert_eq!(std::fs::read(&path).expect("read"), b"new\n");
-        assert_eq!(guard.last_bytes(), b"new\n");
 
-        // A second save is allowed because the guard has the new baseline.
-        guard.save(todos(&["newer"]).iter()).expect("save again");
+        // A second save is allowed when it passes the bytes the caller adopted.
+        guard
+            .save(todos(&["newer"]).iter(), &written)
+            .expect("save again");
+        assert_eq!(std::fs::read(&path).expect("read"), b"newer\n");
     }
 
     #[test]
@@ -221,7 +175,9 @@ mod tests {
         let mut guard = SaveGuard::open(&path, BackupPolicy::None).expect("guard");
 
         std::fs::write(&path, b"external\n").expect("external edit");
-        let error = guard.save(todos(&["mine"]).iter()).expect_err("refused");
+        let error = guard
+            .save(todos(&["mine"]).iter(), b"old\n")
+            .expect_err("refused");
         assert!(matches!(error, StoreError::ChangedOnDisk { .. }));
         assert_eq!(std::fs::read(&path).expect("read"), b"external\n");
     }
@@ -234,7 +190,9 @@ mod tests {
         let mut guard = SaveGuard::open(&path, BackupPolicy::None).expect("guard");
         std::fs::remove_file(&path).expect("delete");
 
-        let error = guard.save(todos(&["mine"]).iter()).expect_err("refused");
+        let error = guard
+            .save(todos(&["mine"]).iter(), b"old\n")
+            .expect_err("refused");
         assert!(matches!(error, StoreError::ChangedOnDisk { .. }));
         assert!(!path.exists());
     }
