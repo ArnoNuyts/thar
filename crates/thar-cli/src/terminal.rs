@@ -576,14 +576,16 @@ fn flush_burst(run: &mut Vec<ratatui::crossterm::event::KeyEvent>, coalesced: &m
     use ratatui::crossterm::event::KeyCode;
 
     if run.len() >= BURST_PASTE_MIN {
-        let text = run
-            .drain(..)
-            .map(|key| match key.code {
-                KeyCode::Enter => '\n',
-                KeyCode::Char(character) => character,
-                _ => unreachable!("is_burst_key admits only characters and Enter"),
-            })
-            .collect();
+        let mut text = String::with_capacity(run.len());
+        for key in run.drain(..) {
+            match key.code {
+                KeyCode::Enter => text.push('\n'),
+                KeyCode::Char(character) => text.push(character),
+                // `is_burst_key` admits only these two. A future predicate
+                // change skips the extra key instead of panicking.
+                _ => {}
+            }
+        }
         coalesced.push(Event::Paste(text));
     } else {
         coalesced.extend(run.drain(..).map(Event::Key));
