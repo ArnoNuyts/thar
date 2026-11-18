@@ -157,14 +157,16 @@ fn copy_commands() -> &'static [(&'static str, &'static [&'static str])] {
 #[cfg(target_os = "windows")]
 fn copy_commands() -> &'static [(&'static str, &'static [&'static str])] {
     // `clip.exe` decodes stdin with the OEM code page and garbles non-ASCII
-    // text. PowerShell reads UTF-8 and writes the clipboard through
-    // `Set-Clipboard`, which is Unicode-aware.
+    // text. Read the pipe as raw bytes and decode them as UTF-8 instead;
+    // changing `[Console]::InputEncoding` inside `-Command` both races
+    // PowerShell's own stdin reader and leaves the shared console code page
+    // changed after thar exits.
     &[(
         "powershell.exe",
         &[
             "-NoProfile",
             "-Command",
-            "try { [Console]::InputEncoding = [System.Text.Encoding]::UTF8 } catch {}; $input | Set-Clipboard",
+            "$ms = New-Object IO.MemoryStream; [Console]::OpenStandardInput().CopyTo($ms); Set-Clipboard -Value ([Text.Encoding]::UTF8.GetString($ms.ToArray()))",
         ],
     )]
 }
@@ -181,14 +183,17 @@ fn paste_commands() -> &'static [(&'static str, &'static [&'static str])] {
 
 #[cfg(target_os = "windows")]
 fn paste_commands() -> &'static [(&'static str, &'static [&'static str])] {
-    // PowerShell's redirected stdout defaults to the OEM code page; request
-    // UTF-8 so non-ASCII clipboard text is not rejected as invalid UTF-8.
+    // PowerShell's redirected stdout defaults to the OEM code page. Write the
+    // UTF-8 bytes of the clipboard text to the raw output stream instead;
+    // changing `[Console]::OutputEncoding` would leave the shared console code
+    // page changed after thar exits. `-Raw` keeps the clipboard line ending
+    // from gaining an extra trailing CRLF.
     &[(
         "powershell.exe",
         &[
             "-NoProfile",
             "-Command",
-            "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}; Get-Clipboard",
+            "$b = [Text.Encoding]::UTF8.GetBytes((Get-Clipboard -Raw)); $o = [Console]::OpenStandardOutput(); $o.Write($b, 0, $b.Length)",
         ],
     )]
 }

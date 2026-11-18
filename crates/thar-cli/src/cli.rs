@@ -16,6 +16,8 @@
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
+use thar_store::BackupPolicy;
+
 /// Default todo file, relative to the process working directory.
 pub const DEFAULT_FILENAME: &str = "todo.txt";
 
@@ -43,10 +45,12 @@ pub enum CliCommand {
     Run {
         /// Todo file to open.
         file: PathBuf,
-        /// `--write` was passed: allow saving and the editing commands.
-        write: bool,
-        /// `--no-backup` was passed: skip the one `<file>.bak` safety copy.
-        no_backup: bool,
+        /// `--write` was passed: the backup policy to save with.
+        ///
+        /// `None` means read-only; the parser never combines a policy with
+        /// `--read-only`, so the invalid "writable without a policy" case
+        /// cannot be represented.
+        write: Option<BackupPolicy>,
     },
 }
 
@@ -210,10 +214,16 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
         return Ok(CliCommand::Version);
     }
 
+    let policy = if no_backup {
+        BackupPolicy::None
+    } else {
+        BackupPolicy::Bak
+    };
     Ok(CliCommand::Run {
         file: file.unwrap_or_else(|| PathBuf::from(DEFAULT_FILENAME)),
-        write,
-        no_backup,
+        // `--no-backup` already requires `--write`, so a policy can only
+        // exist in write mode.
+        write: write.then_some(policy),
     })
 }
 
@@ -222,6 +232,7 @@ mod tests {
     use super::{CliCommand, DEFAULT_FILENAME, format_usage, parse_cli_args};
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
+    use thar_store::BackupPolicy;
 
     fn args(values: &[&str]) -> Vec<OsString> {
         values.iter().map(OsString::from).collect()
@@ -231,22 +242,18 @@ mod tests {
         parse_cli_args(&args(values)).expect("valid arguments")
     }
 
-    fn run(values: &[&str]) -> (PathBuf, bool, bool) {
+    fn run(values: &[&str]) -> (PathBuf, Option<BackupPolicy>) {
         match parse(values) {
-            CliCommand::Run {
-                file,
-                write,
-                no_backup,
-            } => (file, write, no_backup),
+            CliCommand::Run { file, write } => (file, write),
             other => panic!("expected a run command, got {other:?}"),
         }
     }
 
     #[test]
     fn defaults_to_todo_txt() {
-        let (file, write, no_backup) = run(&[]);
+        let (file, write) = run(&[]);
         assert_eq!(file, Path::new(DEFAULT_FILENAME));
-        assert!(!write && !no_backup);
+        assert_eq!(write, None);
         assert!(!matches!(
             parse(&[]),
             CliCommand::Help | CliCommand::Version
@@ -303,16 +310,15 @@ mod tests {
 
     #[test]
     fn accepts_write_mode_and_backup_flags() {
-        let (file, write, no_backup) = run(&["--write", "work.txt"]);
-        assert!(write);
-        assert!(!no_backup);
+        let (file, write) = run(&["--write", "work.txt"]);
+        assert_eq!(write, Some(BackupPolicy::Bak));
         assert_eq!(file, Path::new("work.txt"));
 
-        let (_, write, no_backup) = run(&["--write", "--no-backup"]);
-        assert!(write && no_backup);
+        let (_, write) = run(&["--write", "--no-backup"]);
+        assert_eq!(write, Some(BackupPolicy::None));
 
-        let (_, write, _) = run(&["--read-only"]);
-        assert!(!write);
+        let (_, write) = run(&["--read-only"]);
+        assert_eq!(write, None);
     }
 
     #[test]
@@ -401,6 +407,42 @@ mod tests {
     fn no_backup_requires_write_mode() {
         let error = parse_cli_args(&args(&["--no-backup"])).expect_err("rejected");
         assert_eq!(error.to_string(), "--no-backup requires --write.");
-        assert!(run(&["--write", "--no-backup"]).2);
+        assert_eq!(run(&["--write", "--no-backup"]).1, Some(BackupPolicy::None));
+    }
+
+    // A lone UTF-16 surrogate is not valid UTF-8 but is a legal Windows
+    // filename component, so parsing must keep it as a path or reject it as an
+    // option, never panic while decoding it.
+    #[cfg(windows)]
+    fn lone_surrogate() -> OsString {
+        use std::os::windows::ffi::OsStringExt;
+
+        OsString::from_wide(&[0xD800])
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_lone_surrogate_positional_path_does_not_panic() {
+        match parse_cli_args(&[lone_surrogate()]) {
+            Ok(CliCommand::Run { file, .. }) => assert!(!file.as_os_str().is_empty()),
+            Ok(other) => panic!("expected a run command, got {other:?}"),
+            Err(error) => assert!(!error.to_string().is_empty()),
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_lone_surrogate_after_the_file_flag_does_not_panic() {
+        use std::os::windows::ffi::OsStringExt;
+
+        let mut wide: Vec<u16> = "--file=".encode_utf16().collect();
+        wide.push(0xD800);
+        match parse_cli_args(&[OsString::from_wide(&wide)]) {
+            // A non-UTF-8 token cannot be checked as a flag, so `--file=<bad>`
+            // is rejected as option-shaped; it must never become the path.
+            Ok(CliCommand::Run { file, .. }) => assert!(!file.as_os_str().is_empty()),
+            Ok(other) => panic!("expected a run command, got {other:?}"),
+            Err(error) => assert!(!error.to_string().is_empty()),
+        }
     }
 }

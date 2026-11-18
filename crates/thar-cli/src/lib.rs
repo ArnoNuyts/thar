@@ -73,19 +73,19 @@ pub fn run(args: &[OsString]) -> ExitCode {
             eprintln!("thar-rs: self-update is not supported by this build.");
             ExitCode::from(2)
         }
-        CliCommand::Run {
-            file,
-            write,
-            no_backup,
-        } => run_editor(file, write, no_backup),
+        CliCommand::Run { file, write } => run_editor(file, write),
     }
 }
 
 /// Open one todo file in the TUI, honouring the write flags.
-fn run_editor(file: std::path::PathBuf, write: bool, no_backup: bool) -> ExitCode {
+///
+/// `write` is the backup policy for a writable session; `None` is read-only.
+fn run_editor(file: std::path::PathBuf, write: Option<thar_store::BackupPolicy>) -> ExitCode {
     // The Ink app creates a missing todo file during startup. Restore that only
     // in write mode; the read-only contract must not create anything.
-    if write && let Err(error) = thar_store::ensure_file(&file) {
+    if write.is_some()
+        && let Err(error) = thar_store::ensure_file(&file)
+    {
         eprintln!("thar-rs: cannot create the todo file: {error}");
         return ExitCode::from(1);
     }
@@ -107,41 +107,36 @@ fn run_editor(file: std::path::PathBuf, write: bool, no_backup: bool) -> ExitCod
     let today = today_local();
     let mut app = thar_tui::App::new(file.clone(), loaded.todos, today);
     app.set_load_error(loaded.error);
-    app.set_read_only(!write);
+    app.set_read_only(write.is_none());
 
-    if app.is_read_only() {
+    let Some(policy) = write else {
         // The read-only binary still watches the file: an external edit
         // refreshes the view and can only toast, because no writer is linked.
-        match run_tui(&mut app) {
+        return match run_tui(&mut app) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("thar-rs: {error}");
                 ExitCode::from(1)
             }
+        };
+    };
+
+    // Open the save guard whenever `--write` is set, even when `load_error`
+    // is already set (a file deleted between the create and the read). The
+    // session then writes nothing until the watcher reloads a file that
+    // exists again, which is the Ink app's recovery path.
+    let mut guard = match thar_store::SaveGuard::open(file.clone(), policy) {
+        Ok(guard) => guard,
+        Err(error) => {
+            eprintln!("thar-rs: {error}");
+            return ExitCode::from(1);
         }
-    } else {
-        // Open the save guard whenever `--write` is set, even when `load_error`
-        // is already set (a file deleted between the create and the read). The
-        // session then writes nothing until the watcher reloads a file that
-        // exists again, which is the Ink app's recovery path.
-        let policy = if no_backup {
-            thar_store::BackupPolicy::None
-        } else {
-            thar_store::BackupPolicy::Bak
-        };
-        let mut guard = match thar_store::SaveGuard::open(file.clone(), policy) {
-            Ok(guard) => guard,
-            Err(error) => {
-                eprintln!("thar-rs: {error}");
-                return ExitCode::from(1);
-            }
-        };
-        match run_tui_with_store(&mut app, &mut guard) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => {
-                eprintln!("thar-rs: {error}");
-                ExitCode::from(1)
-            }
+    };
+    match run_tui_with_store(&mut app, &mut guard) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("thar-rs: {error}");
+            ExitCode::from(1)
         }
     }
 }

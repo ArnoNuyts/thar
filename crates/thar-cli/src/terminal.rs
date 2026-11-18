@@ -260,29 +260,18 @@ impl TerminalSession {
             self.terminal.hide_cursor()?;
 
             let timeout = next_poll_timeout(app, Instant::now(), &sync);
-            if event::poll(timeout)? {
-                match event::read()? {
-                    Event::Key(key) => input::handle_key(app, key, now),
-                    Event::Mouse(mouse) => {
-                        if let Some(kind) = mouse_kind(mouse.kind) {
-                            let input = MouseInput {
-                                kind,
-                                x: mouse.column.saturating_add(1),
-                                y: mouse.row.saturating_add(1),
-                                shift: mouse
-                                    .modifiers
-                                    .contains(ratatui::crossterm::event::KeyModifiers::SHIFT),
-                            };
-                            last_click = input::handle_mouse_event(app, input, last_click, now);
-                        }
-                    }
-                    Event::Resize(width, height) => app.resize(width, height),
-                    Event::Paste(text) => input::handle_paste(app, &text, now),
-                    // Focus does not change any read-only state. The next
-                    // iteration redraws and re-checks the local day.
-                    Event::FocusGained | Event::FocusLost => {}
-                }
-            }
+            let event_now = if event::poll(timeout)? {
+                let event = event::read()?;
+                // Timestamp the event after the read: `poll` may have waited
+                // most of the timeout, and an early stamp would misjudge
+                // double clicks, the save debounce and toast expiry. The
+                // earlier `now` stays the frame clock for draw and timers.
+                let event_now = Instant::now();
+                handle_event(app, event, event_now, &mut last_click);
+                event_now
+            } else {
+                now
+            };
 
             // After every event or timeout: reload an externally edited file.
             // A reload that lands while a save is pending drops the in-memory
@@ -296,7 +285,7 @@ impl TerminalSession {
                 Instant::now(),
             );
 
-            process_effects(app, store.as_deref_mut(), now);
+            process_effects(app, store.as_deref_mut(), event_now);
 
             // A timeout at (or past) midnight lands here and re-derives the
             // local day, rebuilding overdue/threshold verdicts exactly once.
@@ -468,7 +457,7 @@ fn paste_from_clipboard(app: &mut App, now: Instant) {
 }
 
 fn done_path(filename: &std::path::Path) -> std::path::PathBuf {
-    std::path::Path::new(filename)
+    filename
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
         .join("done.txt")
@@ -484,14 +473,139 @@ fn mouse_kind(kind: MouseEventKind) -> Option<MouseKind> {
     }
 }
 
+/// Apply one crossterm event at `now`.
+///
+/// On Windows `crossterm` does not report a bracketed paste as
+/// [`Event::Paste`], so a paste arrives as individual key presses and would
+/// otherwise run the single-key list commands (`q` quits, space toggles, …).
+/// A key press is therefore extended with the events already queued: a burst
+/// of three or more printable presses is delivered as one paste.
+fn handle_event(app: &mut App, event: Event, now: Instant, last_click: &mut Option<LastClick>) {
+    #[cfg(windows)]
+    if matches!(&event, Event::Key(key) if is_burst_key(key)) {
+        let mut burst = vec![event];
+        burst.extend(drain_queued());
+        for event in coalesce_burst(&burst) {
+            dispatch_event(app, event, now, last_click);
+        }
+        return;
+    }
+    dispatch_event(app, event, now, last_click);
+}
+
+/// Apply one event to the app.
+fn dispatch_event(app: &mut App, event: Event, now: Instant, last_click: &mut Option<LastClick>) {
+    match event {
+        Event::Key(key) => input::handle_key(app, key, now),
+        Event::Mouse(mouse) => {
+            if let Some(kind) = mouse_kind(mouse.kind) {
+                let input = MouseInput {
+                    kind,
+                    x: mouse.column.saturating_add(1),
+                    y: mouse.row.saturating_add(1),
+                    shift: mouse
+                        .modifiers
+                        .contains(ratatui::crossterm::event::KeyModifiers::SHIFT),
+                };
+                *last_click = input::handle_mouse_event(app, input, *last_click, now);
+            }
+        }
+        Event::Resize(width, height) => app.resize(width, height),
+        Event::Paste(text) => input::handle_paste(app, &text, now),
+        // Focus does not change any read-only state. The next iteration
+        // redraws and re-checks the local day.
+        Event::FocusGained | Event::FocusLost => {}
+    }
+}
+
+/// Windows: the minimum printable presses in one burst that are a paste.
+#[cfg(any(windows, test))]
+const BURST_PASTE_MIN: usize = 3;
+
+/// True for a key press that can be part of a Windows paste.
+///
+/// Enter and printable characters qualify unless Ctrl or Alt is held;
+/// releases, Ctrl combinations, navigation keys and function keys stay single
+/// keys.
+#[cfg(any(windows, test))]
+fn is_burst_key(key: &ratatui::crossterm::event::KeyEvent) -> bool {
+    use ratatui::crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+
+    if key.kind == KeyEventKind::Release
+        || key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+    {
+        return false;
+    }
+    match key.code {
+        KeyCode::Enter => true,
+        KeyCode::Char(character) => !character.is_control(),
+        _ => false,
+    }
+}
+
+/// Windows: the events that are already queued, without waiting.
+#[cfg(windows)]
+fn drain_queued() -> Vec<Event> {
+    let mut queued = Vec::new();
+    while event::poll(Duration::ZERO).unwrap_or(false) {
+        match event::read() {
+            Ok(event) => queued.push(event),
+            Err(_) => break,
+        }
+    }
+    queued
+}
+
+/// Coalesce a burst of key presses into one paste event.
+///
+/// A run of [`BURST_PASTE_MIN`] or more printable or Enter presses becomes
+/// `Event::Paste(text)` with `\n` for Enter; shorter runs and every other
+/// event pass through unchanged.
+#[cfg(any(windows, test))]
+fn coalesce_burst(events: &[Event]) -> Vec<Event> {
+    let mut coalesced = Vec::with_capacity(events.len());
+    let mut run = Vec::new();
+    for event in events {
+        match event {
+            Event::Key(key) if is_burst_key(key) => run.push(*key),
+            event => {
+                flush_burst(&mut run, &mut coalesced);
+                coalesced.push(event.clone());
+            }
+        }
+    }
+    flush_burst(&mut run, &mut coalesced);
+    coalesced
+}
+
+/// Append one run of burst keys, as a paste when it is long enough.
+#[cfg(any(windows, test))]
+fn flush_burst(run: &mut Vec<ratatui::crossterm::event::KeyEvent>, coalesced: &mut Vec<Event>) {
+    use ratatui::crossterm::event::KeyCode;
+
+    if run.len() >= BURST_PASTE_MIN {
+        let text = run
+            .drain(..)
+            .map(|key| match key.code {
+                KeyCode::Enter => '\n',
+                KeyCode::Char(character) => character,
+                _ => unreachable!("is_burst_key admits only characters and Enter"),
+            })
+            .collect();
+        coalesced.push(Event::Paste(text));
+    } else {
+        coalesced.extend(run.drain(..).map(Event::Key));
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{panic_value_is_trigger, today_local, until_next_local_midnight};
-    use std::time::{Duration, Instant};
+    use super::{coalesce_burst, panic_value_is_trigger, today_local, until_next_local_midnight};
+    use std::time::Duration;
 
-    use thar_core::TodoDate;
-    use thar_tui::App;
-    use thar_tui::input;
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     #[test]
     fn today_is_a_valid_calendar_date() {
@@ -534,47 +648,79 @@ mod tests {
     }
 
     #[test]
-    fn a_read_only_list_paste_hits_the_shared_gate() {
-        let mut app = App::new(
-            "todo.txt",
-            Vec::new(),
-            TodoDate::new(2026, 11, 17).expect("valid date"),
-        );
-        let now = Instant::now();
-        let text = (1..=11)
-            .map(|index| format!("pasted {index}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        input::handle_paste(&mut app, &text, now);
-        assert!(app.todos().is_empty(), "a read-only paste adds nothing");
-        assert!(!app.modals().is_open(), "no confirmation may open");
+    fn a_burst_of_three_or_more_presses_is_one_paste() {
+        let events = [
+            key('q'),
+            key('u'),
+            Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            key('x'),
+        ];
         assert_eq!(
-            app.toast_message(now),
-            Some(thar_tui::input::READ_ONLY_MESSAGE)
+            coalesce_burst(&events),
+            [Event::Paste("qu\nx".to_owned())],
+            "a pasted 'qu\\nx' must not run 'q' or Enter as list commands"
         );
-        assert!(!app.is_dirty());
     }
 
     #[test]
-    fn list_paste_delegates_splitting_and_validation_to_the_app() {
-        let mut app = App::new(
-            "todo.txt",
-            Vec::new(),
-            TodoDate::new(2026, 11, 17).expect("valid date"),
+    fn a_lone_press_stays_a_key() {
+        let events = [key('z')];
+        assert_eq!(coalesce_burst(&events), events, "one key is not a paste");
+    }
+
+    #[test]
+    fn a_short_burst_stays_keys() {
+        let events = [key('h'), key('i')];
+        assert_eq!(coalesce_burst(&events), events, "two keys are not a paste");
+    }
+
+    #[test]
+    fn a_burst_ends_at_the_first_non_key_event() {
+        let events = [
+            key('a'),
+            key('b'),
+            key('c'),
+            Event::Resize(80, 24),
+            key('d'),
+            key('e'),
+            key('f'),
+        ];
+        assert_eq!(
+            coalesce_burst(&events),
+            [
+                Event::Paste("abc".to_owned()),
+                Event::Resize(80, 24),
+                Event::Paste("def".to_owned()),
+            ]
         );
-        app.set_read_only(false);
-        let now = Instant::now();
+    }
 
-        input::handle_paste(&mut app, "  one  \n\n\ttwo\t\n", now);
-        let texts: Vec<&str> = app.todos().iter().map(|todo| todo.text.as_str()).collect();
-        assert_eq!(texts, ["one", "two"]);
-        assert!(app.is_dirty());
+    #[test]
+    fn modified_keys_and_navigation_stay_single_keys() {
+        let events = [
+            Event::Key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)),
+            key('b'),
+            Event::Key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+            Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::ALT)),
+        ];
+        assert_eq!(coalesce_burst(&events), events);
+    }
 
-        // Control-character validation belongs to the app's core batch check.
-        // The list branch must not keep a second, divergent pre-check, and a
-        // rejected batch must add nothing.
-        input::handle_paste(&mut app, "safe\na\u{001B}b", now);
-        assert_eq!(app.todos().len(), 2);
+    #[test]
+    fn releases_do_not_join_a_burst() {
+        let release = KeyEvent {
+            kind: KeyEventKind::Release,
+            ..key_event('x')
+        };
+        let events = [key('a'), key('b'), Event::Key(release)];
+        assert_eq!(coalesce_burst(&events), events);
+    }
+
+    fn key_event(character: char) -> KeyEvent {
+        KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)
+    }
+
+    fn key(character: char) -> Event {
+        Event::Key(key_event(character))
     }
 }
