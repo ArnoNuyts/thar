@@ -91,9 +91,11 @@ fn the_empty_list_menu_offers_only_global_commands() {
         );
     }
 
-    // A todo shortcut is not part of this menu, so it does nothing.
+    // A todo shortcut is not part of this menu, so it does nothing; the menu
+    // stays open and the marker still moves.
     session.send(b" ");
-    session.wait_text("Todo menu");
+    session.send(b"\x1b[B"); // Down
+    session.wait_text("» Archive Completed");
 
     session.send(b"\x1b");
     session.wait_no_text("Todo menu");
