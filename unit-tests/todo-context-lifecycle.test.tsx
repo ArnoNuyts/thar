@@ -735,8 +735,17 @@ test("TodoContext: archive is blocked while read-only and leaves done.txt alone"
           throw new Error("Todo not completed yet");
         }
       });
-      // Let the save land and the write-read guard (1s) expire before the
-      // watcher event that puts the provider into read-only mode.
+      // Wait for the debounced save to actually land before waiting out the
+      // write-read guard (1s). The guard starts when the write completes, not
+      // when the in-memory state flips, so waiting from the state change alone
+      // leaves only the debounce interval as margin; a busy CI runner can
+      // still be inside the guard when the external event arrives, and the
+      // provider then ignores the poison and never turns read-only.
+      await waitFor(async () => {
+        if (!(await originalReadTextFile(filename)).startsWith("x ")) {
+          throw new Error("Completed todo not saved yet");
+        }
+      });
       await waitPast(1100);
 
       await originalWriteTextFile(filename, "ARCHIVE_POISON_MARKER\u0000\n");
