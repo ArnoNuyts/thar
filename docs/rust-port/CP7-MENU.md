@@ -25,6 +25,11 @@ The read-only contract is unchanged. Every key below lives only in the
   Escape are named keys and never fall through to shortcut lookup.
 - Mouse: a move over a body row moves the marker; a left click on a body row
   activates it.
+- The row set follows the selection. With no selected todo (an empty list, a
+  filter that matches nothing, or every todo hidden) the single-todo menu keeps
+  only the global commands: Show/Hide Hidden, Archive Completed, Undo, Redo and
+  Paste. The todo rows are filtered out, so no shortcut can dispatch an empty
+  id list.
 - Every row maps to the foundation `Action` vocabulary: `Open` for the
   editor/date/meta screens, `Toggle`, `Delete`, `SetDue`, `SetThreshold`,
   `SetRecurrence`, `SetPriority`, `AddTag`, `ToggleHidden`,
@@ -129,10 +134,11 @@ and `todo.txt` loses it.
   keys not falling through, wrap/navigation, confirm keys and half-body mouse
   map, exact confirmation strings, update action set, >10 paste confirmation,
   delete/archive follow-ups, read-only key rejection).
-- `crates/thar-tui/tests/golden_cp7_menu.rs`: six `TestBackend` goldens at
+- `crates/thar-tui/tests/golden_cp7_menu.rs`: `TestBackend` goldens at
   80×24 and 100×30 — single menu (marker and shortcut colours, all 16 rows),
-  multi-select menu (10 rows, absent commands), archive confirmation, delete
-  confirmation, update screen, and the ephemeral-install update variant.
+  single menu without a selection (only the five global rows), multi-select
+  menu (10 rows, absent commands), archive confirmation, delete confirmation,
+  update screen, and the ephemeral-install update variant.
 - `crates/thar-cli/tests/pty/cp7_menu.rs`: menu open + `space` toggle + saved
   bytes; archive `done.txt` / main-file round trip; delete confirmation and
   saved bytes; clipboard failure as one bounded toast; read-only run rejecting
