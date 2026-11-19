@@ -3,13 +3,15 @@
 //! [`SaveGuard`] compares every save against the bytes the caller last
 //! accepted. The file watcher owns that baseline: if the target no longer
 //! matches it, the save is refused instead of silently replacing an edit made
-//! by another program. This is the CP7 "byte-compare against the current file
-//! shape" rule, implemented before the write rather than after it.
+//! by another program. This is the write path's "byte-compare against the
+//! current file shape" rule, implemented before the write rather than after it.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use thar_core::{MAX_TODOS, ReadLimits, Todo, serialize_file, validate_file_content};
+use thar_core::{
+    MAX_TODOS, ReadLimits, Todo, serialize_file, validate_file_bytes, validate_file_content,
+};
 
 use crate::atomic;
 use crate::backup::{self, BackupPolicy};
@@ -19,21 +21,24 @@ use crate::error::StoreError;
 #[derive(Debug)]
 pub struct SaveGuard {
     path: PathBuf,
+    limits: ReadLimits,
     policy: BackupPolicy,
     backed_up: bool,
 }
 
 impl SaveGuard {
-    /// Create a guard for `path`.
+    /// Create a guard for `path` with the session's read limits.
     ///
     /// This does no I/O. The baseline is supplied by the caller on every save,
     /// because the file watcher already reads the file and owns the accepted
-    /// bytes. The caller decides whether creating a missing file is allowed
-    /// (`--write` only).
+    /// bytes. The limits are the ones the session loaded with, so a save rejects
+    /// the same oversize or over-long file a reload would reject. The caller
+    /// decides whether creating a missing file is allowed (`--write` only).
     #[must_use]
-    pub fn new(path: impl Into<PathBuf>, policy: BackupPolicy) -> Self {
+    pub fn new(path: impl Into<PathBuf>, limits: ReadLimits, policy: BackupPolicy) -> Self {
         Self {
             path: path.into(),
+            limits,
             policy,
             backed_up: policy == BackupPolicy::None,
         }
@@ -71,7 +76,8 @@ impl SaveGuard {
         }
 
         let text = serialize_file(todos);
-        validate_file_content(&text, &ReadLimits::DEFAULT)?;
+        validate_file_content(&text, &self.limits)?;
+        validate_file_bytes(text.len() as u64, &self.limits)?;
         let bytes = text.into_bytes();
 
         let current = match fs::read(&self.path) {
@@ -99,8 +105,8 @@ impl SaveGuard {
 
 /// Create an empty todo file if it does not exist.
 ///
-/// The Ink app creates a missing file during normal startup; CP7 restores that
-/// behaviour only when `--write` is passed.
+/// The Ink app creates a missing file during normal startup; the write path
+/// restores that behaviour only when `--write` is passed.
 ///
 /// # Errors
 ///
@@ -123,7 +129,7 @@ mod tests {
     use crate::backup::BackupPolicy;
     use crate::error::StoreError;
     use crate::test_support::temp_dir;
-    use thar_core::{Todo, TodoId};
+    use thar_core::{CoreError, ReadLimits, Todo, TodoId};
 
     fn todos(lines: &[&str]) -> Vec<Todo> {
         lines
@@ -138,7 +144,7 @@ mod tests {
         let directory = temp_dir("guard-save");
         let path = directory.join("todo.txt");
         std::fs::write(&path, b"old\n").expect("seed");
-        let mut guard = SaveGuard::new(&path, BackupPolicy::Bak);
+        let mut guard = SaveGuard::new(&path, ReadLimits::DEFAULT, BackupPolicy::Bak);
 
         let written = guard.save(todos(&["new"]).iter(), b"old\n").expect("save");
         assert_eq!(written, b"new\n");
@@ -157,7 +163,7 @@ mod tests {
         let directory = temp_dir("guard-changed");
         let path = directory.join("todo.txt");
         std::fs::write(&path, b"old\n").expect("seed");
-        let mut guard = SaveGuard::new(&path, BackupPolicy::None);
+        let mut guard = SaveGuard::new(&path, ReadLimits::DEFAULT, BackupPolicy::None);
 
         std::fs::write(&path, b"external\n").expect("external edit");
         let error = guard
@@ -172,7 +178,7 @@ mod tests {
         let directory = temp_dir("guard-deleted");
         let path = directory.join("todo.txt");
         std::fs::write(&path, b"old\n").expect("seed");
-        let mut guard = SaveGuard::new(&path, BackupPolicy::None);
+        let mut guard = SaveGuard::new(&path, ReadLimits::DEFAULT, BackupPolicy::None);
         std::fs::remove_file(&path).expect("delete");
 
         let error = guard
@@ -180,6 +186,55 @@ mod tests {
             .expect_err("refused");
         assert!(matches!(error, StoreError::ChangedOnDisk { .. }));
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn refuses_a_save_over_the_byte_limit_and_leaves_the_file_untouched() {
+        let directory = temp_dir("guard-bytes");
+        let path = directory.join("todo.txt");
+        std::fs::write(&path, b"old\n").expect("seed");
+        // The serialized list ("new\n") is four bytes, one over the limit.
+        let limits = ReadLimits {
+            max_file_bytes: 3,
+            ..ReadLimits::DEFAULT
+        };
+        let mut guard = SaveGuard::new(&path, limits, BackupPolicy::None);
+
+        let error = guard
+            .save(todos(&["new"]).iter(), b"old\n")
+            .expect_err("refused");
+        assert!(
+            matches!(
+                error,
+                StoreError::Invalid(CoreError::FileTooLarge {
+                    actual_bytes: 4,
+                    max_bytes: 3,
+                })
+            ),
+            "{error:?}"
+        );
+        assert_eq!(std::fs::read(&path).expect("read"), b"old\n");
+    }
+
+    #[test]
+    fn refuses_a_save_over_the_line_limit_and_leaves_the_file_untouched() {
+        let directory = temp_dir("guard-line");
+        let path = directory.join("todo.txt");
+        std::fs::write(&path, b"old\n").expect("seed");
+        let limits = ReadLimits {
+            max_line_chars: 3,
+            ..ReadLimits::DEFAULT
+        };
+        let mut guard = SaveGuard::new(&path, limits, BackupPolicy::None);
+
+        let error = guard
+            .save(todos(&["long"]).iter(), b"old\n")
+            .expect_err("refused");
+        assert!(
+            matches!(error, StoreError::Invalid(CoreError::LineTooLong { .. })),
+            "{error:?}"
+        );
+        assert_eq!(std::fs::read(&path).expect("read"), b"old\n");
     }
 
     #[test]

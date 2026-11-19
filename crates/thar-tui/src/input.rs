@@ -1,7 +1,7 @@
 //! Event mapping: crossterm keys and mouse events to [`Command`]s.
 //!
 //! There is one list keymap and one read-only gate. The keymap is the Ink app's
-//! (`components/TodoList.tsx`) with the CP7 commands merged in; it is a pure
+//! (`components/TodoList.tsx`) with this build's commands merged in; it is a pure
 //! function of the key plus the app's control-flow context (search focus, an
 //! open suggestion popup, single vs multi select). The mode is not duplicated:
 //! after the keymap produces a [`Command`], [`Command::mutates`] decides whether

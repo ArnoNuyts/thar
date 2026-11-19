@@ -15,7 +15,7 @@ pub enum StoreError {
         /// The path the operation touched.
         path: PathBuf,
         /// The underlying operating-system error.
-        source: io::Error,
+        error: io::Error,
     },
     /// The file on disk no longer matches the bytes this session last read or
     /// wrote, so saving would overwrite an external edit.
@@ -37,10 +37,10 @@ pub enum StoreError {
 
 impl StoreError {
     /// Wrap an I/O error with the path it touched.
-    pub(crate) fn io(path: impl Into<PathBuf>, source: io::Error) -> Self {
+    pub(crate) fn io(path: impl Into<PathBuf>, error: io::Error) -> Self {
         Self::Io {
             path: path.into(),
-            source,
+            error,
         }
     }
 }
@@ -48,8 +48,8 @@ impl StoreError {
 impl core::fmt::Display for StoreError {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Io { path, source } => {
-                write!(formatter, "{}: {source}", path.display())
+            Self::Io { path, error } => {
+                write!(formatter, "{}: {error}", path.display())
             }
             Self::ChangedOnDisk { path } => write!(
                 formatter,

@@ -1,8 +1,8 @@
 //! `thar-core`: the pure `todo.txt` domain model for the Thar Rust port.
 //!
-//! This crate is the domain half of checkpoints CP2 and CP3a in
-//! `docs/rust-port/PLAN.md`. It owns parsing, serialization, dates, limits, and
-//! file validation, plus recurrence planning, the immutable setters and
+//! This crate is the core domain described in `docs/rust-port/PLAN.md`. It owns
+//! parsing, serialization, dates, limits, and file validation, plus recurrence
+//! planning, the immutable setters and
 //! `toggle_state`, sort/hidden-filter/search, the contiguous-context row model,
 //! and the pure scroll-offset helper. It is deliberately tiny: no I/O, no clock,
 //! no ambient time, no `unsafe`, and no third-party dependencies. The clock
@@ -12,7 +12,7 @@
 //!
 //! Behaviour is defined by the TypeScript oracle (`logic/todo.ts`,
 //! `logic/dates.ts`, `logic/patterns.ts`, `logic/control-characters.ts`,
-//! `logic/limits.ts`, `logic/todo-file-validation.ts`) and frozen by the CP0
+//! `logic/limits.ts`, `logic/todo-file-validation.ts`) and frozen by the baseline
 //! corpus in `testdata/port/`. The non-obvious rules:
 //!
 //! - Line lengths are UTF-16 code units, because `String.prototype.length`
@@ -53,7 +53,7 @@
 //! ```
 //!
 //! (The corpus tests in `tests/corpus_parity.rs` pin every field and the exact
-//! serialized bytes for the CP0 fixtures.)
+//! serialized bytes for the baseline fixtures.)
 
 mod date;
 mod error;

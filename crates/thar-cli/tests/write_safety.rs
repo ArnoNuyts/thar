@@ -24,7 +24,7 @@ mod support;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use thar_cli::file::{parse_bytes, read_bytes};
+use thar_cli::file::{load_with_limits, parse_bytes, read_bytes};
 use thar_cli::sync::{
     FileSync, MAX_MESSAGE_CHARS, POLL_INTERVAL, RELOAD_DEBOUNCE, ReloadOutcome, SELF_WRITE_WINDOW,
     bounded_message,
@@ -68,6 +68,15 @@ fn poll_until(sync: &mut FileSync, start: Instant) -> Option<ReloadOutcome> {
         now += POLL_INTERVAL;
     }
     None
+}
+
+/// Construct a watcher whose baseline is the file as it is right now.
+///
+/// Only tests read the file here; production builds the watcher from the load
+/// result with [`FileSync::from_load`], so the load and the first poll share one
+/// observation. A missing file gives `None`, which is the startup state.
+fn watch(path: &Path) -> FileSync {
+    FileSync::new(path, ReadLimits::DEFAULT, std::fs::read(path).ok())
 }
 
 /// Set a file's modification time without changing its bytes.
@@ -138,7 +147,7 @@ fn a_read_only_directory_refuses_the_save_and_keeps_the_target() {
     }
 
     let result = std::panic::catch_unwind(|| {
-        let mut guard = SaveGuard::new(&target, BackupPolicy::Bak);
+        let mut guard = SaveGuard::new(&target, ReadLimits::DEFAULT, BackupPolicy::Bak);
         let error = guard
             .save(todos(&["new"]).iter(), b"Locked\n")
             .expect_err("save refused");
@@ -158,7 +167,7 @@ fn a_read_only_directory_refuses_the_save_and_keeps_the_target() {
 fn an_external_edit_between_load_and_save_is_refused() {
     let directory = TempDir::new("write-safety-external-edit");
     let path = directory.write("todo.txt", b"one\n");
-    let mut guard = SaveGuard::new(&path, BackupPolicy::None);
+    let mut guard = SaveGuard::new(&path, ReadLimits::DEFAULT, BackupPolicy::None);
 
     // Another program changes the file after this session loaded it.
     std::fs::write(&path, b"external\nedit from elsewhere\n").expect("external edit");
@@ -186,7 +195,7 @@ fn an_external_edit_reloads_into_the_new_list() {
     let limits = ReadLimits::DEFAULT;
 
     let start = Instant::now();
-    let mut sync = FileSync::new(&path, limits, std::fs::read(&path).unwrap_or_default());
+    let mut sync = watch(&path);
     std::fs::write(&path, b"one\ntwo\nexternal\n").expect("external edit");
 
     // First poll sees the new stamp and arms the debounce; it must not read yet.
@@ -224,7 +233,7 @@ fn a_file_missing_at_startup_stays_quiet_until_it_appears() {
     let directory = TempDir::new("write-safety-missing-startup");
     let path = directory.join("todo.txt");
     let start = Instant::now();
-    let mut sync = FileSync::new(&path, ReadLimits::DEFAULT, Vec::new());
+    let mut sync = watch(&path);
 
     // The initial load already reported the missing file; the startup
     // comparison must not turn that note into an unreadable-file error.
@@ -244,7 +253,7 @@ fn deleting_an_empty_file_after_startup_is_unreadable() {
     let directory = TempDir::new("write-safety-empty-delete");
     let path = directory.write("todo.txt", b"");
     let start = Instant::now();
-    let mut sync = FileSync::new(&path, ReadLimits::DEFAULT, Vec::new());
+    let mut sync = watch(&path);
 
     // The startup comparison accepts the empty file.
     assert!(matches!(
@@ -267,11 +276,7 @@ fn a_touched_but_unchanged_file_is_read_once_and_does_not_reload() {
     let directory = TempDir::new("write-safety-touch");
     let path = directory.write("todo.txt", b"one\ntwo\n");
     let start = Instant::now();
-    let mut sync = FileSync::new(
-        &path,
-        ReadLimits::DEFAULT,
-        std::fs::read(&path).unwrap_or_default(),
-    );
+    let mut sync = watch(&path);
 
     // An editor or sync client rewrites the same bytes. The stamp changes, so
     // the watcher must read the file and reject it by content comparison.
@@ -293,14 +298,10 @@ fn a_touched_but_unchanged_file_is_read_once_and_does_not_reload() {
 fn a_save_does_not_reload_its_own_bytes() {
     let directory = TempDir::new("write-safety-self-write");
     let path = directory.write("todo.txt", b"one\n");
-    let mut guard = SaveGuard::new(&path, BackupPolicy::None);
+    let mut guard = SaveGuard::new(&path, ReadLimits::DEFAULT, BackupPolicy::None);
 
     let start = Instant::now();
-    let mut sync = FileSync::new(
-        &path,
-        ReadLimits::DEFAULT,
-        std::fs::read(&path).unwrap_or_default(),
-    );
+    let mut sync = watch(&path);
     let saved_at = start + Duration::from_millis(10);
 
     let written = guard
@@ -314,9 +315,9 @@ fn a_save_does_not_reload_its_own_bytes() {
         "a save's own rename must not reload"
     );
     assert!(
-        !matches!(
+        matches!(
             poll_until(&mut sync, saved_at + SELF_WRITE_WINDOW),
-            Some(ReloadOutcome::Changed(_))
+            None | Some(ReloadOutcome::Unchanged)
         ),
         "the written bytes are the baseline, so the echo is a no-op"
     );
@@ -327,11 +328,7 @@ fn an_external_edit_inside_the_self_write_window_waits() {
     let directory = TempDir::new("write-safety-suppress");
     let path = directory.write("todo.txt", b"one\n");
     let start = Instant::now();
-    let mut sync = FileSync::new(
-        &path,
-        ReadLimits::DEFAULT,
-        std::fs::read(&path).unwrap_or_default(),
-    );
+    let mut sync = watch(&path);
     let saved_at = start + Duration::from_millis(10);
 
     sync.note_write(saved_at);
@@ -359,7 +356,7 @@ fn a_failed_reload_keeps_the_list_cancels_the_save_and_is_not_retried() {
     let limits = ReadLimits::DEFAULT;
 
     let start = Instant::now();
-    let mut sync = FileSync::new(&path, limits, std::fs::read(&path).unwrap_or_default());
+    let mut sync = watch(&path);
     let mut app = app(&["Original"]);
     app.add_todos(&["Queued".to_owned()], current_time())
         .expect("queued");
@@ -411,11 +408,7 @@ fn a_reload_lossily_decodes_invalid_utf8() {
     let directory = TempDir::new("write-safety-lossy");
     let path = directory.write("todo.txt", b"one\n");
     let start = Instant::now();
-    let mut sync = FileSync::new(
-        &path,
-        ReadLimits::DEFAULT,
-        std::fs::read(&path).unwrap_or_default(),
-    );
+    let mut sync = watch(&path);
 
     std::fs::write(&path, b"one\n\xFF\xFE external\n").expect("write invalid UTF-8");
     let outcome = poll_until(&mut sync, start + POLL_INTERVAL).expect("a change");
@@ -438,7 +431,7 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
     let limits = ReadLimits::DEFAULT;
 
     let start = Instant::now();
-    let mut sync = FileSync::new(&path, limits, std::fs::read(&path).unwrap_or_default());
+    let mut sync = watch(&path);
     let mut app = app(&["Original"]);
 
     // Enter read-only recovery with one undo step outstanding, as a failed
@@ -468,7 +461,7 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
     );
 
     // Saving works again and the guard accepts the reloaded baseline.
-    let mut guard = SaveGuard::new(&path, BackupPolicy::None);
+    let mut guard = SaveGuard::new(&path, limits, BackupPolicy::None);
     app.add_todos(&["Persisted".to_owned()], current_time())
         .expect("persisted");
     assert!(app.is_dirty());
@@ -482,31 +475,48 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
     assert!(saved.contains("Persisted"), "{saved:?}");
 }
 
-/// Secondary check for the recovery step: the watcher reports `Unchanged` for
-/// restored bytes and the host re-parses the baseline instead of marking the
-/// in-memory edit saved.
+/// Drive [`FileSync::apply`] on a synthetic clock until `condition` holds.
 ///
-/// The primary coverage drives the private `terminal::apply_reload` itself in
-/// `crates/thar-cli/src/terminal.rs`; this test keeps the same contract at the
-/// watcher/app boundary so a change in either half is visible here too.
+/// No sleeping: `apply` takes the instant, so the test moves time forward as
+/// fast as the assertions need.
+fn apply_until(
+    app: &mut App,
+    sync: &mut FileSync,
+    start: Instant,
+    condition: impl Fn(&App) -> bool,
+) -> Instant {
+    let mut now = start;
+    for _ in 0..64 {
+        sync.apply(app, now);
+        if condition(app) {
+            return now;
+        }
+        now += POLL_INTERVAL;
+    }
+    panic!(
+        "FileSync::apply never reached the expected state; load_error: {:?}",
+        app.load_error()
+    );
+}
+
+/// The recovery step: the watcher reports `Unchanged` for restored bytes and
+/// `FileSync::apply` re-parses the baseline instead of marking the in-memory
+/// edit saved.
 #[test]
 fn recovery_with_restored_bytes_replaces_unsaved_edits() {
     let directory = TempDir::new("write-safety-recovery-unchanged");
     let path = directory.write("todo.txt", b"a\n");
-    let limits = ReadLimits::DEFAULT;
 
     let start = Instant::now();
-    let mut sync = FileSync::new(&path, limits, std::fs::read(&path).unwrap_or_default());
+    let mut sync = watch(&path);
     let mut app = app(&["a"]);
 
     // The file disappears: the watcher reports it unreadable and the app enters
     // read-only recovery.
     std::fs::remove_file(&path).expect("delete");
-    let outcome = poll_until(&mut sync, start + POLL_INTERVAL).expect("a change");
-    let ReloadOutcome::Unreadable(message) = outcome else {
-        panic!("expected an unreadable file, got {outcome:?}");
-    };
-    app.reload_failed(message);
+    let at = apply_until(&mut app, &mut sync, start + POLL_INTERVAL, |app| {
+        app.load_error().is_some()
+    });
     assert!(!app.writable());
 
     // A mutation still lands in memory, but recovery mode refuses to schedule
@@ -516,21 +526,15 @@ fn recovery_with_restored_bytes_replaces_unsaved_edits() {
     assert!(app.todos()[0].is_done());
     assert!(!app.is_dirty());
 
-    // Restoring the accepted bytes is the recovery signal.
+    // Restoring the accepted bytes is the recovery signal: the watcher reports
+    // `Unchanged` and `apply` re-parses the accepted baseline. The in-memory
+    // toggle must not survive as a falsely clean list.
     std::fs::write(&path, b"a\n").expect("restore");
     set_modified(&path, SystemTime::now() + Duration::from_secs(60));
-    let outcome = poll_until(&mut sync, start + POLL_INTERVAL).expect("a change");
-    assert!(
-        matches!(outcome, ReloadOutcome::Unchanged),
-        "restored bytes are the accepted baseline: {outcome:?}"
-    );
+    apply_until(&mut app, &mut sync, at + POLL_INTERVAL, |app| {
+        app.load_error().is_none()
+    });
 
-    // The host re-parses the accepted baseline on this path. The in-memory
-    // toggle must not survive as a falsely clean list.
-    let reloaded = parse_bytes(sync.baseline(), &limits).expect("parse baseline");
-    app.reloaded(reloaded);
-
-    assert!(app.load_error().is_none());
     assert!(app.writable(), "recovery re-enables writes");
     assert!(!app.is_dirty());
     assert_eq!(app.todos().len(), 1);
@@ -540,6 +544,63 @@ fn recovery_with_restored_bytes_replaces_unsaved_edits() {
         "the list matches disk instead of hiding an unsaved edit"
     );
     assert_eq!(std::fs::read(&path).expect("read target"), b"a\n");
+}
+
+/// A change between the load and the watcher must not be mistaken for this
+/// session's own state.
+///
+/// The watcher is built by the same helper `run_editor` uses, from the load
+/// result rather than a second read, so the save compares against the bytes
+/// that were actually loaded and the first poll still sees the external edit.
+#[test]
+fn a_file_deleted_between_load_and_watcher_construction_is_unreadable() {
+    let directory = TempDir::new("write-safety-startup-delete");
+    let path = directory.write("todo.txt", b"a\n");
+    let limits = ReadLimits::DEFAULT;
+
+    // The load sees the file, then it disappears before the watcher exists.
+    // The watcher must derive "was present" from the load result, not from a
+    // second stat that would now say "missing" and suppress the error forever.
+    let loaded = load_with_limits(&path, &limits).expect("load");
+    std::fs::remove_file(&path).expect("delete");
+
+    let mut sync = FileSync::from_load(&path, &loaded);
+    let outcome = poll_until(&mut sync, Instant::now());
+    assert!(
+        matches!(outcome, Some(ReloadOutcome::Unreadable(_))),
+        "a file present at load and deleted later is an unreadable reload: {outcome:?}"
+    );
+}
+
+#[test]
+fn a_change_between_load_and_watcher_construction_is_detected() {
+    let directory = TempDir::new("write-safety-startup-race");
+    let path = directory.write("todo.txt", b"a\n");
+    let limits = ReadLimits::DEFAULT;
+
+    let loaded = load_with_limits(&path, &limits).expect("load");
+    std::fs::write(&path, b"external\n").expect("external edit");
+    let mut sync = FileSync::from_load(&path, &loaded);
+
+    let mut guard = SaveGuard::new(&path, limits, BackupPolicy::None);
+    assert!(
+        matches!(
+            guard.save(loaded.todos.iter(), sync.baseline()),
+            Err(StoreError::ChangedOnDisk { .. })
+        ),
+        "the load baseline must refuse the save"
+    );
+    assert_eq!(
+        std::fs::read(&path).expect("read target"),
+        b"external\n",
+        "the refused save leaves the external bytes intact"
+    );
+
+    // The first poll reloads the external bytes, so the change is not lost.
+    assert_eq!(
+        poll_until(&mut sync, Instant::now() + POLL_INTERVAL),
+        Some(ReloadOutcome::Changed(b"external\n".to_vec()))
+    );
 }
 
 #[test]

@@ -37,7 +37,7 @@
 //!   `.` matches exactly one UTF-16 code unit and never a line terminator, so
 //!   it cannot consume an astral character (a surrogate pair). Other regex
 //!   metacharacters are outside the parity surface: names are scanned from
-//!   text, and programmatic names become opaque with the CP3b API.
+//!   text, and programmatic names become opaque with the core API.
 
 use core::fmt;
 use core::fmt::Write as _;
@@ -280,31 +280,6 @@ impl Todo {
             completion_date_in_text: parts.completion_date_in_text,
         }
     }
-    /// The parsed pieces of this todo.
-    ///
-    /// The inverse of [`Todo::from_parts`]. A caller that hands a todo across a
-    /// boundary (CP4's write path, or the row builder's request) passes these
-    /// parts instead of the serialized line: the line collapses array-valued
-    /// tags into a comma list and does not carry the two round-trip flags.
-    ///
-    /// The [`TodoId`] is not part of [`TodoParts`]; the receiving side assigns
-    /// its own in load order.
-    #[must_use]
-    pub fn into_parts(self) -> TodoParts {
-        TodoParts {
-            text: self.text,
-            state: self.state,
-            priority: self.priority,
-            completion_date: self.completion_date,
-            creation_date: self.creation_date,
-            projects: self.projects,
-            contexts: self.contexts,
-            tags: self.tags,
-            dates_in_text: self.dates_in_text,
-            completion_date_in_text: self.completion_date_in_text,
-        }
-    }
-
     /// Parse one raw line.
     ///
     /// This never fails: every `&str` is accepted, including control
@@ -454,12 +429,12 @@ impl Todo {
 
     /// Look up a tag by key; the first occurrence wins.
     ///
-    /// TODO(deferred optimization phase, not CP3b): this is a linear scan per
+    /// TODO(deferred optimization phase): this is a linear scan per
     /// lookup, so a line with many tags costs O(tags²) across
     /// `is_hidden`/`is_overdue`/`is_passed_threshold`. Replace the
     /// `Vec<(String, TagValue)>` with an insertion-ordered key→index map when
     /// the deferred row-builder optimization work lands (see
-    /// `docs/rust-port/PLAN.md` §5 CP3b1/§13).
+    /// `docs/rust-port/PLAN.md` §5/§13).
     #[must_use = "a missing tag is meaningful"]
     pub fn tag(&self, key: &str) -> Option<&TagValue> {
         self.tags
@@ -949,58 +924,6 @@ mod tests {
             todo.to_string(),
             "x 2023-05-04 2023-02-29 second date is invalid"
         );
-    }
-
-    #[test]
-    fn parts_round_trip_keeps_duplicate_tags_and_round_trip_flags() {
-        // The two reasons `TodoParts` exists: a serialized line collapses a
-        // duplicate tag key into a comma list, and the round-trip flags are not
-        // visible in the text at all.
-        for line in [
-            "x (A) 2024-03-02 2024-03-01 ship it @work +thar \
-             alpha:one beta:one beta:two h:1",
-            "x 2023-05-04 2023-02-29 second date is invalid beta:one beta:two",
-            "(B) 2023-05-04 2023-05-05 two leading dates",
-        ] {
-            let todo = parse(line);
-            let rebuilt = Todo::from_parts(TodoId::new(7), todo.clone().into_parts());
-
-            assert_eq!(rebuilt.to_string(), todo.to_string(), "line {line:?}");
-            assert_eq!(rebuilt.text, todo.text, "line {line:?}");
-            assert_eq!(rebuilt.state, todo.state, "line {line:?}");
-            assert_eq!(rebuilt.priority, todo.priority, "line {line:?}");
-            assert_eq!(
-                rebuilt.completion_date, todo.completion_date,
-                "line {line:?}"
-            );
-            assert_eq!(rebuilt.creation_date, todo.creation_date, "line {line:?}");
-            assert_eq!(rebuilt.projects, todo.projects, "line {line:?}");
-            assert_eq!(rebuilt.contexts, todo.contexts, "line {line:?}");
-            assert_eq!(rebuilt.tags, todo.tags, "line {line:?}");
-            assert_eq!(rebuilt.dates_in_text, todo.dates_in_text, "line {line:?}");
-            assert_eq!(
-                rebuilt.completion_date_in_text, todo.completion_date_in_text,
-                "line {line:?}"
-            );
-        }
-
-        // The specific shapes the round-trip must not lose.
-        let duplicate = parse("beta:one beta:two body");
-        let parts = duplicate.clone().into_parts();
-        assert_eq!(
-            parts.tags,
-            vec![(
-                "beta".to_owned(),
-                TagValue::Many(vec!["one".to_owned(), "two".to_owned()])
-            )]
-        );
-        assert!(!parts.dates_in_text);
-        assert!(!parts.completion_date_in_text);
-
-        let ambiguous = parse("x 2023-05-04 2023-02-29 second date is invalid");
-        let parts = ambiguous.into_parts();
-        assert!(parts.dates_in_text);
-        assert!(parts.completion_date_in_text);
     }
 
     #[test]

@@ -1,8 +1,8 @@
 //! `thar-store`: the write half of the Thar port.
 //!
-//! CP6 shipped a read-only binary; CP7 adds `--write`. Every filesystem API
-//! that can modify user data lives here so the TUI crates stay free of I/O and
-//! the CP6 read-only source scan keeps its meaning.
+//! The read-only build never writes user data; `--write` enables the write
+//! path. Every filesystem API that can modify user data lives here so the TUI
+//! crates stay free of I/O and the read-only source scan keeps its meaning.
 //!
 //! The pieces are deliberately small:
 //!
@@ -24,7 +24,7 @@ pub mod save;
 
 pub use atomic::write_atomic;
 pub use backup::{BACKUP_SUFFIX, BackupPolicy, backup_path};
-pub use done::append_done;
+pub use done::{append_done, done_path};
 pub use error::StoreError;
 pub use save::{SaveGuard, ensure_file};
 

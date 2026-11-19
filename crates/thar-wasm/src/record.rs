@@ -25,7 +25,7 @@
 //!   They do not affect row building, only serialization: a caller that parsed
 //!   the line itself passes its real flags so `serialize_file` can rebuild an
 //!   exact todo.
-//! - Unknown fields are ignored, so a host can pass a CP1 parse record with its
+//! - Unknown fields are ignored, so a host can pass a contract parse record with
 //!   extra `isDone`/`toString`/`hash` fields without a second projection.
 //! - Missing required fields are rejected with [`RecordError`]; nothing here can
 //!   panic on a bad field. A tag value must be a string or a **non-empty**

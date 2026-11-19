@@ -66,8 +66,8 @@ impl CoreError {
 
     /// TypeScript class name, kept only for adapter compatibility.
     ///
-    /// The Rust error type is the source of truth; `name` exists so the CP1
-    /// contract and the transitional TS adapter can assert the original class
+    /// The Rust error type is the source of truth; `name` exists so the contract
+    /// and the transitional TS adapter can assert the original class
     /// name. Nothing in `thar-core` branches on it.
     #[must_use]
     pub const fn name(&self) -> &'static str {

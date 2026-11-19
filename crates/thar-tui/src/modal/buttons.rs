@@ -11,14 +11,120 @@
 //! equal slice of the modal width.
 
 use ratatui::Frame;
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 
-use crate::event::MouseInput;
+use crate::event::{MouseInput, MouseKind};
 use crate::modal::geometry::{self, ModalRect};
 use crate::theme;
+
+/// Selection and hover state for one button row.
+///
+/// The confirmation, update and create/edit screens all store this, so they
+/// share one activation rule: Enter and Space run [`Row::selected`], and a
+/// pointer hover only changes the paint. A left click still activates the
+/// button under the pointer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Row {
+    /// The button Enter and Space activate.
+    pub(crate) selected: usize,
+    /// The button under the pointer, painted in the warning colour.
+    pub(crate) hovered: Option<usize>,
+}
+
+impl Row {
+    /// Apply one key press, returning the button to activate.
+    ///
+    /// Tab, BackTab, Left and Right move the selection and return `None`;
+    /// Enter and Space return [`Row::selected`], ignoring any hover.
+    pub(crate) fn on_key(&mut self, key: KeyEvent, count: usize) -> Option<usize> {
+        match key.code {
+            KeyCode::Tab => {
+                let forward = !key.modifiers.contains(KeyModifiers::SHIFT);
+                self.selected = cycle(self.selected, count, forward);
+                None
+            }
+            KeyCode::BackTab | KeyCode::Left => {
+                self.selected = cycle(self.selected, count, false);
+                None
+            }
+            KeyCode::Right => {
+                self.selected = cycle(self.selected, count, true);
+                None
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => Some(self.selected),
+            _ => None,
+        }
+    }
+
+    /// Apply one mouse event against body row `row`, returning the button to
+    /// activate on a left click.
+    ///
+    /// Moves only update [`Row::hovered`]; a click sets the hover and the
+    /// selection to the button under the pointer.
+    pub(crate) fn on_mouse(
+        &mut self,
+        rect: ModalRect,
+        row: u16,
+        count: usize,
+        mouse: MouseInput,
+    ) -> Option<usize> {
+        match mouse.kind {
+            MouseKind::Move => {
+                self.hovered = hit(rect, row, count, mouse);
+                None
+            }
+            MouseKind::LeftClick => {
+                let index = hit(rect, row, count, mouse)?;
+                self.hovered = Some(index);
+                self.selected = index;
+                Some(index)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Move `index` by one in `count` buttons, wrapping at both ends.
+///
+/// Returns 0 for an empty row so callers need no separate guard.
+pub(crate) fn cycle(index: usize, count: usize, forward: bool) -> usize {
+    if count == 0 {
+        return 0;
+    }
+    let index = index % count;
+    if forward {
+        (index + 1) % count
+    } else {
+        (index + count - 1) % count
+    }
+}
+
+/// Offset and width of button `index` in a `width`-wide content row.
+///
+/// Every button takes `(width / count).max(1)` columns except the last, which
+/// takes the remainder so the drawn row covers every content column. The same
+/// span is used by [`render`] and [`hit`], so the paint and the hit map cannot
+/// drift apart.
+fn span(index: usize, count: usize, width: u16) -> (u16, u16) {
+    if count == 0 {
+        return (0, width);
+    }
+    let per_slice = u16::try_from(count).unwrap_or(u16::MAX);
+    let slice = (width / per_slice).max(1);
+    let offset = u16::try_from(index)
+        .unwrap_or(u16::MAX)
+        .saturating_mul(slice);
+    let slot_width = if index + 1 == count {
+        width.saturating_sub(offset)
+    } else {
+        slice
+    };
+    (offset, slot_width)
+}
 
 /// Draw one button row at body row `row`.
 pub(crate) fn render(
@@ -37,10 +143,9 @@ pub(crate) fn render(
         return;
     }
 
-    let count = u16::try_from(labels.len()).unwrap_or(u16::MAX);
+    let count = labels.len();
     let left = rect.body.x.saturating_add(1);
     let width = rect.body.width.saturating_sub(2);
-    let slice = (width / count).max(1);
 
     for (index, label) in labels.iter().enumerate() {
         let active = selected == index || hovered == Some(index);
@@ -49,16 +154,7 @@ pub(crate) fn render(
         } else {
             format!("‹ {label} ›")
         };
-        let offset = u16::try_from(index)
-            .unwrap_or(u16::MAX)
-            .saturating_mul(slice);
-        // The last slot takes the remainder so the drawn row covers every
-        // content column, exactly like [`slot`]'s hit map.
-        let slot_width = if index + 1 == labels.len() {
-            width.saturating_sub(offset)
-        } else {
-            slice
-        };
+        let (offset, slot_width) = span(index, count, width);
         let area = Rect::new(left.saturating_add(offset), y, slot_width, 1);
         if area.width == 0 {
             continue;
@@ -98,13 +194,16 @@ pub(crate) fn render(
 ///
 /// The row is split into `count` slices of `(width / count).max(1)` columns;
 /// the last slice extends to the end of the row, so the hit map is exactly the
-/// painted slot map. The slice is never zero, so a narrow modal still assigns
-/// every column to a button instead of dividing by zero.
+/// painted slot map. Callers reject an empty row first.
 fn slot(column: u16, width: u16, count: usize) -> usize {
-    let count = count.max(1);
-    let per_slice = u16::try_from(count).unwrap_or(u16::MAX);
-    let slice = (width / per_slice).max(1);
-    usize::from(column / slice).min(count - 1)
+    (0..count)
+        .find(|index| {
+            let (offset, slot_width) = span(*index, count, width);
+            (offset..offset.saturating_add(slot_width)).contains(&column)
+        })
+        // A body narrower than the labels paints no cell for the last slice;
+        // keep the old fallback of assigning the column to the last button.
+        .unwrap_or_else(|| count.saturating_sub(1))
 }
 
 /// The button under `mouse` when the pointer is on body row `row`.
@@ -129,6 +228,7 @@ mod tests {
     use super::hit;
     use crate::event::{MouseInput, MouseKind};
     use crate::modal::geometry::{self, ModalRect, ModalWidth};
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn mouse(kind: MouseKind, x: u16, y: u16) -> MouseInput {
         MouseInput {
@@ -137,6 +237,10 @@ mod tests {
             y,
             shift: false,
         }
+    }
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
     }
 
     #[test]
@@ -184,46 +288,65 @@ mod tests {
     }
 
     #[test]
-    fn the_hit_map_matches_the_drawn_slots_at_the_edges() {
-        // Widths that do and do not divide evenly, with two and three labels:
-        // the old proportional map disagreed with the painted slices here.
-        for (width, count) in [(63_u16, 2_usize), (64, 3), (63, 3), (64, 2)] {
+    fn the_hit_map_matches_the_drawn_slots_at_the_known_boundaries() {
+        // (body width, label count, content column, expected button). The
+        // neighbours of each boundary prove the slice edge, not just the
+        // middle: 63 columns split 31/32 and 64 split 21/21/22.
+        for (width, count, column, expected) in [
+            (63_u16, 2_usize, 30_u16, 0_usize),
+            (63, 2, 31, 1),
+            (64, 3, 20, 0),
+            (64, 3, 21, 1),
+            (64, 3, 41, 1),
+            (64, 3, 42, 2),
+            (64, 3, 63, 2),
+        ] {
             let rect = ModalRect {
                 area: Rect::new(0, 0, width + 5, 5),
                 body: Rect::new(2, 0, width + 2, 3),
             };
             let row = 1;
-            let slice = (width / u16::try_from(count).unwrap_or(u16::MAX)).max(1);
-            for column in 0..width {
-                let expected = (0..count)
-                    .find(|index| {
-                        let offset = u16::try_from(*index)
-                            .unwrap_or(u16::MAX)
-                            .saturating_mul(slice);
-                        let slot_width = if index + 1 == count {
-                            width.saturating_sub(offset)
-                        } else {
-                            slice
-                        };
-                        (offset..offset.saturating_add(slot_width)).contains(&column)
-                    })
-                    .expect("every content column is drawn in one slot");
-                assert_eq!(
-                    hit(
-                        rect,
-                        row,
-                        count,
-                        mouse(
-                            MouseKind::Move,
-                            rect.body.x + 2 + column,
-                            rect.body.y + row + 1
-                        )
-                    ),
-                    Some(expected),
-                    "width={width} count={count} column={column}"
-                );
-            }
+            assert_eq!(
+                hit(
+                    rect,
+                    row,
+                    count,
+                    mouse(
+                        MouseKind::Move,
+                        rect.body.x + 2 + column,
+                        rect.body.y + row + 1
+                    )
+                ),
+                Some(expected),
+                "width={width} count={count} column={column}"
+            );
         }
+    }
+
+    #[test]
+    fn cycle_wraps_in_both_directions() {
+        assert_eq!(super::cycle(0, 3, true), 1);
+        assert_eq!(super::cycle(2, 3, true), 0);
+        assert_eq!(super::cycle(0, 3, false), 2);
+        assert_eq!(super::cycle(1, 3, false), 0);
+        assert_eq!(super::cycle(7, 3, true), 2);
+        assert_eq!(super::cycle(0, 0, true), 0);
+    }
+
+    #[test]
+    fn the_row_activates_the_keyboard_selection_not_the_hover() {
+        let mut row = super::Row {
+            selected: 0,
+            hovered: Some(2),
+        };
+        assert_eq!(row.on_key(key(KeyCode::Right), 3), None);
+        assert_eq!(row.selected, 1);
+        assert_eq!(row.hovered, Some(2), "a keyboard move keeps the paint");
+        assert_eq!(row.on_key(key(KeyCode::Enter), 3), Some(1));
+        assert_eq!(row.on_key(key(KeyCode::Char(' ')), 3), Some(1));
+        assert_eq!(row.on_key(key(KeyCode::BackTab), 3), None);
+        assert_eq!(row.selected, 0);
+        assert_eq!(row.on_key(key(KeyCode::Esc), 3), None);
     }
 
     #[test]

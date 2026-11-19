@@ -211,16 +211,6 @@ impl TagModal {
         self.set_pending(&item.name, next);
     }
 
-    fn move_selection(&mut self, delta: i32) {
-        let count = self.option_count();
-        if count == 0 {
-            return;
-        }
-        let count = i32::try_from(count).unwrap_or(1);
-        let current = i32::try_from(self.selected).unwrap_or(0);
-        self.selected = usize::try_from((current + delta).rem_euclid(count)).unwrap_or(0);
-    }
-
     /// Apply the custom value first, then each pending change as its own action.
     fn apply(&self) -> Outcome {
         if self.ids.is_empty() {
@@ -301,11 +291,11 @@ impl Modal for TagModal {
             KeyCode::Esc => Outcome::Close,
             KeyCode::Enter => self.apply(),
             KeyCode::Up => {
-                self.move_selection(-1);
+                self.selected = super::buttons::cycle(self.selected, self.option_count(), false);
                 Outcome::Continue
             }
             KeyCode::Down => {
-                self.move_selection(1);
+                self.selected = super::buttons::cycle(self.selected, self.option_count(), true);
                 Outcome::Continue
             }
             KeyCode::Backspace | KeyCode::Delete if self.selected == 0 => {

@@ -48,15 +48,9 @@ pub fn wrap(text: &str, width: u16) -> Vec<String> {
     lines
 }
 
-/// Number of lines [`wrap`] would produce.
-#[must_use]
-pub fn wrapped_line_count(text: &str, width: u16) -> usize {
-    wrap(text, width).len()
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{wrap, wrapped_line_count};
+    use super::wrap;
 
     #[test]
     fn short_text_is_one_line_per_paragraph() {
@@ -68,25 +62,15 @@ mod tests {
     #[test]
     fn breaks_after_the_last_space_in_the_window() {
         assert_eq!(wrap("one two three", 7), ["one two", "three"]);
-        assert_eq!(wrapped_line_count("one two three", 7), 2);
     }
 
     #[test]
     fn a_word_longer_than_the_width_is_hard_broken() {
         assert_eq!(wrap("abcdefgh", 3), ["abc", "def", "gh"]);
-        assert_eq!(wrapped_line_count("abcdefgh", 3), 3);
     }
 
     #[test]
     fn zero_width_still_produces_a_line() {
-        assert_eq!(wrapped_line_count("x", 0), 1);
-    }
-
-    #[test]
-    fn the_count_matches_the_rendered_lines() {
-        for width in 1..=30 {
-            let text = "Archive all completed todos to done.txt?";
-            assert_eq!(wrapped_line_count(text, width), wrap(text, width).len());
-        }
+        assert_eq!(wrap("x", 0), ["x"]);
     }
 }

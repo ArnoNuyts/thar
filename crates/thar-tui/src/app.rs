@@ -693,7 +693,7 @@ impl App {
     /// Number of list rows that fit right now.
     #[must_use]
     pub fn visible_height(&self) -> usize {
-        self.layout().list_height as usize
+        usize::from(self.layout().list_height)
     }
 
     /// Row index for a todo id, if it is visible.
@@ -861,7 +861,7 @@ impl App {
         self.toast.as_ref().and_then(|toast| toast.remaining(now))
     }
 
-    // ---- CP7: mutation, history, save and modal plumbing -------------------
+    // ---- Mutation, history, save and modal plumbing ------------------------
 
     /// True when a command may change the file.
     #[must_use]
@@ -1259,6 +1259,44 @@ impl App {
     /// Take the host effects queued by commands.
     pub fn take_effects(&mut self) -> Vec<Effect> {
         std::mem::take(&mut self.effects)
+    }
+
+    /// Record the outcome of a clipboard copy.
+    ///
+    /// The host only performs the clipboard write; this method owns the toast
+    /// text for a single todo, a batch, and a failure.
+    pub fn copy_finished(&mut self, count: usize, result: Result<(), String>) {
+        match result {
+            Ok(()) => self.push_toast(match count {
+                1 => "Todo copied".to_owned(),
+                count => format!("{count} todos copied"),
+            }),
+            Err(error) => self.push_toast(format!("Copy failed: {error}")),
+        }
+    }
+
+    /// Record the outcome of a clipboard read.
+    ///
+    /// A successful read follows the same path as [`App::receive_clipboard`];
+    /// a host failure is reported under the `Paste failed:` prefix. The write
+    /// gate and the paste policy stay in the app, not in the host.
+    pub fn paste_finished(&mut self, result: Result<String, String>, now: Instant) {
+        match result {
+            Ok(text) => self.receive_clipboard(&text, now),
+            Err(error) => self.push_toast_at(format!("Paste failed: {error}"), now),
+        }
+    }
+
+    /// Record the outcome of an archive append.
+    ///
+    /// The host only appends to `done.txt`; on success the archived ids are
+    /// removed from the list, and on failure the list is untouched and the
+    /// error is shown under the `Archive failed:` prefix.
+    pub fn archive_finished(&mut self, ids: &[TodoId], result: Result<(), String>, now: Instant) {
+        match result {
+            Ok(()) => self.remove_ids(ids, now),
+            Err(error) => self.push_toast_at(format!("Archive failed: {error}"), now),
+        }
     }
 
     /// Deadline of the pending debounced save.
@@ -1781,6 +1819,69 @@ mod tests {
         assert_eq!(
             app.toast_message(now()),
             Some("Paste failed: Todo text cannot start with a date; use the date picker")
+        );
+    }
+
+    #[test]
+    fn copy_finished_reports_single_batches_and_failures() {
+        let mut app = app(&["one"]);
+
+        app.copy_finished(1, Ok(()));
+        assert_eq!(app.toast_message(now()), Some("Todo copied"));
+
+        app.copy_finished(3, Ok(()));
+        assert_eq!(app.toast_message(now()), Some("3 todos copied"));
+
+        app.copy_finished(2, Err("xclip exited with 1".to_owned()));
+        assert_eq!(
+            app.toast_message(now()),
+            Some("Copy failed: xclip exited with 1")
+        );
+    }
+
+    #[test]
+    fn paste_finished_routes_text_through_the_paste_path() {
+        let mut app = app(&["one"]);
+        app.paste_finished(Ok("two\nthree".to_owned()), now());
+        assert_eq!(app.todos().len(), 3);
+        assert!(app.is_dirty());
+    }
+
+    #[test]
+    fn paste_finished_reports_a_host_failure() {
+        let mut app = app(&["one"]);
+        app.paste_finished(Err("no clipboard command found".to_owned()), now());
+        assert_eq!(app.todos().len(), 1, "nothing may be added");
+        assert_eq!(
+            app.toast_message(now()),
+            Some("Paste failed: no clipboard command found")
+        );
+    }
+
+    #[test]
+    fn archive_finished_removes_the_archived_ids() {
+        let mut app = app(&["one", "two"]);
+        let ids = vec![app.todos()[0].id];
+        app.archive_finished(&ids, Ok(()), now());
+        assert_eq!(
+            app.todos()
+                .iter()
+                .map(|todo| todo.text.as_str())
+                .collect::<Vec<_>>(),
+            ["two"]
+        );
+        assert_eq!(app.history.undo_len(), 1, "the removal is one undo step");
+    }
+
+    #[test]
+    fn archive_finished_reports_a_failure_and_keeps_the_list() {
+        let mut app = app(&["one"]);
+        let ids = vec![app.todos()[0].id];
+        app.archive_finished(&ids, Err("done.txt: permission denied".to_owned()), now());
+        assert_eq!(app.todos().len(), 1, "a failed archive removes nothing");
+        assert_eq!(
+            app.toast_message(now()),
+            Some("Archive failed: done.txt: permission denied")
         );
     }
 

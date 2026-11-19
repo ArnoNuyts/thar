@@ -1,29 +1,30 @@
 //! The update-available screen.
 //!
-//! Ported from `components/UpdateModal.tsx`. CP7 has no update check and no
-//! self-update: the screen renders an [`UpdateModel`] the host supplies, and
+//! Ported from `components/UpdateModal.tsx`. This build has no update check and
+//! no self-update: the screen renders an [`UpdateModel`] the host supplies, and
 //! "Update now" only records intent with a bounded toast. The network work,
-//! the skip cache and `thar update` arrive with CP8.
+//! the skip cache and `thar update` arrive with a future release.
 //!
 //! Layout: four content lines (version, install method, command, release
 //! notes), a blank margin row, then the button row. The width is 70% and the
 //! mouse map splits the button row proportionally between the visible actions.
 
 use ratatui::Frame;
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 
-use crate::event::{MouseInput, MouseKind};
+use crate::event::MouseInput;
+use crate::modal::buttons::Row;
 use crate::modal::geometry::{self, ModalRect, ModalWidth};
 use crate::modal::text;
 use crate::modal::{Action, Modal, ModalId, Outcome};
 use crate::theme;
 
-/// Toast shown by "Update now" until CP8 lands the updater.
-pub const SELF_UPDATE_MESSAGE: &str = "Self-update arrives with CP8";
+/// Toast shown by "Update now" while the updater is unavailable in this build.
+pub const SELF_UPDATE_MESSAGE: &str = "Self-update is not available in this build";
 
 /// How the running binary was installed, mirroring `logic/install-method.ts`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -147,8 +148,8 @@ impl UpdateAction {
 /// The update-available screen.
 pub struct UpdateModal {
     model: UpdateModel,
-    selected: usize,
-    hovered: Option<usize>,
+    /// Shared button row, in [`UpdateModal::actions`] order.
+    buttons: Row,
     terminal_width: u16,
     terminal_height: u16,
 }
@@ -159,8 +160,7 @@ impl UpdateModal {
     pub fn new(model: UpdateModel, terminal_width: u16, terminal_height: u16) -> Self {
         Self {
             model,
-            selected: 0,
-            hovered: None,
+            buttons: Row::default(),
             terminal_width,
             terminal_height,
         }
@@ -216,13 +216,6 @@ impl UpdateModal {
         )
     }
 
-    fn move_by(&mut self, delta: i32) {
-        let count = i32::try_from(self.actions().len()).unwrap_or(1);
-        let current = i32::try_from(self.selected).unwrap_or(0);
-        let next = (current + delta).rem_euclid(count);
-        self.selected = usize::try_from(next).unwrap_or(0);
-    }
-
     fn activate(&self, index: usize) -> Outcome {
         match self.actions().get(index) {
             Some(UpdateAction::UpdateNow) => Outcome::Actions(vec![
@@ -271,51 +264,19 @@ impl Modal for UpdateModal {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Outcome {
-        match key.code {
-            KeyCode::Esc => return Outcome::Close,
-            KeyCode::Tab => {
-                self.move_by(if key.modifiers.contains(KeyModifiers::SHIFT) {
-                    -1
-                } else {
-                    1
-                });
-                return Outcome::Continue;
-            }
-            KeyCode::Left => {
-                self.move_by(-1);
-                return Outcome::Continue;
-            }
-            KeyCode::Right => {
-                self.move_by(1);
-                return Outcome::Continue;
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                let index = self.hovered.unwrap_or(self.selected);
-                return self.activate(index);
-            }
-            _ => {}
+        if key.code == KeyCode::Esc {
+            return Outcome::Close;
         }
-        Outcome::Continue
+        self.buttons
+            .on_key(key, self.actions().len())
+            .map_or(Outcome::Continue, |index| self.activate(index))
     }
 
     fn handle_mouse(&mut self, mouse: MouseInput) -> Outcome {
         let rect = self.geometry();
-        let count = self.actions().len();
-        match mouse.kind {
-            MouseKind::Move => {
-                self.hovered = super::buttons::hit(rect, self.button_row(), count, mouse);
-                Outcome::Continue
-            }
-            MouseKind::LeftClick => {
-                let Some(index) = super::buttons::hit(rect, self.button_row(), count, mouse) else {
-                    return Outcome::Continue;
-                };
-                self.hovered = Some(index);
-                self.selected = index;
-                self.activate(index)
-            }
-            _ => Outcome::Continue,
-        }
+        self.buttons
+            .on_mouse(rect, self.button_row(), self.actions().len(), mouse)
+            .map_or(Outcome::Continue, |index| self.activate(index))
     }
 
     fn render(&self, frame: &mut Frame, rect: ModalRect) {
@@ -350,8 +311,8 @@ impl Modal for UpdateModal {
             rect,
             self.button_row(),
             &labels,
-            self.selected,
-            self.hovered,
+            self.buttons.selected,
+            self.buttons.hovered,
         );
     }
 }
@@ -455,11 +416,54 @@ mod tests {
     fn escape_closes_and_tab_wraps() {
         let mut modal = UpdateModal::new(model(true), 100, 30);
         modal.handle_key(key(KeyCode::Left));
-        assert_eq!(modal.selected, 2);
+        assert_eq!(modal.buttons.selected, 2);
         modal.handle_key(key(KeyCode::Right));
-        assert_eq!(modal.selected, 0);
+        assert_eq!(modal.buttons.selected, 0);
         assert!(matches!(
             modal.handle_key(key(KeyCode::Esc)),
+            Outcome::Close
+        ));
+    }
+
+    #[test]
+    fn backtab_moves_the_selection_back() {
+        let mut modal = UpdateModal::new(model(true), 100, 30);
+        assert_eq!(modal.buttons.selected, 0);
+        assert!(matches!(
+            modal.handle_key(key(KeyCode::BackTab)),
+            Outcome::Continue
+        ));
+        assert_eq!(modal.buttons.selected, 2);
+        modal.handle_key(key(KeyCode::Tab));
+        assert_eq!(modal.buttons.selected, 0);
+    }
+
+    #[test]
+    fn a_stale_hover_does_not_override_the_keyboard_selection() {
+        let mut modal = UpdateModal::new(model(true), 100, 30);
+        let rect = modal.geometry();
+        let button_y = rect.body.y + modal.button_row();
+        // Hover Skip: the last slice of the 65 content columns.
+        let hover_skip = MouseInput {
+            kind: MouseKind::Move,
+            x: rect.area.x + 50,
+            y: button_y + 1,
+            shift: false,
+        };
+        assert!(matches!(modal.handle_mouse(hover_skip), Outcome::Continue));
+        assert_eq!(modal.buttons.hovered, Some(2));
+        assert_eq!(modal.buttons.selected, 0);
+
+        // Right selects Later, then Enter activates Later (close), not the
+        // stale Skip hover.
+        assert!(matches!(
+            modal.handle_key(key(KeyCode::Right)),
+            Outcome::Continue
+        ));
+        assert_eq!(modal.buttons.selected, 1);
+        assert_eq!(modal.buttons.hovered, Some(2));
+        assert!(matches!(
+            modal.handle_key(key(KeyCode::Enter)),
             Outcome::Close
         ));
     }
@@ -478,7 +482,7 @@ mod tests {
             shift: false,
         };
         assert!(matches!(modal.handle_mouse(hover), Outcome::Continue));
-        assert_eq!(modal.hovered, Some(2));
+        assert_eq!(modal.buttons.hovered, Some(2));
 
         let click = MouseInput {
             kind: MouseKind::LeftClick,

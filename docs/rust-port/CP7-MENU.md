@@ -80,7 +80,7 @@ version` when `can_self_update`, otherwise `Later`, `Skip this version`.
 Enter/Space activate, Tab/Left/Right navigate, Escape closes. The mouse map
 splits the button row proportionally across the visible actions.
 
-"Update now" closes the screen and emits `Self-update arrives with CP8`; it
+"Update now" closes the screen and emits `Self-update is not available in this build`; it
 performs no network or process work. "Skip this version" closes and toasts the
 version for this session.
 

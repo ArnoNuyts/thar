@@ -153,9 +153,15 @@ jobs:
       - name: Test
         run: cargo test --locked --workspace --all-features
 
-  # CP6 runs the binary on a real PTY. Linux is also covered by the `test`
+  # The binary runs on a real PTY here. Linux is also covered by the `test`
   # job's workspace run; this matrix adds the macOS runner, where the kernel
   # PTY, termios and mouse decoding differ.
+  #
+  # Coverage limit: this matrix is Ubuntu x64 plus macOS 15 arm64. The release
+  # workflow's macOS 15 Intel (x64) and Ubuntu 22.04 arm (Linux arm64) legs
+  # build and publish archives but run no tests. Those targets are therefore
+  # compile-and-package coverage only; a target-specific runtime regression
+  # there would first appear in a released archive, not in this job.
   pty:
     name: PTY (${{ matrix.os }})
     strategy:

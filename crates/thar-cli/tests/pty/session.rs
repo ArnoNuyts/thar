@@ -67,9 +67,11 @@ pub struct Snapshot {
 
 impl Snapshot {
     /// One whole screen row, including trailing spaces.
+    ///
+    /// A row outside the screen is the empty string.
     #[must_use]
-    pub fn row(&self, row: u16) -> String {
-        self.rows.get(usize::from(row)).cloned().unwrap_or_default()
+    pub fn row(&self, row: u16) -> &str {
+        self.rows.get(usize::from(row)).map_or("", String::as_str)
     }
 
     /// The first highlighted todo row. With no shift range there is exactly
@@ -258,6 +260,30 @@ impl Session {
         read(output.parser.screen())
     }
 
+    /// Poll the live parsed screen until `predicate` holds, then return.
+    ///
+    /// Used instead of [`Session::wait_until`] when a wait needs per-cell
+    /// styles, which a [`Snapshot`] drops.
+    ///
+    /// # Panics
+    ///
+    /// Panics with the last screen after [`TIMEOUT`], so a failure shows what
+    /// the app actually drew instead of just "condition not met".
+    pub fn wait_screen(&self, description: &str, predicate: impl Fn(&vt100::Screen) -> bool) {
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            if self.with_screen(&predicate) {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for {description}; last screen:\n{}",
+                self.snapshot().text
+            );
+            thread::sleep(POLL_INTERVAL);
+        }
+    }
+
     /// Poll the screen until `predicate` holds, then return.
     ///
     /// # Panics
@@ -265,19 +291,7 @@ impl Session {
     /// Panics with the last screen after [`TIMEOUT`], so a failure shows what
     /// the app actually drew instead of just "condition not met".
     pub fn wait_until(&self, description: &str, predicate: impl Fn(&Snapshot) -> bool) {
-        let deadline = Instant::now() + TIMEOUT;
-        loop {
-            let snapshot = self.snapshot();
-            if predicate(&snapshot) {
-                return;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "timed out waiting for {description}; last screen:\n{}",
-                snapshot.text
-            );
-            thread::sleep(POLL_INTERVAL);
-        }
+        self.wait_screen(description, |screen| predicate(&snapshot_of(screen)));
     }
 
     /// Wait until the whole screen contains `needle`.
@@ -294,12 +308,6 @@ impl Session {
         });
     }
 
-    /// True when the cell at 0-based `row`/`col` is painted in reverse video.
-    #[must_use]
-    pub fn cell_reversed(&self, row: u16, col: u16) -> bool {
-        self.with_screen(|screen| screen.cell(row, col).is_some_and(|cell| cell.inverse()))
-    }
-
     /// Wait until the cell at `row`/`col` has (or no longer has) reverse video.
     ///
     /// This reads the live parsed screen rather than a [`Snapshot`] because the
@@ -310,18 +318,9 @@ impl Session {
         } else {
             format!("cell ({row}, {col}) to lose reverse video")
         };
-        let deadline = Instant::now() + TIMEOUT;
-        loop {
-            if self.cell_reversed(row, col) == reversed {
-                return;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "timed out waiting for {description}; last screen:\n{}",
-                self.snapshot().text
-            );
-            thread::sleep(POLL_INTERVAL);
-        }
+        self.wait_screen(&description, |screen| {
+            cell_reversed(screen, row, col) == reversed
+        });
     }
 
     /// Wait until the whole screen no longer contains `needle`.
@@ -460,16 +459,18 @@ fn snapshot_of(screen: &vt100::Screen) -> Snapshot {
     let mut lines = Vec::with_capacity(usize::from(rows.get()));
 
     for row in 0..rows.get() {
-        let text = row_text(screen, row, cols.get());
-        lines.push(whole_row_text(screen, row, cols.get()));
-        if row >= rows.get().saturating_sub(ACTION_BAR_ROWS) {
-            continue;
+        let whole = whole_row_text(screen, row, cols.get());
+        if row < rows.get().saturating_sub(ACTION_BAR_ROWS) {
+            let text = whole.trim_end();
+            if is_todo_row(text) {
+                let highlighted = screen.cell(row, 0).map(vt100::Cell::bgcolor) != background;
+                todos.push(TodoRow {
+                    text: text.to_owned(),
+                    highlighted,
+                });
+            }
         }
-        if !is_todo_row(&text) {
-            continue;
-        }
-        let highlighted = screen.cell(row, 0).map(vt100::Cell::bgcolor) != background;
-        todos.push(TodoRow { text, highlighted });
+        lines.push(whole);
     }
 
     Snapshot {
@@ -477,6 +478,11 @@ fn snapshot_of(screen: &vt100::Screen) -> Snapshot {
         rows: lines,
         todos,
     }
+}
+
+/// True when the cell at 0-based `row`/`col` is painted in reverse video.
+fn cell_reversed(screen: &vt100::Screen, row: u16, col: u16) -> bool {
+    screen.cell(row, col).is_some_and(|cell| cell.inverse())
 }
 
 /// The full row from the parsed cells, retaining every trailing space.
@@ -517,10 +523,6 @@ fn dominant_background(screen: &vt100::Screen) -> Option<vt100::Color> {
         .into_iter()
         .max_by_key(|(_, count)| *count)
         .map(|(color, _)| color)
-}
-
-fn row_text(screen: &vt100::Screen, row: u16, cols: u16) -> String {
-    whole_row_text(screen, row, cols).trim_end().to_owned()
 }
 
 /// A rendered todo row starts with the 1-based number and carries a checkbox.

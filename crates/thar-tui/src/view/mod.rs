@@ -154,7 +154,11 @@ fn render_list(frame: &mut Frame, app: &App, layout: Layout) {
         return;
     }
 
-    let track = scrollbar::geometry(app.rows().len(), layout.list_height as usize, app.offset());
+    let track = scrollbar::geometry(
+        app.rows().len(),
+        usize::from(layout.list_height),
+        app.offset(),
+    );
     let content_width = if track.is_some() {
         layout.list_width
     } else {

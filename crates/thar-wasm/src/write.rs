@@ -1,6 +1,6 @@
 //! The `serialize_file` request and its JSON envelope.
 //!
-//! CP4's write path: the host hands over the structured records it already
+//! The write path: the host hands over the structured records it already
 //! holds (the same DTO `build_rows` accepts, see [`crate::record`]) and gets
 //! back the exact file text `writeTodosToFile` would write, or the write-time
 //! control-character rejection.
@@ -11,8 +11,8 @@
 //! { "todos": [ …the records documented in `crate::record`… ] }
 //! ```
 //!
-//! `todos` is required and may be empty. Unknown fields are ignored, so a CP1
-//! parse record with its extra `isDone`/`toString`/`hash` fields can be sent
+//! `todos` is required and may be empty. Unknown fields are ignored, so a
+//! contract parse record with its extra `isDone`/`toString`/`hash` fields can be sent
 //! without a second projection. As everywhere on this boundary, missing
 //! required fields are a *data* error, never a panic.
 //!
@@ -28,7 +28,7 @@
 //! { "ok": false, "error": { "name": …, "code": …, "message": …, … } }
 //! ```
 //!
-//! The shape is the CP1 write shape exactly: one `Todo::to_string()` per record,
+//! The shape is the contract write shape exactly: one `Todo::to_string()` per record,
 //! joined with `"\n"`, plus one trailing `"\n"`. Serializing **zero** todos
 //! therefore yields `"\n"`, because the TypeScript oracle is
 //! `todos.map(toString).join("\n") + "\n"` and `[].join("\n")` is `""`; the
@@ -98,7 +98,7 @@ pub(crate) enum WriteError {
 }
 
 impl WriteError {
-    /// Stable machine code, in the CP1 style.
+    /// Stable machine code, in the contract style.
     pub(crate) fn code(&self) -> &'static str {
         match self {
             Self::InvalidJson { .. } | Self::InvalidInput { .. } => "INVALID_INPUT",

@@ -7,7 +7,7 @@
 //! rebuilt only when the query, hidden-view toggle, today, or the todo list
 //! changes.
 //!
-//! The row semantics are CP3b1's, unchanged: context headers (including the
+//! The row semantics are the row builder's, unchanged: context headers (including the
 //! `"None"` group) are rows, todo numbers are 1-based across the whole list, and
 //! consecutive todos with the same first context form one group.
 

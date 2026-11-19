@@ -139,15 +139,6 @@ impl SetRecurrenceModal {
         };
     }
 
-    fn move_selection(&mut self, delta: i32) {
-        if self.options.is_empty() {
-            return;
-        }
-        let count = i32::try_from(self.options.len()).unwrap_or(1);
-        let current = i32::try_from(self.selected).unwrap_or(0);
-        self.selected = usize::try_from((current + delta).rem_euclid(count)).unwrap_or(0);
-    }
-
     fn select_base(&mut self) -> Outcome {
         match self.options.get(self.selected).copied() {
             Some(Base::Reset) => {
@@ -224,11 +215,11 @@ impl Modal for SetRecurrenceModal {
             Step::Base => match key.code {
                 KeyCode::Esc => Outcome::Close,
                 KeyCode::Up => {
-                    self.move_selection(-1);
+                    self.selected = super::buttons::cycle(self.selected, self.options.len(), false);
                     Outcome::Continue
                 }
                 KeyCode::Down => {
-                    self.move_selection(1);
+                    self.selected = super::buttons::cycle(self.selected, self.options.len(), true);
                     Outcome::Continue
                 }
                 KeyCode::Enter => self.select_base(),

@@ -160,6 +160,29 @@ cargo test -p thar-cli --test pty -- --ignored cp7_editor_screenshot
 `ffmpeg` with the librsvg decoder is required for the SVG → PNG step, the same
 as the CP6/CP7-write assets.
 
+## Windows paste detection
+
+Windows does not report a bracketed paste as `Event::Paste`: a paste arrives as
+individual key events, so `crates/thar-cli/src/terminal.rs` coalesces a burst of
+queued printable presses into one paste. The rule is deliberately narrow, and
+these are its known limits:
+
+- **A paste of one repeated character stays single keys.** `qqq` or three spaces
+  is indistinguishable from auto-repeat, so a burst needs at least three presses
+  and at least two distinct keys. Typing `qqq` by hand is unaffected; pasting it
+  runs the single-key commands.
+- **`Ctrl+Alt+letter` looks like AltGr.** Windows reports both the same way, so
+  the host clears the pair and types the layout character (which is how `@`,
+  `€`, `{`, `[`, `\`, `|` and `~` type on many layouts). A `Ctrl+Alt` shortcut
+  therefore cannot be told apart from an AltGr character.
+- **Keys typed during a blocking effect may become a paste.** Copy, paste and
+  archive run synchronously on the event loop; the clipboard call spawns
+  `powershell.exe` and takes roughly 440 ms. Keys typed during that stall are
+  only drained afterwards, and three or more distinct keys arriving together are
+  treated as a paste. Moving those effects off the event loop would remove the
+  stall; the timing change is not part of this slice, so the burst rule keeps
+  these bounds documented instead.
+
 ## Deliberate gaps
 
 - **Ctrl+C inside a modal closes the modal, not the process.** The modal host

@@ -41,8 +41,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
 use thar_core::ReadLimits;
+use thar_tui::App;
 
-use crate::file::{LoadError, read_bytes};
+use crate::file::{LoadError, LoadedFile, parse_bytes, read_bytes};
 
 /// How often the file metadata is checked, while the loop is idle.
 pub const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -86,8 +87,8 @@ impl Stamp {
 pub enum ReloadOutcome {
     /// The on-disk bytes differ from the last accepted content.
     ///
-    /// The caller decodes and parses them with [`crate::file::parse_bytes`],
-    /// then hands them to [`FileSync::adopt`], which is also the save baseline.
+    /// [`FileSync::apply`] decodes and parses them with
+    /// [`crate::file::parse_bytes`], then adopts them as the save baseline.
     Changed(Vec<u8>),
     /// The file was rewritten with exactly the accepted bytes.
     ///
@@ -103,11 +104,12 @@ pub enum ReloadOutcome {
 /// A poll-based watcher for one todo file.
 ///
 /// Construct it once per session with the limits the initial load used and the
-/// exact bytes the caller loaded. The first poll compares the on-disk content
-/// against that caller-supplied baseline: equal bytes are [`ReloadOutcome::Unchanged`]
-/// (a no-op for a healthy session), different bytes reload. Nothing is read at
-/// construction, so a change between the load and the watcher cannot be
-/// mistaken for the session's own state.
+/// exact bytes the caller loaded ([`FileSync::from_load`] does both). The first
+/// poll compares the on-disk content against that caller-supplied baseline:
+/// equal bytes are [`ReloadOutcome::Unchanged`] (a no-op for a healthy session),
+/// different bytes reload. The watcher does no I/O at construction, so a change
+/// between the load and the watcher cannot be mistaken for the session's own
+/// state.
 #[derive(Debug)]
 pub struct FileSync {
     path: PathBuf,
@@ -133,18 +135,21 @@ pub struct FileSync {
 impl FileSync {
     /// Start watching `path` with the same limits the initial load used.
     ///
-    /// `baseline` is the bytes the caller loaded and parsed; it becomes the
-    /// first comparison target and the save baseline. The watcher arms one
-    /// debounce immediately, so the first poll re-reads the file once the
-    /// quiet period ends and reports whether it still matches `baseline`.
+    /// `baseline` is the bytes the caller loaded and parsed, or `None` when the
+    /// file was missing. It becomes the first comparison target and the save
+    /// baseline. The watcher arms one debounce immediately, so the first poll
+    /// re-reads the file once the quiet period ends and reports whether it
+    /// still matches `baseline`.
     #[must_use]
-    pub fn new(path: impl Into<PathBuf>, limits: ReadLimits, baseline: Vec<u8>) -> Self {
-        let path = path.into();
-        let started_missing = fs::metadata(&path).is_err();
+    pub fn new(path: impl Into<PathBuf>, limits: ReadLimits, baseline: Option<Vec<u8>>) -> Self {
+        // A missing file at load time is the startup state. Deriving it from
+        // the baseline instead of a second stat keeps the load and the watcher
+        // on one observation.
+        let started_missing = baseline.is_none();
         Self {
-            path,
+            path: path.into(),
             limits,
-            baseline,
+            baseline: baseline.unwrap_or_default(),
             observed: None,
             started_missing,
             next_poll: Instant::now(),
@@ -152,6 +157,17 @@ impl FileSync {
             suppress_until: None,
             content_reads: 0,
         }
+    }
+
+    /// Build the watcher from a load result.
+    ///
+    /// This is the one constructor the host uses: it takes the load's limits
+    /// and exact bytes (including the missing-file `None`) without a second
+    /// read, so the first poll compares against what the session actually
+    /// loaded.
+    #[must_use]
+    pub fn from_load(path: impl Into<PathBuf>, loaded: &LoadedFile) -> Self {
+        Self::new(path, loaded.limits, loaded.bytes.clone())
     }
 
     /// Adopt bytes the caller has just read, parsed, or written.
@@ -259,6 +275,43 @@ impl FileSync {
     #[must_use]
     pub fn content_reads(&self) -> u64 {
         self.content_reads
+    }
+
+    /// Apply one poll outcome to the app: reload the list, or enter read-only
+    /// recovery.
+    ///
+    /// The bytes are parsed once. On success they become the watcher baseline
+    /// in the same step, so the bytes that were parsed are exactly the bytes a
+    /// later save compares against. `Unchanged` is a no-op for a healthy
+    /// session, but during recovery it means an external fix restored the
+    /// accepted bytes: re-parse the baseline so an unsaved in-memory edit is
+    /// replaced instead of being marked saved.
+    pub fn apply(&mut self, app: &mut App, now: Instant) {
+        let Some(outcome) = self.poll(now) else {
+            return;
+        };
+
+        let bytes = match outcome {
+            ReloadOutcome::Changed(bytes) => bytes,
+            ReloadOutcome::Unchanged if app.load_error().is_some() => self.baseline.clone(),
+            ReloadOutcome::Unchanged => return,
+            ReloadOutcome::Unreadable(message) => {
+                app.reload_failed(message);
+                return;
+            }
+        };
+
+        let todos = match parse_bytes(&bytes, &self.limits) {
+            Ok(todos) => todos,
+            Err(error) => {
+                app.reload_failed(bounded_message(&error.to_string()));
+                return;
+            }
+        };
+
+        self.adopt(bytes);
+        app.reloaded(todos);
+        app.push_toast(RELOADED_MESSAGE);
     }
 
     /// Refresh the observed stamp and arm the debounce when it changed.
