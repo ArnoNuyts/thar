@@ -2,7 +2,7 @@
 //!
 //! The crate deliberately carries no serializer dependency: every document it
 //! returns is written by hand so the field order is visible in the code and the
-//! module stays inside the CP2 size budget. The one document that arrives from
+//! module stays inside the WASM size budget. The one document that arrives from
 //! JavaScript (`build_rows`'s request) needs a reader, so this module implements
 //! the subset of RFC 8259 that `JSON.stringify` can produce — and nothing more:
 //!
@@ -463,8 +463,8 @@ pub(crate) fn push_json_string(out: &mut String, value: &str) {
             '\u{000C}' => out.push_str("\\f"),
             '\u{2028}' => out.push_str("\\u2028"),
             '\u{2029}' => out.push_str("\\u2029"),
-            control if (control as u32) < 0x20 => {
-                push_fmt(out, format_args!("\\u{:04x}", control as u32));
+            control if u32::from(control) < 0x20 => {
+                push_fmt(out, format_args!("\\u{:04x}", u32::from(control)));
             }
             other => out.push(other),
         }

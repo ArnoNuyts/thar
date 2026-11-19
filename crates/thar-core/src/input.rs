@@ -95,7 +95,7 @@ impl fmt::Display for TodoInputError {
     }
 }
 
-impl core::error::Error for TodoInputError {}
+impl std::error::Error for TodoInputError {}
 
 /// True when the text contains one of the four line separators.
 fn is_multiline(text: &str) -> bool {

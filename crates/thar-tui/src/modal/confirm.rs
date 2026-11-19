@@ -13,14 +13,15 @@
 //! update screens.
 
 use ratatui::Frame;
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use thar_core::TodoId;
 
-use crate::event::{MouseInput, MouseKind};
+use crate::event::MouseInput;
+use crate::modal::buttons::Row;
 use crate::modal::geometry::{self, ModalRect, ModalWidth};
 use crate::modal::text;
 use crate::modal::{Action, Modal, ModalId, Outcome};
@@ -91,8 +92,8 @@ pub const BUTTON_LABELS: [&str; 2] = ["Confirm", "Cancel"];
 /// The confirmation screen.
 pub struct ConfirmModal {
     request: ConfirmRequest,
-    selected: usize,
-    hovered: Option<usize>,
+    /// Shared button row: 0 confirms, 1 cancels.
+    buttons: Row,
     terminal_width: u16,
     terminal_height: u16,
 }
@@ -103,8 +104,7 @@ impl ConfirmModal {
     pub fn new(request: ConfirmRequest, terminal_width: u16, terminal_height: u16) -> Self {
         Self {
             request,
-            selected: 0,
-            hovered: None,
+            buttons: Row::default(),
             terminal_width,
             terminal_height,
         }
@@ -119,7 +119,7 @@ impl ConfirmModal {
     /// Highlighted button (0 confirm, 1 cancel).
     #[must_use]
     pub fn selected(&self) -> usize {
-        self.selected
+        self.buttons.selected
     }
 
     fn width_for(&self) -> ModalWidth {
@@ -159,13 +159,6 @@ impl ConfirmModal {
         )
     }
 
-    fn move_by(&mut self, delta: i32) {
-        let count = i32::try_from(BUTTON_LABELS.len()).unwrap_or(2);
-        let current = i32::try_from(self.selected).unwrap_or(0);
-        let next = (current + delta).rem_euclid(count);
-        self.selected = usize::try_from(next).unwrap_or(0);
-    }
-
     fn activate(&self, index: usize) -> Outcome {
         if index == 0 {
             Outcome::Actions(vec![Action::Close, (*self.request.confirm).clone()])
@@ -202,55 +195,19 @@ impl Modal for ConfirmModal {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Outcome {
-        match key.code {
-            KeyCode::Esc => return self.activate(1),
-            KeyCode::Tab => {
-                // A keyboard move takes over from a pointer hover; Enter then
-                // follows the keyboard selection instead of the stale hover.
-                self.hovered = None;
-                self.move_by(if key.modifiers.contains(KeyModifiers::SHIFT) {
-                    -1
-                } else {
-                    1
-                });
-                return Outcome::Continue;
-            }
-            KeyCode::Left => {
-                self.hovered = None;
-                self.move_by(-1);
-                return Outcome::Continue;
-            }
-            KeyCode::Right => {
-                self.hovered = None;
-                self.move_by(1);
-                return Outcome::Continue;
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                return self.activate(self.hovered.unwrap_or(self.selected));
-            }
-            _ => {}
+        if key.code == KeyCode::Esc {
+            return self.activate(1);
         }
-        Outcome::Continue
+        self.buttons
+            .on_key(key, BUTTON_LABELS.len())
+            .map_or(Outcome::Continue, |index| self.activate(index))
     }
 
     fn handle_mouse(&mut self, mouse: MouseInput) -> Outcome {
         let rect = self.geometry();
-        let count = BUTTON_LABELS.len();
-        match mouse.kind {
-            MouseKind::Move => {
-                self.hovered = super::buttons::hit(rect, self.button_row(), count, mouse);
-                Outcome::Continue
-            }
-            MouseKind::LeftClick => {
-                let Some(index) = super::buttons::hit(rect, self.button_row(), count, mouse) else {
-                    return Outcome::Continue;
-                };
-                self.hovered = Some(index);
-                self.selected = index;
-                self.activate(index)
-            }
-            _ => Outcome::Continue,
-        }
+        self.buttons
+            .on_mouse(rect, self.button_row(), BUTTON_LABELS.len(), mouse)
+            .map_or(Outcome::Continue, |index| self.activate(index))
     }
 
     fn render(&self, frame: &mut Frame, rect: ModalRect) {
@@ -279,8 +236,8 @@ impl Modal for ConfirmModal {
             rect,
             self.button_row(),
             &BUTTON_LABELS,
-            self.selected,
-            self.hovered,
+            self.buttons.selected,
+            self.buttons.hovered,
         );
     }
 }
@@ -372,6 +329,22 @@ mod tests {
     }
 
     #[test]
+    fn backtab_moves_the_selection_back() {
+        let mut modal = modal();
+        // Tab to Cancel, then Shift+Tab (BackTab) returns to Confirm.
+        modal.handle_key(key(KeyCode::Tab));
+        assert_eq!(modal.selected(), 1);
+        assert!(matches!(
+            modal.handle_key(key(KeyCode::BackTab)),
+            Outcome::Continue
+        ));
+        assert_eq!(modal.selected(), 0);
+        // A second BackTab wraps backwards to Cancel.
+        modal.handle_key(key(KeyCode::BackTab));
+        assert_eq!(modal.selected(), 1);
+    }
+
+    #[test]
     fn message_wrapping_sets_the_button_row() {
         let long = "a ".repeat(80);
         let modal = ConfirmModal::new(
@@ -423,7 +396,7 @@ mod tests {
             shift: false,
         };
         assert!(matches!(modal.handle_mouse(hover), Outcome::Continue));
-        assert_eq!(modal.hovered, Some(0));
+        assert_eq!(modal.buttons.hovered, Some(0));
         assert_eq!(modal.selected(), 0);
 
         // The whole half is a hover target, not only the glyphs: a cell well
@@ -435,7 +408,7 @@ mod tests {
             shift: false,
         };
         modal.handle_mouse(empty_part);
-        assert_eq!(modal.hovered, Some(0));
+        assert_eq!(modal.buttons.hovered, Some(0));
 
         // Off the button row there is no hover.
         let elsewhere = MouseInput {
@@ -445,7 +418,7 @@ mod tests {
             shift: false,
         };
         modal.handle_mouse(elsewhere);
-        assert_eq!(modal.hovered, None);
+        assert_eq!(modal.buttons.hovered, None);
     }
 
     fn modal_with_cancel() -> ConfirmModal {
@@ -455,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn a_keyboard_move_clears_a_stale_hover_before_enter() {
+    fn enter_uses_the_keyboard_selection_even_with_a_stale_hover() {
         let mut modal = modal_with_cancel();
         let rect = modal.geometry();
         let button_y = rect.body.y + modal.button_row();
@@ -467,18 +440,19 @@ mod tests {
         };
 
         // Hover Confirm, then Tab to Cancel: Enter must activate Cancel, not
-        // the pointer hover.
+        // the pointer hover. The hover still paints Confirm, which is why the
+        // activation reads the selection instead of `hovered`.
         assert!(matches!(
             modal.handle_mouse(hover_confirm),
             Outcome::Continue
         ));
-        assert_eq!(modal.hovered, Some(0));
+        assert_eq!(modal.buttons.hovered, Some(0));
         assert!(matches!(
             modal.handle_key(key(KeyCode::Tab)),
             Outcome::Continue
         ));
         assert_eq!(modal.selected(), 1);
-        assert_eq!(modal.hovered, None);
+        assert_eq!(modal.buttons.hovered, Some(0));
         assert_eq!(
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::Close, Action::ToggleHiddenView]
@@ -490,10 +464,10 @@ mod tests {
             modal.handle_mouse(hover_confirm),
             Outcome::Continue
         ));
-        assert_eq!(modal.hovered, Some(0));
+        assert_eq!(modal.buttons.hovered, Some(0));
         modal.handle_key(key(KeyCode::Left));
         assert_eq!(modal.selected(), 1);
-        assert_eq!(modal.hovered, None);
+        assert_eq!(modal.buttons.hovered, Some(0));
         assert_eq!(
             actions(modal.handle_key(key(KeyCode::Enter))),
             vec![Action::Close, Action::ToggleHiddenView]

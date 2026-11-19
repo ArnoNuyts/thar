@@ -1,6 +1,6 @@
-//! The modal host shared by every CP7 workstream.
+//! The modal host shared by every screen.
 //!
-//! CP7 has eleven screens over one list. They all obey the same rules: one is
+//! This build has eleven screens over one list. They all obey the same rules: one is
 //! active at a time, it owns the keyboard, Escape closes it, and it returns an
 //! [`Action`] instead of touching the todo list itself. Keeping those rules in
 //! one place lets each screen live in its own module and be tested with plain
@@ -10,7 +10,7 @@
 //! and draws the chrome, then asks the active [`Modal`] to draw its body. The
 //! per-screen modules never compute terminal geometry.
 //!
-//! The CP6 layout module deliberately keeps the base rows (search bar, list,
+//! The base layout module deliberately keeps the base rows (search bar, list,
 //! action bar) untouched; overlays live here and use their own hit-testing.
 
 pub mod confirm;
@@ -38,7 +38,7 @@ pub use geometry::{ModalRect, ModalWidth};
 pub use registry::OpenError;
 pub use update::{InstallKind, UpdateModel};
 
-/// Every screen CP7 can show.
+/// Every screen this build can show.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ModalId {
     /// Create a todo.

@@ -1,6 +1,6 @@
 //! The one-write-to-disk safety copy.
 //!
-//! CP7 keeps a `<file>.bak` next to the todo file before the first write of a
+//! The write path keeps a `<file>.bak` next to the todo file before the first write of a
 //! session. It is created once with mode `0600` and never overwritten, so a
 //! second run cannot replace the original with an already-edited copy. `--no-backup`
 //! (or `THAR_BACKUP=none`) disables it.

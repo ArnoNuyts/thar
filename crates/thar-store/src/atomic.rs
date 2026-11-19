@@ -6,9 +6,9 @@
 //! crash either leaves the old file or the new file, never a partial one.
 //!
 //! The temporary file is removed on every error path. Directory `fsync` is
-//! deliberately not attempted: it is not portably available, and CP7's gate is
-//! "no partial file / no content change on failure", not crash-consistency
-//! beyond the rename.
+//! deliberately not attempted: it is not portably available, and the write
+//! path's gate is "no partial file / no content change on failure", not
+//! crash-consistency beyond the rename.
 //!
 //! A debug-only hook (`THAR_SAVE_CRASH=before-rename`) stops the process
 //! between the temp-file flush and the rename so the data-safety suite can

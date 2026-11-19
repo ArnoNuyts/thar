@@ -1,9 +1,9 @@
 //! The structured `build_rows` request and its JSON envelope.
 //!
-//! `parse_file` returns CP1 records, so the host already holds the parsed
+//! `parse_file` returns contract records, so the host already holds the parsed
 //! fields when it builds rows on the next keystroke. Re-serializing those
 //! records would be lossy (a duplicate tag key collapses into a comma list, and
-//! the two round-trip flags are not in the CP1 record set), so this module
+//! the two round-trip flags are not in the contract record set), so this module
 //! accepts the fields back as a DTO and rebuilds a [`Todo`] through
 //! [`Todo::from_parts`]. The record shape itself is shared with
 //! [`crate::write`] and lives in the `record` module.
@@ -43,12 +43,12 @@
 //! - Todo ids are the array positions, matching parse order. The response
 //!   carries the index of every todo row so the host maps back to its objects.
 //! - `datesInText`/`completionDateInText` are optional and default to `false`;
-//!   they do not affect row building, only serialization. The CP1 parse records
+//!   they do not affect row building, only serialization. The contract parse records
 //!   do not carry them, so the rows contract's candidate leaves them `false`; a
 //!   host that parsed the line itself (the app's adapter) passes its real flags
-//!   so CP4 can rebuild an exact `Todo`.
+//!   so the write path can rebuild an exact `Todo`.
 //!
-//! Unknown fields are ignored so a host can pass a CP1 record with its extra
+//! Unknown fields are ignored so a host can pass a contract record with its extra
 //! `isDone`/`toString` fields without a second projection; missing required
 //! fields are rejected.
 //!
@@ -114,7 +114,7 @@ pub enum RowsError {
 }
 
 impl RowsError {
-    /// Stable machine code, in the CP1 style.
+    /// Stable machine code, in the contract style.
     #[must_use]
     pub fn code(&self) -> &'static str {
         match self {

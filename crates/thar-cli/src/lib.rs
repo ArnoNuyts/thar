@@ -1,21 +1,21 @@
 //! `thar-cli`: the `thar-rs` TUI binary.
 //!
-//! The binary opens a todo file read-only by default. CP7 adds `--write`: the
-//! write-capable path creates a missing file, keeps one `<file>.bak` before the
-//! first save, refuses to overwrite an external edit, and replaces the file
+//! The binary opens a todo file read-only by default. `--write` enables the
+//! write-capable path: it creates a missing file, keeps one `<file>.bak` before
+//! the first save, refuses to overwrite an external edit, and replaces the file
 //! atomically through [`thar_store`]. The read-only path links no writer in
 //! practice: [`load`] reads and parses, [`terminal`] owns the terminal, and a
-//! missing file is not created unless `--write` was passed. [`sync`] polls the
+//! missing file is not created unless `--write` was passed. [`sync`] watches the
 //! file for external edits in both modes and owns the reload and read-only
-//! recovery policy (see `docs/rust-port/CP7-SYNC.md`).
+//! recovery policy (see the sync design notes under `docs/rust-port/`).
 //!
 //! The CLI surface mirrors `logic/cli.ts` for the flags the port supports:
 //! `-f/--file`, `-h/--help`, `-v/--version`, `--write`, `--read-only`,
 //! `--no-backup`, `--no-update-check`, and `--`. `update` is recognized and
-//! rejected with a bounded message: self-update is a distribution concern
-//! (CP8), not a CP7 feature. An invalid `THAR_MAX_*` override is fatal with
-//! exit code 2, matching the TypeScript `InvalidLimitError`; it never silently
-//! falls back to a default.
+//! rejected with a bounded message: self-update is a distribution concern, not a
+//! feature of this binary. An invalid `THAR_MAX_*` override is fatal with exit
+//! code 2, matching the TypeScript `InvalidLimitError`; it never silently falls
+//! back to a default.
 
 pub mod cli;
 pub mod clipboard;
@@ -28,11 +28,9 @@ use std::process::ExitCode;
 
 pub use cli::{CliCommand, CliError, DEFAULT_FILENAME, format_usage, parse_cli_args};
 pub use file::{
-    LoadError, LoadedFile, get_read_limits, load, load_with_limits, parse_bytes, read_bytes,
-    read_limits_from,
+    LoadError, LoadedFile, get_read_limits, load, load_with_limits, read_bytes, read_limits_from,
 };
-pub use sync::{FileSync, ReloadOutcome};
-pub use terminal::{run_tui, today_local};
+use terminal::{run_tui, today_local};
 
 /// Version printed by `thar-rs --version`.
 ///
@@ -104,10 +102,16 @@ fn run_editor(file: std::path::PathBuf, write: Option<thar_store::BackupPolicy>)
         }
     };
 
+    // Build the watcher from what this session actually loaded: the same limits
+    // and the exact bytes, so no environment value is read or file stat is
+    // repeated between the load and the first poll.
+    let sync = crate::sync::FileSync::from_load(&file, &loaded);
+
     let LoadedFile {
         todos,
         error,
-        bytes,
+        limits,
+        ..
     } = loaded;
 
     let today = today_local();
@@ -118,8 +122,8 @@ fn run_editor(file: std::path::PathBuf, write: Option<thar_store::BackupPolicy>)
     // mode, even when `load_error` is already set (a file deleted between the
     // create and the read): the session then writes nothing until the watcher
     // reloads a file that exists again, which is the Ink app's recovery path.
-    let mut guard = write.map(|policy| thar_store::SaveGuard::new(file, policy));
-    match run_tui(&mut app, guard.as_mut(), bytes) {
+    let mut guard = write.map(|policy| thar_store::SaveGuard::new(file, limits, policy));
+    match run_tui(&mut app, guard.as_mut(), sync) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("thar-rs: {error}");

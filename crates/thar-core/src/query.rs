@@ -22,7 +22,7 @@
 //! not the contract: its Unicode version can trail the host's. So this crate
 //! does not fold or split anything; the host passes the normalized values in.
 //!
-//! - The CP3b adapter lowercases each todo's `text`, `contexts`, and `projects`
+//! - The adapter lowercases each todo's `text`, `contexts`, and `projects`
 //!   once per load or mutation and passes one [`SearchView`] per visible todo.
 //! - Only the query changes per keystroke, so the host normalizes it with
 //!   `extractSearchTerms` and passes the resulting terms.
@@ -153,12 +153,12 @@ fn primary_weight(character: char) -> u32 {
         '_' => 0,
         '-' => 1,
         '.' => 2,
-        '0'..='9' => 3 + (character as u32 - '0' as u32),
-        'a'..='z' => 13 + (character as u32 - 'a' as u32),
-        'A'..='Z' => 13 + (character as u32 - 'A' as u32),
+        '0'..='9' => 3 + (u32::from(character) - u32::from('0')),
+        'a'..='z' => 13 + (u32::from(character) - u32::from('a')),
+        'A'..='Z' => 13 + (u32::from(character) - u32::from('A')),
         // Not producible by the `[\w.\-]` scanner. Keep the order total and
         // deterministic instead of falling back to byte order.
-        _ => 1_000 + character as u32,
+        _ => 1_000 + u32::from(character),
     }
 }
 
@@ -174,7 +174,7 @@ fn case_weight(character: char) -> u8 {
 /// Rust's Unicode version can trail the host's, so this type carries values the
 /// host lowercased instead of folding them again here.
 ///
-/// The CP3b adapter builds one view per todo when the list loads or a todo is
+/// The adapter builds one view per todo when the list loads or a todo is
 /// mutated, and reuses it for every keystroke.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SearchView<'a> {

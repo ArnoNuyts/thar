@@ -110,7 +110,7 @@ impl Layout {
     #[must_use]
     pub fn row_at(&self, screen_y: u16) -> Option<usize> {
         let relative = screen_y.checked_sub(self.list_top)?;
-        (relative < self.list_height).then_some(relative as usize)
+        (relative < self.list_height).then_some(usize::from(relative))
     }
 
     /// Screen row for a list-relative row.
@@ -151,17 +151,9 @@ pub fn action_item_at(column: u16) -> Option<Command> {
     None
 }
 
-/// Lays out the row prefix exactly as the renderer does: a space, the number
-/// right-aligned to `max_digits`, a space, then `[ ]` or `[x]`.
-#[must_use]
-pub fn todo_prefix(number: usize, max_digits: usize, done: bool) -> String {
-    let checkbox = if done { "[x]" } else { "[ ]" };
-    format!(" {number:>max_digits$} {checkbox} ")
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Layout, checkbox_columns, todo_prefix};
+    use super::{Layout, checkbox_columns};
 
     #[test]
     fn list_sits_between_the_search_bar_and_action_bar() {
@@ -201,12 +193,6 @@ mod tests {
         assert_eq!(checkbox_columns(1), 3..=5);
         // three digits: " 100 [ ] " -> checkbox starts at column 4
         assert_eq!(checkbox_columns(3), 5..=7);
-    }
-
-    #[test]
-    fn todo_prefix_is_the_rendered_prefix() {
-        assert_eq!(todo_prefix(1, 1, false), " 1 [ ] ");
-        assert_eq!(todo_prefix(7, 3, true), "   7 [x] ");
     }
 
     #[test]

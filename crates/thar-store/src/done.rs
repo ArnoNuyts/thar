@@ -7,11 +7,22 @@
 
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use thar_core::{Todo, serialize_file};
 
 use crate::error::StoreError;
+
+/// Path of the archive file that sits next to the todo file at `path`.
+///
+/// The archive is always `done.txt` in the todo file's directory; a relative
+/// todo file name resolves to `done.txt` in the working directory.
+#[must_use]
+pub fn done_path(path: &Path) -> PathBuf {
+    path.parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("done.txt")
+}
 
 /// Append `todos` to `path` as canonical `todo.txt` lines.
 ///
@@ -38,9 +49,22 @@ pub fn append_done(path: &Path, todos: &[Todo]) -> Result<(), StoreError> {
 
 #[cfg(test)]
 mod tests {
-    use super::append_done;
+    use super::{append_done, done_path};
     use crate::test_support::temp_dir;
     use thar_core::{Todo, TodoId};
+
+    #[test]
+    fn done_path_sits_next_to_the_todo_file() {
+        let directory = temp_dir("done-path");
+        assert_eq!(
+            done_path(&directory.join("todo.txt")),
+            directory.join("done.txt")
+        );
+        assert_eq!(
+            done_path(std::path::Path::new("todo.txt")),
+            std::path::PathBuf::from("done.txt")
+        );
+    }
 
     #[test]
     fn appends_canonical_lines_with_one_trailing_newline() {

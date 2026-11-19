@@ -79,32 +79,30 @@ impl std::error::Error for CliError {}
 /// Usage text; the flags match the Ink app's help.
 #[must_use]
 pub fn format_usage(version: &str) -> String {
-    [
-        format!("thar-rs {version}"),
-        String::new(),
-        "A todo.txt TUI for the terminal.".to_owned(),
-        String::new(),
-        "Usage:".to_owned(),
-        "  thar-rs [options] [file]".to_owned(),
-        String::new(),
-        "Arguments:".to_owned(),
-        format!("  file                  Todo file to open (default: ./{DEFAULT_FILENAME})"),
-        String::new(),
-        "Options:".to_owned(),
-        "  -f, --file <path>     Todo file to open".to_owned(),
-        "  -h, --help            Show this help".to_owned(),
-        "  -v, --version         Show version".to_owned(),
-        "  --write               Allow edits; default is read-only".to_owned(),
-        "  --read-only           Force the read-only default".to_owned(),
-        "  --no-backup           Skip todo.txt.bak before the first save (needs --write)"
-            .to_owned(),
-        "  --no-update-check     Accepted for CLI parity".to_owned(),
-        String::new(),
-        "Without --write this binary never creates, saves, or archives todos.".to_owned(),
-        "With --write, edits are debounced and saved atomically; todo.txt.bak keeps".to_owned(),
-        "the original until the first save of the session.".to_owned(),
-    ]
-    .join("\n")
+    format!(
+        r"thar-rs {version}
+
+A todo.txt TUI for the terminal.
+
+Usage:
+  thar-rs [options] [file]
+
+Arguments:
+  file                  Todo file to open (default: ./{DEFAULT_FILENAME})
+
+Options:
+  -f, --file <path>     Todo file to open
+  -h, --help            Show this help
+  -v, --version         Show version
+  --write               Allow edits; default is read-only
+  --read-only           Force the read-only default
+  --no-backup           Skip todo.txt.bak before the first save (needs --write)
+  --no-update-check     Accepted for CLI parity
+
+Without --write this binary never creates, saves, or archives todos.
+With --write, edits are debounced and saved atomically; todo.txt.bak keeps
+the original until the first save of the session."
+    )
 }
 
 /// Parse the arguments after the program name.
@@ -178,11 +176,14 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
                     .ok_or_else(|| CliError::new(format!("{name} requires a path.")))?;
                 set_file(value)?;
             }
-            Some(value) if value.starts_with("--file=") => {
-                set_file(OsStr::new(&value["--file=".len()..]))?;
-            }
-            Some(value) if value.starts_with('-') && value != "-" => {
-                return Err(CliError::new(format!("Unknown option: {value}")));
+            Some(value) => {
+                if let Some(path) = value.strip_prefix("--file=") {
+                    set_file(OsStr::new(path))?;
+                } else if value.starts_with('-') && value != "-" {
+                    return Err(CliError::new(format!("Unknown option: {value}")));
+                } else {
+                    set_file(argument.as_os_str())?;
+                }
             }
             // A non-UTF-8 token cannot be checked as a flag, but an argument
             // that starts with `-` is still option-shaped. Treating it as a

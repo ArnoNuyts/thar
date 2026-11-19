@@ -1,8 +1,8 @@
 //! WebAssembly batch boundary for the Thar core.
 //!
-//! Checkpoint CP2b of `docs/rust-port/PLAN.md`: the real batch surface the Node
-//! app and the CP1 contract harness call. CP3b1 adds the row builder
-//! ([`build_rows`]) on top of it. The boundary is deliberately coarse — one
+//! The WASM boundary described in `docs/rust-port/PLAN.md`: the real batch
+//! surface the Node app and the contract harness call. The row builder
+//! ([`build_rows`]) sits on top of it. The boundary is deliberately coarse — one
 //! call per file load or row build, no per-row getters — and every call returns
 //! one deterministic JSON document that JavaScript can `JSON.parse`.
 //!
@@ -20,15 +20,15 @@
 //! {"ok":false,"error":{…}}
 //! ```
 //!
-//! A record uses the CP1 contract field names and order exactly (`text`,
+//! A record uses the contract field names and order exactly (`text`,
 //! `state`, `priority`, `completionDate`, `creationDate`, `projects`,
 //! `contexts`, `tags`, `isDone`, `isHidden`, `isVisibleInOverview`,
 //! `isOverdue`, `toString`, `hash`), followed by the three fields a host needs
 //! to rebuild the identical todo without re-parsing the line: `datesInText`,
-//! `completionDateInText` and `id` (the 0-based load order). CP1 pins only the
-//! first fourteen; its candidate projects exactly those. The error object uses
+//! `completionDateInText` and `id` (the 0-based load order). The contract pins
+//! only the first fourteen; its candidate projects exactly those. The error object uses
 //! the contract order too: `name`, `code`, the numeric fields the variant
-//! carries (in the CP1 order `lineNumber`, `length`, `maxLineChars`,
+//! carries (in the contract order `lineNumber`, `length`, `maxLineChars`,
 //! `lineCount`, `maxReadTodos`, `actualBytes`, `maxBytes`, `codePoint`), then
 //! `message`.
 //!
@@ -44,14 +44,14 @@
 //! The JSON is written by hand: every key is emitted in a fixed order, strings
 //! are escaped the way `JSON.stringify` would escape them, and no dependency is
 //! added just to serialize a handful of fields. That keeps the module inside
-//! the CP2 size budget (≤ 250 KB raw, ≤ 100 KB gzip) and makes the field order
+//! the WASM size budget (≤ 250 KB raw, ≤ 100 KB gzip) and makes the field order
 //! a property of the code rather than of a serializer's configuration. The one
 //! request document that arrives from JavaScript is read by the small parser in
 //! the `json` module.
 //!
 //! # Serialization
 //!
-//! [`serialize_file`] is the whole-file write shape CP1 defines:
+//! [`serialize_file`] is the whole-file write shape the contract defines:
 //! `todos.map(toString).join("\n") + "\n"`, i.e. each `thar_core::Todo`'s
 //! `Display` output, joined with `"\n"`, plus one trailing `"\n"`
 //! (so zero todos produce `"\n"`). It also runs the write-time guard from
@@ -184,11 +184,11 @@ pub fn parse_file_with_limits(
 ///   projects` and `terms` must already be lowercased/extracted by the host
 ///   (`toLowerCase`, `extractSearchTerms`); the core never folds.
 /// - **Collation.** Context names are collated with the en-US ICU order
-///   `thar_core::sort_by_importance` implements, the same assumption the CP3a
-///   probe pins (`docs/rust-port/PLAN.md` §13). The host must not pre-sort.
+///   `thar_core::sort_by_importance` implements, the same assumption the core
+///   domain probe pins (`docs/rust-port/PLAN.md` §13). The host must not pre-sort.
 /// - **Opaque names.** Names the programme supplies (rather than names scanned
-///   out of a line) are not normalized or validated here; they stay opaque
-///   until CP3b2/CP4.
+///   out of a line) are not normalized or validated here; they stay opaque to
+///   the row contract and the write path.
 ///
 /// # Example
 ///
@@ -302,7 +302,7 @@ fn parse_envelope(text: &str, today: &str, limits: &ReadLimits) -> Result<String
     Ok(out)
 }
 
-/// Append one todo record in the CP1 field order.
+/// Append one todo record in the contract field order.
 fn push_record(out: &mut String, todo: &Todo, today: TodoDate) {
     out.push_str("{\"text\":");
     push_json_string(out, &todo.text);
@@ -373,7 +373,7 @@ fn push_record(out: &mut String, todo: &Todo, today: TodoDate) {
     out.push_str(",\"hash\":");
     push_json_string(out, &line);
 
-    // Beyond the CP1 record set: the two round-trip flags cannot be recovered
+    // Beyond the contract record set: the two round-trip flags cannot be recovered
     // from the serialized line, and the load-order id is what lets a host
     // reject an envelope whose records were reordered. The read path rebuilds
     // a `Todo` from these fields instead of parsing the line a second time.
@@ -386,7 +386,7 @@ fn push_record(out: &mut String, todo: &Todo, today: TodoDate) {
     out.push('}');
 }
 
-/// Append the CP1 error object, with the numeric fields in contract order.
+/// Append the contract error object, with the numeric fields in contract order.
 fn push_error(out: &mut String, error: &CoreError) {
     out.push_str("{\"ok\":false,\"error\":{\"name\":");
     push_json_string(out, error.name());

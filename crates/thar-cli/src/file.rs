@@ -1,9 +1,9 @@
 //! Read-only file loading with the app's existing limits.
 //!
-//! CP6 must never create or modify the todo file, so this module only reads
-//! metadata and bytes. A missing path is an empty in-memory list plus one
-//! bounded note, not a created file (a deliberate divergence from the Ink
-//! app's "create on first run", which would need a write).
+//! The read-only path must never create or modify the todo file, so this
+//! module only reads metadata and bytes. A missing path is an empty in-memory
+//! list plus one bounded note, not a created file (a deliberate divergence from
+//! the Ink app's "create on first run", which would need a write).
 //!
 //! The byte limit is checked against the on-disk size before the file is read
 //! and again against the decoded text, matching `readTodosFromFile` in
@@ -71,12 +71,19 @@ pub struct LoadedFile {
     pub todos: Vec<Todo>,
     /// A bounded message to show in the TUI, if the file was absent.
     pub error: Option<String>,
-    /// The exact bytes that were parsed (empty when the file was missing).
+    /// The limits this load used.
     ///
-    /// This is the startup baseline for [`crate::sync::FileSync`], so the
-    /// watcher compares the first poll against what this session actually read
-    /// instead of reading the file a second time.
-    pub bytes: Vec<u8>,
+    /// The same limits drive the watcher and the save guard, so a reload or a
+    /// save cannot accept a file the startup read would reject (or the
+    /// reverse).
+    pub limits: ReadLimits,
+    /// The exact bytes that were parsed, or `None` when the file was missing.
+    ///
+    /// `Some(Vec::new())` is an empty file, which is different from a file that
+    /// does not exist. This is the startup baseline for
+    /// [`crate::sync::FileSync`], so the watcher compares the first poll against
+    /// what this session actually read instead of reading the file again.
+    pub bytes: Option<Vec<u8>>,
 }
 
 /// Read and parse `path` read-only with the environment's limits.
@@ -101,9 +108,12 @@ pub fn load_with_limits(path: &Path, limits: &ReadLimits) -> Result<LoadedFile, 
         Ok(bytes) => Ok(LoadedFile {
             todos: parse_bytes(&bytes, limits)?,
             error: None,
-            bytes,
+            limits: *limits,
+            bytes: Some(bytes),
         }),
-        Err(LoadError::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(missing_file()),
+        Err(LoadError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+            Ok(missing_file(*limits))
+        }
         Err(error) => Err(error),
     }
 }
@@ -175,11 +185,14 @@ pub fn parse_bytes(bytes: &[u8], limits: &ReadLimits) -> Result<Vec<Todo>, LoadE
     Ok(parse_file(&text, limits)?)
 }
 
-fn missing_file() -> LoadedFile {
+fn missing_file(limits: ReadLimits) -> LoadedFile {
     LoadedFile {
         todos: Vec::new(),
         error: Some(MISSING_FILE_NOTE.to_owned()),
-        bytes: Vec::new(),
+        limits,
+        // The file never existed, so the watcher must know there is no
+        // baseline to compare against until it first appears.
+        bytes: None,
     }
 }
 

@@ -175,16 +175,6 @@ impl SetDateModal {
         }])
     }
 
-    fn move_selection(&mut self, delta: i32) {
-        if self.options.is_empty() {
-            return;
-        }
-        let count = self.options.len();
-        let current = i32::try_from(self.selected).unwrap_or(0);
-        let next = (current + delta).rem_euclid(i32::try_from(count).unwrap_or(1));
-        self.selected = usize::try_from(next).unwrap_or(0);
-    }
-
     fn rect(&self) -> ModalRect {
         geometry::resolve(self.terminal, self.width(), self.body_rows())
     }
@@ -287,11 +277,11 @@ impl Modal for SetDateModal {
         match key.code {
             KeyCode::Esc => Outcome::Close,
             KeyCode::Up => {
-                self.move_selection(-1);
+                self.selected = super::buttons::cycle(self.selected, self.options.len(), false);
                 Outcome::Continue
             }
             KeyCode::Down => {
-                self.move_selection(1);
+                self.selected = super::buttons::cycle(self.selected, self.options.len(), true);
                 Outcome::Continue
             }
             KeyCode::Enter => self.apply(self.selected),

@@ -54,7 +54,8 @@ use thar_core::{MAX_TODO_CHARS, TodoId, validate_todo_batch, validate_todo_text}
 use crate::app::App;
 use crate::display::sanitize_for_display;
 use crate::editor::Editor;
-use crate::event::{MouseInput, MouseKind};
+use crate::event::MouseInput;
+use crate::modal::buttons::Row;
 use crate::modal::geometry;
 use crate::modal::{Action, Modal, ModalId, ModalRect, ModalWidth, Outcome};
 use crate::suggest::{Anchor, Overlay, Suggestions, TagSources};
@@ -86,10 +87,8 @@ pub struct TextModal {
     editor: Editor,
     sources: TagSources,
     suggestions: Suggestions,
-    /// 0 = Save, 1 = Cancel.
-    selected_button: usize,
-    /// Button under the pointer, if any.
-    hovered: Option<usize>,
+    /// Shared button row: 0 = Save, 1 = Cancel.
+    buttons: Row,
     max_chars: usize,
     existing_count: usize,
     ids: Vec<TodoId>,
@@ -138,18 +137,13 @@ impl TextModal {
         self.suggestions.clear();
     }
 
-    /// Enter: activate the selected button.
-    fn activate(&self) -> Outcome {
-        if self.selected_button == 1 {
+    /// Enter: activate the button at `index` (0 = Save, 1 = Cancel).
+    fn activate(&self, index: usize) -> Outcome {
+        if index == 1 {
             Outcome::Close
         } else {
             self.submit()
         }
-    }
-
-    /// Toggle Save/Cancel.
-    fn toggle_button(&mut self) {
-        self.selected_button = if self.selected_button == 0 { 1 } else { 0 };
     }
 
     /// The centred modal rectangle for the current terminal size.
@@ -227,10 +221,13 @@ impl Modal for TextModal {
             // keyboard, so it closes the screen instead of quitting silently.
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Outcome::Close,
             KeyCode::Tab | KeyCode::BackTab if !command => {
-                self.toggle_button();
+                self.buttons.on_key(key, BUTTON_LABELS.len());
                 Outcome::Continue
             }
-            KeyCode::Enter => self.activate(),
+            KeyCode::Enter => self
+                .buttons
+                .on_key(key, BUTTON_LABELS.len())
+                .map_or(Outcome::Continue, |index| self.activate(index)),
             _ => {
                 if self.editor.handle_key(key) {
                     self.refresh_suggestions();
@@ -249,27 +246,16 @@ impl Modal for TextModal {
 
     fn handle_mouse(&mut self, mouse: MouseInput) -> Outcome {
         // The suggestion popup is painted over the button row, so a click that
-        // lands on the overlay must not reach Save/Cancel underneath it.
+        // lands on the overlay must not reach Save/Cancel underneath it. Drop
+        // any stale hover so the guard does not keep painting a button.
         if self.suggestions.is_open() {
+            self.buttons.hovered = None;
             return Outcome::Continue;
         }
         let rect = self.geometry();
-        let count = BUTTON_LABELS.len();
-        match mouse.kind {
-            MouseKind::Move => {
-                self.hovered = super::buttons::hit(rect, BUTTON_ROW, count, mouse);
-                Outcome::Continue
-            }
-            MouseKind::LeftClick => {
-                let Some(index) = super::buttons::hit(rect, BUTTON_ROW, count, mouse) else {
-                    return Outcome::Continue;
-                };
-                self.hovered = Some(index);
-                self.selected_button = index;
-                self.activate()
-            }
-            _ => Outcome::Continue,
-        }
+        self.buttons
+            .on_mouse(rect, BUTTON_ROW, BUTTON_LABELS.len(), mouse)
+            .map_or(Outcome::Continue, |index| self.activate(index))
     }
 
     fn render(&self, frame: &mut Frame, rect: ModalRect) {
@@ -286,8 +272,8 @@ impl Modal for TextModal {
             rect,
             BUTTON_ROW,
             &BUTTON_LABELS,
-            self.selected_button,
-            self.hovered,
+            self.buttons.selected,
+            self.buttons.hovered,
         );
     }
 
@@ -524,8 +510,7 @@ pub fn create(app: &App) -> Box<dyn Modal> {
         editor: Editor::with_cursor(&prefill, 0),
         sources: app.tag_sources().clone(),
         suggestions: Suggestions::new(),
-        selected_button: 0,
-        hovered: None,
+        buttons: Row::default(),
         max_chars: MAX_TODO_CHARS,
         existing_count: app.todos().len(),
         ids: Vec::new(),
@@ -551,8 +536,7 @@ pub fn edit(app: &App) -> Box<dyn Modal> {
         editor: Editor::new(&text),
         sources: app.tag_sources().clone(),
         suggestions: Suggestions::new(),
-        selected_button: 0,
-        hovered: None,
+        buttons: Row::default(),
         max_chars,
         existing_count: app.todos().len(),
         ids,

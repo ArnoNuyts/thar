@@ -1,4 +1,5 @@
-//! `thar-tui`: the ratatui front end for Thar (CP6 read-only, CP7 writes).
+//! `thar-tui`: the ratatui front end for Thar (read-only by default, writes
+//! with `--write`).
 //!
 //! The crate is split so each layer can be tested without a terminal:
 //!
@@ -33,8 +34,8 @@
 //!
 //! This crate has no filesystem API: it queues [`app::Effect`]s and lets the
 //! host (`thar-cli` + `thar-store`) do the writing. The binary is read-only
-//! unless `--write` is passed, and the CP6 source scan still proves that the
-//! read-only path links no writer.
+//! unless `--write` is passed, and the read-only source scan still proves that
+//! the read-only path links no writer.
 
 pub mod app;
 pub mod calendar;

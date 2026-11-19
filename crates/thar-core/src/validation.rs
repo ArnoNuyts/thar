@@ -104,7 +104,7 @@ pub fn validate_file_content<'a>(
         if let Some(code_point) = find_unsafe_control(line) {
             return Err(CoreError::ControlCharacter {
                 line_number,
-                code_point: code_point as u32,
+                code_point: u32::from(code_point),
             });
         }
 

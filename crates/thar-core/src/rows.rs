@@ -31,7 +31,7 @@
 //! Names the programme supplies (project/context/tag names that never come out
 //! of a `todo.txt` line) are **opaque** here: the row builder does not
 //! normalize, validate, or collate anything it did not parse itself. They
-//! become part of the contract in CP3b2/CP4.
+//! become part of the row contract and the write path.
 //!
 //! # Example
 //!
@@ -65,6 +65,7 @@
 //! assert_eq!(rows.todo_indexes(), [1, 0]);
 //! ```
 
+use core::fmt;
 use std::borrow::Borrow;
 
 use crate::date::TodoDate;
@@ -249,8 +250,8 @@ pub enum RowError {
     },
 }
 
-impl core::fmt::Display for RowError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Display for RowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ViewCountMismatch { todos, views } => write!(
                 f,
