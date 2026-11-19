@@ -168,21 +168,23 @@ pub(crate) fn render(
             (*label).to_owned()
         };
         let text: String = text.chars().take(usize::from(slot_width)).collect();
-        let color = if hovered == Some(index) {
-            theme::WARNING
-        } else if selected == index {
-            theme::FOREGROUND
+        let style = if hovered == Some(index) {
+            theme::HOVER_STYLE.bg(theme::MODAL_BACKGROUND)
         } else {
-            theme::MUTED
-        };
-        let style = Style::default()
-            .bg(theme::MODAL_BACKGROUND)
-            .fg(color)
-            .add_modifier(if active {
-                Modifier::BOLD
+            let color = if selected == index {
+                theme::FOREGROUND
             } else {
-                Modifier::empty()
-            });
+                theme::MUTED
+            };
+            Style::default()
+                .bg(theme::MODAL_BACKGROUND)
+                .fg(color)
+                .add_modifier(if selected == index {
+                    Modifier::BOLD
+                } else {
+                    Modifier::empty()
+                })
+        };
         frame.render_widget(
             Paragraph::new(Span::styled(text, style)).alignment(Alignment::Center),
             area,

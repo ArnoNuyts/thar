@@ -12,7 +12,7 @@ use thar_tui::input::{
 };
 use thar_tui::layout::{self, Layout};
 use thar_tui::messages::READ_ONLY_MESSAGE;
-use thar_tui::{App, nav};
+use thar_tui::{App, ModalId, nav};
 
 fn app_with(lines: &[&str], width: u16, height: u16) -> App {
     let todos = lines
@@ -41,6 +41,15 @@ fn click(x: u16, y: u16, shift: bool) -> MouseInput {
         x,
         y,
         shift,
+    }
+}
+
+fn move_to(x: u16, y: u16) -> MouseInput {
+    MouseInput {
+        kind: MouseKind::Move,
+        x,
+        y,
+        shift: false,
     }
 }
 
@@ -295,21 +304,51 @@ fn wheel_scrolls_only_while_the_list_owns_focus() {
 }
 
 #[test]
-fn mouse_motion_is_ignored() {
+fn mouse_motion_tracks_the_action_bar_hover_without_a_command() {
     let mut app = two_todos();
-    let (last, command) = handle_mouse(
-        &mut app,
-        MouseInput {
-            kind: MouseKind::Move,
-            x: 10,
-            y: 3,
-            shift: false,
-        },
-        None,
-        Instant::now(),
-    );
+    let y = app.layout().action_row() + 1;
+    let cursor = app.cursor();
+
+    let (last, command) = handle_mouse(&mut app, move_to(1, y), None, Instant::now());
     assert!(last.is_none());
     assert_eq!(command, None);
+    assert_eq!(app.hovered_action_index(app.layout()), Some(0));
+    assert_eq!(app.cursor(), cursor);
+
+    // Each boundary uses the same window as the click hit-test.
+    handle_mouse(&mut app, move_to(10, y), None, Instant::now());
+    assert_eq!(app.hovered_action_index(app.layout()), Some(1));
+    handle_mouse(&mut app, move_to(36, y), None, Instant::now());
+    assert_eq!(app.hovered_action_index(app.layout()), Some(4));
+
+    // Wheel events scroll without moving the pointer, so the hover stays.
+    handle_mouse(&mut app, wheel(MouseKind::WheelDown), None, Instant::now());
+    assert_eq!(app.hovered_action_index(app.layout()), Some(4));
+
+    // Leaving the action row clears the hover and keeps the list untouched.
+    handle_mouse(&mut app, move_to(1, 1), None, Instant::now());
+    assert_eq!(app.hovered_action_index(app.layout()), None);
+    assert_eq!(app.cursor(), cursor);
+}
+
+#[test]
+fn a_left_click_tracks_the_action_bar_hover() {
+    let mut app = two_todos();
+    let y = app.layout().action_row() + 1;
+
+    handle_mouse(&mut app, click(10, y, false), None, Instant::now());
+    assert_eq!(app.hovered_action_index(app.layout()), Some(1));
+}
+
+#[test]
+fn an_open_modal_suppresses_the_action_bar_hover() {
+    let mut app = two_todos();
+    let y = app.layout().action_row() + 1;
+    handle_mouse(&mut app, move_to(36, y), None, Instant::now());
+    assert_eq!(app.hovered_action_index(app.layout()), Some(4));
+
+    app.open_modal(ModalId::CreateTodo);
+    assert_eq!(app.hovered_action_index(app.layout()), None);
 }
 
 #[test]

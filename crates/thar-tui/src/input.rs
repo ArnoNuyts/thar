@@ -28,7 +28,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use thar_core::Priority;
 
 use crate::app::{App, Direction};
-use crate::layout::{action_item_at, checkbox_columns};
+use crate::layout::checkbox_columns;
 use crate::messages::{NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE};
 use crate::modal::{Action, ConfirmRequest, ModalId};
 use crate::nav;
@@ -307,6 +307,17 @@ fn search_key(key: KeyEvent) -> Option<Command> {
     }
 }
 
+/// Remember a pointer position for the action bar's hover feedback.
+///
+/// Wheel events do not move the pointer, so they keep the previous cell. A
+/// modal owns the pointer while it is open, but tracking still updates the
+/// cell so the bar's hover is correct again once the modal closes.
+fn track_pointer(app: &mut App, mouse: MouseInput) {
+    if matches!(mouse.kind, MouseKind::Move | MouseKind::LeftClick) {
+        app.set_pointer(mouse);
+    }
+}
+
 /// Apply a mouse event, returning the click to remember for double-click
 /// detection (or `None` when the event was not a left click).
 ///
@@ -321,6 +332,7 @@ pub fn handle_mouse(
     last_click: Option<LastClick>,
     now: Instant,
 ) -> (Option<LastClick>, Option<Command>) {
+    track_pointer(app, mouse);
     match mouse.kind {
         MouseKind::WheelUp => {
             if app.search().focused() {
@@ -357,12 +369,14 @@ fn left_click(
         at: now,
     };
 
-    if screen_row == layout.action_row() {
-        let command = action_item_at(mouse.x.saturating_sub(1)).map(|command| match command {
-            // The bar's Menu item follows the same range rule as the keymap.
-            Command::Open(ModalId::TodoMenu) => Command::Open(menu_for(app)),
-            other => other,
-        });
+    if layout.is_action_row(mouse.y) {
+        let command = layout
+            .action_item_at_cell(mouse.x, mouse.y)
+            .map(|command| match command {
+                // The bar's Menu item follows the same range rule as the keymap.
+                Command::Open(ModalId::TodoMenu) => Command::Open(menu_for(app)),
+                other => other,
+            });
         return (last_click, gate(app, command));
     }
 
@@ -465,6 +479,11 @@ pub fn handle_mouse_event(
     last_click: Option<LastClick>,
     now: Instant,
 ) -> Option<LastClick> {
+    // A modal owns the pointer, but the bar still needs the latest cell once
+    // the modal closes. Without a modal, `handle_mouse` records it below.
+    if app.modals().is_open() {
+        track_pointer(app, mouse);
+    }
     if app.handle_modal_mouse(mouse, now) {
         return last_click;
     }

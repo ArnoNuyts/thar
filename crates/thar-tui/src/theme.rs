@@ -5,7 +5,7 @@
 //! `TestBackend` records, which keeps the snapshot tests independent of the
 //! running terminal's colour capability.
 
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
 
 /// Build a colour from the same `#RRGGBB` literals `theme/colors.ts` uses.
 const fn rgb(value: u32) -> Color {
@@ -58,6 +58,8 @@ pub const SELECTED_BACKGROUND: Color = rgb(0x3A3A3A);
 pub const DANGER_BACKGROUND: Color = DANGER;
 /// Border colour of a focused input.
 pub const INPUT_FOCUS: Color = SECONDARY;
+/// Text style shared by a hovered modal button and a hovered action-bar item.
+pub const HOVER_STYLE: Style = Style::new().fg(WARNING).add_modifier(Modifier::BOLD);
 
 /// Colour of the `(A)`..`(F)` priority badge.
 #[must_use]

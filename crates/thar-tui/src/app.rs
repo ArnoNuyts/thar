@@ -89,6 +89,13 @@ impl Toast {
     }
 }
 
+/// A pointer cell in 1-based terminal coordinates, matching [`MouseInput`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Pointer {
+    x: u16,
+    y: u16,
+}
+
 /// The cursor, anchor and range of the list selection.
 ///
 /// `range` is empty for a cursor-only selection. The three fields move
@@ -240,6 +247,10 @@ pub struct App {
     offset: usize,
     width: u16,
     height: u16,
+    /// Last pointer cell, or `None` until the terminal reports motion or a
+    /// click. Hover is derived from this and the action-bar geometry, so the
+    /// pointer has one source of truth.
+    pointer: Option<Pointer>,
     toast: Option<Toast>,
     load_error: Option<String>,
     should_quit: bool,
@@ -298,6 +309,7 @@ impl App {
             offset: 0,
             width: 80,
             height: 24,
+            pointer: None,
             toast: None,
             load_error: None,
             should_quit: false,
@@ -384,6 +396,31 @@ impl App {
     #[must_use]
     pub fn height(&self) -> u16 {
         self.height
+    }
+
+    /// Record the pointer cell.
+    ///
+    /// Motion and left clicks call this; a wheel event leaves the pointer
+    /// alone because scrolling does not move the mouse.
+    pub(crate) fn set_pointer(&mut self, mouse: MouseInput) {
+        self.pointer = Some(Pointer {
+            x: mouse.x,
+            y: mouse.y,
+        });
+    }
+
+    /// Index of the action-bar item under the pointer, if any.
+    ///
+    /// The caller passes the layout it is drawing, so one frame has one
+    /// geometry. An open modal owns the pointer and suppresses the bar's
+    /// hover.
+    #[must_use]
+    pub fn hovered_action_index(&self, layout: Layout) -> Option<usize> {
+        if self.modals.is_open() {
+            return None;
+        }
+        let pointer = self.pointer?;
+        layout.action_item_index_at_cell(pointer.x, pointer.y)
     }
 
     /// Local calendar day used by the overdue and threshold rules.
