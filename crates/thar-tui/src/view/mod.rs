@@ -17,7 +17,9 @@
 //! - context headers are rows and keep the primary background;
 //! - the scrollbar takes a column only while the list is scrollable;
 //! - the action bar puts the read-only badge before the toast and bounds the
-//!   toast to the space the action items leave.
+//!   toast to the space the action items leave;
+//! - the action-bar item under the pointer uses the same warning colour and
+//!   bold weight as a hovered modal button.
 //!
 //! Every string that comes from the file goes through
 //! [`crate::display::sanitize_for_display`] before it reaches the terminal.
@@ -397,13 +399,25 @@ fn render_action_bar(frame: &mut Frame, app: &App, layout: Layout) {
         .map(|(key, label, _)| action_item_width(key, label))
         .sum();
 
+    let hovered = app.hovered_action_index(layout);
     let mut spans = Vec::new();
-    for (key, label, _) in ACTION_ITEMS {
+    for (index, (key, label, _)) in ACTION_ITEMS.iter().enumerate() {
+        let hovered = hovered == Some(index);
         spans.push(Span::styled(
             format!(" {key}"),
-            Style::default().fg(theme::PRIMARY),
+            if hovered {
+                theme::HOVER_STYLE
+            } else {
+                Style::default().fg(theme::PRIMARY)
+            },
         ));
-        spans.push(Span::raw(format!(" {label}  ")));
+        // Mirror the button row: the whole clickable segment uses the shared
+        // hover style while the pointer is on it.
+        spans.push(if hovered {
+            Span::styled(format!(" {label}  "), theme::HOVER_STYLE)
+        } else {
+            Span::raw(format!(" {label}  "))
+        });
     }
 
     let (indicator, indicator_color) = if app.writable() {
@@ -489,6 +503,8 @@ fn centred_vertically(area: Rect, lines: usize) -> Rect {
 mod tests {
     use super::{bound, render, text_spans};
     use crate::app::App;
+    use crate::event::{MouseInput, MouseKind};
+    use crate::layout::{ACTION_ITEMS, action_item_width};
     use crate::theme;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -535,6 +551,39 @@ mod tests {
         assert!(screen.contains("one @home"));
         assert!(screen.contains("Quit"));
         assert!(screen.contains("READ-ONLY"));
+    }
+
+    #[test]
+    fn the_action_bar_paints_the_hovered_segment_in_the_button_hover_colour() {
+        let mut app = app(&["one"]);
+        app.resize(40, 12);
+        let row = app.layout().action_row();
+        // `set_pointer` takes 1-based terminal cells; the buffer is 0-based.
+        app.set_pointer(MouseInput {
+            kind: MouseKind::Move,
+            x: 1,
+            y: row + 1,
+            shift: false,
+        });
+
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).expect("test terminal");
+        terminal
+            .draw(|frame| render(frame, &app))
+            .expect("draw succeeds");
+        let buffer = terminal.backend().buffer();
+
+        // The first segment is " x Menu  ": the key and label turn warning
+        // and bold, matching the modal button row.
+        for column in [1, 3] {
+            let cell = &buffer[(column, row)];
+            assert_eq!(cell.style().fg, Some(theme::WARNING), "column {column}");
+            assert!(cell.style().add_modifier.contains(Modifier::BOLD));
+        }
+        // The neighbouring item keeps its normal key colour.
+        let (key, label, _) = ACTION_ITEMS[0];
+        let q = 1 + action_item_width(key, label);
+        assert_eq!(buffer[(q, row)].symbol(), "q");
+        assert_eq!(buffer[(q, row)].style().fg, Some(theme::PRIMARY));
     }
 
     #[test]

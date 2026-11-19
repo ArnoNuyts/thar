@@ -105,6 +105,32 @@ impl Layout {
         self.action_top.saturating_add(1)
     }
 
+    /// True when a 1-based pointer row is the action bar's content row.
+    #[must_use]
+    pub fn is_action_row(&self, y: u16) -> bool {
+        y.saturating_sub(1) == self.action_row()
+    }
+
+    /// Index of the action-bar item at a 1-based pointer cell, if any.
+    ///
+    /// This is the one cell-to-item conversion for the bar, so hover feedback
+    /// and a left click cannot disagree about the row or the segment.
+    #[must_use]
+    pub fn action_item_index_at_cell(&self, x: u16, y: u16) -> Option<usize> {
+        if self.is_action_row(y) {
+            action_item_index_at(x.saturating_sub(1))
+        } else {
+            None
+        }
+    }
+
+    /// The action-bar command at a 1-based pointer cell, if any.
+    #[must_use]
+    pub fn action_item_at_cell(&self, x: u16, y: u16) -> Option<Command> {
+        self.action_item_index_at_cell(x, y)
+            .map(|index| ACTION_ITEMS[index].2)
+    }
+
     /// List-relative row for a 0-based screen row, if the row is inside the
     /// list.
     #[must_use]
@@ -134,21 +160,29 @@ pub fn checkbox_columns(max_digits: usize) -> core::ops::RangeInclusive<u16> {
     start..=start.saturating_add(2)
 }
 
-/// The action-bar command at an 0-based screen column, if any.
+/// Index of the action-bar item at an 0-based screen column, if any.
 ///
 /// The Ink bar lays items out from column 1 (1-based) with the segment
-/// `" <key> <label>  "`; this maps the same regions to 0-based columns.
+/// `" <key> <label>  "`; this maps the same regions to 0-based columns. The
+/// renderer, the click hit-test and the hover state all read this window, so
+/// pointer feedback cannot land on a different segment than a click would.
 #[must_use]
-pub fn action_item_at(column: u16) -> Option<Command> {
+pub(crate) fn action_item_index_at(column: u16) -> Option<usize> {
     let mut start = 0_u16;
-    for (key, label, command) in ACTION_ITEMS {
+    for (index, (key, label, _)) in ACTION_ITEMS.iter().enumerate() {
         let width = action_item_width(key, label);
         if (start..start + width).contains(&column) {
-            return Some(command);
+            return Some(index);
         }
         start = start.saturating_add(width);
     }
     None
+}
+
+/// The action-bar command at an 0-based screen column, if any.
+#[must_use]
+pub fn action_item_at(column: u16) -> Option<Command> {
+    action_item_index_at(column).map(|index| ACTION_ITEMS[index].2)
 }
 
 #[cfg(test)]
@@ -197,7 +231,7 @@ mod tests {
 
     #[test]
     fn action_items_cover_the_rendered_segments() {
-        use super::{ACTION_ITEMS, action_item_at, action_item_width};
+        use super::{ACTION_ITEMS, action_item_at, action_item_index_at, action_item_width};
         use crate::input::Command;
         use crate::modal::ModalId;
 
@@ -212,5 +246,28 @@ mod tests {
         assert_eq!(action_item_at(44), Some(Command::SearchFocus));
         assert_eq!(action_item_at(45), Some(Command::SearchFocus));
         assert_eq!(action_item_at(46), None);
+
+        // Hover uses the same window: each boundary belongs to one item.
+        assert_eq!(action_item_index_at(0), Some(0));
+        assert_eq!(action_item_index_at(8), Some(0));
+        assert_eq!(action_item_index_at(9), Some(1));
+        assert_eq!(action_item_index_at(44), Some(4));
+        assert_eq!(action_item_index_at(45), Some(4));
+        assert_eq!(action_item_index_at(46), None);
+    }
+
+    #[test]
+    fn action_cells_share_the_row_and_column_map() {
+        use super::Layout;
+        use crate::input::Command;
+
+        let layout = Layout::new(40, 12, false);
+        let row = layout.action_row();
+        assert_eq!(layout.action_item_index_at_cell(1, row + 1), Some(0));
+        assert_eq!(layout.action_item_index_at_cell(10, row + 1), Some(1));
+        assert_eq!(layout.action_item_at_cell(10, row + 1), Some(Command::Quit));
+        // The border row and the row below the bar are not action cells.
+        assert_eq!(layout.action_item_index_at_cell(1, row), None);
+        assert_eq!(layout.action_item_index_at_cell(1, row + 2), None);
     }
 }

@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `thar-rs`: the action bar now highlights the item under the pointer in the
+  same warning colour as a hovered modal button.
 - `thar-rs`: opening the todo menu without a selected todo (an empty list, no
   search match, or every todo hidden) now shows only the global commands
   instead of offering todo actions that cannot run.
