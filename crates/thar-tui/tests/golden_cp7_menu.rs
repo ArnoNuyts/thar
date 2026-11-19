@@ -161,6 +161,54 @@ fn eighty_by_twenty_four_pins_the_single_todo_menu() {
 }
 
 #[test]
+fn eighty_by_twenty_four_hides_todo_commands_without_a_selection() {
+    let mut filtered = app(&["one", "two"]);
+    filtered.set_query("no-match");
+    let hidden = app(&["one h:1", "two h:1"]);
+
+    // The three ways the app can have no selected todo: an empty list, a
+    // filter that matches nothing, and a view where every todo is hidden.
+    for mut case in [app(&[]), filtered, hidden] {
+        assert!(case.selected_todo().is_none());
+        case.resize(80, 24);
+        case.open_modal(thar_tui::ModalId::TodoMenu);
+        let backend = draw(&case, 80, 24);
+        let rect = modal_area(&case);
+        assert_eq!((rect.area.x, rect.area.y), (20, 7));
+        assert_eq!((rect.area.width, rect.area.height), (40, 10));
+        assert_eq!(rect.body.height, 5);
+
+        let rows: Vec<String> = (0..5).map(|row| body_row(&case, &backend, row)).collect();
+        assert!(rows[0].starts_with("» Show/Hide Hidden"), "{rows:#?}");
+        assert!(rows[0].ends_with('H'));
+        assert!(rows[1].starts_with("  Archive Completed"));
+        assert!(rows[2].starts_with("  Undo"));
+        assert!(rows[3].starts_with("  Redo"));
+        assert!(rows[4].starts_with("  Paste"));
+        assert!(rows[4].ends_with('v'));
+
+        for absent in [
+            "Edit",
+            "Delete",
+            "Toggle Complete",
+            "Set Due Date",
+            "Set Threshold Date",
+            "Set Recurrence",
+            "Set Priority",
+            "Modify Projects",
+            "Modify Contexts",
+            "Toggle Hidden",
+            "Copy",
+        ] {
+            assert!(
+                !rows.iter().any(|row| row.contains(absent)),
+                "{absent} must not be offered without a selection: {rows:#?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn one_hundred_by_thirty_pins_the_multi_select_menu() {
     let mut app = app(&["one", "two", "three"]);
     app.resize(100, 30);

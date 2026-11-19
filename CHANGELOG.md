@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   byte-compared write path run through the shipped WebAssembly core, with
   `THAR_CORE=ts` as the one-release escape hatch.
 
+### Fixed
+
+- `thar-rs`: opening the todo menu without a selected todo (an empty list, no
+  search match, or every todo hidden) now shows only the global commands
+  instead of offering todo actions that cannot run.
+
 ## [0.6.1] - 2026-11-14
 
 ### Changed

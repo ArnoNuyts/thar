@@ -69,6 +69,42 @@ fn the_menu_opens_and_a_shortcut_toggles_through_it() {
 }
 
 #[test]
+fn the_empty_list_menu_offers_only_global_commands() {
+    let directory = TempDir::new("cp7-menu-empty");
+    let path = directory.write("todo.txt", b"");
+    let mut session = Session::open_write(&path);
+
+    session.wait_text("WRITE");
+
+    session.send(b"x");
+    session.wait_text("Todo menu");
+    session.wait_text("Show/Hide Hidden");
+    session.wait_text("Archive Completed");
+    session.wait_text("Paste");
+
+    let snapshot = session.snapshot();
+    for absent in ["Toggle Complete", "Set Due Date", "Modify Projects", "Copy"] {
+        assert!(
+            !snapshot.text.contains(absent),
+            "{absent} must not be offered without a selection:\n{}",
+            snapshot.text
+        );
+    }
+
+    // A todo shortcut is not part of this menu, so it does nothing; the menu
+    // stays open and the marker still moves.
+    session.send(b" ");
+    session.send(b"\x1b[B"); // Down
+    session.wait_text("» Archive Completed");
+
+    session.send(b"\x1b");
+    session.wait_no_text("Todo menu");
+    session.send(b"q");
+    assert_eq!(session.wait_exit(TIMEOUT).exit_code(), 0);
+    assert_eq!(std::fs::read(&path).expect("read file"), b"");
+}
+
+#[test]
 fn archive_appends_done_txt_and_removes_the_completed_lines() {
     let directory = TempDir::new("cp7-menu-archive");
     let path = directory.write("todo.txt", ARCHIVE_FIXTURE.as_bytes());

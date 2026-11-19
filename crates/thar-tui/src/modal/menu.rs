@@ -66,6 +66,31 @@ pub enum MenuAction {
     Paste,
 }
 
+impl MenuAction {
+    /// True for the commands that work without a selected todo.
+    ///
+    /// A menu with no todo selection keeps only these global commands
+    /// (show/hide hidden, archive, undo, redo and paste). The other rows need a
+    /// selected todo, so the menu hides them instead of offering a command that
+    /// would apply to an empty selection.
+    const fn is_global(self) -> bool {
+        match self {
+            Self::ToggleHiddenView | Self::Archive | Self::Undo | Self::Redo | Self::Paste => true,
+            Self::Edit
+            | Self::Delete
+            | Self::Toggle
+            | Self::Due
+            | Self::Threshold
+            | Self::Recurrence
+            | Self::Priority
+            | Self::AddProject
+            | Self::AddContext
+            | Self::ToggleHidden
+            | Self::Copy => false,
+        }
+    }
+}
+
 /// One rendered menu row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MenuItem {
@@ -262,6 +287,18 @@ impl MenuKind {
         }
     }
 
+    /// The rows that can run for `ids`.
+    ///
+    /// Without a todo selection only the global commands stay, so no row can
+    /// apply to an empty selection.
+    fn items_for(self, ids: &[TodoId]) -> impl Iterator<Item = MenuItem> {
+        let has_selection = !ids.is_empty();
+        self.items()
+            .iter()
+            .copied()
+            .filter(move |item| has_selection || item.action.is_global())
+    }
+
     /// The title drawn on the modal border.
     #[must_use]
     pub const fn title(self) -> &'static str {
@@ -275,6 +312,7 @@ impl MenuKind {
 /// The command-menu screen.
 pub struct Menu {
     kind: MenuKind,
+    items: Box<[MenuItem]>,
     ids: Vec<TodoId>,
     selected: usize,
     terminal_width: u16,
@@ -283,6 +321,9 @@ pub struct Menu {
 
 impl Menu {
     /// A menu over `ids`, sized for the terminal it will open in.
+    ///
+    /// The rows follow the selection: with no selected todo the menu keeps
+    /// only the global commands, because the rest need a selected todo.
     #[must_use]
     pub fn new(
         kind: MenuKind,
@@ -290,8 +331,10 @@ impl Menu {
         terminal_width: u16,
         terminal_height: u16,
     ) -> Self {
+        let items = kind.items_for(&ids).collect();
         Self {
             kind,
+            items,
             ids,
             selected: 0,
             terminal_width,
@@ -311,8 +354,8 @@ impl Menu {
         Self::new(MenuKind::MultiSelect, ids, terminal_width, terminal_height)
     }
 
-    fn items(&self) -> &'static [MenuItem] {
-        self.kind.items()
+    fn visible_items(&self) -> &[MenuItem] {
+        &self.items
     }
 
     /// The highlighted row.
@@ -330,14 +373,14 @@ impl Menu {
     }
 
     fn move_down(&mut self) {
-        let len = self.items().len();
+        let len = self.visible_items().len();
         if len > 0 {
             self.selected = (self.selected + 1) % len;
         }
     }
 
     fn move_up(&mut self) {
-        let len = self.items().len();
+        let len = self.visible_items().len();
         if len > 0 {
             self.selected = (self.selected + len - 1) % len;
         }
@@ -367,7 +410,7 @@ impl Menu {
     }
 
     fn activate(&self, index: usize) -> Outcome {
-        match self.items().get(index) {
+        match self.visible_items().get(index) {
             Some(item) => Outcome::Actions(vec![self.action_for(item.action)]),
             None => Outcome::Continue,
         }
@@ -391,7 +434,7 @@ impl Modal for Menu {
     }
 
     fn body_rows(&self) -> u16 {
-        u16::try_from(self.items().len()).unwrap_or(u16::MAX)
+        u16::try_from(self.visible_items().len()).unwrap_or(u16::MAX)
     }
 
     fn resize(&mut self, width: u16, height: u16) {
@@ -414,7 +457,7 @@ impl Modal for Menu {
             _ => {}
         }
 
-        if let Some(index) = shortcut_index(self.items(), key) {
+        if let Some(index) = shortcut_index(self.visible_items(), key) {
             self.selected = index;
             return self.activate(index);
         }
@@ -427,7 +470,7 @@ impl Modal for Menu {
             return Outcome::Continue;
         };
         let index = usize::from(row);
-        if index >= self.items().len() {
+        if index >= self.visible_items().len() {
             return Outcome::Continue;
         }
 
@@ -445,7 +488,7 @@ impl Modal for Menu {
     }
 
     fn render(&self, frame: &mut Frame, rect: ModalRect) {
-        let items = self.items();
+        let items = self.visible_items();
         let base = Style::default()
             .fg(theme::FOREGROUND)
             .bg(theme::MODAL_BACKGROUND);
@@ -506,6 +549,18 @@ mod tests {
 
     fn single() -> Menu {
         Menu::single(vec![TodoId::new(1)], 100, 30)
+    }
+
+    fn empty() -> Menu {
+        Menu::single(Vec::new(), 100, 30)
+    }
+
+    fn shortcut_key(shortcut: &str) -> KeyEvent {
+        match shortcut {
+            "del" => key(KeyCode::Delete),
+            "space" => key(KeyCode::Char(' ')),
+            label => key(KeyCode::Char(label.chars().next().expect("one char"))),
+        }
     }
 
     fn action_of(outcome: Outcome) -> Action {
@@ -584,20 +639,121 @@ mod tests {
     #[test]
     fn every_displayed_shortcut_dispatches_its_action() {
         for item in MENU_ITEMS {
-            let key = match item.shortcut {
-                "del" => key(KeyCode::Delete),
-                "space" => key(KeyCode::Char(' ')),
-                label => key(KeyCode::Char(label.chars().next().expect("one char"))),
-            };
             let mut menu = single();
             assert_eq!(
-                action_of(menu.handle_key(key)),
+                action_of(menu.handle_key(shortcut_key(item.shortcut))),
                 menu.action_for(item.action),
                 "shortcut {} should dispatch {:?}",
                 item.shortcut,
                 item.action
             );
         }
+    }
+
+    #[test]
+    fn a_menu_without_a_selection_keeps_only_global_commands() {
+        let menu = empty();
+        assert_eq!(
+            menu.visible_items()
+                .iter()
+                .map(|item| item.action)
+                .collect::<Vec<_>>(),
+            [
+                MenuAction::ToggleHiddenView,
+                MenuAction::Archive,
+                MenuAction::Undo,
+                MenuAction::Redo,
+                MenuAction::Paste,
+            ]
+        );
+        assert_eq!(menu.body_rows(), 5);
+        assert_eq!(menu.selected(), 0);
+    }
+
+    #[test]
+    fn shortcuts_that_need_a_todo_do_nothing_without_a_selection() {
+        let mut menu = empty();
+        for item in MENU_ITEMS.iter().filter(|item| !item.action.is_global()) {
+            assert!(
+                matches!(
+                    menu.handle_key(shortcut_key(item.shortcut)),
+                    Outcome::Continue
+                ),
+                "{} must not dispatch without a selection",
+                item.label
+            );
+            assert_eq!(menu.selected(), 0);
+        }
+    }
+
+    #[test]
+    fn global_shortcuts_still_dispatch_without_a_selection() {
+        for item in MENU_ITEMS.iter().filter(|item| item.action.is_global()) {
+            let mut menu = empty();
+            assert_eq!(
+                action_of(menu.handle_key(shortcut_key(item.shortcut))),
+                menu.action_for(item.action),
+                "{} should still dispatch without a selection",
+                item.label
+            );
+        }
+    }
+
+    #[test]
+    fn return_without_a_selection_activates_the_first_global_command() {
+        let mut menu = empty();
+        assert_eq!(
+            action_of(menu.handle_key(key(KeyCode::Enter))),
+            Action::ToggleHiddenView
+        );
+    }
+
+    #[test]
+    fn a_click_uses_the_visible_rows_without_a_selection() {
+        let mut menu = empty();
+        let rect = menu.geometry();
+        let click = MouseInput {
+            kind: MouseKind::LeftClick,
+            x: rect.body.x + 1,
+            y: rect.body.y + 3,
+            shift: false,
+        };
+        assert_eq!(action_of(menu.handle_mouse(click)), Action::Undo);
+        assert_eq!(menu.selected(), 2);
+    }
+
+    #[test]
+    fn multi_select_rows_all_need_a_selection() {
+        assert!(
+            MULTI_SELECT_MENU_ITEMS
+                .iter()
+                .all(|item| !item.action.is_global()),
+            "the range menu has no global rows"
+        );
+    }
+
+    #[test]
+    fn an_empty_multi_select_menu_has_no_rows_and_is_inert() {
+        let mut menu = Menu::multi(Vec::new(), 100, 30);
+        assert!(menu.visible_items().is_empty());
+        assert_eq!(menu.body_rows(), 0);
+        assert!(matches!(
+            menu.handle_key(key(KeyCode::Enter)),
+            Outcome::Continue
+        ));
+        assert!(matches!(
+            menu.handle_key(key(KeyCode::Char(' '))),
+            Outcome::Continue
+        ));
+        let rect = menu.geometry();
+        let click = MouseInput {
+            kind: MouseKind::LeftClick,
+            x: rect.body.x + 1,
+            y: rect.body.y,
+            shift: false,
+        };
+        assert!(matches!(menu.handle_mouse(click), Outcome::Continue));
+        assert!(matches!(menu.handle_key(key(KeyCode::Esc)), Outcome::Close));
     }
 
     #[test]
