@@ -20,12 +20,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `macos-latest` currently resolves to the brand-new macos-26 arm64
-        # image, whose hosted pool is capacity-constrained: jobs can stay
-        # queued until the job timeout and fail without running a step. Pin the
-        # mature macOS 15 arm64 image instead; this leg only needs a real
-        # Darwin host, not the newest OS. See actions/runner-images#13882.
-        os: [ubuntu-latest, windows-latest, macos-15]
+        # The macOS arm64 hosted pool regularly runs out of capacity: a job can
+        # sit in the queue for the full 15-minute acquisition window and then be
+        # cancelled without running a single step ("The job was not acquired by
+        # Runner of type hosted"). That is not a code failure, but it reddens
+        # every PR and feature-branch run. See actions/runner-images#13882 and
+        # orgs/community/discussions/211885. Keep the Darwin leg on the release
+        # branches, where it gates a shipping build, and skip it on pull requests
+        # and the long-lived port branch; PRs still run the Ubuntu and Windows
+        # Node legs, and the Rust `pty` job keeps exercising Darwin terminal and
+        # termios behaviour.
+        os: ${{ ((github.event_name == 'workflow_call') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release/next'))) && fromJSON('["ubuntu-latest","windows-latest","macos-15"]') || fromJSON('["ubuntu-latest","windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
