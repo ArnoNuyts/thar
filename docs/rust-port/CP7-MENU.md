@@ -133,7 +133,7 @@ and `todo.txt` loses it.
 - `thar-tui` unit tests: 234 (the menu tables, empty-selection filtering, every
   shortcut dispatch, named keys not falling through, wrap/navigation, confirm
   keys and half-body mouse map, exact confirmation strings, update action set,
-  >10 paste confirmation, delete/archive follow-ups, read-only key rejection).
+  > 10 paste confirmation, delete/archive follow-ups, read-only key rejection).
 - `crates/thar-tui/tests/golden_cp7_menu.rs`: `TestBackend` goldens at
   80×24 and 100×30 — single menu (marker and shortcut colours, all 16 rows),
   single menu without a selection (only the five global rows), multi-select
