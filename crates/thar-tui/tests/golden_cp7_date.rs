@@ -29,13 +29,11 @@ fn app(lines: &[&str]) -> App {
         .enumerate()
         .map(|(index, line)| Todo::parse_line(line, TodoId::new(index as u64)))
         .collect();
-    let mut app = App::new(
+    App::new(
         "todo.txt",
         todos,
         "2026-11-15".parse::<TodoDate>().expect("valid date"),
-    );
-    app.set_read_only(false);
-    app
+    )
 }
 
 fn draw(app: &App, width: u16, height: u16) -> Vec<String> {
@@ -134,8 +132,10 @@ fn the_due_date_list_matches_at_80x24() {
         "{block:#?}"
     );
     assert!(
-        lines.last().is_some_and(|line| line.ends_with("WRITE")),
-        "the write badge must stay visible: {lines:#?}"
+        lines
+            .last()
+            .is_some_and(|line| line.ends_with("e Edit   / Search")),
+        "the action bar must be the last row: {lines:#?}"
     );
     assert!(
         lines.iter().any(|line| line.contains("None (2)")),

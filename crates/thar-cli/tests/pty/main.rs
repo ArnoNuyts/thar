@@ -1,4 +1,4 @@
-//! PTY integration tests for the `thar-rs` read-only TUI.
+//! PTY integration tests for the `thar-rs` TUI.
 //!
 //! Each test spawns the real binary on a real pseudo-terminal and drives it
 //! with the bytes a terminal sends, so the terminal lifecycle, the crossterm
@@ -54,7 +54,6 @@ const ENTER: &[u8] = b"\r";
 const ESC: &[u8] = b"\x1b";
 const BACKSPACE: u8 = 0x7f;
 const CTRL_C: &[u8] = b"\x03";
-const READ_ONLY_TOAST: &str = "Read-only: thar-rs cannot modify todo.txt";
 
 /// Create a fixture directory and open its `todo.txt`.
 fn open_fixture(label: &str, contents: &str) -> (TempDir, Session) {
@@ -84,13 +83,12 @@ fn mouse(button: u8, column: u16, row: u16) -> Vec<u8> {
 }
 
 #[test]
-fn initial_screen_shows_the_list_action_bar_and_read_only_badge() {
+fn initial_screen_shows_the_list_and_action_bar() {
     let (_directory, session) = open_fixture("initial", FIXTURE);
-    // READ-ONLY is drawn after the list and the action items, so its presence
-    // proves the frame is complete; the PTY reader can otherwise hand over a
-    // prefix of the first draw.
-    session.wait_text("READ-ONLY");
-    session.wait_text("water the plants");
+    // The action bar is painted after the list, so waiting for its last item
+    // proves the whole first frame is complete; the PTY reader can otherwise
+    // hand over a prefix of the first draw.
+    session.wait_text("/ Search");
 
     let snapshot = session.snapshot();
     let screen = &snapshot.text;
@@ -126,8 +124,11 @@ fn initial_screen_shows_the_list_action_bar_and_read_only_badge() {
         );
     }
     assert!(
-        screen.contains("READ-ONLY"),
-        "the read-only badge is missing:\n{screen}"
+        !screen.contains("WRITE")
+            && !screen.contains("NOT SAVING")
+            && !screen.contains("READ-ONLY")
+            && !screen.to_lowercase().contains("read-only"),
+        "the UI must not mention a write or read-only mode:\n{screen}"
     );
     assert!(
         !screen.contains("not found"),
@@ -155,54 +156,25 @@ fn initial_screen_shows_the_list_action_bar_and_read_only_badge() {
 }
 
 #[test]
-fn a_real_pty_session_leaves_the_file_and_directory_untouched() {
-    let directory = TempDir::new("pty-read-only");
-    let path = directory.write("todo.txt", FIXTURE.as_bytes());
+fn a_large_paste_opens_the_confirmation_and_cancel_leaves_the_file_unchanged() {
+    let directory = TempDir::new("pty-paste");
+    let path = directory.write("todo.txt", b"one\n");
     let before_bytes = std::fs::read(&path).expect("read before");
     let before_mtime = modified(&path);
     let before_entries = directory.entries();
-
-    let mut session = Session::open(&path);
-    session.wait_text("READ-ONLY");
-
-    // Every mutating key must be acknowledged without touching the file: the
-    // first one shows the bounded read-only toast.
-    session.send(b" ");
-    session.wait_text("Read-only: thar-rs cannot modify todo.txt");
-    for key in [b"x".as_slice(), b"n", b"e", b"z", b"v", b"@"] {
-        session.send(key);
-    }
-    session.send(b"q");
-    let status = session.wait_exit(TIMEOUT);
-    assert_eq!(status.exit_code(), 0);
-
-    assert_eq!(
-        std::fs::read(&path).expect("read after"),
-        before_bytes,
-        "a PTY session must not change the todo file"
-    );
-    assert_eq!(modified(&path), before_mtime, "mtime changed");
-    assert_eq!(directory.entries(), before_entries, "directory changed");
-}
-
-#[test]
-fn a_read_only_bracketed_paste_is_refused_by_the_shared_gate() {
-    let directory = TempDir::new("pty-read-only-paste");
-    let path = directory.write("todo.txt", b"one\n");
     let mut session = Session::open(&path);
 
-    session.wait_text("READ-ONLY");
     session.wait_todo_text("one");
 
-    // Eleven lines would normally open the paste confirmation. In a read-only
-    // session the shared gate must reject the batch before splitting or opening
-    // anything, with exactly the bounded read-only toast.
+    // Eleven lines open the paste confirmation instead of adding anything.
     let pasted = (1..=11)
         .map(|index| format!("pasted {index}"))
         .collect::<Vec<_>>()
         .join("\n");
     session.send(format!("\x1b[200~{pasted}\x1b[201~").as_bytes());
-    session.wait_text(READ_ONLY_TOAST);
+    session.wait_text("Paste Multiple Todos");
+
+    session.send(ESC);
     session.wait_no_text("Paste Multiple Todos");
     session.wait_no_todo_text("pasted");
 
@@ -211,9 +183,59 @@ fn a_read_only_bracketed_paste_is_refused_by_the_shared_gate() {
     assert_eq!(status.exit_code(), 0);
     assert_eq!(
         std::fs::read(&path).expect("read after"),
-        b"one\n",
-        "a read-only paste must not change the file"
+        before_bytes,
+        "a cancelled paste must not change the file"
     );
+    assert_eq!(
+        modified(&path),
+        before_mtime,
+        "a no-op session must not rewrite the file"
+    );
+    assert_eq!(
+        directory.entries(),
+        before_entries,
+        "a no-op session must not create backup or temp files"
+    );
+    assert!(!directory.join("todo.txt.bak").exists());
+}
+
+#[test]
+fn a_large_paste_confirms_and_saves_every_line() {
+    let directory = TempDir::new("pty-paste-confirm");
+    let path = directory.write("todo.txt", b"one\n");
+    let mut session = Session::open(&path);
+
+    session.wait_todo_text("one");
+
+    let pasted = (1..=11)
+        .map(|index| format!("pasted {index}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    session.send(format!("\x1b[200~{pasted}\x1b[201~").as_bytes());
+    session.wait_text("Paste Multiple Todos");
+
+    session.send(ENTER);
+    session.wait_text("Pasted 11 todo(s)");
+    session.wait_todo_text("pasted 11");
+
+    session.send(b"q");
+    let status = session.wait_exit(TIMEOUT);
+    assert_eq!(status.exit_code(), 0);
+
+    let saved = std::fs::read_to_string(&path).expect("read saved file");
+    assert_eq!(
+        saved.lines().count(),
+        12,
+        "one original plus eleven pasted lines: {saved:?}"
+    );
+    for index in 1..=11 {
+        assert!(
+            saved
+                .lines()
+                .any(|line| line.ends_with(&format!("pasted {index}"))),
+            "missing exact pasted line {index}: {saved:?}"
+        );
+    }
 }
 
 #[test]
@@ -383,21 +405,33 @@ fn mouse_wheel_scrolls_and_clicks_select_and_extend() {
 }
 
 #[test]
-fn double_click_acknowledges_the_read_only_toggle() {
-    let (_directory, mut session) = open_fixture("double-click", FIXTURE);
+fn double_click_toggles_the_todo_and_persists() {
+    let directory = TempDir::new("double-click");
+    let path = directory.write("todo.txt", FIXTURE.as_bytes());
+    let mut session = Session::open(&path);
     session.wait_text("water the plants");
 
     // Two clicks in one write: the app sees both well inside the 350 ms
     // double-click window, so the test never depends on scheduling luck.
+    // Column 5 is the checkbox of row 3 (`call the dentist`).
     let click = mouse(0, 5, 3);
     let mut double_click = click.clone();
     double_click.extend(click);
     session.send(&double_click);
 
-    session.wait_text(READ_ONLY_TOAST);
+    session.wait_text("[x] call the dentist");
     session.wait_focused("call the dentist");
-    // The list did not change: a read-only double-click only acknowledges.
-    assert!(session.snapshot().text.contains("[ ] call the dentist"));
+
+    session.send(b"q");
+    let status = session.wait_exit(TIMEOUT);
+    assert_eq!(status.exit_code(), 0);
+    let saved = std::fs::read_to_string(&path).expect("read saved file");
+    assert!(
+        saved
+            .lines()
+            .any(|line| line.starts_with("x ") && line.contains("call the dentist")),
+        "the double-click toggle must be saved: {saved:?}"
+    );
 }
 
 #[test]
@@ -435,33 +469,28 @@ fn panic_reports_the_failure_and_restores_the_terminal() {
 }
 
 #[test]
-fn a_missing_file_renders_an_empty_list_and_is_not_created() {
+fn a_missing_file_is_created_and_renders_the_welcome_screen() {
     let directory = TempDir::new("missing");
     let mut session = Session::start(directory.path(), &[]);
 
-    session.wait_text("READ-ONLY");
-    // The view owns the bounded read error when there is no list to explain it:
-    // the note must be visible and must not be the welcome screen's create hint.
-    session.wait_text("Todo file not found");
-    session.wait_text("does not create todo files");
+    // Write-by-default startup creates the file, so the empty list shows the
+    // welcome quote rather than the missing-file note.
+    session.wait_text("I love deadlines");
+    session.wait_text("Menu");
     let snapshot = session.snapshot();
     assert!(
         snapshot.todos.is_empty(),
-        "a missing file must render an empty list:\n{}",
+        "an empty file must render an empty list:\n{}",
         snapshot.text
     );
+    assert!(
+        directory.join("todo.txt").exists(),
+        "the binary must create a missing todo file"
+    );
+
     session.send(b"q");
     let status = session.wait_exit(TIMEOUT);
     assert_eq!(status.exit_code(), 0);
-
-    assert!(
-        !directory.join("todo.txt").exists(),
-        "the read-only build must not create a missing todo file"
-    );
-    assert!(
-        directory.entries().is_empty(),
-        "the directory must stay empty"
-    );
 }
 
 /// The terminal-restore sequences a TUI must emit on the way out: leave the

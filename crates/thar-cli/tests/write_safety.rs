@@ -44,15 +44,13 @@ fn todos(lines: &[&str]) -> Vec<Todo> {
         .collect()
 }
 
-/// A write-enabled app for the reload tests.
+/// An app for the reload tests.
 fn app(lines: &[&str]) -> App {
-    let mut app = App::new(
+    App::new(
         "todo.txt",
         todos(lines),
         "2026-11-15".parse::<TodoDate>().expect("valid date"),
-    );
-    app.set_read_only(false);
-    app
+    )
 }
 
 /// Poll the watcher on a synthetic clock until it produces an outcome.
@@ -434,7 +432,7 @@ fn a_later_reload_recovers_the_session_and_re_enables_writes() {
     let mut sync = watch(&path);
     let mut app = app(&["Original"]);
 
-    // Enter read-only recovery with one undo step outstanding, as a failed
+    // Enter save-blocked recovery with one undo step outstanding, as a failed
     // reload would after an unsaved edit.
     let _ = app.add_todos(&["Unsaved".to_owned()], current_time());
     assert_eq!(app.undo_len(), 1);
@@ -512,7 +510,7 @@ fn recovery_with_restored_bytes_replaces_unsaved_edits() {
     let mut app = app(&["a"]);
 
     // The file disappears: the watcher reports it unreadable and the app enters
-    // read-only recovery.
+    // save-blocked recovery.
     std::fs::remove_file(&path).expect("delete");
     let at = apply_until(&mut app, &mut sync, start + POLL_INTERVAL, |app| {
         app.load_error().is_some()

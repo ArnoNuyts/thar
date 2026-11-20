@@ -19,8 +19,7 @@ ratatui.workspace = true
 jiff.workspace = true
 
 # PTY integration tests (`tests/pty`) only. Neither crate is linked into the
-# shipped `thar-rs` binary, so the read-only build and its dependency tree are
-# unchanged.
+# shipped `thar-rs` binary, so its dependency tree is unchanged.
 [dev-dependencies]
 portable-pty = "0.9.0"
 vt100 = "0.18.1"

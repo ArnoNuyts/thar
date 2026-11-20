@@ -1,21 +1,20 @@
 //! `thar-cli`: the `thar-rs` TUI binary.
 //!
-//! The binary opens a todo file read-only by default. `--write` enables the
-//! write-capable path: it creates a missing file, keeps one `<file>.bak` before
-//! the first save, refuses to overwrite an external edit, and replaces the file
-//! atomically through [`thar_store`]. The read-only path links no writer in
-//! practice: [`load`] reads and parses, [`terminal`] owns the terminal, and a
-//! missing file is not created unless `--write` was passed. [`sync`] watches the
-//! file for external edits in both modes and owns the reload and read-only
-//! recovery policy (see the sync design notes under `docs/rust-port/`).
+//! The binary opens a todo file and saves edits by default. The write path
+//! creates a missing file, keeps one `<file>.bak` before the first save,
+//! refuses to overwrite an external edit, and replaces the file atomically
+//! through [`thar_store`]. [`load_with_limits`] reads and parses,
+//! [`terminal`] owns the terminal, and [`sync`] watches the file for external edits and owns the
+//! reload and save-blocked recovery policy (see the sync design notes under
+//! `docs/rust-port/`).
 //!
 //! The CLI surface mirrors `logic/cli.ts` for the flags the port supports:
-//! `-f/--file`, `-h/--help`, `-v/--version`, `--write`, `--read-only`,
-//! `--no-backup`, `--no-update-check`, and `--`. `update` is recognized and
-//! rejected with a bounded message: self-update is a distribution concern, not a
-//! feature of this binary. An invalid `THAR_MAX_*` override is fatal with exit
-//! code 2, matching the TypeScript `InvalidLimitError`; it never silently falls
-//! back to a default.
+//! `-f/--file`, `-h/--help`, `-v/--version`, `--no-backup`,
+//! `--no-update-check`, and `--`. `update` is recognized and rejected with a
+//! bounded message: self-update is a distribution concern, not a feature of
+//! this binary. An invalid `THAR_MAX_*` override is fatal with exit code 2,
+//! matching the TypeScript `InvalidLimitError`; it never silently falls back to
+//! a default.
 
 pub mod cli;
 pub mod clipboard;
@@ -28,7 +27,7 @@ use std::process::ExitCode;
 
 pub use cli::{CliCommand, CliError, DEFAULT_FILENAME, format_usage, parse_cli_args};
 pub use file::{
-    LoadError, LoadedFile, get_read_limits, load, load_with_limits, read_bytes, read_limits_from,
+    LoadError, LoadedFile, get_read_limits, load_with_limits, read_bytes, read_limits_from,
 };
 use terminal::{run_tui, today_local};
 
@@ -71,34 +70,38 @@ pub fn run(args: &[OsString]) -> ExitCode {
             eprintln!("thar-rs: self-update is not supported by this build.");
             ExitCode::from(2)
         }
-        CliCommand::Run { file, write } => run_editor(file, write),
+        CliCommand::Run { file, backup } => run_editor(file, backup),
     }
 }
 
-/// Open one todo file in the TUI, honouring the write flags.
+/// Open one todo file in the TUI.
 ///
-/// `write` is the backup policy for a writable session; `None` is read-only.
-fn run_editor(file: std::path::PathBuf, write: Option<thar_store::BackupPolicy>) -> ExitCode {
-    // The Ink app creates a missing todo file during startup. Restore that only
-    // in write mode; the read-only contract must not create anything.
-    if write.is_some()
-        && let Err(error) = thar_store::ensure_file(&file)
-    {
+/// `backup` is the policy for the session's saves.
+fn run_editor(file: std::path::PathBuf, backup: thar_store::BackupPolicy) -> ExitCode {
+    // Resolve the environment limits before touching the filesystem: an invalid
+    // `THAR_MAX_*` override is a usage error and must not create a todo file.
+    let limits = match get_read_limits() {
+        Ok(limits) => limits,
+        Err(error) => {
+            eprintln!("thar-rs: {error}");
+            return ExitCode::from(2);
+        }
+    };
+
+    // The Ink app creates a missing todo file during startup; this binary is
+    // write-by-default, so it restores that behaviour.
+    if let Err(error) = thar_store::ensure_file(&file) {
         eprintln!("thar-rs: cannot create the todo file: {error}");
         return ExitCode::from(1);
     }
 
-    let loaded = match load(&file) {
+    let loaded = match load_with_limits(&file, &limits) {
         Ok(loaded) => loaded,
         Err(error) => {
-            // An invalid THAR_MAX_* override is a usage error (the TypeScript
-            // InvalidLimitError path); every other load failure is exit 1.
-            let code = match error {
-                LoadError::InvalidLimit(_) => 2,
-                _ => 1,
-            };
+            // Every remaining load failure is exit 1; the environment check
+            // above already handled the InvalidLimit usage error.
             eprintln!("thar-rs: {error}");
-            return ExitCode::from(code);
+            return ExitCode::from(1);
         }
     };
 
@@ -117,13 +120,12 @@ fn run_editor(file: std::path::PathBuf, write: Option<thar_store::BackupPolicy>)
     let today = today_local();
     let mut app = thar_tui::App::new(file.clone(), todos, today);
     app.set_load_error(error);
-    // `run_tui` derives the read-only flag from the presence of the store, so
-    // write mode has one source of truth. The guard is created only in write
-    // mode, even when `load_error` is already set (a file deleted between the
-    // create and the read): the session then writes nothing until the watcher
-    // reloads a file that exists again, which is the Ink app's recovery path.
-    let mut guard = write.map(|policy| thar_store::SaveGuard::new(file, limits, policy));
-    match run_tui(&mut app, guard.as_mut(), sync) {
+    // The guard exists for every session. Even when `load_error` is already set
+    // (a file deleted between the create and the read), the session writes
+    // nothing until the watcher reloads a file that exists again, which is the
+    // Ink app's recovery path.
+    let mut guard = thar_store::SaveGuard::new(file, limits, backup);
+    match run_tui(&mut app, &mut guard, sync) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("thar-rs: {error}");

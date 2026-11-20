@@ -1,5 +1,4 @@
-//! `thar-tui`: the ratatui front end for Thar (read-only by default, writes
-//! with `--write`).
+//! `thar-tui`: the ratatui front end for Thar.
 //!
 //! The crate is split so each layer can be tested without a terminal:
 //!
@@ -13,8 +12,6 @@
 //! - [`event`] is the leaf terminal-event module shared by input and modals;
 //! - [`editor`] is the one-line text editor behind the create/edit screen and
 //!   the search bar;
-//! - [`messages`] holds the bounded user-facing strings shared by input and
-//!   the app;
 //! - [`search_bar`] owns the query, its cursor and the suggestion popup;
 //! - [`suggest`] collects project/context tag sources and drives the
 //!   suggestion list;
@@ -33,9 +30,9 @@
 //! # Write path
 //!
 //! This crate has no filesystem API: it queues [`app::Effect`]s and lets the
-//! host (`thar-cli` + `thar-store`) do the writing. The binary is read-only
-//! unless `--write` is passed, and the read-only source scan still proves that
-//! the read-only path links no writer.
+//! host (`thar-cli` + `thar-store`) do the writing. Every session is
+//! write-by-default; a failed reload only blocks saves until the file is
+//! readable again.
 
 pub mod app;
 pub mod calendar;
@@ -47,7 +44,6 @@ mod history;
 pub mod input;
 pub mod layout;
 pub mod list;
-pub mod messages;
 pub mod modal;
 pub mod nav;
 pub mod search;

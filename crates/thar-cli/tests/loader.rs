@@ -1,4 +1,4 @@
-//! Read-only loader parity tests.
+//! Loader parity tests.
 //!
 //! Every case mirrors `readTodosFromFile` / `validateTodoFileContent` in
 //! `logic/`: the byte limit runs before parsing (and again on the decoded

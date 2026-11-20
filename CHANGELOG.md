@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `thar-rs`: a read-only ratatui TUI shipped as a separate binary, with list
-  navigation, context headers, search, the hidden-todo view, a scrollbar,
-  mouse wheel/click/shift-click/double-click and terminal restore on panic.
-  It links no writer and never creates a todo file; `thar` still starts the Ink
-  app.
+- `thar-rs`: a ratatui TUI shipped as a separate binary, with list navigation,
+  context headers, search, the hidden-todo view, a scrollbar, mouse
+  wheel/click/shift-click/double-click and terminal restore on panic. It writes
+  by default: edits are debounced and saved atomically with an external-edit
+  guard and a `todo.txt.bak` backup; `thar` still starts the Ink app.
 - Prebuilt `thar-rs` release archives for Linux (x64/arm64), macOS (x64/arm64)
   and Windows (x64), each with a `.sha256` checksum.
 

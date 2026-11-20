@@ -15,9 +15,35 @@ fn help_exits_zero_and_prints_usage_to_stdout() {
         let text = stdout(&output);
         assert!(text.contains("Usage:"), "{flag}: {text}");
         assert!(text.contains("--no-update-check"), "{flag}: {text}");
-        assert!(text.contains("read-only"), "{flag}: {text}");
+        assert!(text.contains("--no-backup"), "{flag}: {text}");
+        assert!(text.contains("saved atomically"), "{flag}: {text}");
+        assert!(!text.contains("--write"), "{flag}: {text}");
+        assert!(!text.contains("read-only"), "{flag}: {text}");
         assert!(stderr(&output).is_empty(), "{flag}");
     }
+}
+
+#[test]
+fn removed_write_flags_are_unknown_options() {
+    for flag in ["--write", "--read-only"] {
+        let output = thar().arg(flag).output().expect("run thar-rs");
+        assert_eq!(output.status.code(), Some(2), "{flag}");
+        let text = stderr(&output);
+        assert!(text.contains("Unknown option:"), "{flag}: {text}");
+        assert!(text.contains(flag), "{flag}: {text}");
+        assert!(text.contains("Usage:"), "{flag}: {text}");
+        assert!(stdout(&output).is_empty(), "{flag}");
+    }
+}
+
+#[test]
+fn no_backup_is_accepted_without_a_write_flag() {
+    let output = thar()
+        .args(["--no-backup", "--help"])
+        .output()
+        .expect("run thar-rs");
+    assert_eq!(output.status.code(), Some(0));
+    assert!(stdout(&output).contains("Usage:"));
 }
 
 #[test]
@@ -132,9 +158,12 @@ fn update_is_recognized_and_rejected_explicitly() {
 
 #[test]
 fn an_invalid_limit_override_is_fatal_with_exit_two() {
+    let dir = TempDir::new("cli-invalid-limit");
+    let path = dir.join("unused.txt");
     let output = thar()
         .env("THAR_MAX_FILE_BYTES", "nope")
-        .args(["--file", "unused.txt"])
+        .arg("--file")
+        .arg(&path)
         .output()
         .expect("run thar-rs");
     assert_eq!(output.status.code(), Some(2));
@@ -146,14 +175,21 @@ fn an_invalid_limit_override_is_fatal_with_exit_two() {
     );
     assert!(!text.contains("nope"));
     assert!(stdout(&output).is_empty());
+    assert!(
+        !path.exists(),
+        "a usage error must not create the todo file"
+    );
 }
 
 #[test]
 fn a_zero_limit_override_is_fatal() {
     for (name, value) in [("THAR_MAX_READ_TODOS", "0"), ("THAR_MAX_LINE_CHARS", "-1")] {
+        let dir = TempDir::new("cli-zero-limit");
+        let path = dir.join("unused.txt");
         let output = thar()
             .env(name, value)
-            .args(["--file", "unused.txt"])
+            .arg("--file")
+            .arg(&path)
             .output()
             .expect("run thar-rs");
         assert_eq!(output.status.code(), Some(2), "{name}");
@@ -161,6 +197,10 @@ fn a_zero_limit_override_is_fatal() {
             stderr(&output).contains(&format!("Invalid {name}:")),
             "{name}: {}",
             stderr(&output)
+        );
+        assert!(
+            !path.exists(),
+            "{name}: a usage error must not create the file"
         );
     }
 }

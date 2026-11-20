@@ -62,11 +62,10 @@ fn wait_for_file(path: &Path, needle: &str) {
 fn an_external_edit_reloads_and_toasts() {
     let directory = TempDir::new("cp7-sync-reload");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
     // The watcher takes its baseline before the first frame is drawn, so an
-    // edit made after these two waits is unambiguously external.
-    session.wait_text("WRITE");
+    // edit made after the wait above is unambiguously external.
     session.wait_todo_text("water the plants");
     std::fs::write(&path, EXTERNAL.as_bytes()).expect("external edit");
 
@@ -101,9 +100,8 @@ fn an_external_edit_replaces_the_list_instead_of_merging() {
     // gone after the reload, nothing is appended, and quitting writes nothing.
     let directory = TempDir::new("cp7-sync-no-merge");
     let path = directory.write("todo.txt", b"one\ntwo\n");
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("one");
     std::fs::write(&path, b"external\nrows\ntotal\n").expect("external edit");
     session.wait_text("File reloaded");
@@ -158,8 +156,7 @@ fn a_read_only_directory_shows_a_bounded_save_failure_and_keeps_the_bytes() {
     // Restore the mode even when an assertion panics: the temp directory's
     // cleanup cannot remove a `0555` directory.
     let result = std::panic::catch_unwind(|| {
-        let mut session = Session::open_write(&path);
-        session.wait_text("WRITE");
+        let mut session = Session::open(&path);
         session.wait_todo_text("one");
 
         // The toggle schedules a save, which cannot create the backup or the
@@ -215,37 +212,32 @@ fn a_read_only_directory_shows_a_bounded_save_failure_and_keeps_the_bytes() {
 }
 
 #[test]
-fn a_failed_reload_enters_read_only_recovery_and_a_fix_recovers() {
+fn a_failed_reload_blocks_saving_and_a_fix_recovers() {
     let directory = TempDir::new("cp7-sync-recovery");
     let path = directory.write("todo.txt", b"one\ntwo\n");
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("one");
 
     // Another program writes a rejected control character. The reload fails:
-    // the badge turns READ-ONLY, the last good rows stay, and the bounded
-    // message reaches the action bar.
+    // the last good rows stay and the bounded message reaches the action bar.
     std::fs::write(&path, b"POISONED_BY_ANOTHER_PROGRAM\x00\n").expect("poison");
-    session.wait_text("READ-ONLY");
     session.wait_text("Todo file line 1");
     session.wait_todo_text("one");
     session.wait_todo_text("two");
 
-    // A mutation is applied in memory but not written while read-only.
+    // A mutation is applied in memory but not written while saving is blocked.
     session.send(b" ");
-    session.wait_text("Not saved: read-only");
+    session.wait_text("Not saved: reload failed");
     assert_eq!(
         std::fs::read(&path).expect("read poisoned"),
         b"POISONED_BY_ANOTHER_PROGRAM\x00\n"
     );
 
-    // Fixing the file externally recovers the session: the rows are replaced,
-    // the badge returns to WRITE and the error disappears.
+    // Fixing the file externally recovers the session: the rows are replaced
+    // and the error disappears.
     std::fs::write(&path, b"one\ntwo\nrecovered\n").expect("fix");
     session.wait_text("File reloaded");
-    session.wait_text("WRITE");
-    session.wait_no_text("READ-ONLY");
     session.wait_no_text("Todo file line 1");
     session.wait_todo_text("recovered");
 
@@ -264,19 +256,17 @@ fn a_failed_reload_enters_read_only_recovery_and_a_fix_recovers() {
 }
 
 #[test]
-fn restoring_the_original_bytes_clears_read_only_recovery() {
+fn restoring_the_original_bytes_clears_save_blocked_recovery() {
     let directory = TempDir::new("cp7-sync-recovery-same-bytes");
     let path = directory.write("todo.txt", b"one\ntwo\n");
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("one");
 
     // Break the file, then restore exactly the bytes the session accepted.
     // The watcher sees a changed stamp but identical content, which must still
     // clear the recovery state even though there is no new list to adopt.
     std::fs::write(&path, b"POISONED\x00\n").expect("poison");
-    session.wait_text("READ-ONLY");
     session.wait_text("Todo file line 1");
 
     // A mutation made while writes are blocked still changes the list in
@@ -288,8 +278,6 @@ fn restoring_the_original_bytes_clears_read_only_recovery() {
 
     std::fs::write(&path, b"one\ntwo\n").expect("restore the original bytes");
     session.wait_text("File reloaded");
-    session.wait_text("WRITE");
-    session.wait_no_text("READ-ONLY");
     session.wait_no_text("Todo file line 1");
     session.wait_todo_text("one");
     session.wait_todo_text("two");
@@ -309,9 +297,8 @@ fn restoring_the_original_bytes_clears_read_only_recovery() {
 fn cp7_sync_screenshot() {
     let directory = TempDir::new("cp7-sync-screenshot");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("water the plants");
     std::fs::write(&path, EXTERNAL.as_bytes()).expect("external edit");
     session.wait_text("File reloaded");

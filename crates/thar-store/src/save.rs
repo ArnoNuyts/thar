@@ -32,8 +32,7 @@ impl SaveGuard {
     /// This does no I/O. The baseline is supplied by the caller on every save,
     /// because the file watcher already reads the file and owns the accepted
     /// bytes. The limits are the ones the session loaded with, so a save rejects
-    /// the same oversize or over-long file a reload would reject. The caller
-    /// decides whether creating a missing file is allowed (`--write` only).
+    /// the same oversize or over-long file a reload would reject.
     #[must_use]
     pub fn new(path: impl Into<PathBuf>, limits: ReadLimits, policy: BackupPolicy) -> Self {
         Self {
@@ -105,8 +104,8 @@ impl SaveGuard {
 
 /// Create an empty todo file if it does not exist.
 ///
-/// The Ink app creates a missing file during normal startup; the write path
-/// restores that behaviour only when `--write` is passed.
+/// The Ink app creates a missing file during normal startup; this binary
+/// restores that behaviour for every session.
 ///
 /// # Errors
 ///

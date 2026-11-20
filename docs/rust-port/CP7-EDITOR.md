@@ -108,17 +108,16 @@ It returns `OpenError::Unavailable` only when the host did not supply the update
 model, and `OpenError::NeedsRequest` for `Confirm`, which is opened with its
 request after an `Action::Confirm`.
 
-## Read-only contract
+## Write path
 
-- The one keymap runs through `command_for_key`; a read-only process maps
-  every `Command::mutates()` intent (including `n`/`e`) to
-  `Command::Toast(READ_ONLY_MESSAGE)` and the `READ-ONLY` badge stays.
-- `thar-tui` gained no I/O: the screens return `Action`s, and the host applies
-  them. `crates/thar-cli/tests/no_write.rs` (the CP6 source scan) still scans
-  every source file; `clipboard.rs` has its own forbidden list that allows only
-  the child-pipe `write_all(`.
-- The PTY suite's existing read-only tests still pass, including
-  `a_real_pty_session_leaves_the_file_and_directory_untouched`.
+- The one keymap runs through `command_for_key`; every mutating intent reaches
+  its real command and the action bar shows no mode badge.
+- `thar-tui` has no I/O: the screens return `Action`s, and the host applies
+  them. `crates/thar-tui/tests/purity.rs` enforces that boundary;
+  `crates/thar-cli/tests/startup.rs` covers the non-TTY startup paths and
+  `tests/write_safety.rs` covers the data-safety matrix.
+- The PTY suite drives the same write-by-default binary, including the
+  startup test that creates a missing todo file.
 
 ## Tests
 
@@ -146,10 +145,10 @@ All three are green. No benchmark or performance work was done.
 
 ## Screenshot
 
-`docs/rust-port/assets/cp7-editor.png` is a real 100×30 PTY frame: `--write`,
-`n` for the create screen, `buy oat milk for the week +th` typed, the `+thar`
-row highlighted and `+thar-tui` below it. Nothing is mocked; the image comes
-from the parsed `vt100` screen (`crate::screenshot::{svg, rasterize}`).
+`docs/rust-port/assets/cp7-editor.png` is a real 100×30 PTY frame: `n` for the
+create screen, `buy oat milk for the week +th` typed, the `+thar` row
+highlighted and `+thar-tui` below it. Nothing is mocked; the image comes from
+the parsed `vt100` screen (`crate::screenshot::{svg, rasterize}`).
 
 Regenerate with:
 

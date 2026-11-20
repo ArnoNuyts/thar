@@ -29,9 +29,8 @@ const ESC: &[u8] = b"\x1b";
 fn the_create_modal_types_applies_a_suggestion_and_saves() {
     let directory = TempDir::new("cp7-editor-create");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("water the plants");
 
     // `n` opens the create screen with the input focused.
@@ -85,9 +84,9 @@ fn the_create_modal_types_applies_a_suggestion_and_saves() {
 fn escape_closes_the_create_modal_without_adding_anything() {
     let directory = TempDir::new("cp7-editor-cancel");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
+    session.wait_todo_text("water the plants");
     session.send(b"n");
     session.wait_text("Create new todo");
     session.send(b"half typed");
@@ -112,9 +111,8 @@ fn escape_closes_the_create_modal_without_adding_anything() {
 fn cp7_editor_screenshot() {
     let directory = TempDir::new("cp7-editor-screenshot");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("water the plants");
 
     // Open the create screen and type a tag word so the suggestion list is
@@ -151,9 +149,9 @@ fn cp7_editor_screenshot() {
 fn search_suggestions_popup_applies_to_the_query() {
     let directory = TempDir::new("cp7-editor-search-suggest");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
+    session.wait_todo_text("water the plants");
     session.send(b"/");
     session.wait_row(0, &crate::search_row(""));
     session.send(b"+th");

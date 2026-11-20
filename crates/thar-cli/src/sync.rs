@@ -25,13 +25,15 @@
 //! - The external file wins. A reload replaces the in-memory list and clears
 //!   the undo history ([`thar_tui::App::reloaded`]).
 //! - A failed read or parse keeps the last good list, cancels a pending save,
-//!   and puts the session in the read-only recovery state (`app.load_error`).
-//!   The next successful reload clears it and re-enables writes.
+//!   and puts the session in the save-blocked recovery state
+//!   (`app.load_error`). The next successful reload clears it and re-enables
+//!   writes.
 //! - A failed reload is not retried on a timer: the metadata must change again
 //!   before another read happens, so a rejected file cannot cause a toast loop.
-//! - A session that starts without a file stays quiet until the file first
-//!   appears: a never-present file is the startup note, not an unreadable
-//!   event. Once the watcher has seen the file, deleting it is reported.
+//! - If the file is deleted between the create in `run_editor` and the startup
+//!   read, the watcher has no baseline yet and stays quiet until the file first
+//!   appears; that is not an unreadable-file event. Once the watcher has seen
+//!   the file, deleting it is reported.
 //! - The target is never written from here. Deletes and unreadable files are
 //!   reported instead of recreated.
 
@@ -277,7 +279,7 @@ impl FileSync {
         self.content_reads
     }
 
-    /// Apply one poll outcome to the app: reload the list, or enter read-only
+    /// Apply one poll outcome to the app: reload the list, or enter save-blocked
     /// recovery.
     ///
     /// The bytes are parsed once. On success they become the watcher baseline

@@ -34,8 +34,6 @@ fn app(lines: &[&str], query: &str) -> App {
         todos,
         "2026-11-15".parse::<TodoDate>().expect("valid date"),
     );
-    // The write badge keeps the frame identical to a `--write` session.
-    app.set_read_only(false);
     app.set_query(query);
     app
 }
@@ -110,7 +108,7 @@ fn eighty_by_twenty_four_create_modal_pins_input_suggestions_and_buttons() {
         "",
         "",
         "────────────────────────────────────────────────────────────────────────────────",
-        " x Menu   q Quit   n New   e Edit   / Search                              WRITE",
+        " x Menu   q Quit   n New   e Edit   / Search",
     ]
     .into_iter()
     .map(str::to_owned)
@@ -231,7 +229,7 @@ fn eighty_by_twenty_four_create_modal_prefills_tags_from_the_search() {
         "",
         "",
         "────────────────────────────────────────────────────────────────────────────────",
-        " x Menu   q Quit   n New   e Edit   / Search                              WRITE",
+        " x Menu   q Quit   n New   e Edit   / Search",
     ]
     .into_iter()
     .map(str::to_owned)
@@ -283,7 +281,7 @@ fn a_hundred_by_thirty_edit_modal_starts_at_the_text_end() {
         "",
         "",
         "────────────────────────────────────────────────────────────────────────────────────────────────────",
-        " x Menu   q Quit   n New   e Edit   / Search                                                  WRITE",
+        " x Menu   q Quit   n New   e Edit   / Search",
     ]
     .into_iter()
     .map(str::to_owned)

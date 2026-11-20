@@ -1,9 +1,9 @@
-//! Read-only file loading with the app's existing limits.
+//! File loading with the app's existing limits.
 //!
-//! The read-only path must never create or modify the todo file, so this
-//! module only reads metadata and bytes. A missing path is an empty in-memory
-//! list plus one bounded note, not a created file (a deliberate divergence from
-//! the Ink app's "create on first run", which would need a write).
+//! This module only reads metadata and bytes; the write path lives in
+//! `thar-store` and `thar-cli`. A missing path is an empty in-memory list plus
+//! one bounded note, so a startup race between the create in `run_editor` and
+//! this read reports the state instead of panicking.
 //!
 //! The byte limit is checked against the on-disk size before the file is read
 //! and again against the decoded text, matching `readTodosFromFile` in
@@ -28,7 +28,7 @@ const MAX_LINE_CHARS: &str = "THAR_MAX_LINE_CHARS";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 /// The note shown when the todo file does not exist.
-const MISSING_FILE_NOTE: &str = "Todo file not found; the read-only build will not create it.";
+const MISSING_FILE_NOTE: &str = "Todo file not found; restore it to resume saving.";
 
 /// Why a file could not be loaded.
 #[derive(Debug)]
@@ -86,23 +86,13 @@ pub struct LoadedFile {
     pub bytes: Option<Vec<u8>>,
 }
 
-/// Read and parse `path` read-only with the environment's limits.
+/// Read and parse `path` with explicit limits.
 ///
 /// # Errors
 ///
-/// Returns [`LoadError`] for a real read failure, an invalid limit override,
-/// or a file that violates the read limits. A missing file is not an error: it
-/// returns an empty list and a note.
-pub fn load(path: &Path) -> Result<LoadedFile, LoadError> {
-    let limits = get_read_limits()?;
-    load_with_limits(path, &limits)
-}
-
-/// Read and parse `path` read-only with explicit limits (tests and hosts).
-///
-/// # Errors
-///
-/// See [`load`].
+/// Returns [`LoadError`] for a real read failure or a file that violates the
+/// read limits. A missing file is not an error: it returns an empty list and a
+/// note.
 pub fn load_with_limits(path: &Path, limits: &ReadLimits) -> Result<LoadedFile, LoadError> {
     match read_bytes(path, limits) {
         Ok(bytes) => Ok(LoadedFile {

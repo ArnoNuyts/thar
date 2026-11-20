@@ -1,10 +1,10 @@
 //! Command-line parsing, mirroring `logic/cli.ts`.
 //!
-//! The surface is the TUI's: one todo file plus `--write`, `--read-only`,
-//! `--no-backup` and `--no-update-check`, the script-compatible `--help` and
-//! `--version`, and the `update` subcommand (which reports that self-update is
-//! unsupported). Parsing produces a [`CliCommand`] so the startup path cannot
-//! read a flag that was never set.
+//! The surface is the TUI's: one todo file plus `--no-backup` and
+//! `--no-update-check`, the script-compatible `--help` and `--version`, and the
+//! `update` subcommand (which reports that self-update is unsupported). Parsing
+//! produces a [`CliCommand`] so the startup path cannot read a flag that was
+//! never set.
 //!
 //! Arguments are [`OsString`]s, not `String`s: a todo file name is a filesystem
 //! path and may be non-UTF-8. Flags are recognized only when the argument is
@@ -45,12 +45,11 @@ pub enum CliCommand {
     Run {
         /// Todo file to open.
         file: PathBuf,
-        /// `--write` was passed: the backup policy to save with.
+        /// The backup policy to save with.
         ///
-        /// `None` means read-only; the parser never combines a policy with
-        /// `--read-only`, so the invalid "writable without a policy" case
-        /// cannot be represented.
-        write: Option<BackupPolicy>,
+        /// [`BackupPolicy::Bak`] is the default; `--no-backup` selects
+        /// [`BackupPolicy::None`].
+        backup: BackupPolicy,
     },
 }
 
@@ -94,14 +93,11 @@ Options:
   -f, --file <path>     Todo file to open
   -h, --help            Show this help
   -v, --version         Show version
-  --write               Allow edits; default is read-only
-  --read-only           Force the read-only default
-  --no-backup           Skip todo.txt.bak before the first save (needs --write)
+  --no-backup           Skip todo.txt.bak before the first save
   --no-update-check     Accepted for CLI parity
 
-Without --write this binary never creates, saves, or archives todos.
-With --write, edits are debounced and saved atomically; todo.txt.bak keeps
-the original until the first save of the session."
+A missing todo file is created. Edits are debounced and saved atomically;
+todo.txt.bak keeps the original until the first save of the session."
     )
 }
 
@@ -116,8 +112,7 @@ the original until the first save of the session."
 /// # Errors
 ///
 /// Returns a [`CliError`] for an unknown option, a missing `--file` value, an
-/// empty path, more than one file argument, `--write` together with
-/// `--read-only`, or `--no-backup` without `--write`.
+/// empty path, or more than one file argument.
 pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
     if argv.first().and_then(|argument| argument.to_str()) == Some("update") {
         let rest = &argv[1..];
@@ -135,8 +130,6 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
     let mut file: Option<PathBuf> = None;
     let mut help = false;
     let mut version = false;
-    let mut write = false;
-    let mut read_only_flag = false;
     let mut no_backup = false;
     let mut end_of_options = false;
 
@@ -167,8 +160,6 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
             Some("-v" | "--version") => version = true,
             // Accepted for command-line parity; this build has no update check.
             Some("--no-update-check") => {}
-            Some("--write") => write = true,
-            Some("--read-only") => read_only_flag = true,
             Some("--no-backup") => no_backup = true,
             Some(name @ ("-f" | "--file")) => {
                 let value = iterator
@@ -199,15 +190,6 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
         }
     }
 
-    if write && read_only_flag {
-        return Err(CliError::new(
-            "--write and --read-only cannot be used together.",
-        ));
-    }
-    if no_backup && !write {
-        return Err(CliError::new("--no-backup requires --write."));
-    }
-
     if help {
         return Ok(CliCommand::Help);
     }
@@ -215,16 +197,14 @@ pub fn parse_cli_args(argv: &[OsString]) -> Result<CliCommand, CliError> {
         return Ok(CliCommand::Version);
     }
 
-    let policy = if no_backup {
+    let backup = if no_backup {
         BackupPolicy::None
     } else {
         BackupPolicy::Bak
     };
     Ok(CliCommand::Run {
         file: file.unwrap_or_else(|| PathBuf::from(DEFAULT_FILENAME)),
-        // `--no-backup` already requires `--write`, so a policy can only
-        // exist in write mode.
-        write: write.then_some(policy),
+        backup,
     })
 }
 
@@ -243,18 +223,18 @@ mod tests {
         parse_cli_args(&args(values)).expect("valid arguments")
     }
 
-    fn run(values: &[&str]) -> (PathBuf, Option<BackupPolicy>) {
+    fn run(values: &[&str]) -> (PathBuf, BackupPolicy) {
         match parse(values) {
-            CliCommand::Run { file, write } => (file, write),
+            CliCommand::Run { file, backup } => (file, backup),
             other => panic!("expected a run command, got {other:?}"),
         }
     }
 
     #[test]
-    fn defaults_to_todo_txt() {
-        let (file, write) = run(&[]);
+    fn defaults_to_todo_txt_with_a_backup() {
+        let (file, backup) = run(&[]);
         assert_eq!(file, Path::new(DEFAULT_FILENAME));
-        assert_eq!(write, None);
+        assert_eq!(backup, BackupPolicy::Bak);
         assert!(!matches!(
             parse(&[]),
             CliCommand::Help | CliCommand::Version
@@ -310,32 +290,31 @@ mod tests {
     }
 
     #[test]
-    fn accepts_write_mode_and_backup_flags() {
-        let (file, write) = run(&["--write", "work.txt"]);
-        assert_eq!(write, Some(BackupPolicy::Bak));
+    fn the_default_backup_policy_is_bak_and_no_backup_selects_none() {
+        let (file, backup) = run(&["--no-backup", "work.txt"]);
         assert_eq!(file, Path::new("work.txt"));
-
-        let (_, write) = run(&["--write", "--no-backup"]);
-        assert_eq!(write, Some(BackupPolicy::None));
-
-        let (_, write) = run(&["--read-only"]);
-        assert_eq!(write, None);
+        assert_eq!(backup, BackupPolicy::None);
+        assert_eq!(run(&[]).1, BackupPolicy::Bak);
+        assert_eq!(run(&["--no-backup"]).1, BackupPolicy::None);
     }
 
     #[test]
-    fn write_and_read_only_together_are_a_usage_error() {
-        assert!(parse_cli_args(&args(&["--write", "--read-only"])).is_err());
-        // The conflict is a parse error even when help was also requested.
-        assert!(parse_cli_args(&args(&["--help", "--write", "--read-only"])).is_err());
+    fn removed_write_flags_are_unknown_options() {
+        assert!(parse_cli_args(&args(&["--write"])).is_err());
+        assert!(parse_cli_args(&args(&["--read-only"])).is_err());
+        let error = parse_cli_args(&args(&["--write"])).expect_err("rejected");
+        assert_eq!(error.to_string(), "Unknown option: --write");
     }
 
     #[test]
-    fn usage_names_the_binary_and_the_read_only_contract() {
+    fn usage_names_the_binary_and_the_write_contract() {
         let usage = format_usage("0.1.0");
         assert!(usage.contains("thar-rs 0.1.0"));
         assert!(usage.contains("--no-update-check"));
-        assert!(usage.contains("--write"));
-        assert!(usage.contains("read-only"));
+        assert!(usage.contains("--no-backup"));
+        assert!(usage.contains("saved atomically"));
+        assert!(!usage.contains("--write"));
+        assert!(!usage.contains("read-only"));
     }
 
     #[test]
@@ -402,13 +381,6 @@ mod tests {
             }
             other => panic!("expected a run command, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn no_backup_requires_write_mode() {
-        let error = parse_cli_args(&args(&["--no-backup"])).expect_err("rejected");
-        assert_eq!(error.to_string(), "--no-backup requires --write.");
-        assert_eq!(run(&["--write", "--no-backup"]).1, Some(BackupPolicy::None));
     }
 
     // A lone UTF-16 surrogate is not valid UTF-8 but is a legal Windows

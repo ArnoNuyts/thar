@@ -579,13 +579,11 @@ mod tests {
             .enumerate()
             .map(|(index, line)| Todo::parse_line(line, TodoId::new(index as u64)))
             .collect();
-        let mut app = App::new(
+        App::new(
             "todo.txt",
             todos,
             "2026-11-15".parse::<TodoDate>().expect("valid date"),
-        );
-        app.set_read_only(false);
-        app
+        )
     }
 
     fn type_text(modal: &mut dyn Modal, text: &str) {
