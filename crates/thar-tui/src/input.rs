@@ -1,15 +1,9 @@
 //! Event mapping: crossterm keys and mouse events to [`Command`]s.
 //!
-//! There is one list keymap and one read-only gate. The keymap is the Ink app's
-//! (`components/TodoList.tsx`) with this build's commands merged in; it is a pure
-//! function of the key plus the app's control-flow context (search focus, an
-//! open suggestion popup, single vs multi select). The mode is not duplicated:
-//! after the keymap produces a [`Command`], [`Command::mutates`] decides whether
-//! a read-only session must acknowledge the press with one bounded toast.
-//!
-//! Navigation, search, scrolling and the mouse are fully functional in both
-//! modes. A read-only session may also copy and open the update screen; every
-//! editing command is rejected at the single gate.
+//! There is one list keymap. It is the Ink app's (`components/TodoList.tsx`)
+//! with this build's commands merged in; it is a pure function of the key plus
+//! the app's control-flow context (search focus, an open suggestion popup,
+//! single vs multi select).
 //!
 //! Mouse coordinates are the ones `thar-cli` produces: 1-based terminal cells,
 //! converted through the shared [`crate::layout::Layout`].
@@ -29,11 +23,13 @@ use thar_core::Priority;
 
 use crate::app::{App, Direction};
 use crate::layout::checkbox_columns;
-use crate::messages::{NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE};
 use crate::modal::{Action, ConfirmRequest, ModalId};
 use crate::nav;
 
 pub use crate::event::{DOUBLE_CLICK_WINDOW, LastClick, MouseInput, MouseKind};
+
+/// Bounded message when `u` is pressed without update information.
+pub const NO_UPDATE_MESSAGE: &str = "No update available";
 
 /// One intent produced by the input layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,72 +112,14 @@ pub enum Command {
     CopySelected,
     /// Read the clipboard and add its lines as todos.
     Paste,
-    /// Show a bounded static message: a keymap hint or the read-only rejection.
+    /// Show a bounded static message.
     Toast(&'static str),
-}
-
-impl Command {
-    /// True when the command changes `todo.txt` or the in-memory list.
-    ///
-    /// Navigation, search editing, quitting, copy, and opening the read-only
-    /// update screen are not mutations. Every command that writes the list or
-    /// opens an editing modal is. This is the single predicate behind the
-    /// read-only gate, so a new command cannot forget its own check.
-    #[must_use]
-    pub const fn mutates(self) -> bool {
-        match self {
-            Self::Quit
-            | Self::SearchFocus
-            | Self::SearchBlur
-            | Self::SearchClear
-            | Self::SearchInsert(_)
-            | Self::SearchBackspace
-            | Self::SearchDelete
-            | Self::SearchLeft
-            | Self::SearchRight
-            | Self::Up
-            | Self::Down
-            | Self::ContextUp
-            | Self::ContextDown
-            | Self::ExtendContextUp
-            | Self::ExtendContextDown
-            | Self::PageUp
-            | Self::PageDown
-            | Self::ExtendPageUp
-            | Self::ExtendPageDown
-            | Self::Home
-            | Self::End
-            | Self::ToggleHiddenView
-            | Self::ClearRange
-            | Self::ExtendUp
-            | Self::ExtendDown
-            | Self::SuggestionPrevious
-            | Self::SuggestionNext
-            | Self::SuggestionApply
-            | Self::SuggestionClose
-            | Self::CopySelected
-            | Self::Toast(_) => false,
-            // Only the read-only update screen may be opened by a read-only
-            // session; every other screen edits the list.
-            Self::Open(id) => !matches!(id, ModalId::Update),
-            Self::Toggle
-            | Self::ToggleHidden
-            | Self::SetPriority(_)
-            | Self::Undo
-            | Self::Redo
-            | Self::Archive
-            | Self::DeleteSelected
-            | Self::Paste => true,
-        }
-    }
 }
 
 /// Translate a key press for a specific app state.
 ///
 /// This is the one keymap entry point. The control flow (search focus, an open
-/// suggestion popup, single vs multi select) selects the branch; after the
-/// command is produced, [`Command::mutates`] applies the read-only gate in one
-/// place.
+/// suggestion popup, single vs multi select) selects the branch.
 #[must_use]
 pub fn command_for_key(app: &App, key: KeyEvent) -> Option<Command> {
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
@@ -198,23 +136,13 @@ pub fn command_for_key(app: &App, key: KeyEvent) -> Option<Command> {
                 _ => {}
             }
         }
-        return gate(app, search_key(key));
+        return search_key(key);
     }
 
-    gate(app, list_key(app, key))
+    list_key(app, key)
 }
 
-/// The single read-only gate: a mutating command becomes one bounded toast.
-fn gate(app: &App, command: Option<Command>) -> Option<Command> {
-    match command {
-        Some(command) if app.is_read_only() && command.mutates() => {
-            Some(Command::Toast(READ_ONLY_MESSAGE))
-        }
-        other => other,
-    }
-}
-
-/// The one list keymap, for both read-only and write sessions.
+/// The one list keymap.
 fn list_key(app: &App, key: KeyEvent) -> Option<Command> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
@@ -324,8 +252,8 @@ fn track_pointer(app: &mut App, mouse: MouseInput) {
 /// Wheel events scroll the viewport only while the list owns focus. A left
 /// click on the action bar maps the clicked segment to its command; a click on
 /// a todo row selects it (shift extends) and focuses the list; clicks on
-/// headers, the search bar and empty space are ignored. The returned command is
-/// already passed through the same read-only gate as a key press.
+/// headers, the search bar and empty space are ignored. A returned command is
+/// the real command for the clicked action-bar item or double-click target.
 pub fn handle_mouse(
     app: &mut App,
     mouse: MouseInput,
@@ -377,7 +305,7 @@ fn left_click(
                 Command::Open(ModalId::TodoMenu) => Command::Open(menu_for(app)),
                 other => other,
             });
-        return (last_click, gate(app, command));
+        return (last_click, command);
     }
 
     let Some(relative) = layout.row_at(screen_row) else {
@@ -404,7 +332,7 @@ fn left_click(
         });
 
     // A double-click on the checkbox toggles that todo; on the text it opens
-    // the editor. The read-only gate turns either into one bounded toast.
+    // the editor.
     let command = double.then(|| {
         if clicked_checkbox(app, mouse.x) {
             Command::Toggle
@@ -417,7 +345,7 @@ fn left_click(
             todo_id: Some(id),
             ..record
         }),
-        gate(app, command),
+        command,
     )
 }
 
@@ -453,7 +381,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent, now: Instant) {
 /// The search bar keeps its one-line filter: rejected controls and tab are
 /// dropped before the text is spliced in once. The list hands the raw text to
 /// [`App::receive_clipboard`], which owns splitting, trimming, validation, the
-/// paste limit, the confirmation, and the read-only gate.
+/// paste limit and the confirmation.
 pub fn handle_paste(app: &mut App, text: &str, now: Instant) {
     if app.handle_modal_paste(text, now) {
         return;
@@ -591,12 +519,12 @@ pub fn clicked_checkbox(app: &App, x: u16) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::NO_UPDATE_MESSAGE;
     use super::{
         Command, MouseInput, MouseKind, apply, command_for_key, handle_key, handle_mouse,
         handle_paste, is_pastable,
     };
     use crate::app::App;
-    use crate::messages::{NO_UPDATE_MESSAGE, READ_ONLY_MESSAGE};
     use crate::modal::{ModalId, UpdateModel};
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
     use std::time::{Duration, Instant};
@@ -625,15 +553,9 @@ mod tests {
         app
     }
 
-    fn writable(lines: &[&str]) -> App {
-        let mut app = app(lines);
-        app.set_read_only(false);
-        app
-    }
-
     #[test]
     fn search_typing_filters_and_escape_clears() {
-        let mut app = writable(&["write docs", "buy milk"]);
+        let mut app = app(&["write docs", "buy milk"]);
         apply(&mut app, Command::SearchFocus, now());
         for ch in "docs".chars() {
             assert_eq!(
@@ -650,7 +572,7 @@ mod tests {
 
     #[test]
     fn backspace_and_delete_edit_at_the_cursor() {
-        let mut app = writable(&["one"]);
+        let mut app = app(&["one"]);
         apply(&mut app, Command::SearchFocus, now());
         for ch in "abc".chars() {
             apply(&mut app, Command::SearchInsert(ch), now());
@@ -664,26 +586,7 @@ mod tests {
     }
 
     #[test]
-    fn mutating_keys_are_rejected_with_one_message() {
-        let app = app(&["one"]);
-        for code in [
-            KeyCode::Char(' '),
-            KeyCode::Char('n'),
-            KeyCode::Char('e'),
-            KeyCode::Delete,
-        ] {
-            assert_eq!(
-                command_for_key(&app, key(code, KeyModifiers::NONE)),
-                Some(Command::Toast(READ_ONLY_MESSAGE))
-            );
-        }
-        let mut app = app;
-        apply(&mut app, Command::Toast(READ_ONLY_MESSAGE), now());
-        assert_eq!(app.toast_message(now()), Some(READ_ONLY_MESSAGE));
-    }
-
-    #[test]
-    fn non_mutating_commands_are_not_rejected_in_a_read_only_session() {
+    fn list_keys_map_to_their_real_commands() {
         let app = app(&["one"]);
         for (code, modifiers, expected) in [
             (KeyCode::Up, KeyModifiers::NONE, Command::Up),
@@ -702,67 +605,74 @@ mod tests {
                 KeyModifiers::SHIFT,
                 Command::ToggleHiddenView,
             ),
+            (KeyCode::Char(' '), KeyModifiers::NONE, Command::Toggle),
+            (
+                KeyCode::Char('h'),
+                KeyModifiers::NONE,
+                Command::ToggleHidden,
+            ),
+            (KeyCode::Char('z'), KeyModifiers::NONE, Command::Undo),
+            (KeyCode::Char('Z'), KeyModifiers::NONE, Command::Redo),
+            (
+                KeyCode::Char('n'),
+                KeyModifiers::NONE,
+                Command::Open(ModalId::CreateTodo),
+            ),
+            (
+                KeyCode::Char('e'),
+                KeyModifiers::NONE,
+                Command::Open(ModalId::EditTodo),
+            ),
+            (
+                KeyCode::Char('x'),
+                KeyModifiers::NONE,
+                Command::Open(ModalId::TodoMenu),
+            ),
+            (
+                KeyCode::Char('d'),
+                KeyModifiers::NONE,
+                Command::Open(ModalId::SetDueDate),
+            ),
+            (
+                KeyCode::Char('t'),
+                KeyModifiers::NONE,
+                Command::Open(ModalId::SetThresholdDate),
+            ),
+            (
+                KeyCode::Char('r'),
+                KeyModifiers::NONE,
+                Command::Open(ModalId::SetRecurrence),
+            ),
+            (
+                KeyCode::Char('+'),
+                KeyModifiers::NONE,
+                Command::Open(ModalId::AddProject),
+            ),
+            (
+                KeyCode::Char('@'),
+                KeyModifiers::NONE,
+                Command::Open(ModalId::AddContext),
+            ),
+            (
+                KeyCode::Enter,
+                KeyModifiers::NONE,
+                Command::Open(ModalId::TodoMenu),
+            ),
+            (KeyCode::Char('a'), KeyModifiers::NONE, Command::Archive),
+            (KeyCode::Char('v'), KeyModifiers::NONE, Command::Paste),
+            (KeyCode::Delete, KeyModifiers::NONE, Command::DeleteSelected),
+            (
+                KeyCode::Char('F'),
+                KeyModifiers::NONE,
+                Command::SetPriority(Some(Priority::new('F').expect("valid priority"))),
+            ),
         ] {
             assert_eq!(
                 command_for_key(&app, key(code, modifiers)),
                 Some(expected),
-                "{code:?} must stay available read-only"
+                "{code:?} with {modifiers:?}"
             );
         }
-    }
-
-    #[test]
-    fn the_read_only_gate_rejects_every_mutating_list_key() {
-        let app = app(&["one"]);
-        for code in [
-            KeyCode::Char(' '),
-            KeyCode::Char('x'),
-            KeyCode::Char('n'),
-            KeyCode::Char('z'),
-            KeyCode::Char('Z'),
-            KeyCode::Char('v'),
-            KeyCode::Char('e'),
-            KeyCode::Char('a'),
-            KeyCode::Char('d'),
-            KeyCode::Char('t'),
-            KeyCode::Char('r'),
-            KeyCode::Char('h'),
-            KeyCode::Char('+'),
-            KeyCode::Char('@'),
-            KeyCode::Char('A'),
-            KeyCode::Char('B'),
-            KeyCode::Char('C'),
-            KeyCode::Char('D'),
-            KeyCode::Char('E'),
-            KeyCode::Char('F'),
-            KeyCode::Delete,
-            KeyCode::Enter,
-        ] {
-            assert_eq!(
-                command_for_key(&app, key(code, KeyModifiers::NONE)),
-                Some(Command::Toast(READ_ONLY_MESSAGE)),
-                "{code:?} must be rejected by the one gate"
-            );
-        }
-    }
-
-    #[test]
-    fn one_gate_produces_exactly_one_bounded_toast() {
-        let mut app = app(&["write the docs"]);
-        let command =
-            command_for_key(&app, key(KeyCode::Char('x'), KeyModifiers::NONE)).expect("command");
-        assert_eq!(command, Command::Toast(READ_ONLY_MESSAGE));
-        apply(&mut app, command, now());
-
-        // A second gated command at the same instant replaces the toast; it
-        // never stacks into a second message.
-        let second =
-            command_for_key(&app, key(KeyCode::Char('n'), KeyModifiers::NONE)).expect("command");
-        apply(&mut app, second, now());
-        assert_eq!(app.toast_message(now()), Some(READ_ONLY_MESSAGE));
-
-        assert_eq!(app.cursor(), Some(TodoId::new(0)));
-        assert_eq!(app.search().query(), "");
     }
 
     #[test]
@@ -783,7 +693,7 @@ mod tests {
 
     #[test]
     fn search_suggestions_take_key_precedence_and_apply() {
-        let mut app = writable(&["one +thar @home"]);
+        let mut app = app(&["one +thar @home"]);
         app.set_search_focused(true);
         app.set_query("+th");
         assert!(app.search().suggestions().is_open());
@@ -808,13 +718,13 @@ mod tests {
     }
 
     #[test]
-    fn clicking_a_row_selects_it_and_a_double_click_is_rejected() {
+    fn clicking_a_row_selects_it_and_a_double_click_toggles() {
         let mut app = app(&["one", "two"]);
         // Rows: None header at screen row 1, todo 1 at row 2, todo 2 at row 3.
         let now = now();
         let mouse = MouseInput {
             kind: MouseKind::LeftClick,
-            x: 1,
+            x: 4,
             y: 3,
             shift: false,
         };
@@ -826,7 +736,7 @@ mod tests {
         );
 
         let (_, command) = handle_mouse(&mut app, mouse, last, now + Duration::from_millis(100));
-        assert_eq!(command, Some(Command::Toast(READ_ONLY_MESSAGE)));
+        assert_eq!(command, Some(Command::Toggle));
     }
 
     #[test]
@@ -848,8 +758,8 @@ mod tests {
     }
 
     #[test]
-    fn the_writable_list_keys_reach_the_new_commands() {
-        let app = writable(&["one", "two"]);
+    fn the_list_keys_reach_the_mutating_commands() {
+        let app = app(&["one", "two"]);
         let plain = |code| key(code, KeyModifiers::NONE);
 
         assert_eq!(
@@ -881,17 +791,14 @@ mod tests {
     }
 
     #[test]
-    fn the_update_screen_is_reachable_in_both_modes() {
+    fn the_update_screen_is_reachable() {
         let mut app = app(&["one"]);
         app.set_update_model(Some(UpdateModel::default()));
         assert_eq!(
             command_for_key(&app, key(KeyCode::Char('u'), KeyModifiers::NONE)),
             Some(Command::Open(ModalId::Update))
         );
-        assert!(!Command::Open(ModalId::Update).mutates());
-        assert!(Command::Open(ModalId::EditTodo).mutates());
 
-        // Opening it in read-only mode is not gated.
         apply(&mut app, Command::Open(ModalId::Update), now());
         assert_eq!(
             app.modals().top().map(|modal| modal.id()),
@@ -901,14 +808,14 @@ mod tests {
 
     #[test]
     fn archive_and_delete_apply_through_a_confirmation() {
-        let mut archive_app = writable(&["one", "two"]);
+        let mut archive_app = app(&["one", "two"]);
         apply(&mut archive_app, Command::Archive, now());
         assert_eq!(
             archive_app.modals().top().map(|modal| modal.title()),
             Some("Archive Completed")
         );
 
-        let mut delete_app = writable(&["one", "two"]);
+        let mut delete_app = app(&["one", "two"]);
         apply(&mut delete_app, Command::DeleteSelected, now());
         let modal = delete_app.modals().top().expect("delete confirmation");
         assert_eq!(modal.title(), "Delete Todo");
@@ -917,7 +824,7 @@ mod tests {
 
     #[test]
     fn copy_and_paste_become_host_effects() {
-        let mut app = writable(&["one @home", "two"]);
+        let mut app = app(&["one @home", "two"]);
         apply(&mut app, Command::CopySelected, now());
         assert_eq!(
             app.take_effects(),
@@ -926,42 +833,6 @@ mod tests {
 
         apply(&mut app, Command::Paste, now());
         assert_eq!(app.take_effects(), vec![crate::Effect::Paste]);
-    }
-
-    #[test]
-    fn mutates_is_honest_about_every_variant() {
-        for command in [
-            Command::Quit,
-            Command::SearchFocus,
-            Command::SearchBlur,
-            Command::SearchClear,
-            Command::SearchInsert('a'),
-            Command::SearchBackspace,
-            Command::SearchDelete,
-            Command::SearchLeft,
-            Command::SearchRight,
-            Command::Up,
-            Command::CopySelected,
-            Command::Toast(NO_UPDATE_MESSAGE),
-            Command::Toast(READ_ONLY_MESSAGE),
-            Command::Open(ModalId::Update),
-        ] {
-            assert!(!command.mutates(), "{command:?} must not mutate");
-        }
-        for command in [
-            Command::Toggle,
-            Command::ToggleHidden,
-            Command::SetPriority(None),
-            Command::Undo,
-            Command::Redo,
-            Command::Archive,
-            Command::DeleteSelected,
-            Command::Paste,
-            Command::Open(ModalId::CreateTodo),
-            Command::Open(ModalId::EditTodo),
-        ] {
-            assert!(command.mutates(), "{command:?} must mutate");
-        }
     }
 
     #[test]
@@ -977,7 +848,7 @@ mod tests {
 
     #[test]
     fn a_search_paste_drops_controls_and_tab_then_inserts_once() {
-        let mut app = writable(&["one"]);
+        let mut app = app(&["one"]);
         app.focus_search();
         handle_paste(&mut app, "do\tcs\u{001B}", now());
         assert_eq!(app.search().query(), "docs");
@@ -986,7 +857,7 @@ mod tests {
 
     #[test]
     fn release_events_are_ignored() {
-        let mut app = writable(&["one"]);
+        let mut app = app(&["one"]);
         let mut release = key(KeyCode::Char('q'), KeyModifiers::NONE);
         release.kind = KeyEventKind::Release;
         handle_key(&mut app, release, now());
@@ -995,7 +866,7 @@ mod tests {
 
     #[test]
     fn an_open_modal_owns_the_key_before_the_list_keymap() {
-        let mut app = writable(&["one"]);
+        let mut app = app(&["one"]);
         app.open_modal(ModalId::CreateTodo);
         handle_key(&mut app, key(KeyCode::Char('q'), KeyModifiers::NONE), now());
         assert!(!app.should_quit());

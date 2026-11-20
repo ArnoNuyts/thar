@@ -19,7 +19,7 @@
 //! the watcher, and a debounced external change replaces the list, clears the
 //! undo history, refreshes the save baseline and toasts "File reloaded". A
 //! failed reload keeps the last good list, cancels a pending save and enters
-//! the read-only recovery state; the next successful reload clears it. The
+//! the save-blocked recovery state; the next successful reload clears it. The
 //! policy lives in `crates/thar-cli/src/sync.rs`, mirrored by the file-sync
 //! design notes under `docs/rust-port/`.
 
@@ -198,8 +198,7 @@ impl TerminalSession {
         Ok(session)
     }
 
-    /// Run the event loop until the app quits, saving through `store` when it
-    /// is present.
+    /// Run the event loop until the app quits, saving through `store`.
     ///
     /// `sync` is the session's watcher, built from the load result so its
     /// baseline and limits are the ones the session actually loaded.
@@ -210,12 +209,9 @@ impl TerminalSession {
     pub fn run(
         &mut self,
         app: &mut App,
-        mut store: Option<&mut SaveGuard>,
+        store: &mut SaveGuard,
         mut sync: FileSync,
     ) -> io::Result<()> {
-        // Write mode has one source of truth: the presence of the store. The
-        // caller opens a store exactly when `--write` is active.
-        app.set_read_only(store.is_none());
         let mut last_click: Option<LastClick> = None;
         // One decoder for the whole session: a press and its key-up can arrive
         // in separate event-loop iterations, and a per-batch decoder would
@@ -229,9 +225,7 @@ impl TerminalSession {
 
             let now = Instant::now();
             app.expire_toast(now);
-            if app.save_due(now)
-                && let Some(store) = store.as_deref_mut()
-            {
+            if app.save_due(now) {
                 flush_save(app, store, &mut sync, now);
             }
             self.terminal.draw(|frame| view::render(frame, app))?;
@@ -241,9 +235,7 @@ impl TerminalSession {
                 // loop flushes it first, because losing the last keystroke of
                 // an edit is exactly the data-safety failure the flush exists
                 // to prevent.
-                if app.is_dirty()
-                    && let Some(store) = store.as_deref_mut()
-                {
+                if app.is_dirty() {
                     flush_save(app, store, &mut sync, now);
                 }
                 if app.is_dirty() {
@@ -277,7 +269,7 @@ impl TerminalSession {
 
             // Apply the effects queued by this event before the reload: an
             // effect was gated by the app state when the key was handled, and
-            // a reload first could flip the session into read-only recovery
+            // a reload first could flip the session into save-blocked recovery
             // between the queue and the host step (for example, archiving to
             // `done.txt` after the file became unreadable).
             process_effects(app, event_now);
@@ -312,13 +304,13 @@ impl Drop for TerminalSession {
 
 /// Enter the TUI, run it until quit, and restore the terminal.
 ///
-/// `store` is the write path; `None` is read-only. `sync` is the watcher built
-/// from the load result, so its baseline and limits travel with the session.
+/// `sync` is the watcher built from the load result, so its baseline and limits
+/// travel with the session.
 ///
 /// # Errors
 ///
 /// Propagates terminal setup and draw errors.
-pub fn run_tui(app: &mut App, store: Option<&mut SaveGuard>, sync: FileSync) -> io::Result<()> {
+pub fn run_tui(app: &mut App, store: &mut SaveGuard, sync: FileSync) -> io::Result<()> {
     let mut session = TerminalSession::start()?;
     session.run(app, store, sync)
 }
@@ -363,9 +355,9 @@ fn process_effects(app: &mut App, now: Instant) {
 
 /// Append the completed todos to `done.txt` and report the outcome.
 ///
-/// `App` owns the archive gate (write mode and healthy recovery state) and
-/// passes the completed todos in the effect; this host half only performs the
-/// file append and hands the result back for removal and the toast.
+/// `App` owns the archive gate (a healthy save state) and passes the completed
+/// todos in the effect; this host half only performs the file append and hands
+/// the result back for removal and the toast.
 fn archive(app: &mut App, todos: Vec<thar_core::Todo>, now: Instant) {
     let ids: Vec<_> = todos.iter().map(|todo| todo.id).collect();
     let done = thar_store::done_path(app.filename());
@@ -477,8 +469,8 @@ fn dispatch_event(app: &mut App, event: Event, now: Instant, last_click: &mut Op
         }
         Event::Resize(width, height) => app.resize(width, height),
         Event::Paste(text) => input::handle_paste(app, &text, now),
-        // Focus does not change any read-only state. The next iteration
-        // redraws and re-checks the local day.
+        // Focus does not change any save state. The next iteration redraws and
+        // re-checks the local day.
         Event::FocusGained | Event::FocusLost => {}
     }
 }
@@ -957,12 +949,11 @@ mod tests {
             vec![Todo::parse_line("a", TodoId::new(0))],
             "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
-        app.set_read_only(false);
         let mut sync = FileSync::new(&path, limits, std::fs::read(&path).ok());
         let start = Instant::now();
 
         // The file disappears: the first successful reload is a failure, so the
-        // session enters read-only recovery.
+        // session enters save-blocked recovery.
         std::fs::remove_file(&path).expect("delete the file");
         reload_until(&mut app, &mut sync, start, |app| app.load_error().is_some());
         assert!(!app.writable(), "a failed reload blocks writes");

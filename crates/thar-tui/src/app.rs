@@ -1,4 +1,4 @@
-//! Application state for the read-only TUI.
+//! Application state for the TUI.
 //!
 //! The state is deliberately split from the event loop and from rendering:
 //! `thar-cli` owns the terminal, `input` maps events to commands, and `view`
@@ -20,13 +20,14 @@
 //! entry, so an undo snapshot shares every untouched todo with the live list
 //! instead of deep-cloning the whole file.
 //!
-//! # Read-only and write modes
+//! # Write path
 //!
-//! The binary is read-only unless `--write` is passed. In read-only mode the
-//! mutating keys are rejected by the input layer with one bounded toast. In
-//! write mode they call the mutation API here, which records one undo step per
-//! command and schedules a debounced save. The actual filesystem write lives
-//! in `thar-cli`/`thar-store`; this crate only queues [`Effect`]s.
+//! The binary saves every edit. Mutating commands call the mutation API here,
+//! which records one undo step per command and schedules a debounced save. When
+//! a reload has failed, edits are still applied in memory but not scheduled for
+//! saving until a later reload succeeds (the save-blocked recovery state). The
+//! actual filesystem write lives in `thar-cli`/`thar-store`; this crate only
+//! queues [`Effect`]s.
 //!
 //! Every mutation and modal action takes an explicit [`Instant`], so the save
 //! debounce and retry state are deterministic in tests. Convenience toasts that
@@ -49,7 +50,6 @@ use crate::event::MouseInput;
 use crate::history::History;
 use crate::layout::Layout;
 use crate::list::{ListModel, ListRow};
-use crate::messages::READ_ONLY_MESSAGE;
 use crate::modal::{
     self, Action, ConfirmRequest, ModalId, OpenError, Outcome, Stack, TagKind, UpdateModel,
 };
@@ -66,8 +66,9 @@ pub const PASTE_CONFIRM_THRESHOLD: usize = 10;
 /// Backoff before retrying a failed save.
 pub const SAVE_RETRY: Duration = Duration::from_secs(1);
 
-/// Toast shown when a write-enabled session lost its file.
-pub const NOT_SAVED_MESSAGE: &str = "Not saved: read-only";
+/// Toast shown when a mutation is applied in memory but not saved because the
+/// last reload failed.
+pub const NOT_SAVED_MESSAGE: &str = "Not saved: reload failed";
 
 /// How long a toast stays visible, matching `ToasterProvider`.
 pub const TOAST_DURATION: Duration = Duration::from_millis(2_000);
@@ -254,7 +255,6 @@ pub struct App {
     toast: Option<Toast>,
     load_error: Option<String>,
     should_quit: bool,
-    read_only: bool,
     next_id: u64,
     history: History,
     modals: Stack,
@@ -285,7 +285,7 @@ pub(crate) enum Direction {
 }
 
 impl App {
-    /// Create the app for an already-loaded, read-only todo list.
+    /// Create the app for an already-loaded todo list.
     #[must_use]
     pub fn new(filename: impl Into<PathBuf>, todos: Vec<Todo>, today: TodoDate) -> Self {
         let tag_sources = TagSources::collect(&todos);
@@ -313,7 +313,6 @@ impl App {
             toast: None,
             load_error: None,
             should_quit: false,
-            read_only: true,
             next_id,
             history: History::default(),
             modals: Stack::default(),
@@ -327,7 +326,7 @@ impl App {
         app
     }
 
-    // ---- read-only accessors ----------------------------------------------
+    // ---- read accessors ----------------------------------------------------
 
     /// Path shown in diagnostics (never rendered as a row).
     #[must_use]
@@ -349,9 +348,9 @@ impl App {
 
     /// The search bar: query, cursor, focus and suggestions.
     ///
-    /// Read-only: every edit goes through `edit_query`, `move_query_cursor`,
-    /// `focus_search` or `blur_search`, which keep the row model and scroll
-    /// offset in step.
+    /// The accessor only borrows the search bar; every edit goes through
+    /// `edit_query`, `move_query_cursor`, `focus_search` or `blur_search`, which
+    /// keep the row model and scroll offset in step.
     #[must_use]
     pub fn search(&self) -> &SearchBar {
         &self.search
@@ -433,17 +432,6 @@ impl App {
     #[must_use]
     pub(crate) fn show_hidden(&self) -> bool {
         self.show_hidden
-    }
-
-    /// True when the session may not modify the file.
-    #[must_use]
-    pub fn is_read_only(&self) -> bool {
-        self.read_only
-    }
-
-    /// Set the read-only flag.
-    pub fn set_read_only(&mut self, read_only: bool) {
-        self.read_only = read_only;
     }
 
     /// A bounded read failure, if any.
@@ -572,8 +560,8 @@ impl App {
         crate::nav::reflow(self);
     }
 
-    /// Apply a successful file reload: replace the list and leave the read-only
-    /// recovery state.
+    /// Apply a successful file reload: replace the list and leave the
+    /// save-blocked recovery state.
     ///
     /// `App::set_todos` already clears both undo stacks, the pending save and
     /// the save error; the external file wins over unsaved in-memory edits.
@@ -900,10 +888,10 @@ impl App {
 
     // ---- Mutation, history, save and modal plumbing ------------------------
 
-    /// True when a command may change the file.
+    /// True when the session may save changes to the file.
     #[must_use]
     pub fn writable(&self) -> bool {
-        !self.read_only && self.load_error.is_none()
+        self.load_error.is_none()
     }
 
     /// Allocate a stable id for a todo created in this session.
@@ -934,19 +922,6 @@ impl App {
         self.entries[index].replace(todo);
     }
 
-    /// Gate a mutating command.
-    ///
-    /// A read-only binary refuses the command. A write-enabled session whose
-    /// last load failed still mutates in memory but never saves, matching the
-    /// Ink app's read-only recovery state.
-    fn begin_mutation(&mut self, now: Instant) -> bool {
-        if self.read_only {
-            self.push_toast_at(READ_ONLY_MESSAGE, now);
-            return false;
-        }
-        true
-    }
-
     /// Snapshot the current list before a mutation.
     fn record_history(&mut self) {
         self.history
@@ -967,7 +942,7 @@ impl App {
         self.tag_sources = TagSources::collect(self.todos().iter());
         self.refresh_search_suggestions();
         crate::nav::rebuild(self);
-        if self.load_error.is_some() {
+        if !self.writable() {
             self.push_toast_at(NOT_SAVED_MESSAGE, now);
         } else {
             self.mark_dirty(now);
@@ -1016,7 +991,7 @@ impl App {
     where
         F: FnMut(Todo) -> Todo,
     {
-        if ids.is_empty() || !self.begin_mutation(now) {
+        if ids.is_empty() {
             return;
         }
         self.record_history();
@@ -1038,9 +1013,7 @@ impl App {
     ///
     /// The batch is validated as a whole by
     /// [`thar_core::validate_default_batch`] before any history is recorded, so a
-    /// rejected line adds nothing. An empty batch, a read-only session, and a
-    /// command refused by the mutation gate all return `Ok(vec![])`; the gate
-    /// has already shown its own toast.
+    /// rejected line adds nothing. An empty batch returns `Ok(vec![])`.
     ///
     /// The cursor moves to the last added todo only when that todo is present
     /// in the current row model. A new todo filtered out by the active search
@@ -1055,7 +1028,7 @@ impl App {
         texts: &[String],
         now: Instant,
     ) -> Result<Vec<TodoId>, TodoInputError> {
-        if texts.is_empty() || !self.begin_mutation(now) {
+        if texts.is_empty() {
             return Ok(Vec::new());
         }
         validate_default_batch(texts, self.entries.len())?;
@@ -1082,7 +1055,7 @@ impl App {
 
     /// Delete every todo whose id is in `ids`.
     pub fn remove_ids(&mut self, ids: &[TodoId], now: Instant) {
-        if ids.is_empty() || !self.begin_mutation(now) {
+        if ids.is_empty() {
             return;
         }
         self.record_history();
@@ -1094,7 +1067,7 @@ impl App {
 
     /// Flip open/done on `ids`, appending the recurrence copies.
     pub(crate) fn toggle_ids(&mut self, ids: &[TodoId], now: Instant) {
-        if ids.is_empty() || !self.begin_mutation(now) {
+        if ids.is_empty() {
             return;
         }
         self.record_history();
@@ -1198,7 +1171,7 @@ impl App {
         });
     }
 
-    /// Step one undo or redo after the mutation gate.
+    /// Step one undo or redo.
     ///
     /// `step` swaps the live handle vector with a history snapshot in place, so
     /// a successful step does not clone any `Todo`.
@@ -1207,9 +1180,6 @@ impl App {
         now: Instant,
         step: fn(&mut History, &mut Vec<Rc<Todo>>) -> bool,
     ) -> bool {
-        if !self.begin_mutation(now) {
-            return false;
-        }
         let mut current: Vec<Rc<Todo>> = self
             .entries
             .iter()
@@ -1260,15 +1230,7 @@ impl App {
     /// A batch above [`PASTE_CONFIRM_THRESHOLD`] (but within the core limit)
     /// opens the existing confirmation screen; a smaller batch is applied
     /// immediately.
-    ///
-    /// The shared mutation gate runs before splitting, validation, or opening a
-    /// confirmation, so a read-only session rejects every paste with exactly
-    /// one [`READ_ONLY_MESSAGE`] toast. The write path reaches
-    /// [`App::add_todos`], whose second gate call is a no-op.
     pub fn receive_clipboard(&mut self, text: &str, now: Instant) {
-        if !self.begin_mutation(now) {
-            return;
-        }
         let lines: Vec<String> = text
             .lines()
             .map(js_trim)
@@ -1315,8 +1277,8 @@ impl App {
     /// Record the outcome of a clipboard read.
     ///
     /// A successful read follows the same path as [`App::receive_clipboard`];
-    /// a host failure is reported under the `Paste failed:` prefix. The write
-    /// gate and the paste policy stay in the app, not in the host.
+    /// a host failure is reported under the `Paste failed:` prefix. The paste
+    /// policy stays in the app, not in the host.
     pub fn paste_finished(&mut self, result: Result<String, String>, now: Instant) {
         match result {
             Ok(text) => self.receive_clipboard(&text, now),
@@ -1561,7 +1523,6 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::{App, SAVE_DEBOUNCE, SAVE_RETRY};
-    use crate::messages::READ_ONLY_MESSAGE;
     use crate::modal::{Action, Modal};
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::time::{Duration, Instant};
@@ -1577,13 +1538,11 @@ mod tests {
             .enumerate()
             .map(|(index, line)| Todo::parse_line(line, TodoId::new(index as u64)))
             .collect();
-        let mut app = App::new(
+        App::new(
             "todo.txt",
             todos,
             "2026-11-15".parse::<TodoDate>().expect("valid date"),
-        );
-        app.set_read_only(false);
-        app
+        )
     }
 
     fn enter() -> KeyEvent {
@@ -1591,25 +1550,8 @@ mod tests {
     }
 
     #[test]
-    fn read_only_refuses_mutations() {
+    fn a_large_paste_opens_the_confirmation_without_adding_or_saving() {
         let mut app = app(&["one"]);
-        app.set_read_only(true);
-        app.toggle_ids(
-            &app.selected_todos()
-                .iter()
-                .map(|todo| todo.id)
-                .collect::<Vec<_>>(),
-            now(),
-        );
-        assert!(!app.todos()[0].is_done());
-        assert!(!app.is_dirty());
-        assert_eq!(app.toast_message(now()), Some(READ_ONLY_MESSAGE));
-    }
-
-    #[test]
-    fn a_read_only_paste_uses_the_shared_gate_and_adds_nothing() {
-        let mut app = app(&["one"]);
-        app.set_read_only(true);
         let at = now();
         let text = (1..=11)
             .map(|index| format!("pasted {index}"))
@@ -1617,9 +1559,8 @@ mod tests {
             .join("\n");
 
         app.receive_clipboard(&text, at);
-        assert_eq!(app.todos().len(), 1, "a read-only paste adds nothing");
-        assert!(!app.modals.is_open(), "no confirmation may open");
-        assert_eq!(app.toast_message(at), Some(READ_ONLY_MESSAGE));
+        assert_eq!(app.todos().len(), 1, "nothing is added before confirmation");
+        assert!(app.modals.is_open(), "the confirmation must open");
         assert_eq!(app.history.undo_len(), 0);
         assert!(!app.is_dirty());
     }

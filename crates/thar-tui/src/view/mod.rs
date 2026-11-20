@@ -1,4 +1,4 @@
-//! Rendering for the read-only TUI.
+//! Rendering for the TUI.
 //!
 //! The view is a pure function of [`App`]: no widget keeps state between
 //! frames, and only the visible row slice is turned into lines. The layout is
@@ -16,8 +16,7 @@
 //!   and a shift-selection range uses the selection colour;
 //! - context headers are rows and keep the primary background;
 //! - the scrollbar takes a column only while the list is scrollable;
-//! - the action bar puts the read-only badge before the toast and bounds the
-//!   toast to the space the action items leave;
+//! - the action bar bounds the toast to the space the action items leave;
 //! - the action-bar item under the pointer uses the same warning colour and
 //!   bold weight as a hovered modal button.
 //!
@@ -40,11 +39,6 @@ use crate::display::sanitize_for_display;
 use crate::layout::{ACTION_ITEMS, Layout, action_item_width};
 use crate::list::ListRow;
 use crate::theme;
-
-/// Label on the action bar's status side while the binary cannot write.
-const READ_ONLY_LABEL: &str = "READ-ONLY";
-/// Label on the action bar's status side when `--write` is active.
-const WRITE_LABEL: &str = "WRITE";
 
 /// Draw one frame.
 pub fn render(frame: &mut Frame, app: &App) {
@@ -332,11 +326,7 @@ fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
                 )),
                 Line::from(""),
                 Line::from(Span::styled(
-                    if app.is_read_only() {
-                        "The read-only build does not create todo files."
-                    } else {
-                        "Fix the todo file to resume saving."
-                    },
+                    "Fix the todo file to resume saving.",
                     Style::default()
                         .fg(theme::MUTED)
                         .add_modifier(Modifier::DIM),
@@ -348,13 +338,6 @@ fn render_empty_state(frame: &mut Frame, app: &App, layout: Layout) {
                 Line::from(Span::styled(
                     "- Douglas Adams",
                     Style::default().fg(theme::MUTED),
-                )),
-                Line::from(""),
-                Line::from(Span::styled(
-                    "Read-only build: creating and editing are not available.",
-                    Style::default()
-                        .fg(theme::MUTED)
-                        .add_modifier(Modifier::DIM),
                 )),
             ]
         }
@@ -420,18 +403,7 @@ fn render_action_bar(frame: &mut Frame, app: &App, layout: Layout) {
         });
     }
 
-    let (indicator, indicator_color) = if app.writable() {
-        (WRITE_LABEL, theme::SUCCESS)
-    } else {
-        // A write session whose last reload failed shows READ-ONLY until the
-        // file is readable again, matching the Ink app's recovery state. The
-        // `--write` flag itself is unchanged, so the list still accepts
-        // in-memory edits without saving them.
-        (READ_ONLY_LABEL, theme::DANGER)
-    };
-    let indicator_width = indicator.chars().count() + 1;
     let right_limit = usize::from(layout.width.saturating_sub(action_width).saturating_sub(1));
-    let status_limit = right_limit.saturating_sub(indicator_width);
     let toast = app.toast_message(std::time::Instant::now());
     // With no rows the empty state carries the load error in full; the action
     // bar only repeats it when there is a list that lost its refresh.
@@ -439,32 +411,20 @@ fn render_action_bar(frame: &mut Frame, app: &App, layout: Layout) {
     let message = toast
         .or(load_error)
         .or(app.save_error())
-        .map(|text| bound(sanitize_for_display(text), status_limit));
+        .map(|text| bound(sanitize_for_display(text), right_limit));
 
-    let mut right = Vec::new();
-    let mut right_width = 0;
-    right.push(Span::styled(
-        format!("{indicator} "),
-        Style::default().fg(indicator_color),
-    ));
-    right_width += indicator_width;
     if let Some(message) = message.filter(|text| !text.is_empty()) {
-        right_width += message.chars().count();
+        let width = message.chars().count();
+        let padding = usize::from(layout.width).saturating_sub(usize::from(action_width) + width);
+        if padding > 0 {
+            spans.push(Span::raw(" ".repeat(padding)));
+        }
         let color = if toast.is_some() {
             theme::SECONDARY
         } else {
             theme::DANGER
         };
-        right.push(Span::styled(message, Style::default().fg(color)));
-    }
-
-    if right_width > 0 {
-        let left_width = usize::from(action_width);
-        let padding = usize::from(layout.width).saturating_sub(left_width + right_width);
-        if padding > 0 {
-            spans.push(Span::raw(" ".repeat(padding)));
-        }
-        spans.extend(right);
+        spans.push(Span::styled(message, Style::default().fg(color)));
     }
 
     frame.render_widget(Paragraph::new(Line::from(spans)), row);
@@ -550,7 +510,9 @@ mod tests {
         assert!(screen.contains("home"));
         assert!(screen.contains("one @home"));
         assert!(screen.contains("Quit"));
-        assert!(screen.contains("READ-ONLY"));
+        assert!(!screen.contains("WRITE"));
+        assert!(!screen.contains("READ-ONLY"));
+        assert!(!screen.to_lowercase().contains("read-only"));
     }
 
     #[test]
@@ -669,13 +631,28 @@ mod tests {
     }
 
     #[test]
-    fn the_read_only_badge_precedes_the_toast() {
+    fn a_toast_is_right_aligned_without_a_status_badge() {
         let mut app = app(&["one"]);
         app.resize(100, 10);
         app.push_toast("Hidden todos shown");
         let screen = screen(&app, 100, 10);
         let bar = screen.lines().last().expect("action bar");
-        assert!(bar.contains("READ-ONLY Hidden todos shown"));
+        assert!(bar.ends_with("Hidden todos shown"), "{bar:?}");
+        assert!(!bar.contains("WRITE"));
+        assert!(!bar.contains("NOT SAVING"));
+        assert!(!bar.contains("READ-ONLY"));
+        assert!(!bar.to_lowercase().contains("read-only"));
+    }
+
+    #[test]
+    fn a_failed_reload_is_shown_in_the_action_bar() {
+        let mut app = app(&["one"]);
+        app.resize(100, 10);
+        app.reload_failed("todo.txt is unreadable");
+        let screen = screen(&app, 100, 10);
+        let bar = screen.lines().last().expect("action bar");
+        assert!(bar.contains("todo.txt is unreadable"), "{bar:?}");
+        assert!(!bar.contains("NOT SAVING"));
     }
 
     #[test]
@@ -692,7 +669,7 @@ mod tests {
         app.set_load_error(Some("todo.txt not found".to_owned()));
         let screen = screen(&app, 80, 10);
         assert!(screen.contains("todo.txt not found"));
-        assert!(screen.contains("does not create todo files"));
+        assert!(screen.contains("Fix the todo file to resume saving."));
     }
 
     fn focused_query(query: &str) -> App {

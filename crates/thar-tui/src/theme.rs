@@ -28,7 +28,7 @@ pub const INVERSE_FOREGROUND: Color = rgb(0x141210);
 pub const PRIMARY: Color = rgb(0xF4BF75);
 /// Secondary accent: search prompt, toasts, selection background.
 pub const SECONDARY: Color = rgb(0xAF76B7);
-/// Errors, overdue dates, read-only indicator, `due:` suffix.
+/// Errors, overdue dates, `due:` suffix.
 pub const DANGER: Color = rgb(0xCE7768);
 /// Warning accent (search-empty query).
 pub const WARNING: Color = rgb(0xDDB14D);

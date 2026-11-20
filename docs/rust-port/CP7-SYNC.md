@@ -1,12 +1,12 @@
-# CP7 — file sync, reloads and read-only recovery
+# CP7 — file sync, reloads and save-blocked recovery
 
 Status: implemented on `rust-port/cp7-sync`, based on
 `rust-port/cp7-foundation`.
 
 This workstream adds the missing half of CP7's data-safety story: while
-`thar-rs --write` runs, an external edit to the todo file is noticed, debounced,
+`thar-rs` runs, an external edit to the todo file is noticed, debounced,
 re-read and applied, and a file that becomes unreadable puts the session into
-the same read-only recovery state as the Ink app. No new dependency, no
+the same save-blocked recovery state as the Ink app. No new dependency, no
 filesystem or process I/O in `thar-tui`, and the shipped atomic-replace path is
 unchanged.
 
@@ -17,7 +17,7 @@ unchanged.
 | Watcher      | New `crates/thar-cli/src/sync.rs` with `FileSync`, `ReloadOutcome`, `bounded_message` and the poll/debounce/suppression constants. std only (`fs::metadata`, `fs::File`).                                                                                                    |
 | Event loop   | `terminal::run_tui` owns one `FileSync`, extends the `event::poll` timeout with the watcher deadline, and calls `apply_reload` after every event or timeout. The watcher starts from the bytes the initial load parsed, not a second read.                                   |
 | Reload       | Reads the bytes once, lossy-decodes and parses with the startup `ReadLimits`, calls `App::reloaded` (which calls `set_todos`, clearing the undo history), adopts the parsed bytes as the watcher baseline (the save guard's `expected` bytes), and toasts `File reloaded`.   |
-| Failure      | Sets `app.load_error`, toasts the bounded message, cancels a pending save, and shows `READ-ONLY` until a later reload succeeds.                                                                                                                                              |
+| Failure      | Sets `app.load_error`, toasts the bounded message, cancels a pending save and blocks further saves until a later reload succeeds.                                                                                                                                            |
 | Recovery     | `App::reloaded` clears `load_error`, so `App::writable()` is true again and the next mutation saves. When the file returns with the already-accepted bytes, the host re-parses `FileSync::baseline()` and calls `App::reloaded`, so unsaved edits are not reported as saved. |
 | Save refusal | `StoreError::ChangedOnDisk` keeps the target untouched, shows one bounded toast, keeps the list dirty and retries with the app's 1 s backoff; the watcher normally reloads the external file first, which clears the dirty state.                                            |
 | Store        | `FileSync` owns the baseline; `SaveGuard::save(todos, expected)` compares against it and returns the written bytes; `atomic::write_atomic` gained a debug-only `THAR_SAVE_CRASH=before-rename` abort hook.                                                                   |
@@ -87,20 +87,14 @@ file wins, and the in-memory edit that was refused is discarded by the reload.
 This mirrors the Ink hook, which also replaces state on reload and only toasts
 a write rejection.
 
-### Read-only recovery
-
-The `--write` flag and the recovery state are separate:
-
-- `App::read_only` is set once from `--write`;
-- `App::load_error` is the recovery state;
-- `App::writable()` is `!read_only && load_error.is_none()`.
+### Save-blocked recovery
 
 A failed reload (unreadable file, or bytes that fail validation) sets
-`load_error`, cancels the pending save and toasts the bounded message. The badge
-switches to `READ-ONLY` and mutations are applied in memory only, with the
-existing `Not saved: read-only` toast; archive is blocked for the same reason
-(it writes `done.txt`). A later successful reload clears `load_error`, restores
-the `WRITE` badge and persists the next mutation.
+`load_error`, cancels the pending save and toasts the bounded message. The
+action bar shows that error and mutations are applied in memory only, with the
+existing `Not saved: reload failed` toast; archive is blocked for the same
+reason (it writes `done.txt`). A later successful reload clears `load_error` and
+persists the next mutation.
 
 ### Bounds
 
@@ -108,7 +102,7 @@ Every failure message goes through `bounded_message`, which sanitizes control
 characters (`logic/display-safety.ts` escapes them as `\uXXXX`), trims, maps an
 empty message to `Unknown error`, and truncates at 300 characters. The action
 bar additionally clips the toast to the free width, so a long path cannot push
-the badge or the action items off screen.
+the action items off screen.
 
 ## Data-safety matrix
 
@@ -123,10 +117,10 @@ explicit `Instant` to `FileSync::poll`, and the PTY tests poll the parsed screen
 | External edit: reloads into the new list                               | `write_safety::an_external_edit_reloads_into_the_new_list`, `pty::cp7_sync::an_external_edit_reloads_and_toasts`                                                     |
 | Reload replaces instead of merging, and quitting writes nothing        | `pty::cp7_sync::an_external_edit_replaces_the_list_instead_of_merging`                                                                                               |
 | Touched-but-unchanged file: one read, `Unchanged`, no reload           | `write_safety::a_touched_but_unchanged_file_is_read_once_and_does_not_reload`                                                                                        |
-| Restoring the original bytes clears recovery                           | `pty::cp7_sync::restoring_the_original_bytes_clears_read_only_recovery`                                                                                              |
+| Restoring the original bytes clears recovery                           | `pty::cp7_sync::restoring_the_original_bytes_clears_save_blocked_recovery`                                                                                           |
 | Self-write echo: no reload; an edit inside the window waits            | `write_safety::a_save_does_not_reload_its_own_bytes`, `write_safety::an_external_edit_inside_the_self_write_window_waits`                                            |
-| Failed reload keeps the list, cancels the save, is not retried         | `write_safety::a_failed_reload_keeps_the_list_cancels_the_save_and_is_not_retried`, `pty::cp7_sync::a_failed_reload_enters_read_only_recovery_and_a_fix_recovers`    |
-| Recovery clears read-only and re-enables writes                        | `write_safety::a_later_reload_recovers_the_session_and_re_enables_writes`, same PTY test                                                                             |
+| Failed reload keeps the list, cancels the save, is not retried         | `write_safety::a_failed_reload_keeps_the_list_cancels_the_save_and_is_not_retried`, `pty::cp7_sync::a_failed_reload_blocks_saving_and_a_fix_recovers`                |
+| Recovery clears the blocked state and re-enables writes                | `write_safety::a_later_reload_recovers_the_session_and_re_enables_writes`, same PTY test                                                                             |
 | Missing file is a reload error, not an empty list                      | `write_safety::a_missing_file_is_a_reload_error_not_an_empty_list`                                                                                                   |
 | Reload uses the reader's lossy UTF-8 decode                            | `write_safety::a_reload_lossily_decodes_invalid_utf8`                                                                                                                |
 | Crash before the rename leaves the old target                          | `write_safety::crash_before_rename_leaves_the_previous_target`                                                                                                       |
@@ -158,7 +152,7 @@ cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo test --locked --workspace --all-features
 ```
 
-Results: fmt clean, clippy clean, workspace tests green. New coverage:
+Results at this checkpoint: fmt clean, clippy clean, workspace tests green. New coverage:
 `thar-cli` unit 15, `tests/write_safety.rs` 13 tests (12 passed + 1 ignored
 helper), `tests/pty` 17 passed + 3 ignored generators, plus every pre-existing
 CP6/CP7 suite.
@@ -170,8 +164,8 @@ cargo test -p thar-cli --test pty -- --ignored cp7_sync_screenshot
 ```
 
 produced `docs/rust-port/assets/cp7-sync.png` from the real binary: the list has
-an externally added `ship the CP7 sync @work +thar` row, the badge reads
-`WRITE`, and the action bar shows the `File reloaded` toast.
+an externally added `ship the CP7 sync @work +thar` row and the action bar shows
+the `File reloaded` toast.
 
 ## Deliberate gaps and deviations
 
@@ -188,7 +182,7 @@ an externally added `ship the CP7 sync @work +thar` row, the badge reads
   first debounce. An edit between the load and the watcher's first poll is
   therefore reloaded (or refused by the save guard) instead of being mistaken
   for the starting content.
-- **A write session whose initial read _fails validation_ still exits** with a
+- **A session whose initial read _fails validation_ still exits** with a
   message before the TUI starts (CP6 behaviour, unchanged here). The recovery
   path covers a file that becomes invalid, unreadable or deleted after startup,
   which is what the Ink lifecycle tests exercise after the first load.

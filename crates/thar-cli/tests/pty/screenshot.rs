@@ -59,10 +59,10 @@ fn cp6_screenshot() {
     let todo = directory.write("todo.txt", FIXTURE.as_bytes());
     let mut session = Session::open(&todo);
 
-    // Wait for the last fixture row and the badge: at that point the frame is
-    // complete, because ratatui's first draw writes every row in one batch.
-    session.wait_text("READ-ONLY");
+    // Wait for the last fixture row and the action bar: at that point the
+    // frame is complete, because ratatui writes the list before the bar.
     session.wait_todo_text("ship the release");
+    session.wait_text("/ Search");
 
     let image = session.with_screen(svg);
     let svg_path = directory.join("cp6-tui.svg");
@@ -337,7 +337,7 @@ fn cp6_paste_fix_screenshot() {
     let todo = directory.write("todo.txt", crate::FIXTURE.as_bytes());
     let mut session = Session::open(&todo);
 
-    session.wait_text("READ-ONLY");
+    session.wait_todo_text("buy milk");
     session.send(b"/");
     session.wait_row(0, &crate::search_row(""));
     session.wait_cell_reversed(0, 3, true);

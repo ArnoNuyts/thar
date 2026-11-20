@@ -364,7 +364,6 @@ mod tests {
             "2026-11-15".parse::<TodoDate>().expect("valid date"),
         );
         app.resize(80, 24);
-        app.set_read_only(false);
         app
     }
 

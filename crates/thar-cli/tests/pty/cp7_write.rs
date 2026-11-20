@@ -1,9 +1,9 @@
-//! CP7 write-mode PTY coverage.
+//! CP7 write-path PTY coverage.
 //!
-//! These tests drive the real binary through a real terminal: `--write`, a
-//! toggle key, the debounced save, undo, and the one-session backup. They read
-//! the file after the process exits, so they prove the bytes on disk rather
-//! than the in-memory state.
+//! These tests drive the real binary through a real terminal in its default
+//! mode: a toggle key, the debounced save, undo, and the one-session backup.
+//! They read the file after the process exits, so they prove the bytes on disk
+//! rather than the in-memory state.
 //!
 //! The screenshot generator is `#[ignore]`d like CP6's; run it with
 //! `cargo test -p thar-cli --test pty -- --ignored cp7_write_screenshot`.
@@ -46,12 +46,11 @@ fn wait_for_file(path: &Path, needle: &str) {
 }
 
 #[test]
-fn write_mode_toggles_saves_and_keeps_a_backup() {
+fn the_default_session_toggles_saves_and_keeps_a_backup() {
     let directory = TempDir::new("cp7-write-toggle");
     let path = directory.write("todo.txt", b"one\ntwo\n");
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("one");
     session.send(b" ");
     session.wait_text("[x]");
@@ -77,9 +76,9 @@ fn write_mode_toggles_saves_and_keeps_a_backup() {
 fn undo_restores_the_original_bytes() {
     let directory = TempDir::new("cp7-write-undo");
     let path = directory.write("todo.txt", b"one\n");
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
+    session.wait_todo_text("one");
     session.send(b" ");
     session.wait_text("[x]");
     session.send(b"z");
@@ -95,29 +94,12 @@ fn undo_restores_the_original_bytes() {
 }
 
 #[test]
-fn a_read_only_run_still_creates_nothing() {
-    let directory = TempDir::new("cp7-write-readonly");
-    let path = directory.write("todo.txt", b"one\n");
-    let mut session = Session::open(&path);
-
-    session.wait_text("READ-ONLY");
-    session.send(b" ");
-    session.wait_text("Read-only");
-    session.send(b"q");
-    let status = session.wait_exit(TIMEOUT);
-    assert_eq!(status.exit_code(), 0);
-    assert_eq!(std::fs::read(&path).expect("read file"), b"one\n");
-    assert!(!directory.join("todo.txt.bak").exists());
-}
-
-#[test]
 #[ignore = "manual asset generator: regenerates docs/rust-port/assets/cp7-write.png"]
 fn cp7_write_screenshot() {
     let directory = TempDir::new("cp7-write-screenshot");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("write the CP7 foundation");
     session.send(b" ");
     session.wait_text("[x]");

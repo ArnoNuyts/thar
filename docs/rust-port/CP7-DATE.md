@@ -132,10 +132,9 @@ unless the host supplies an update model.
 - **Goldens** — `crates/thar-tui/tests/golden_cp7_date.rs`, eight frames:
   exact 80×24 due list and 100×30 calendar blocks, plus pinned 80×24 priority,
   recurrence base/amount, context editor and 100×30 project editor frames
-  (dimensions, centring, markers `»`, `[x]`/`[?]` colours and the `WRITE`
-  badge).
+  (dimensions, centring, markers `»`, `[x]`/`[?]` colours and the action bar).
 - **PTY** — `crates/thar-cli/tests/pty/cp7_calendar.rs`:
-  - a non-ignored real-PTY test opens `--write`, presses `d`, moves to Custom,
+  - a non-ignored real-PTY test opens the default session, presses `d`, moves to Custom,
     opens the calendar, moves one day right and Enter, exits with `q`, and
     asserts the file now contains `due:2024-05-07` and not `due:2024-05-06`
     (the fixture's fixed due date makes it independent of the wall clock);
@@ -162,8 +161,10 @@ cargo test --locked --workspace --all-features
   4 ignored** (the three manual screenshot generators and the manual row-perf
   report). The new targets are 148 `thar-core` unit tests, 114 `thar-tui` unit
   tests, 8 `golden_cp7_date` frames, and the PTY target at 15 passed with 3
-  ignored. `tests/no_write.rs` and `tests/read_only.rs` still pass unchanged:
-  `thar-tui` gained no filesystem or process I/O.
+  ignored. `tests/read_only.rs` and `tests/no_write.rs` still passed at this
+  checkpoint. Later, when writes became the default, `read_only.rs` was renamed
+  to `startup.rs`, `no_write.rs` was removed, and `tests/purity.rs` took over
+  the no-I/O half of its guarantee.
 
 ### Screenshot
 

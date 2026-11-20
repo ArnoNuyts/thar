@@ -121,33 +121,10 @@ impl Session {
         Self::spawn(directory, &args, environment)
     }
 
-    /// Run `thar-rs --write --file <file>`.
-    pub fn open_write(file: &Path) -> Self {
-        Self::open_write_with(file, &[])
-    }
-
-    /// Run `thar-rs --write --file <file>` with extra environment overrides.
-    ///
-    /// Used to point `PATH` at a directory with no clipboard command, so the
-    /// failure toast can be asserted without touching the host clipboard.
-    pub fn open_write_with(file: &Path, environment: &[(&str, &str)]) -> Self {
+    /// Run `thar-rs --file <file>` at an explicit terminal size.
+    pub fn open_sized(file: &Path, cols: u16, rows: u16) -> Self {
         let directory = file.parent().unwrap_or_else(|| Path::new("."));
-        let args = [
-            OsStr::new("--write"),
-            OsStr::new("--file"),
-            file.as_os_str(),
-        ];
-        Self::spawn(directory, &args, environment)
-    }
-
-    /// Run `thar-rs --write --file <file>` at an explicit terminal size.
-    pub fn open_write_sized(file: &Path, cols: u16, rows: u16) -> Self {
-        let directory = file.parent().unwrap_or_else(|| Path::new("."));
-        let args = [
-            OsStr::new("--write"),
-            OsStr::new("--file"),
-            file.as_os_str(),
-        ];
+        let args = [OsStr::new("--file"), file.as_os_str()];
         Self::spawn_sized(directory, &args, &[], cols, rows)
     }
 

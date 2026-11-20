@@ -1,4 +1,4 @@
-//! Golden frames for the read-only TUI.
+//! Golden frames for the TUI.
 //!
 //! CP6's rendering is pinned the same way the Ink app's snapshots would be:
 //! a fixed todo list, a fixed size and a fixed day, then the exact cell
@@ -64,15 +64,8 @@ fn fixture() -> App {
     ])
 }
 
-/// The action-bar row with the read-only badge right-aligned.
-fn action_bar(width: usize) -> String {
-    let left = " x Menu   q Quit   n New   e Edit   / Search  ";
-    let indicator = "READ-ONLY ";
-    format!(
-        "{left}{}READ-ONLY",
-        " ".repeat(width - left.len() - indicator.len())
-    )
-}
+/// The action-bar row: the action items and no status badge.
+const ACTION_BAR: &str = " x Menu   q Quit   n New   e Edit   / Search";
 
 #[test]
 fn eighty_by_twenty_four_matches_the_ink_layout() {
@@ -94,8 +87,13 @@ fn eighty_by_twenty_four_matches_the_ink_layout() {
     .collect();
     expected.extend(core::iter::repeat_n(String::new(), 15));
     expected.push("─".repeat(80));
-    expected.push(action_bar(80));
+    expected.push(ACTION_BAR.to_owned());
     assert_eq!(screen_lines(&backend), expected);
+    let rendered = screen_lines(&backend).join("\n");
+    assert!(!rendered.contains("WRITE"));
+    assert!(!rendered.contains("NOT SAVING"));
+    assert!(!rendered.contains("READ-ONLY"));
+    assert!(!rendered.to_lowercase().contains("read-only"));
 
     // The cursor starts on the first todo row and the number is dimmed.
     let buffer = backend.buffer();
@@ -158,7 +156,7 @@ fn one_hundred_and_twenty_by_forty_scrolls_with_a_track() {
         format!(" 50 [ ] todo 50{}│", " ".repeat(119 - 15))
     );
     assert_eq!(screen[38], "─".repeat(120));
-    assert_eq!(screen[39], action_bar(120));
+    assert_eq!(screen[39], ACTION_BAR);
 
     let buffer = backend.buffer();
     // The scrollbar column is always the last one. The handle is 28 rows tall
@@ -180,14 +178,13 @@ fn the_empty_state_is_vertically_centred() {
     let screen = screen_lines(&backend);
 
     // The list area is 10 rows (12 minus the two action-bar rows) and the
-    // welcome block is four lines, so it starts at row (10 - 4) / 2 = 3.
+    // welcome block is two lines, so it starts at row (10 - 2) / 2 = 4.
     let quote = screen
         .iter()
         .position(|line| line.contains("I love deadlines"))
         .expect("welcome quote");
-    assert_eq!(quote, 3, "{screen:#?}");
+    assert_eq!(quote, 4, "{screen:#?}");
     assert!(screen.iter().any(|line| line.contains("Douglas Adams")));
-    assert!(screen.iter().any(|line| line.contains("Read-only build")));
 }
 
 #[test]

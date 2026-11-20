@@ -37,9 +37,8 @@ buy milk @home
 fn the_menu_opens_and_a_shortcut_toggles_through_it() {
     let directory = TempDir::new("cp7-menu-toggle");
     let path = directory.write("todo.txt", b"one\ntwo\n");
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("one");
 
     session.send(b"x");
@@ -72,10 +71,9 @@ fn the_menu_opens_and_a_shortcut_toggles_through_it() {
 fn the_empty_list_menu_offers_only_global_commands() {
     let directory = TempDir::new("cp7-menu-empty");
     let path = directory.write("todo.txt", b"");
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
-
+    session.wait_text("I love deadlines");
     session.send(b"x");
     session.wait_text("Todo menu");
     session.wait_text("Show/Hide Hidden");
@@ -108,9 +106,8 @@ fn the_empty_list_menu_offers_only_global_commands() {
 fn archive_appends_done_txt_and_removes_the_completed_lines() {
     let directory = TempDir::new("cp7-menu-archive");
     let path = directory.write("todo.txt", ARCHIVE_FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("ship the release");
 
     session.send(b"a");
@@ -139,9 +136,8 @@ fn archive_appends_done_txt_and_removes_the_completed_lines() {
 fn delete_asks_first_and_then_removes_the_cursor_todo() {
     let directory = TempDir::new("cp7-menu-delete");
     let path = directory.write("todo.txt", b"one\ntwo\n");
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("one");
 
     session.send(b"\x1b[3~"); // Delete
@@ -170,42 +166,15 @@ fn a_clipboard_failure_is_one_bounded_toast() {
     let bin = directory.join("bin");
     std::fs::create_dir(&bin).expect("create empty bin directory");
     let bin = bin.to_string_lossy().into_owned();
-    let mut session = Session::open_write_with(&path, &[("PATH", &bin)]);
+    let mut session = Session::open_with(&path, &[("PATH", &bin)]);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("one");
 
     session.send(b"c");
     session.wait_text("Copy failed:");
     session.send(b"v");
     session.wait_text("Paste failed:");
-
-    session.send(b"q");
-    let status = session.wait_exit(TIMEOUT);
-    assert_eq!(status.exit_code(), 0);
-    assert_eq!(std::fs::read(&path).expect("read file"), b"one\n");
-}
-
-#[test]
-fn a_read_only_run_rejects_the_menu_and_write_keys() {
-    let directory = TempDir::new("cp7-menu-readonly");
-    let path = directory.write("todo.txt", b"one\n");
-    let mut session = Session::open(&path);
-
-    session.wait_text("READ-ONLY");
-    for key in [b"x".as_slice(), b"a", b"v"] {
-        session.send(key);
-        session.wait_text("Read-only: thar-rs cannot modify todo.txt");
-    }
-
-    // Copy is non-mutating, so the one gate lets it through even read-only.
-    // The host may or may not have a clipboard tool, so accept either toast.
-    session.send(b"c");
-    session.wait_until("a copy result toast", |snapshot| {
-        snapshot.text.contains("Todo copied") || snapshot.text.contains("Copy failed:")
-    });
-    // Without host update information `u` is a bounded information toast, not
-    // a rejection.
+    // Without host update information `u` is a bounded information toast.
     session.send(b"u");
     session.wait_text("No update available");
 
@@ -213,7 +182,6 @@ fn a_read_only_run_rejects_the_menu_and_write_keys() {
     let status = session.wait_exit(TIMEOUT);
     assert_eq!(status.exit_code(), 0);
     assert_eq!(std::fs::read(&path).expect("read file"), b"one\n");
-    assert!(!directory.join("done.txt").exists());
 }
 
 #[test]
@@ -221,9 +189,8 @@ fn a_read_only_run_rejects_the_menu_and_write_keys() {
 fn cp7_menu_screenshot() {
     let directory = TempDir::new("cp7-menu-screenshot");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("write the CP7 menu");
 
     session.send(b"x");
@@ -252,9 +219,8 @@ fn cp7_menu_screenshot() {
 fn the_delete_confirmation_at_80x24_uses_the_left_bar_chrome() {
     let directory = TempDir::new("cp7-modal-padding-80");
     let path = directory.write("todo.txt", b"one\ntwo\n");
-    let mut session = Session::open_write_sized(&path, 80, 24);
+    let mut session = Session::open_sized(&path, 80, 24);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("one");
     session.send(b"\x1b[3~"); // Delete
     session.wait_text("Delete Todo");
@@ -296,9 +262,8 @@ fn the_delete_confirmation_at_80x24_uses_the_left_bar_chrome() {
 fn cp7_modal_padding_screenshot() {
     let directory = TempDir::new("cp7-modal-padding");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write_sized(&path, 80, 24);
+    let mut session = Session::open_sized(&path, 80, 24);
 
-    session.wait_text("WRITE");
     session.wait_todo_text("water the plants");
 
     // Open the single-todo delete confirmation. Its message is long enough to

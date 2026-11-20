@@ -1,9 +1,9 @@
 //! CP7 date-screen PTY coverage.
 //!
 //! The non-ignored test drives the real binary through the whole date flow:
-//! `--write`, `d`, the Custom row, the calendar, a day move, Enter, and the
-//! saved file. The fixture todo already has a fixed `due:` date, so the
-//! calendar starts on a deterministic day instead of today.
+//! `d`, the Custom row, the calendar, a day move, Enter, and the saved file.
+//! The fixture todo already has a fixed `due:` date, so the calendar starts on
+//! a deterministic day instead of today.
 //!
 //! The `#[ignore]`d test is the manual asset generator for
 //! `docs/rust-port/assets/cp7-calendar.png`; run it with
@@ -28,7 +28,6 @@ const ENTER: &[u8] = b"\r";
 
 /// Drive the modal to the custom calendar and move one day right.
 fn open_calendar_and_move(session: &mut Session) {
-    session.wait_text("WRITE");
     session.wait_todo_text("write the CP7 calendar");
     session.send(b"d");
     session.wait_text("Set Due Date");
@@ -50,7 +49,7 @@ fn open_calendar_and_move(session: &mut Session) {
 fn choosing_a_custom_due_date_saves_the_new_day() {
     let directory = TempDir::new("cp7-calendar");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
     open_calendar_and_move(&mut session);
     session.send(ENTER);
@@ -80,7 +79,7 @@ fn choosing_a_custom_due_date_saves_the_new_day() {
 fn escape_from_the_calendar_returns_to_the_list_step() {
     let directory = TempDir::new("cp7-calendar-escape");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
     open_calendar_and_move(&mut session);
     // Escape leaves the calendar, not the modal; the Custom row stays selected.
@@ -105,7 +104,7 @@ fn escape_from_the_calendar_returns_to_the_list_step() {
 fn cp7_calendar_screenshot() {
     let directory = TempDir::new("cp7-calendar-screenshot");
     let path = directory.write("todo.txt", FIXTURE.as_bytes());
-    let mut session = Session::open_write(&path);
+    let mut session = Session::open(&path);
 
     open_calendar_and_move(&mut session);
 

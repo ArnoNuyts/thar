@@ -11,7 +11,6 @@ use thar_tui::input::{
     self, Command, DOUBLE_CLICK_WINDOW, MouseInput, MouseKind, clicked_checkbox, handle_mouse,
 };
 use thar_tui::layout::{self, Layout};
-use thar_tui::messages::READ_ONLY_MESSAGE;
 use thar_tui::{App, ModalId, nav};
 
 fn app_with(lines: &[&str], width: u16, height: u16) -> App {
@@ -60,10 +59,6 @@ fn wheel(kind: MouseKind) -> MouseInput {
         y: 2,
         shift: false,
     }
-}
-
-fn rejected() -> Option<Command> {
-    Some(Command::Toast(READ_ONLY_MESSAGE))
 }
 
 fn cursor_text(app: &App) -> Option<String> {
@@ -145,45 +140,41 @@ fn a_click_on_a_header_never_extends_a_range() {
 }
 
 #[test]
-fn a_double_click_selects_and_is_rejected_read_only() {
+fn a_double_click_on_the_text_opens_the_editor() {
     let mut app = two_todos();
     let now = Instant::now();
 
-    let (first, command) = handle_mouse(&mut app, click(1, 2, false), None, now);
+    let (first, command) = handle_mouse(&mut app, click(20, 2, false), None, now);
     assert_eq!(command, None);
     assert_eq!(cursor_text(&app).as_deref(), Some("one"));
 
     let (_, command) = handle_mouse(
         &mut app,
-        click(1, 2, false),
+        click(20, 2, false),
         first,
         now + DOUBLE_CLICK_WINDOW / 2,
     );
-    assert_eq!(command, rejected());
+    assert_eq!(command, Some(Command::Open(ModalId::EditTodo)));
     assert_eq!(cursor_text(&app).as_deref(), Some("one"));
-    assert_eq!(
-        app.toast_message(Instant::now()),
-        None,
-        "handle_mouse returns the command; applying it is the event loop's job"
-    );
-    input::apply(&mut app, Command::Toast(READ_ONLY_MESSAGE), current_time());
-    assert_eq!(app.toast_message(Instant::now()), Some(READ_ONLY_MESSAGE));
 }
 
 #[test]
-fn a_double_click_on_the_checkbox_and_on_the_text_are_both_rejected() {
-    for x in [4, 20] {
-        let mut app = two_todos();
-        let now = Instant::now();
-        let (first, _) = handle_mouse(&mut app, click(x, 2, false), None, now);
-        let (_, command) = handle_mouse(
-            &mut app,
-            click(x, 2, false),
-            first,
-            now + Duration::from_millis(100),
-        );
-        assert_eq!(command, rejected(), "column {x}");
-    }
+fn a_double_click_on_the_checkbox_toggles_and_marks_dirty() {
+    let mut app = two_todos();
+    let now = Instant::now();
+
+    let (first, _) = handle_mouse(&mut app, click(4, 2, false), None, now);
+    let (_, command) = handle_mouse(
+        &mut app,
+        click(4, 2, false),
+        first,
+        now + Duration::from_millis(100),
+    );
+    assert_eq!(command, Some(Command::Toggle));
+
+    input::apply(&mut app, Command::Toggle, current_time());
+    assert!(app.todos()[0].is_done());
+    assert!(app.is_dirty());
 }
 
 #[test]
@@ -240,10 +231,10 @@ fn action_bar_clicks_map_to_their_command() {
     let layout = Layout::new(40, 12, false);
     let y = layout.action_row() + 1;
     let cases = [
-        (1, rejected()),
+        (1, Some(Command::Open(ModalId::TodoMenu))),
         (10, Some(Command::Quit)),
-        (19, rejected()),
-        (27, rejected()),
+        (19, Some(Command::Open(ModalId::CreateTodo))),
+        (27, Some(Command::Open(ModalId::EditTodo))),
         (36, Some(Command::SearchFocus)),
         (47, None),
     ];

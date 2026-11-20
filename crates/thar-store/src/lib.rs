@@ -1,8 +1,7 @@
 //! `thar-store`: the write half of the Thar port.
 //!
-//! The read-only build never writes user data; `--write` enables the write
-//! path. Every filesystem API that can modify user data lives here so the TUI
-//! crates stay free of I/O and the read-only source scan keeps its meaning.
+//! Every filesystem API that can modify user data lives here so the TUI crates
+//! stay free of I/O.
 //!
 //! The pieces are deliberately small:
 //!

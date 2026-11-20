@@ -3,7 +3,7 @@
 - **Branch:** `feature/rust-port` (long-lived integration branch)
 - **Status:** Plan + checkpoint ladder. CP0 (corpus, baseline), CP1 (contract
   harness + candidate protocol) and CP2 (workspace, `thar-core`, the WASM batch
-  surface, the read-only `THAR_SHADOW` check) are in. CP2b closes CP2's
+  surface, the non-writing `THAR_SHADOW` check) are in. CP2b closes CP2's
   WASM/contract half; the seven-day real-file dogfood and the decisions CP3
   depends on are still open. CP3a adds the remaining pure domain (recurrence,
   setters, sort/filter/search, rows, navigation) and pins it to the TypeScript
@@ -256,17 +256,17 @@ PRs, each independently reversible. The rule is:
 A checkpoint is complete only when its gate passes and its baseline is
 recorded. Do not start the next checkpoint while one is red.
 
-| CP  | Change                                                   | User risk                            | Gate (must be able to fail)                                              | Rollback                   |
-| --- | -------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------ | -------------------------- |
-| 0   | Characterization tests, corpus, benchmark baseline       | None (tests only)                    | `npm test` + `npm run check`; corpus covers every rule in §7             | revert commit              |
-| 1   | TS-only differential harness + seeded-bug proof          | None (dev tool)                      | Harness exits non-zero on a deliberately mutated parser; runs in Node CI | remove tool                |
-| 2   | First crate: `thar-core` + `thar-wasm`, read-only shadow | None (TS output still used)          | Zero mismatches over corpus + dogfood; WASM size budget; TS fallback     | delete crate; workflow off |
-| 3   | Rust core opt-in for the read path (`THAR_CORE=rust`)    | Low (memory only)                    | Byte-identical rows/serialization; no fallback errors; perf no worse     | `THAR_CORE=ts`             |
-| 4   | Rust core opt-in for writes, byte-compared               | Medium                               | Temp file + byte compare with TS + abort on mismatch; crash/atomic tests | `THAR_CORE=ts`             |
-| 5   | Rust core becomes the default in the Node app            | Medium                               | One release cycle, zero data-loss reports; opt-out documented            | flip default               |
-| 6   | Read-only Rust TUI as a separate `thar-rs` binary        | None (separate binary; cannot write) | PTY + mouse + perf parity; write attempts rejected                       | do not ship binary         |
-| 7   | TUI writes behind `--write`                              | Medium                               | Data-safety suite, byte compare, backup; read-only default               | `--read-only` / use Ink    |
-| 8   | Cutover: Rust TUI becomes `thar`; remove Ink             | High                                 | §14 definition of done; release targets; rollback rehearsal              | previous release tag       |
+| CP  | Change                                                     | User risk                   | Gate (must be able to fail)                                              | Rollback                   |
+| --- | ---------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------ | -------------------------- |
+| 0   | Characterization tests, corpus, benchmark baseline         | None (tests only)           | `npm test` + `npm run check`; corpus covers every rule in §7             | revert commit              |
+| 1   | TS-only differential harness + seeded-bug proof            | None (dev tool)             | Harness exits non-zero on a deliberately mutated parser; runs in Node CI | remove tool                |
+| 2   | First crate: `thar-core` + `thar-wasm`, non-writing shadow | None (TS output still used) | Zero mismatches over corpus + dogfood; WASM size budget; TS fallback     | delete crate; workflow off |
+| 3   | Rust core opt-in for the read path (`THAR_CORE=rust`)      | Low (memory only)           | Byte-identical rows/serialization; no fallback errors; perf no worse     | `THAR_CORE=ts`             |
+| 4   | Rust core opt-in for writes, byte-compared                 | Medium                      | Temp file + byte compare with TS + abort on mismatch; crash/atomic tests | `THAR_CORE=ts`             |
+| 5   | Rust core becomes the default in the Node app              | Medium                      | One release cycle, zero data-loss reports; opt-out documented            | flip default               |
+| 6   | Rust TUI as a separate `thar-rs` binary                    | None (separate binary)      | PTY + mouse + perf parity; list-only at CP6                              | do not ship binary         |
+| 7   | TUI write path (default once landed)                       | Medium                      | Data-safety suite, byte compare, backup; writes by default               | use Ink                    |
+| 8   | Cutover: Rust TUI becomes `thar`; remove Ink               | High                        | §14 definition of done; release targets; rollback rehearsal              | previous release tag       |
 
 ### CP0 — Freeze current behaviour (no app changes)
 
@@ -298,7 +298,7 @@ recorded. Do not start the next checkpoint while one is red.
   harness is fast enough for every PR (< 30 s on the corpus).
 - Rollback: delete the tool and its CI step.
 
-### CP2 — First crate, read-only shadow (no behaviour change)
+### CP2 — First crate, non-writing shadow (no behaviour change)
 
 - Add the Cargo workspace, `thar-core`, `thar-wasm`, and `rust-toolchain.toml`.
 - Install `.github/workflows/rust.yml` from the validated commands in §9.1 and
@@ -755,10 +755,11 @@ revert.
   and the npm WASM subpath (the Rust TUI becomes the package). Until then the
   offline contracts and the TypeScript corpus stay as the oracle.
 
-### CP6 — Read-only Rust TUI (separate binary)
+### CP6 — Rust TUI (separate binary)
 
-- `thar-rs` opens the file read-only. It cannot write: no write API is linked
-  into the read-only build, and attempts are rejected explicitly.
+- At CP6, `thar-rs` was list-only: no write API was linked and attempts were
+  rejected explicitly. CP7 replaced that with the write-by-default path
+  described below.
 - Port list rendering, navigation, search, action bar, scrollbar, toaster,
   terminal lifecycle, mouse wheel/click/shift-click/double-click.
 - Gate: PTY tests (Linux/macOS), mouse parity, terminal restore on panic,
@@ -773,21 +774,19 @@ workspace; the Ink app, `bin/thar.js` and the npm entry point are untouched.
   navigation and scroll-padding, search normalization, the keyboard and SGR
   mouse keymap, the shared layout/hit-test geometry, the theme, and the view.
 - `crates/thar-cli` holds the binary: `cli.rs` (`-f/--file`, `-h/--help`,
-  `-v/--version`, `--no-update-check`; `update` is rejected with a bounded
-  message), `file.rs` (read-only loader, no create path), `terminal.rs` (raw
-  mode, alternate screen, mouse capture, bracketed paste, a restore-on-panic
-  hook, and the draw/event loop) and `main.rs`.
-- Read-only proof: no write API is linked; mutating keys answer with one
-  bounded toast; a missing file is reported and is not created; a directory
-  argument fails cleanly. `tests/pty/main.rs` asserts a real PTY session leaves
-  the file bytes, mtime and directory entries untouched; `tests/read_only.rs`
-  covers the non-TTY startup paths, and `tests/no_write.rs` scans both
-  `thar-cli/src` and `thar-tui/src` for write-capable APIs.
+  `-v/--version`, `--no-backup`, `--no-update-check`; `update` is rejected with
+  a bounded message), `file.rs` (loader), `terminal.rs` (raw mode, alternate
+  screen, mouse capture, bracketed paste, a restore-on-panic hook, and the
+  draw/event loop) and `main.rs`.
+- CP6's list-only proof (the startup suite and a source-level no-writer scan)
+  was replaced when the write path became the only path: `startup.rs` and
+  `write_safety.rs` cover the host paths, and `tests/purity.rs` guards that
+  `thar-tui` stays free of filesystem, process and network I/O.
 - PTY evidence (`crates/thar-cli/tests/pty`, `portable-pty` + `vt100` as
   dev-dependencies only; 100×30, `TERM=xterm-256color`, polling waits and no
   fixed sleeps):
   - initial screen: todo text, `"None"`/`home`/`work` context headers, the
-    action-bar labels from `layout::ACTION_ITEMS`, `READ-ONLY`, and no
+    action-bar labels from `layout::ACTION_ITEMS`, no status badge, and no
     missing-file note for a present file;
   - keys: Down/Up, Ctrl+Down/Up across context groups, Home/End, `/` focus,
     a live query, the no-results state, Enter keeping the filter, Escape
@@ -795,14 +794,14 @@ workspace; the Ink app, `bin/thar.js` and the npm entry point are untouched.
     hidden rows, and `q` exiting 0;
   - mouse: SGR wheel up/down scrolls without moving the cursor, left click
     selects a row, shift-click (button 4) extends the range across three rows,
-    and a double-click inside 350 ms shows the read-only toast;
+    and a double-click toggles the checkbox and saves;
   - lifecycle: Ctrl+C exits 0 and the raw stream contains the
     leave-alternate-screen, disable-mouse, disable-bracketed-paste and
     show-cursor sequences; a debug build with `THAR_TUI_PANIC=1` exits non-zero
     with the panic message emitted after the same restore sequences (the
     trigger is compiled out of release builds);
-  - a missing file in an empty directory renders an empty list and creates
-    nothing.
+  - a missing file in an empty directory is created and renders the welcome
+    screen.
 - CI: `.github/workflows/rust.yml` gains a `pty` job matrixed over
   `ubuntu-latest` and `macos-15` (`cargo test -p thar-cli --test pty`) and a
   `windows` job that runs `cargo check -p thar-cli --all-targets`. The macOS
@@ -818,38 +817,38 @@ workspace; the Ink app, `bin/thar.js` and the npm entry point are untouched.
 
 **Still open at CP6.** The §2 p50/p95 targets are not measured by this
 checkpoint, so no benchmark or performance claim is made here, and the one-week
-read-only navigation dogfood has not happened yet. The view-styling parity pass
+navigation dogfood has not happened yet. The view-styling parity pass
 (colours, scrollbar, empty/load-error states) is part of this checkpoint and is
 covered by `crates/thar-tui/tests/golden.rs`. Writes and the 11 modals are CP7;
 distribution and cutover are CP8.
 
-### CP7 — TUI writes opt-in
+### CP7 — TUI write path
 
-- Add `--write`; the default remains read-only. Before the first write, keep a
-  `todo.txt.bak` (mode 0600) or a timestamped backup; document how to disable
-  backups.
+- Add the write path; the binary saves every edit by default. Before the first
+  write, keep a `todo.txt.bak` (mode 0600) or a timestamped backup; document how
+  to disable backups.
 - Save atomically (temp + fsync + rename), byte-compare against the current
-  file shape, and refuse to overwrite on an unexpected read-only/error state.
+  file shape, and refuse to overwrite on an unexpected error state.
 - Port editing, all 11 modals, calendar, suggestions, undo/redo, archive,
   clipboard, multi-select.
 - Gate: full data-safety suite, crash/kill tests, one week of dogfood,
   byte-identical files for no-op edits.
-- Rollback: `--read-only`/omit `--write`; use the Ink app.
+- Rollback: use the Ink app.
 
-#### CP7 — foundation implemented (write mode, save safety, undo/redo)
+#### CP7 — foundation implemented (save safety, undo/redo)
 
 The first CP7 slice lands the parts every screen depends on. It is deliberately
 a pure infrastructure step: the list gains toggle, hidden-tag, priority and
 undo/redo commands, while the modal screens arrive in parallel workstreams.
 
-- **`--write` is opt-in.** `thar-rs` stays read-only by default, keeps the CP6
-  `READ-ONLY` badge, and rejects every write command with the same bounded
-  toast. `--write` enables saving and the new commands, shows a green `WRITE`
-  badge, and creates a missing `todo.txt` (the Ink startup behaviour). The
-  event loop flushes a pending save on `q` instead of dropping the last
-  keystroke inside the 50 ms debounce.
-- **New crate `thar-store`.** All write-capable APIs live here so the CP6
-  scan of `thar-cli/src` and `thar-tui/src` still proves the read-only path:
+- **Writes are the default.** `thar-rs` saves every edit and creates a missing
+  `todo.txt` (the Ink startup behaviour). The action bar carries no mode badge:
+  the toast or the last load/save error is the only status text. The event loop
+  flushes a pending save on `q` instead of dropping the last keystroke inside the
+  50 ms debounce. When a reload fails, edits stay in memory until a later reload
+  succeeds and a `Not saved: reload failed` toast marks the blocked mutation.
+- **New crate `thar-store`.** All write-capable APIs live here so the TUI crates
+  stay free of filesystem I/O:
   - `atomic::write_atomic` writes a sibling temp file, syncs it, preserves the
     target mode, and renames over the target; the temp is removed on error.
   - `save::SaveGuard` compares every save with the accepted bytes the caller
@@ -884,7 +883,7 @@ undo/redo commands, while the modal screens arrive in parallel workstreams.
   backup-once, external-edit refusal, deleted-target refusal, append, ensure);
   `thar-tui` app/history tests (stable ids, one-step group, undo/redo,
   recurrence copy, debounce); PTY tests for toggle + backup, undo restoring the
-  original bytes, and a read-only run creating nothing; the ignored
+  original bytes, and a missing file being created; the ignored
   `cp7_write_screenshot` generator produced
   `docs/rust-port/assets/cp7-write.png` from a real 100x30 PTY.
   `cargo fmt`, `cargo clippy -D warnings`, and
@@ -969,7 +968,7 @@ every rule in §7, and `npm test` + `npm run check` are green.
 
 ### Phase 1 — Domain core (2–3 weeks)
 
-Checkpoints: CP2 (first crate, read-only shadow) through CP3 (read path opt-in).
+Checkpoints: CP2 (first crate, non-writing shadow) through CP3 (read path opt-in).
 
 Port, in this order:
 
@@ -1027,9 +1026,9 @@ team is comfortable making the Rust core the default for the next release.
 
 ### Phase 4 — ratatui shell (2–3 weeks)
 
-Checkpoint: CP6 (separate `thar-rs` binary, read-only).
+Checkpoint: CP6 (separate `thar-rs` binary).
 
-- [x] `thar-cli` binary that opens a file and renders a read-only list.
+- [x] `thar-cli` binary that opens a file and renders the list.
 - [x] Terminal lifecycle + panic hook + mouse capture + bracketed paste.
 - [x] Virtual list, context headers, selection, scroll padding.
 - [x] Search input and filtering; action bar; hidden indicator; toaster.
@@ -1039,12 +1038,12 @@ Checkpoint: CP6 (separate `thar-rs` binary, read-only).
 - [x] View-styling parity pass (scrollbar, per-tag colours, empty and
       load-error states) — pinned by the `thar-tui` golden frames.
 - [ ] §2 p50/p95 measured on a real PTY.
-- [ ] Read-only navigation dogfooded for a week.
+- [ ] Navigation dogfooded for a week.
 
 Exit criteria: perf targets met on a real PTY; mouse parity checklist complete;
-read-only navigation dogfooded for a week.
+navigation dogfooded for a week.
 
-**Landed at CP6.** The binary, the read-only loader, the terminal session and
+**Landed at CP6.** The binary, the loader, the terminal session and
 the event loop are in `crates/thar-cli`; the state, rows, navigation, search,
 input, layout and view are in `crates/thar-tui`. `cargo test -p thar-tui`,
 `cargo test -p thar-cli` and the workspace suite are green, and the macOS PTY
@@ -1060,7 +1059,7 @@ rollback is to stop shipping `thar-rs`.
 
 ### Phase 5 — Editing, commands, modals (2–3 weeks)
 
-Checkpoint: CP7 (`--write`, opt-in).
+Checkpoint: CP7 (write path).
 
 - Text editing (`ratatui-textarea`), cursor, validation, caps.
 - 11 modals: create, edit, todo menu, multi-select menu, due, threshold,
@@ -1076,7 +1075,7 @@ issues; mouse and keyboard parity signed off.
 
 Checkpoints: CP7–CP8.
 
-- File sync: load/save, atomic replace, read-only recovery, watcher and
+- File sync: load/save, atomic replace, save-blocked recovery, watcher and
   debounces, `done.txt` append.
 - Limits/errors, Windows code page, install-method detection, update check,
   `thar update`, self-update policy.
@@ -1140,8 +1139,8 @@ Subtle rules that must be covered by fixtures:
   overdue.
 - Recurrence plans use the completion time, not the due date, and produce a
   new open todo with the next due date.
-- Saves are debounced 50 ms; reloads 500 ms; a failed load makes the session
-  read-only until a later read succeeds.
+- Saves are debounced 50 ms; reloads 500 ms; a failed load blocks saving
+  until a later read succeeds.
 
 ## 8. Testing strategy
 
@@ -1159,7 +1158,7 @@ Subtle rules that must be covered by fixtures:
    Linux + macOS in CI; Windows smoke.
 7. **End-to-end benchmarks**: reuse the existing todo generator, protocol and
    percentiles; record wall/CPU p50/p95, output bytes and render counts.
-8. **Data-safety tests**: read-only mode, atomic replace, crash mid-write,
+8. **Data-safety tests**: save-blocked recovery, atomic replace, crash mid-write,
    concurrent external edits, `done.txt` append.
 
 CI must run 1–2, 5–6 and a fast subset of 7 on every PR. Fuzzing runs nightly
@@ -1285,7 +1284,7 @@ surface 84 632 / 37 292.
 
 | Risk                                                  | Impact   | Mitigation                                                                                                                                                                                 |
 | ----------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Silent data loss or altered lines                     | Critical | Differential harness, atomic writes, read-only mode, real-file dogfood, rollback tag                                                                                                       |
+| Silent data loss or altered lines                     | Critical | Differential harness, atomic writes, save-blocked recovery, real-file dogfood, rollback tag                                                                                                |
 | Domain drift (dates, duplicate tags, `"None"` header) | High     | Fixtures for every known edge case; TS as oracle; property/fuzz tests                                                                                                                      |
 | ratatui 0.30 is 0.x                                   | Medium   | Pin versions; upgrade deliberately; keep view code behind a thin layer                                                                                                                     |
 | Native distribution complexity                        | Medium   | Start with GitHub releases + npm optional deps; codesign macOS; keep Node fallback                                                                                                         |
@@ -1308,8 +1307,8 @@ surface 84 632 / 37 292.
 - CP5: the Rust core becomes the Node app's default; `THAR_CORE=ts` is the
   one-release opt-out, and reverting is the one-line default flip. The WASM
   ships in the npm tarball, so no download or platform matrix is involved.
-- CP6: ship `thar-rs` alongside the Ink app and keep it read-only by default.
-  The Node package still installs the Ink app.
+- CP6: ship `thar-rs` alongside the Ink app as a list-only binary. The Node
+  package still installs the Ink app.
 - CP7–CP8: switch the default only after the release candidate passes the
   parity suite and a one-week dogfood. Publish as `next` first; promote to
   `latest` after a week without data-safety reports.
