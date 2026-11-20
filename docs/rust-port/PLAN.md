@@ -256,17 +256,17 @@ PRs, each independently reversible. The rule is:
 A checkpoint is complete only when its gate passes and its baseline is
 recorded. Do not start the next checkpoint while one is red.
 
-| CP  | Change                                                   | User risk                            | Gate (must be able to fail)                                              | Rollback                   |
-| --- | -------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------ | -------------------------- |
-| 0   | Characterization tests, corpus, benchmark baseline       | None (tests only)                    | `npm test` + `npm run check`; corpus covers every rule in §7             | revert commit              |
-| 1   | TS-only differential harness + seeded-bug proof          | None (dev tool)                      | Harness exits non-zero on a deliberately mutated parser; runs in Node CI | remove tool                |
-| 2   | First crate: `thar-core` + `thar-wasm`, non-writing shadow | None (TS output still used)        | Zero mismatches over corpus + dogfood; WASM size budget; TS fallback     | delete crate; workflow off |
-| 3   | Rust core opt-in for the read path (`THAR_CORE=rust`)    | Low (memory only)                    | Byte-identical rows/serialization; no fallback errors; perf no worse     | `THAR_CORE=ts`             |
-| 4   | Rust core opt-in for writes, byte-compared               | Medium                               | Temp file + byte compare with TS + abort on mismatch; crash/atomic tests | `THAR_CORE=ts`             |
-| 5   | Rust core becomes the default in the Node app            | Medium                               | One release cycle, zero data-loss reports; opt-out documented            | flip default               |
-| 6   | Rust TUI as a separate `thar-rs` binary                  | None (separate binary)               | PTY + mouse + perf parity; list-only at CP6                              | do not ship binary         |
-| 7   | TUI write path (default once landed)                     | Medium                               | Data-safety suite, byte compare, backup; writes by default               | use Ink                    |
-| 8   | Cutover: Rust TUI becomes `thar`; remove Ink             | High                                 | §14 definition of done; release targets; rollback rehearsal              | previous release tag       |
+| CP  | Change                                                     | User risk                   | Gate (must be able to fail)                                              | Rollback                   |
+| --- | ---------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------ | -------------------------- |
+| 0   | Characterization tests, corpus, benchmark baseline         | None (tests only)           | `npm test` + `npm run check`; corpus covers every rule in §7             | revert commit              |
+| 1   | TS-only differential harness + seeded-bug proof            | None (dev tool)             | Harness exits non-zero on a deliberately mutated parser; runs in Node CI | remove tool                |
+| 2   | First crate: `thar-core` + `thar-wasm`, non-writing shadow | None (TS output still used) | Zero mismatches over corpus + dogfood; WASM size budget; TS fallback     | delete crate; workflow off |
+| 3   | Rust core opt-in for the read path (`THAR_CORE=rust`)      | Low (memory only)           | Byte-identical rows/serialization; no fallback errors; perf no worse     | `THAR_CORE=ts`             |
+| 4   | Rust core opt-in for writes, byte-compared                 | Medium                      | Temp file + byte compare with TS + abort on mismatch; crash/atomic tests | `THAR_CORE=ts`             |
+| 5   | Rust core becomes the default in the Node app              | Medium                      | One release cycle, zero data-loss reports; opt-out documented            | flip default               |
+| 6   | Rust TUI as a separate `thar-rs` binary                    | None (separate binary)      | PTY + mouse + perf parity; list-only at CP6                              | do not ship binary         |
+| 7   | TUI write path (default once landed)                       | Medium                      | Data-safety suite, byte compare, backup; writes by default               | use Ink                    |
+| 8   | Cutover: Rust TUI becomes `thar`; remove Ink               | High                        | §14 definition of done; release targets; rollback rehearsal              | previous release tag       |
 
 ### CP0 — Freeze current behaviour (no app changes)
 
